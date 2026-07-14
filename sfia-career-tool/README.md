@@ -23,12 +23,16 @@ for testing, but not what's actually running in production.
 The deployed app's real content comes from `src/import-career-paths.js`, a one-off script that replaces
 the placeholder data with 33 real role profiles across 8 tracks, imported from the user's own
 `EngineeringCareerPathsV3.xlsx` (an internal engineering career framework, not the official SFIA
-catalogue). It uses **real SFIA 9 skill codes** (e.g. `PROG`, `ARCH`, `DATM`) with real per-role levels,
-but SFIA is a licensed framework and the source spreadsheet only contained codes and levels, not official
-skill names or descriptions &mdash; so every imported skill has **`skill_name` set to its code** (e.g.
-"PROG") and no description, deliberately, rather than risk asserting an incorrect official SFIA name from
-memory. An administrator with access to the organisation's SFIA licence should fill in the real names and
-descriptions via Admin &gt; SFIA skills (built for exactly this).
+catalogue). It uses **real SFIA 9 skill codes** (e.g. `PROG`, `ARCH`, `DATM`) with real per-role levels.
+
+`src/update-sfia-content.js` is a second, non-destructive one-off script that fills in real skill names,
+skill overviews and level-specific descriptions, transcribed from the official SFIA 9 framework reference
+PDF the user supplied (and confirmed is cleared for public display). It only touches the 24 of the
+spreadsheet's 37 codes that actually match a real SFIA 9 skill; the other 13 (`BUAN`, `QUMT`, `VUIM`,
+`AUTH`, `OPSG`, `INAN`, `MLEN`, `SYAS`, `STRP`, `SADM`, `PLMT`, `STAD`, `STRT`) don't correspond to any
+code in the official SFIA 9 reference &mdash; likely a different SFIA version or spreadsheet-author
+shorthand &mdash; and are left showing their raw code pending review. An administrator can correct or
+fill these in via Admin &gt; SFIA skills.
 
 Run it with `node src/import-career-paths.js` (needs `ADMIN_EMAIL` already seeded via the normal seed
 script first, so a super admin exists to own the imported content). It is **destructive**: it deletes all
@@ -127,8 +131,8 @@ with Railway's env vars injected and can't reach a volume that only exists insid
   card set the FRD describes (seniority/role type/capability/core-skill-count are already derived from
   existing columns and rendered directly, so the JSON field only needs to carry the one thing that isn't
   already structured data). Revisit if at-a-glance cards need more admin-authored content later.
-- **Real SFIA skill codes, but no official names/descriptions yet** &mdash; see the content section above.
-  An admin with SFIA licence access should fill these in via Admin &gt; SFIA skills.
+- **13 of the 37 imported SFIA skill codes don't match the official SFIA 9 reference** &mdash; see the
+  content section above. They still show their raw code as `skill_name` until an admin reviews them.
 - **No learning resources imported.** The source spreadsheet didn't include any, so every skill gap on the
   live site currently shows "No learning resources are linked yet." until an admin adds real ones.
 - **No approval workflow for role profile changes.** Publishing is immediate for anyone with `canPublish`;

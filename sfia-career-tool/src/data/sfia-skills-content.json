@@ -1,0 +1,276 @@
+{
+  "PROG": {
+    "code": "PROG",
+    "name": "Programming/software development",
+    "overview": "Developing software components to deliver value to stakeholders.",
+    "levels": {
+      "2": "Designs, codes, verifies, tests, documents, amends and refactors simple programs/scripts. Applies agreed standards, tools and basic security practices to achieve a well-engineered result. Reviews own work.",
+      "3": "Designs, codes, verifies, tests, documents, amends and refactors moderately complex programs/scripts. Applies agreed standards, tools and security measures to achieve a well-engineered result. Monitors and reports on progress. Identifies issues related to software development activities. Proposes practical solutions to resolve issues. Collaborates in reviews of work with others as appropriate.",
+      "4": "Designs, codes, verifies, tests, documents, amends and refactors complex programs/scripts and integration software services. Contributes to the selection of the software development methods, tools, techniques, and security practices. Applies agreed standards, tools, and security measures to achieve well-engineered outcomes. Participates in reviews of own work and leads reviews of colleagues' work.",
+      "5": "Takes technical responsibility across all stages and iterations of software development. Plans and drives software construction activities. Adopts and adapts appropriate software development methods, tools and techniques. Measures and monitors applications of project/team standards for software construction, including software security. Contributes to the development of organisational policies, standards and guidelines for software development.",
+      "6": "Develops organisational policies, standards and guidelines for software construction and refactoring. Plans and leads software construction activities for strategic, large and complex development projects. Adapts or develops new methods and organisational capabilities and drives adoption of, and adherence to, policies and standards."
+    }
+  },
+  "TEST": {
+    "code": "TEST",
+    "name": "Functional testing",
+    "overview": "Assessing specified or unspecified functional requirements and characteristics of products, systems and services through investigation and testing.",
+    "levels": {
+      "1": "Executes given manual functional test scripts under supervision to verify basic software capabilities. Configures test environments, uses basic automated tools for functionality verification, records results and reports issues.",
+      "2": "Assists in designing functional test cases and creating test scripts. Supports the preparation of test data for functional testing under supervision. Configures test environments to reflect realistic use cases. Executes and records manual and automated functional tests, analysing results and reporting on findings, issues and risks.",
+      "3": "Designs detailed functional test cases and scripts, covering various scenarios and boundary values. Actively participates in requirement and design reviews, refining test plans based on insights gained. Undertakes structured exploratory testing to investigate and verify functionality. Prepares test data, configures environments and automates repeatable tests. Executes tests, logs defects with detailed information and analyses results to assess system functionality.",
+      "4": "Selects appropriate functional testing approaches, considering risk, criticality and complexity. Develops, automates and executes comprehensive test plans and cases. Configures environments to mirror real-world usage, collaborates with stakeholders to refine requirements and manages scalable automated testing frameworks. Identifies and mitigates risks during testing, provides detailed analysis and reports on functional test activities and results, including work done by others.",
+      "5": "Leads functional testing efforts across all development stages, ensuring alignment with functional requirements and focusing on risk-based prioritisation. Provides authoritative advice on testing methods, tools and frameworks. Monitors and improves test coverage, collaborates with teams to address challenges and ensures compliance with standards. Leads efforts to improve the efficiency and reliability of functional testing. Identifies improvements and contributes to organisational policies, standards and guidelines for functional testing.",
+      "6": "Develops organisational policies, standards and guidelines for functional testing, ensuring they align with business strategy and incorporate a risk-based approach. Plans and leads complex testing initiatives, ensuring alignment with strategic objectives and incorporating a risk-based approach. Manages risks and opportunities, coordinates with other testing activities and drives improvements in functional testing capabilities. Promotes a culture of quality in functional testing, driving adherence to organisational standards and proactive risk mitigation."
+    }
+  },
+  "DESN": {
+    "code": "DESN",
+    "name": "Systems design",
+    "overview": "Designing systems to meet specified requirements and agreed systems architectures.",
+    "levels": {
+      "2": "Assists in the creation and documentation of system design elements under routine supervision. Follows established procedures and guidelines. Helps create and maintain documentation.",
+      "3": "Follows standard approaches and established design patterns to create new designs for simple systems or system components. Identifies and resolves minor design issues. Identifies alternative design options and seeks guidance when deviating from established design patterns.",
+      "4": "Designs system components using appropriate modelling techniques following agreed architectures, design standards, patterns and methodology. Identifies and evaluates alternative design options and trade-offs. Creates multiple design views to address the concerns of the different stakeholders and to handle functional and non-functional requirements. Models, simulates or prototypes the behaviour of proposed system components to enable approval by stakeholders. Produces detailed design specifications to form the basis for the construction of systems. Reviews, verifies and improves own designs against specifications.",
+      "5": "Designs large or complex systems and undertakes impact analysis on major design options and trade-offs. Ensures the system design balances functional and non-functional requirements. Reviews systems designs and ensures appropriate methods, tools and techniques are applied effectively. Makes recommendations and assesses and manages associated risks. Adopts and adapts system design methods, tools and techniques. Contributes to development of system design policies, standards and selection of architecture components.",
+      "6": "Develops and drives adoption of and adherence to organisational policies, standards, guidelines and methods for system design. Champions the importance and value of system design principles and the selection of appropriate systems design lifecycle models. Leads system design activities for strategic, large and complex systems development programmes. Develops effective implementation strategies consistent with specified requirements, architectures and constraints of performance and feasibility. Develops system design requiring the introduction of new technologies or new uses for existing technologies."
+    }
+  },
+  "ASUP": {
+    "code": "ASUP",
+    "name": "Application support",
+    "overview": "Delivering management, technical and administrative services to support and maintain live applications.",
+    "levels": {
+      "2": "Assists with specified maintenance procedures. Assists in the investigation and resolution of issues relating to applications.",
+      "3": "Follows agreed procedures to identify and resolve issues with applications. Uses application management software and tools to collect agreed performance statistics. Carries out agreed applications maintenance tasks.",
+      "4": "Maintains application support processes and checks that all requests for support are dealt with according to agreed procedures. Uses application management software and tools to investigate issues, collect performance statistics and create reports.",
+      "5": "Ensures all requests for support are dealt with according to set standards and procedures. Drafts and maintains procedures and documentation for applications support, incorporating security considerations. Manages application enhancements to improve business performance. Advises on application security, licensing, upgrades, backups and disaster recovery needs."
+    }
+  },
+  "CFMG": {
+    "code": "CFMG",
+    "name": "Configuration management",
+    "overview": "Planning, identifying, controlling, accounting for and auditing of configuration items (CIs) and their interrelationships.",
+    "levels": {
+      "2": "Applies tools, techniques and processes to administer, track, log, report on and correct configuration items, components and changes. Assists with audits to check the accuracy of the information and undertakes any necessary corrective action under direction.",
+      "3": "Applies tools, techniques and processes to track, log and correct information related to configuration items. Verifies and approves changes to protect assets and components from unauthorised change, diversion and inappropriate use. Supports user compliance with identification standards for object types, environments, processes, lifecycles, documentation, versions, formats, baselines, releases and templates. Performs audits to check the accuracy of the information and undertakes any necessary corrective action under direction.",
+      "4": "Proposes and agrees the configuration items (CIs) to be uniquely identified with naming conventions. Puts in place operational processes for secure configuration, classification and management of CIs and for verifying and auditing configuration records. Develops, configures and maintains tools (including automation) to identify, track, log and maintain accurate, complete and current information. Reports on the status of configuration management. Identifies problems and issues and recommend corrective actions.",
+      "5": "Plans the capture and management of CIs and related information. Agrees scope of configuration management processes and the configuration items (CIs) and related information to be controlled. Identifies, evaluates and manages the adoption of appropriate tools, techniques and processes (including automation) for configuration management. Contributes to the development of configuration management strategies, policies, standards and guidelines.",
+      "6": "Develops configuration management strategies, policies, standards and guidelines. Champions the importance and value of configuration management and develops new methods and organisational capabilities (including automation) for configuration management. Provides resources to drive adoption of, and adherence to, policies and standards. Measures and monitors adherence to standards and ensures consistent execution of the process across the organisation."
+    }
+  },
+  "USUP": {
+    "code": "USUP",
+    "name": "Incident management",
+    "overview": "Coordinating responses to a diverse range of incidents to minimise negative impacts and quickly restore services.",
+    "levels": {
+      "1": "Follows agreed procedures to identify, register and categorise incidents. Uses provided tools and technologies to support the incident management process. Collects information as instructed to assist in incident resolution and allocates incidents as directed. Assists in monitoring incident queues and escalates issues according to procedures.",
+      "2": "Provides first line investigation and gathers information to enable incident resolution and allocate incidents. Gathers information to enable incident resolution and allocates incidents according to established procedures. Escalates incidents as necessary. Advises relevant people of actions taken. Communicates with users and stakeholders to provide updates on incident status. Assists in maintaining records and documentation related to incidents.",
+      "3": "Prioritises and diagnoses incidents applying agreed procedures and tools. Investigates causes of incidents and seeks resolution. Escalates unresolved incidents to higher levels or specialist teams. Coordinates with stakeholders to ensure timely resolution. Facilitates recovery, following resolution of incidents. Documents, communicates outcomes and closes resolved incidents.",
+      "4": "Monitors and manages incident queues to ensure incidents are handled according to procedures and service levels. Contributes to developing, testing and improving incident management procedures. Uses analytics tools to track trends. Ensures resolved incidents are properly documented and closed. Supports team members in the correct use of the incident process.",
+      "5": "Responsible for the operation of the incident management process. Manages incident communications, ensuring al parties are aware of incidents and their role in the process. Leads the review of major incidents and informs service owners of outcomes. Ensures incident resolution within service targets. Analyses metrics and reports on the performance of the incident management process. Develops, maintains and tests incident management policy and procedures. Ensures compliance with regulatory requirements.",
+      "6": "Shapes and directs the organisation's incident management strategy. Establishes policies and standards for incident management aligned with organisational goals. Provides leadership during major incidents, coordinating cross-functional teams and external partners. Makes high-level decisions to minimise impact and ensure swift recovery. Leads the development of organisational capabilities for incident management. Promotes organisational collaboration and ensures that incident management processes are understood and adopted across the organisation."
+    }
+  },
+  "SCTY": {
+    "code": "SCTY",
+    "name": "Information security",
+    "overview": "Defining and operating a framework of security controls and security management strategies.",
+    "levels": {
+      "2": "Assists with implementing and monitoring security policies and protocols across different systems. Contributes to identifying and addressing potential risks in security governance and compliance. Supports the analysis of documented security incidents, escalating where appropriate. Assists in the review of access controls and permissions, ensuring adherence to security policies.",
+      "3": "Applies and maintains specific security controls as required by organisational policy and local risk assessments. Communicates security risks and issues to business managers and others. Performs basic risk assessments for small information systems. Contributes to the identification of risks that arise from potential technical solution architectures. Suggests alternate solutions or countermeasures to mitigate risks. Defines secure systems configurations in compliance with intended architectures. Supports investigation of suspected attacks and security breaches.",
+      "4": "Provides guidance on the application and operation of elementary physical, procedural and technical security controls. Explains the purpose of security controls and performs security risk and business impact analysis for medium complexity information systems. Identifies risks that arise from potential technical solution architectures. Designs alternate solutions or countermeasures and ensures they manage identified risks. Investigates suspected attacks and supports security incident management.",
+      "5": "Provides advice and guidance on security strategies to manage identified risks and ensure adoption and adherence to standards. Contributes to development of information security policy, standards and guidelines. Obtains and acts on vulnerability information and conducts security risk assessments, business impact analysis and accreditation on complex information systems. Investigates major breaches of security and recommends appropriate control improvements. Develops new architectures that manage the risks posed by new technologies and business practices.",
+      "6": "Develops and communicates corporate information security policy, standards and guidelines. Ensures architectural principles are applied during design to reduce risk. Drives adoption and adherence to policy, standards and guidelines. Contributes to the development of organisational strategies that address information control requirements. Identifies and monitors environmental and market trends and proactively assesses impact on business strategies, benefits and risks. Leads the provision of authoritative advice and guidance on the requirements for security controls in collaboration with subject matter experts.",
+      "7": "Directs the development, implementation, delivery and support of an enterprise information security strategy aligned with the business strategy. Ensures compliance between business strategies and information security. Leads the provision of information security expertise, guidance and systems needed to execute strategic and operational plans. Secures organisational resources to execute the information security strategy."
+    }
+  },
+  "NTDS": {
+    "code": "NTDS",
+    "name": "Network design",
+    "overview": "Designing communication networks to meet business requirements, ensuring scalability, reliability, security and alignment with strategic objectives.",
+    "levels": {
+      "2": "Assists with defining configurations for networks and network components under routine supervision. Follows established network architectures, standards, and security protocols. Assists in documenting network configurations and producing detailed network specifications under guidance, incorporating relevant security aspects.",
+      "3": "Specifies the technical configurations and components required for a small network or a network segment in a more complex infrastructure. Follows organisational architectures, standards, and security guidelines.",
+      "4": "Designs specific network components using agreed architectures, design standards, patterns and methodology. Translates logical designs into physical designs that meet specified operational parameters for capacity and performance. Reviews and verifies network designs against non-functional requirements, including validation and error correction procedures, access, security and audit controls. Contributes to the development of recovery routines and contingency procedures. Contributes to alternative network architectures, networking topologies and design options.",
+      "5": "Produces, or approves network providers', network architectures, topologies and configuration databases for own area of responsibility. Specifies design parameters for network connectivity, capacity, speed, interfacing, security and access, in line with business requirements. Assesses network-related risks and specifies recovery routines and contingency procedures. Creates multiple design views to address the different stakeholders' concerns and to handle both functional and non-functional requirements.",
+      "6": "Takes responsibility for major aspects of network specification, standards, technologies and overall network design models within the organisation. Produces network design policies, principles and criteria covering connectivity, capacity, interfacing, security, resilience, recovery and access. Develops and drives adoption of and adherence to organisational policies, standards, guidelines and methods for network design."
+    }
+  },
+  "PBMG": {
+    "code": "PBMG",
+    "name": "Problem management",
+    "overview": "Managing the lifecycle of all problems that have occurred or could occur in delivering a service.",
+    "levels": {
+      "2": "Assists with problem management tasks under routine supervision. Helps document problems and maintain relevant records. Assists in detecting, logging, classifying, and prioritising problems in systems, processes, and services.",
+      "3": "Investigates problems in systems, processes and services. Contributes to the implementation of agreed remedies and preventative measures.",
+      "4": "Initiates and monitors actions to investigate and resolve problems in systems, processes and services. Determines problem fixes and remedies. Collaborates with others to implement agreed remedies and preventative measures. Supports analysis of patterns and trends to improve problem management processes.",
+      "5": "Ensures appropriate action is taken to anticipate, investigate and resolve problems in systems and services. Ensures problems are fully documented within the relevant reporting systems. Enables development of problem solutions. Coordinates the implementation of agreed remedies and preventative measures. Analyses patterns and trends and improves problem management processes."
+    }
+  },
+  "DATM": {
+    "code": "DATM",
+    "name": "Data management",
+    "overview": "Developing and implementing plans, policies and practices that control, protect and optimise the value and governance of data assets.",
+    "levels": {
+      "2": "Assists in implementing data management activities under close guidance and supervision. Helps create and maintain documentation of data management activities. Helps identify and report issues and discrepancies.",
+      "3": "Implements standard data management practices based on detailed organisational requirements. Monitors and maintains data quality through regular reviews and validation checks. Communicates the details of data management procedures to others, helping with their understanding and compliance.",
+      "4": "Devises and implements data governance and master data management processes for specific subsets of data. Assesses the integrity of data from multiple sources. Advises on transformation of data between formats or media. Maintains and implements data handling procedures. Enables data availability, integrity and searchability through formal data and metadata structures and protection measures.",
+      "5": "Devises and implements data governance and master data management processes. Derives data management structures and metadata to support consistent data retrieval, integration, analysis, pattern recognition and interpretation across the organisation. Independently validates external information from multiple sources. Plans effective data storage, sharing and publishing practices within the organisation. Identifies and addresses issues preventing optimal use of information assets. Provides expert advice to maximise data asset value, ensuring data quality and compliance.",
+      "6": "Leads the strategic direction for data management and data governance, establishing policies and frameworks that align with business and regulatory requirements. Derives an overall strategy of master data management that supports the development and secure operation of data and digital services. Creates organisational policies, standards and guidelines for data management, ensuring ethical principles are applied. Plans, establishes and manages processes for regular and consistent access to external data sources, ensuring their validation and integration."
+    }
+  },
+  "DBDS": {
+    "code": "DBDS",
+    "name": "Database design",
+    "overview": "Specifying, designing and maintaining mechanisms for storing and accessing data across various environments and platforms.",
+    "levels": {
+      "2": "Assists in creating and documenting detailed database designs under routine supervision. Follows established procedures and guidelines. Helps create and maintain documentation.",
+      "3": "Interprets installation standards to meet project needs and produces database or data warehouse component specifications. Develops physical database or data warehouse design elements, within set policies, to meet data requirements.",
+      "4": "Implements physical database designs to support transactional data requirements for performance and availability. Develops and maintains specialist knowledge of database and data warehouse concepts, design principles, architectures, software and facilities. Assesses proposed changes to object/data structures and evaluates alternative options. Implements data warehouse designs that support business intelligence and data analytics.",
+      "5": "Provides specialist expertise in the design characteristics of database management systems or data warehouse products/services. Provides expert guidance in the selection, provision and use of database and data warehouse architectures, software and facilities. Ensures design policies optimise transactional data systems for performance and availability while meeting the needs of business intelligence and analytics platforms."
+    }
+  },
+  "PORT": {
+    "code": "PORT",
+    "name": "Software configuration",
+    "overview": "Designing and deploying software product configurations into software environments or platforms.",
+    "levels": {
+      "2": "Assists with software configuration tasks. Supports the setup and customisation of software environments and platforms. Helps document and report on configuration changes and deployments. Reviews own work.",
+      "3": "Designs, verifies, documents, amends and refactors moderately complex software configurations for deployment. Applies agreed standards and tools, to achieve a well-engineered result. Collaborates in reviews of work with others as appropriate.",
+      "4": "Designs, verifies, documents, amends and refactors complex software configurations for deployment. Contributes to the selection of the software configuration methods, tools and techniques. Applies agreed standards and tools, to achieve well-engineered outcomes. Participates in reviews of own work and leads reviews of colleagues' work.",
+      "5": "Takes technical responsibility across all stages and iterations of configuration development and deployment. Plans and drives software configuration activities. Adopts and adapts appropriate software configuration methods, tools and techniques. Measures and monitors the application of standards for configuration design and deployment including software security. Contributes to the development of organisational policies, standards and guidelines for software configuration design and deployment.",
+      "6": "Develops organisational policies, standards and guidelines for software configuration design, deployment and refactoring. Plans and leads software configuration and deployment activities for strategic, large and complex deployment projects. Develops new methods and organisational capabilities and drives adoption of and adherence to policies and standards."
+    }
+  },
+  "ARCH": {
+    "code": "ARCH",
+    "name": "Solution architecture",
+    "overview": "Developing and communicating a multi-dimensional solution architecture to deliver agreed business outcomes.",
+    "levels": {
+      "4": "Contributes to the development of solution architectures in specific business, infrastructure or functional areas. Identifies and evaluates alternative architectures and the trade-offs in cost, performance and scalability. Determines and documents architecturally significant decisions. Produces specifications of cloud-based or on-premises components, tiers and interfaces, for translation into detailed designs using selected services and products. Supports projects or change initiatives through the preparation of technical plans and application of design principles. Aligns solutions with enterprise and solution architecture standards (including security).",
+      "5": "Leads the development of solution architectures in specific business, infrastructure or functional areas. Leads the preparation of technical plans and ensures appropriate technical resources are made available. Ensures appropriate tools and methods are available, understood and employed in architecture development. Provides technical guidance and governance on solution development and integration. Evaluates requests for changes and deviations from specifications and recommends actions. Ensures relevant technical strategies, policies, standards and practices (including security and cost management) are applied correctly.",
+      "6": "Leads the development of architectures for complex solutions ensuring consistency with agreed requirements. Establishes policies, principles and practices for the selection of solution architecture components. Manages trade-offs and balances functional, service quality, cost efficiency and systems management requirements within a significant area of the organisation. Communicates proposed decisions to stakeholders. Coordinates and manages the target architecture across multiple projects or initiatives. Maintains a stable, viable architecture and ensures consistency of design and adherence to appropriate standards across multiple projects or initiatives."
+    }
+  },
+  "GOVN": {
+    "code": "GOVN",
+    "name": "Governance",
+    "overview": "Defining and operating frameworks for decision-making, risk management, stakeholder relationships and compliance with organisational and regulatory obligations.",
+    "levels": {
+      "6": "Implements the governance framework to enable governance activity to be conducted. Within a defined area of accountability, determines the requirements for appropriate governance reflecting the organisation's values, ethics, risk appetite and wider governance frameworks. Communicates delegated authority, benefits, opportunities, costs and risks. Leads reviews of governance practices with appropriate and sufficient independence from management activity. Acts as the organisation's contact for relevant regulatory authorities and ensures proper relationships between the organisation and external stakeholders.",
+      "7": "Directs the definition, implementation and monitoring of the governance framework to meet organisational obligations under regulation, law, or contracts. Provides leadership, direction and oversight for governance activities. Integrates risk management into frameworks, aligning with strategic objectives and risk appetite. Secures resources required to execute activities to achieve the organisation’s governance goals with effective transparency. Provides assurance to stakeholders that the organisation can deliver its obligations with an agreed balance of benefits, opportunities, costs and risks."
+    }
+  },
+  "PEMT": {
+    "code": "PEMT",
+    "name": "Performance management",
+    "overview": "Improving organisational performance by developing the performance of individuals and workgroups to meet agreed objectives with measurable results.",
+    "levels": {
+      "4": "Provides operational direction, support and guidance to assigned colleagues. Allocates routine tasks or project work, in line with team objectives and individual capabilities. Monitors quality and performance against agreed criteria to make learning recommendations or to escalate concerns. Coaches colleagues in developing target skills and capabilities in line with team and personal goals. Facilitates effective working relationships between team members.",
+      "5": "Forms, maintains and leads workgroups and individuals to achieve organisational objectives. Delegates objectives and responsibilities, including people management tasks. Sets quality, performance and capability targets aligned with organisational goals. Monitors performance and working relationships and provides feedback to address individual issues. Encourages skill development in line with team and personal goals. Adjusts workload, targets and team capacity to support individual growth. Actively participates in formal processes such as recruitment, reward, promotion and disciplinary procedures.",
+      "6": "Determines and delegates people management and functional management objectives and responsibilities. Creates and sets the direction for multiple workgroups to achieve strategic organisational objectives. Sets strategy for quality and performance measurement in line with organisational goals. Provides a work environment and resources that allow individuals and workgroups to perform their tasks efficiently. Leads the implementation of formal organisational processes such as recruitment, reward, promotion and disciplinary procedures."
+    }
+  },
+  "RESC": {
+    "code": "RESC",
+    "name": "Resourcing",
+    "overview": "Acquiring, deploying and onboarding resources.",
+    "levels": {
+      "2": "Assists with resourcing tasks under routine supervision. Helps with recruiting and onboarding new employees. Supports the documentation and tracking of resourcing activities.",
+      "3": "Supports managers and teams in resourcing and recruitment activities. Uses recommended tools for planning, scheduling and tracking resourcing activity. Provides guidance on resource management and recruitment software, procedures, processes, tools and techniques.",
+      "4": "Facilitates and supports the execution of resourcing activities in collaboration with managers and teams. Analyses resource requests to determine tasks, skills and effort required. Creates and communicates open positions internally and externally. Conducts interviews and assessments using a planned format and structure. Implements internal resource allocation matching skills to tasks. Contributes to transitioning of resources, complying with relevant statutory or external regulations and codes of practice.",
+      "5": "Plans and manages the acquisition and deployment of resources to meet specific needs and ongoing demand. Defines and manages the implementation of resourcing processes and tools. Advises on available options and customises resourcing approach to meet requirements. Adheres to standards, statutory or external regulations and codes of practice and ensures compliance. Engages with external parties in support of resourcing plans. Measures effectiveness of resourcing processes and implements improvements.",
+      "6": "Defines resourcing approach for a significant part of the organisation in line with workforce plans and strategic business goals. Communicates resourcing approach and obtains organisational commitment. Advises on standards, regulations and codes of practice and ensures compliance. Maintains a strong external network and supplier framework to support sourcing and acquiring resources. Leads development of plans and budget to ensure the organisation has appropriately skilled resources to meet organisational objectives and commitments. Reviews the ongoing success and effectiveness of resource management processes."
+    }
+  },
+  "LEDA": {
+    "code": "LEDA",
+    "name": "Competency assessment",
+    "overview": "Assessing knowledge, skills, competency and behaviours by any means, whether formal or informal, against frameworks such as SFIA.",
+    "levels": {
+      "2": "Assists in the administration of competency assessments using standard tools and procedures under routine supervision. Supports the collection and organisation of assessment data and results using specified methods and tools. Helps create and maintain documentation.",
+      "3": "Performs routine assessments of knowledge, skills, competencies, or behaviours using specified tools and methods. Supports the collection, organisation, and review of assessment data to maintain accurate records.",
+      "4": "Performs routine and non-routine assessments of knowledge, skill, competency or behaviour using specified methods. Provides advice and guidance to support the adoption of assessment methods and tools. Moderates assessments conducted by other assessors. Reviews and improves usage and application of assessment methods and tools.",
+      "5": "Provides advice and guidance on selecting, adopting and adapting assessment methods, tools and techniques. Plans assessments based on the context of the assessment and how assessment results will be used. Manages execution of assessments to ensure they deliver the required outcomes with acceptable quality. Monitors and moderates reviews performed by other assessors. Manages reviews of the benefits and value of assessment methods and tools. Identifies and recommends improvements to assessment methods and tools.",
+      "6": "Champions the importance and value of assessment and appropriate assessment methods, tools and techniques. Develops organisational policies, standards and guidelines for assessments. Leads in the introduction and use of assessment methodologies and tools. Establishes an assessment practice and pool of assessors within the organisation. Establishes quality assurance to ensure internal and/or external consistency and reliability of assessment outcomes. Ensures the quality of assessments across different user groups."
+    }
+  },
+  "STPL": {
+    "code": "STPL",
+    "name": "Enterprise and business architecture",
+    "overview": "Aligning an organisation's technology strategy with its business mission, strategy and processes and documenting this using architectural models.",
+    "levels": {
+      "5": "Develops models and plans to drive the execution of the business strategy, taking advantage of opportunities to improve business performance. Contributes to creating and reviewing a systems capability strategy which meets the business's strategic requirements. Creates and maintains roadmaps to guide the execution of business strategy and capability improvements. Determines requirements and specifies effective business processes, through improvements in technology, information or data practices, organisation, roles, procedures and equipment.",
+      "6": "Develops enterprise-wide architecture and processes to embed strategic change management within the organisation. Leads the creation and review of a systems capability strategy aligned with business requirements. Develops roadmaps for enterprise architecture and initiatives, ensuring stakeholder buy-in. Captures and prioritises market and environmental trends, business strategies and objectives, identifying alternative strategies. Develops business cases for approval, funding and prioritisation of high-level initiatives. Sets strategies, policies, standards and practices to ensure compliance between business strategies, technology strategies and enterprise transformation activities.",
+      "7": "Directs the development of enterprise-wide architecture and processes to embed the strategic application of change in the management of the organisation. Directs the creation and review of an enterprise capability strategy to support the strategic requirements of the business. Oversees the creation and implementation of roadmaps to guide long-term enterprise transformation and strategic alignment. Identifies the business benefits of alternative strategies. Ensures compliance between business strategies, enterprise transformation activities and technology directions, setting strategies, policies, standards and practices."
+    }
+  },
+  "TECH": {
+    "code": "TECH",
+    "name": "Specialist advice",
+    "overview": "Providing authoritative, professional advice and direction in a specialist area.",
+    "levels": {
+      "4": "Provides detailed and specific advice to support the organisation's planning and operations, typically related to the immediate area of responsibility. Actively maintains recognised expert level knowledge in one or more identifiable specialisms. Recognises and identifies the boundaries of their own specialist knowledge. Where appropriate, collaborates with other specialists to ensure advice given is professionally sound and appropriate to the organisation's needs.",
+      "5": "Provides professional advice that informs operational leadership and influences the translation of strategy into operations in their specialist area. Oversees the provision of specialist advice by others. Consolidates expertise from multiple sources, including third-party experts, to provide coherent and professionally sound advice to further organisational objectives. Supports and promotes the development and sharing of specialist knowledge within the organisation.",
+      "6": "Leads and promotes the development and application of specialist knowledge across the organisation, delivering professional advice that shapes direction and high-level decisions. Maintains a network of recognised experts (inside and/or outside the organisation) who can deliver expert advice in relevant areas. Actively influences professional development planning across a significant part of the organisation to further the development of appropriate expertise and provision of high-quality professional advice."
+    }
+  },
+  "INOV": {
+    "code": "INOV",
+    "name": "Innovation management",
+    "overview": "Identifying, prioritising, incubating and exploiting opportunities provided by information, communication and digital technologies.",
+    "levels": {
+      "5": "Manages the innovation pipeline and executes innovation processes. Develops and adapts innovation tools, processes and infrastructures to drive the process of innovation. Identifies resources and capabilities needed to support innovation. Encourages and motivates innovation communities, teams and individuals to share creative ideas and learn from failures. Manages and facilitates the communication and open flow of creative ideas between interested parties and the set-up of innovation networks and communities.",
+      "6": "Obtains organisational commitment to innovation. Develops organisational capabilities to drive innovation. Leads and plans the development of innovation capabilities and implementation of innovation processes, tools and frameworks. Leads the communication and an open flow of creative ideas between interested parties and the set-up of innovation networks and communities.",
+      "7": "Leads development of a culture that encourages innovation, risk-taking and collaboration. Embeds innovation processes throughout business units and links strategy execution with innovation. Aligns organisational and individual objectives, measures and rewards with innovation."
+    }
+  },
+  "BUSA": {
+    "code": "BUSA",
+    "name": "Business situation analysis",
+    "overview": "Investigating business situations to define recommendations for improvement action.",
+    "levels": {
+      "2": "Assists in investigating business situations to help identify and analyse problems and opportunities, under routine supervision. Helps collect and organise data and information to support recommendations.",
+      "3": "Investigates straightforward business situations to identify and analyse problems and opportunities. Contributes to the recommendation of improvements. Follows agreed standards and techniques to investigate, analyse and document business situations. Engages with stakeholders under direction.",
+      "4": "Investigates business situations where there is some complexity and ambiguity. Adopts holistic view to identify and analyse problems and opportunities. Contributes to the selection of the approach and techniques to be used for business situation analysis. Conducts root cause analysis and identifies recommendations for improvements. Engages and collaborates with operational stakeholders.",
+      "5": "Plans, manages and investigates business situation analysis where there is significant ambiguity and complexity. Advises on the approach and techniques to be used for business situation analysis. Ensures holistic view adopted to identify and analyse wide-ranging problems and opportunities. Engages and collaborates with a wide range of stakeholders, including those at the management level. Gains agreement from stakeholders to conclusions and recommendations. Contributes to definition of organisational standards and guidelines for business situation analysis.",
+      "6": "Initiates and leads business situation analysis where there is extensive ambiguity, complexity and potentially significant organisational impacts. Establishes and promotes the need for holistic business situation analysis prior to change programme initiation. Engages with stakeholders at executive level and advises on recommended change initiatives. Defines organisational policies, standards and techniques for business situation analysis."
+    }
+  },
+  "RLMT": {
+    "code": "RLMT",
+    "name": "Stakeholder relationship management",
+    "overview": "Systematically analysing, managing and influencing stakeholder relationships to achieve mutually beneficial outcomes through structured engagement.",
+    "levels": {
+      "4": "Deals with problems and issues, managing resolutions, corrective actions, lessons learned and the collection and dissemination of relevant information. Implements stakeholder engagement/communications plans. Collects and uses feedback from customers and stakeholders to help measure the effectiveness of stakeholder management. Helps develop and enhance customer and stakeholder relationships.",
+      "5": "Identifies the communications and relationship needs of stakeholder groups. Translates communications/stakeholder engagement strategies into specific activities and deliverables. Facilitates open communication and discussion between stakeholders. Acts as a single point of contact by developing, maintaining and working to stakeholder engagement strategies and plans. Provides informed feedback to assess and promote understanding. Facilitates business decision-making processes. Captures and disseminates technical and business information.",
+      "6": "Leads the development of comprehensive stakeholder management strategies and plans. Establishes and builds long-term, strategic relationships with key stakeholders to support service delivery and change initiatives. Acts as a principal point of contact, ensuring effective communication and alignment. Negotiates and ensures agreements meet stakeholder needs. Oversees the monitoring of stakeholder relationships, capturing lessons learned and providing feedback. Leads initiatives to enhance communication and relationships, promoting collaboration and understanding between all parties.",
+      "7": "Determines the strategic approach to understanding stakeholder objectives and requirements. Works with all interested parties to identify stakeholders and establish effective relationships. Establishes and promotes the overall vision for how stakeholder objectives are met and determines organisational roles and alignment. Actively manages relationships with the most senior stakeholders and is the ultimate escalation point for issue resolution."
+    }
+  },
+  "RELM": {
+    "code": "RELM",
+    "name": "Release management",
+    "overview": "Managing the release of new and updated services into production, ensuring alignment with business objectives and compliance standards.",
+    "levels": {
+      "2": "Assists with release management tasks under routine supervision. Supports the collection of data and information for release planning and scheduling. Assists in the preparation of release materials and resources. Helps document and maintain records of release activities. Participates in basic testing and quality assurance tasks and issue resolution.",
+      "3": "Supports the planning and scheduling of releases. Coordinates release activities with relevant teams. Follows defined release processes and procedures. Participates in testing and quality assurance activities to ensure releases meet standards. Identifies and resolves issues related to the release process. Documents and reports on release outcomes and communicates findings to stakeholders.",
+      "4": "Plans and schedules releases in line with business requirements and objectives. Coordinates release activities across multiple teams and stakeholders. Manages the release lifecycle, ensuring timely and quality deliverables. Ensures releases meet defined quality, security and compliance standards. Communicates release plans, progress and outcomes to stakeholders. Conducts post-release reviews and identifies areas for improvement.",
+      "5": "Develops and maintains release approaches, processes and automation tools. Oversees the planning and scheduling of complex, large-scale releases. Coordinates release activities across multiple projects and programmes. Ensures release processes and procedures are applied and that releases can be rolled back as needed. Communicates release approaches and outcomes. Conducts post-release analysis and drives continuous improvement.",
+      "6": "Defines organisational release management strategies, policies and standards. Aligns release management with overall business strategies and objectives. Ensures the availability of resources and tools for effective release management. Communicates release strategies and outcomes to stakeholders. Drives the adoption of new release management techniques and technologies."
+    }
+  },
+  "ASMG": {
+    "code": "ASMG",
+    "name": "Asset management",
+    "overview": "Managing the full lifecycle of assets from acquisition, operation, maintenance to disposal.",
+    "levels": {
+      "2": "Uses agreed procedures to create and maintain an accurate register of assets. Performs activities related to the administration of assets. Produces routine reports to assist asset management activities and decision-making.",
+      "3": "Applies tools, techniques and processes to create and maintain an accurate asset register. Produces reports and analysis to support asset management activities and aid decision-making.",
+      "4": "Controls assets in one or more significant areas ensuring administration of full lifecycle of assets is carried out. Produces and analyses registers and histories of authorised assets and verifies that all of these assets are in a known state and location. Acts to highlight and resolve potential instances of unauthorised assets.",
+      "5": "Manages and maintains the service compliance of IT and service assets in line with business and regulatory requirements. Identifies, assesses and communicates associated risks. Ensures asset controllers, infrastructure teams and the business co-ordinate and optimise value, maintain control and maintain appropriate legal compliance.",
+      "6": "Sets the strategy for asset management across the organisation. Communicates the policy, governance, scope and roles involved in asset management. Promotes awareness of and commitment to the role of asset management in the continuing economic and effective provision of services. Provides information and advice on complex asset management issues. Initiates impact assessment arising from decisions to obtain, change or continue the possession or use of an asset, system or service."
+    }
+  }
+}
