@@ -1,0 +1,12 @@
+DirectoryIndex index.html index.php
+
+RewriteEngine On
+
+# Requests for a real file or directory are served as-is (static html/css/js,
+# and lets DirectoryIndex above serve index.html for "/"). Everything else -
+# API routes and the OSM OAuth callback - goes through the front controller.
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+RewriteRule ^ index.php [L]

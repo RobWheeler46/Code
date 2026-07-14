@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Photo gallery - 7thPortal</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header id="app-nav" class="app-nav"></header>
+
+  <div class="container">
+    <h1>Photo gallery</h1>
+
+    <div class="card">
+      <h2>New album</h2>
+      <form id="album-form">
+        <div class="grid cols-2">
+          <div class="field"><label>Title</label><input type="text" id="a-title" required placeholder="e.g. Cubs Camp 2026"></div>
+          <div class="field"><label>Grouping</label>
+            <select id="a-grouping">
+              <option value="camp">Camp</option>
+              <option value="event">Event</option>
+              <option value="activity" selected>Activity</option>
+              <option value="term">Term</option>
+              <option value="section">Section</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid cols-2">
+          <div class="field"><label>Section</label><select id="a-section"></select></div>
+          <div class="field"><label>Who can see it</label>
+            <select id="a-scope">
+              <option value="section">Parents/carers with a child in this section</option>
+              <option value="all_parents">All parents/carers</option>
+            </select>
+          </div>
+        </div>
+        <div id="album-error"></div>
+        <button class="btn btn-primary" type="submit">Create draft album</button>
+      </form>
+    </div>
+
+    <div id="album-list"><p class="muted">Loading&hellip;</p></div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/leader-gallery.js"></script>
+</body>
+</html>

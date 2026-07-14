@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Log in - 7th Swindon Form Manager</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  body { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  .login-card { max-width: 380px; width: 100%; }
+  .login-card h1 { text-align: center; }
+</style>
+</head>
+<body>
+  <div class="card login-card">
+    <h1>7th Swindon<br>Form Request Manager</h1>
+    <p class="muted" style="text-align:center; margin-top:-0.5rem">Sign in with your Online Scout Manager email and password.</p>
+    <div id="alert-box"></div>
+    <form id="login-form">
+      <div class="field">
+        <label for="email">OSM email address</label>
+        <input type="email" id="email" name="email" required autocomplete="username">
+      </div>
+      <div class="field">
+        <label for="password">OSM password</label>
+        <input type="password" id="password" name="password" required autocomplete="current-password">
+      </div>
+      <button class="btn btn-primary" type="submit" style="width:100%">Log in</button>
+    </form>
+  </div>
+  <script src="js/api.js"></script>
+  <script>
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const alertBox = document.getElementById('alert-box');
+      alertBox.innerHTML = '';
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      try {
+        await Api.post('/api/login', { email, password });
+        location.href = 'index.html';
+      } catch (err) {
+        let html = `<div class="alert alert-error">${escapeHtml(err.message)}`;
+        if (err.hint === 'osm_password_reset') {
+          html += ` If you've forgotten your password, reset it on the <a href="https://www.onlinescoutmanager.co.uk/" target="_blank" rel="noopener">Online Scout Manager</a> website &mdash; this app cannot reset it for you.`;
+        }
+        html += '</div>';
+        alertBox.innerHTML = html;
+      }
+    });
+  </script>
+</body>
+</html>

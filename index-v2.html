@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Airspace Monitor — SN25 4TP</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #000;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    #map {
+      width: 100vw;
+      height: 100vh;
+      background: #000;
+    }
+
+    /* ── HUD overlay (top-left) ─────────────────────────── */
+    #hud {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      z-index: 2000;
+      background: rgba(0,0,0,0.72);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 10px;
+      padding: 10px 16px;
+      color: #e2e8f0;
+      pointer-events: none;
+      min-width: 220px;
+    }
+
+    #hud .hud-title {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #64748b;
+      margin-bottom: 4px;
+    }
+
+    #hud .hud-count {
+      font-size: 2rem;
+      font-weight: 800;
+      color: #7dd3fc;
+      line-height: 1;
+    }
+
+    #hud .hud-sub {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      margin-top: 4px;
+    }
+
+    #hud .hud-dot {
+      display: inline-block;
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #22c55e;
+      margin-right: 5px;
+      animation: pulse 2s infinite;
+    }
+    #hud .hud-dot.fetching { background: #facc15; animation: none; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.25; }
+    }
+
+    /* ── Leaflet overrides ──────────────────────────────── */
+    .leaflet-control-zoom a {
+      background: rgba(0,0,0,0.75) !important;
+      color: #94a3b8 !important;
+      border-color: #2d3148 !important;
+    }
+
+    .leaflet-control-attribution {
+      background: rgba(0,0,0,0.5) !important;
+      color: #374151 !important;
+      font-size: 0.6rem !important;
+    }
+
+    /* ── Plane label tooltips ───────────────────────────── */
+    .plane-label {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      padding: 0 !important;
+      pointer-events: none;
+    }
+
+    .plane-label::before { display: none !important; }
+
+    .label-box {
+      background: rgba(0,0,0,0.82);
+      border-radius: 6px;
+      padding: 5px 9px;
+      border-left: 3px solid #7dd3fc;
+      white-space: nowrap;
+      line-height: 1.45;
+    }
+
+    .label-box.cat-other {
+      border-left-color: #fb923c;
+    }
+
+    .label-cs {
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #7dd3fc;
+      letter-spacing: 0.05em;
+    }
+
+    .label-box.cat-other .label-cs { color: #fb923c; }
+
+    .label-line {
+      font-size: 0.72rem;
+      color: #94a3b8;
+    }
+
+    .label-alt {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #a3e635;
+    }
+
+    /* ── Filter controls ────────────────────────────────── */
+    #filters {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 2000;
+      background: rgba(0,0,0,0.72);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 10px;
+      padding: 10px 14px;
+      display: none;
+    }
+
+    .filter-title {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #4b5563;
+      margin-bottom: 8px;
+    }
+
+    .filter-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      background: none;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 6px;
+      padding: 6px 10px;
+      margin-bottom: 6px;
+      cursor: pointer;
+      font-size: 0.78rem;
+      color: #94a3b8;
+      text-align: left;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .filter-btn:last-child { margin-bottom: 0; }
+
+    .filter-btn:hover { background: rgba(255,255,255,0.05); }
+
+    .filter-btn.active {
+      border-color: rgba(255,255,255,0.25);
+      background: rgba(255,255,255,0.07);
+      color: #e2e8f0;
+    }
+
+    .filter-pip {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      opacity: 0.35;
+      transition: opacity 0.15s;
+    }
+
+    .filter-btn.active .filter-pip { opacity: 1; }
+
+    .filter-check {
+      margin-left: auto;
+      font-size: 0.7rem;
+      color: #22c55e;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+
+    .filter-btn.active .filter-check { opacity: 1; }
+
+    .filter-divider {
+      border: none;
+      border-top: 1px solid rgba(255,255,255,0.07);
+      margin: 8px 0;
+    }
+
+    /* Legend */
+    #legend {
+      position: fixed;
+      bottom: 28px;
+      left: 16px;
+      z-index: 2000;
+      background: rgba(0,0,0,0.72);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      padding: 8px 14px;
+      pointer-events: none;
+      display: none;
+    }
+
+    .leg-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.72rem;
+      color: #94a3b8;
+      margin-bottom: 4px;
+    }
+
+    .leg-row:last-child { margin-bottom: 0; }
+
+    .leg-icon { font-size: 15px; line-height: 1; }
+  </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div id="hud">
+  <div class="hud-title">&#9992; Live Airspace · SN25 4TP · 50 mi</div>
+  <div class="hud-count" id="hudCount">—</div>
+  <div class="hud-sub">
+    <span class="hud-dot" id="hudDot"></span>
+    <span id="hudSub">Connecting…</span>
+  </div>
+</div>
+
+<div id="filters">
+  <div class="filter-title">Show aircraft</div>
+  <button class="filter-btn active" id="f-commercial" onclick="toggleFilter('commercial')">
+    <span class="filter-pip" style="background:#7dd3fc"></span>
+    Commercial
+    <span class="filter-check">&#10003;</span>
+  </button>
+  <button class="filter-btn active" id="f-military" onclick="toggleFilter('military')">
+    <span class="filter-pip" style="background:#a855f7"></span>
+    Military
+    <span class="filter-check">&#10003;</span>
+  </button>
+  <button class="filter-btn active" id="f-private" onclick="toggleFilter('private')">
+    <span class="filter-pip" style="background:#fb923c"></span>
+    Private / Cargo
+    <span class="filter-check">&#10003;</span>
+  </button>
+  <button class="filter-btn active" id="f-ground" onclick="toggleFilter('ground')">
+    <span class="filter-pip" style="background:#6b7280"></span>
+    On ground
+    <span class="filter-check">&#10003;</span>
+  </button>
+</div>
+
+<div id="legend">
+  <div class="leg-row"><span class="leg-icon" style="color:#7dd3fc">&#9992;</span> Commercial (scheduled)</div>
+  <div class="leg-row"><span class="leg-icon" style="color:#a855f7">&#9992;</span> Military</div>
+  <div class="leg-row"><span class="leg-icon" style="color:#fb923c">&#9992;</span> Private / Cargo</div>
+  <div class="leg-row"><span class="leg-icon" style="color:#6b7280">&#9992;</span> On ground</div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  const POSTCODE     = 'SN254TP';
+  const RADIUS_MILES = 50;
+  const RADIUS_NM    = RADIUS_MILES / 1.15078;
+  const RADIUS_KM    = RADIUS_MILES * 1.60934;
+  const REFRESH_SEC  = 5;
+
+  // ── Map setup ────────────────────────────────────────────
+  const map = L.map('map', { zoomControl: true, attributionControl: true })
+    .setView([51.6, -1.8], 8);
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+    maxZoom: 14
+  }).addTo(map);
+
+  // ── State ────────────────────────────────────────────────
+  let homeLat = null, homeLon = null;
+  let radiusCircle = null, centerMarker = null;
+  let planeMarkers = [];
+  let countdownTimer = null;
+  let secondsLeft = REFRESH_SEC;
+  let lastAircraft = [];
+
+  const filters = { commercial: true, military: true, private: true, ground: true };
+
+  function toggleFilter(key) {
+    filters[key] = !filters[key];
+    const btn = document.getElementById('f-' + key);
+    btn.classList.toggle('active', filters[key]);
+    applyFilters();
+  }
+
+  function categoryOf(a) {
+    if (a.on_ground) return 'ground';
+    if (isMilitary(a)) return 'military';
+    if (isCommercial(a)) return 'commercial';
+    return 'private';
+  }
+
+  function applyFilters() {
+    const visible = lastAircraft.filter(a => filters[categoryOf(a)]);
+    render(visible);
+    document.getElementById('hudCount').textContent = visible.length +
+      (visible.length < lastAircraft.length ? ' / ' + lastAircraft.length : '');
+  }
+
+  // ── Helpers ──────────────────────────────────────────────
+  function toRad(d) { return d * Math.PI / 180; }
+
+  function distKm(la1, lo1, la2, lo2) {
+    const R = 6371, dLa = toRad(la2-la1), dLo = toRad(lo2-lo1);
+    const a = Math.sin(dLa/2)**2 + Math.cos(toRad(la1))*Math.cos(toRad(la2))*Math.sin(dLo/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  function fmtAlt(ft) {
+    if (ft == null || typeof ft === 'string') return '';
+    return Math.round(ft).toLocaleString() + ' ft';
+  }
+
+  function fmtSpd(kts) {
+    return kts == null ? '' : Math.round(kts) + ' kts';
+  }
+
+  function cs(a) {
+    return (a.flight || a.r || a.hex || '?').trim();
+  }
+
+  function isMilitary(a) {
+    // airplanes.live sets a.military boolean and/or dbFlags bit 0 for known military
+    return a.military === true || (a.dbFlags & 1) === 1;
+  }
+
+  function isCommercial(a) {
+    // ICAO airline callsign: exactly 3 letters + 1–4 digits + optional suffix letter
+    // Must not be flagged military first (checked before this is called)
+    return /^[A-Z]{3}\d{1,4}[A-Z]?$/.test((a.flight || '').trim());
+  }
+
+  const CAT_COLORS = {
+    commercial: '#7dd3fc',  // cyan
+    military:   '#a855f7',  // purple
+    private:    '#fb923c',  // orange
+    ground:     '#6b7280',  // gray
+  };
+
+  function planeColor(a, active) {
+    if (active) return '#facc15';
+    return CAT_COLORS[categoryOf(a)];
+  }
+
+  function planeIconHtml(a, active) {
+    const color = planeColor(a, active);
+    const rot   = a.track ?? 0;
+    return `<div style="transform:rotate(${rot}deg);font-size:26px;line-height:1;filter:drop-shadow(0 0 5px ${color});color:${color}">&#9992;</div>`;
+  }
+
+  function makePlaneIcon(a, active) {
+    return L.divIcon({
+      className: '',
+      html: planeIconHtml(a, active),
+      iconSize: [30, 30],
+      iconAnchor: [15, 15]
+    });
+  }
+
+  function makeLabelContent(a) {
+    const color  = planeColor(a, false);
+    const alt    = a.on_ground ? 'Ground' : (a.alt_baro != null ? fmtAlt(a.alt_baro) : '');
+    const spd    = fmtSpd(a.gs);
+    const detail = [a.t, spd].filter(Boolean).join(' · ');
+    return `<div class="label-box" style="border-left-color:${color}">
+      <div class="label-cs" style="color:${color}">${cs(a)}</div>
+      ${detail ? `<div class="label-line">${detail}</div>` : ''}
+      ${alt    ? `<div class="label-alt" style="${a.on_ground ? 'color:#6b7280' : ''}">${alt}</div>` : ''}
+    </div>`;
+  }
+
+  // ── Render ───────────────────────────────────────────────
+  function render(aircraft) {
+    planeMarkers.forEach(m => {
+      map.removeLayer(m.marker);
+      map.removeLayer(m.label);
+    });
+    planeMarkers = [];
+
+    aircraft.forEach(a => {
+      const marker = L.marker([a.lat, a.lon], { icon: makePlaneIcon(a, false) }).addTo(map);
+
+      const label = L.marker([a.lat, a.lon], {
+        icon: L.divIcon({
+          className: 'plane-label',
+          html: makeLabelContent(a),
+          iconAnchor: [-14, 10]   // offset label to the right of the plane icon
+        }),
+        interactive: false
+      }).addTo(map);
+
+      marker.on('click', () => {
+        // toggle highlight
+        const entry = planeMarkers.find(e => e.a === a);
+        if (!entry) return;
+        const wasActive = entry.active;
+        // reset all
+        planeMarkers.forEach(e => {
+          e.active = false;
+          e.marker.setIcon(makePlaneIcon(e.a, false));
+        });
+        if (!wasActive) {
+          entry.active = true;
+          entry.marker.setIcon(makePlaneIcon(a, true));
+        }
+      });
+
+      planeMarkers.push({ marker, label, a, active: false });
+    });
+
+  }
+
+  // ── Fetch ────────────────────────────────────────────────
+  async function fetchFlights() {
+    document.getElementById('hudDot').className = 'hud-dot fetching';
+
+    const url = `https://api.airplanes.live/v2/point/${homeLat}/${homeLon}/${Math.ceil(RADIUS_NM)}`;
+    const res  = await fetch(url);
+    if (!res.ok) throw new Error(`API ${res.status}`);
+
+    const json     = await res.json();
+    lastAircraft = (json.ac || []).filter(a => a.lat != null && a.lon != null);
+
+    applyFilters();
+
+    const now = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    document.getElementById('hudSub').textContent = `Updated ${now}`;
+    document.getElementById('hudDot').className   = 'hud-dot';
+    document.getElementById('filters').style.display = 'block';
+    document.getElementById('legend').style.display  = 'block';
+
+    secondsLeft = REFRESH_SEC;
+  }
+
+  function startCountdown() {
+    clearInterval(countdownTimer);
+    countdownTimer = setInterval(async () => {
+      secondsLeft--;
+      if (secondsLeft <= 0) {
+        secondsLeft = REFRESH_SEC;
+        try { await fetchFlights(); } catch (e) {
+          document.getElementById('hudSub').textContent = 'Fetch failed — retrying…';
+          document.getElementById('hudDot').className   = 'hud-dot fetching';
+        }
+      }
+    }, 1000);
+  }
+
+  // ── Boot ─────────────────────────────────────────────────
+  async function boot() {
+    document.getElementById('hudSub').textContent = 'Resolving postcode…';
+
+    const pcRes  = await fetch(`https://api.postcodes.io/postcodes/${POSTCODE}`);
+    const pcJson = await pcRes.json();
+    if (pcJson.status !== 200) throw new Error('Postcode lookup failed');
+
+    homeLat = pcJson.result.latitude;
+    homeLon = pcJson.result.longitude;
+
+    // Draw radius ring
+    radiusCircle = L.circle([homeLat, homeLon], {
+      radius: RADIUS_KM * 1000,
+      color: '#1d4ed8', weight: 1, dashArray: '6 4',
+      fill: true, fillColor: '#1d4ed8', fillOpacity: 0.04
+    }).addTo(map);
+
+    centerMarker = L.marker([homeLat, homeLon], {
+      icon: L.divIcon({
+        className: '',
+        html: '<div style="width:14px;height:14px;background:#f87171;border-radius:50%;border:2px solid #fff;box-shadow:0 0 8px #f87171"></div>',
+        iconSize: [14,14], iconAnchor: [7,7]
+      }),
+      interactive: false
+    }).addTo(map);
+
+    map.fitBounds(radiusCircle.getBounds(), { padding: [8, 8] });
+
+    await fetchFlights();
+    startCountdown();
+  }
+
+  boot().catch(e => {
+    document.getElementById('hudSub').textContent = 'Error: ' + e.message;
+    document.getElementById('hudDot').className   = 'hud-dot fetching';
+  });
+</script>
+</body>
+</html>

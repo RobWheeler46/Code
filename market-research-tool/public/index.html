@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Dashboard - Market Research Desk</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="app-nav" id="app-nav"></header>
+  <div class="container">
+    <h1>Dashboard</h1>
+    <div id="stale-warning"></div>
+
+    <div class="grid cols-4" id="stat-tiles"></div>
+
+    <div class="grid cols-2" style="margin-top:1.25rem">
+      <div class="card">
+        <h2>Top Risers</h2>
+        <div id="top-risers"></div>
+      </div>
+      <div class="card">
+        <h2>Top Fallers</h2>
+        <div id="top-fallers"></div>
+      </div>
+      <div class="card">
+        <h2>Highest Volume Movers</h2>
+        <div id="volume-movers"></div>
+      </div>
+      <div class="card">
+        <h2>High-Risk Warnings</h2>
+        <div id="risk-warnings"></div>
+      </div>
+    </div>
+
+    <div class="card" id="alerts">
+      <h2>Recent Alerts</h2>
+      <div id="recent-alerts"></div>
+    </div>
+
+    <div class="card">
+      <h2>Active Signals</h2>
+      <div id="active-signals"></div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/dashboard.js"></script>
+</body>
+</html>

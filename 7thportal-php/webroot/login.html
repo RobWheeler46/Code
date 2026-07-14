@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Log in - 7thPortal</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header id="app-nav" class="app-nav"></header>
+
+  <div class="container narrow">
+    <div id="error-box"></div>
+
+    <div class="card">
+      <h1>Leaders and administrators</h1>
+      <p class="muted">Sign in with your Online Scout Manager account. 7thPortal never sees or stores your OSM password.</p>
+      <a class="btn btn-primary" href="/auth/osm/login">Log in with OSM</a>
+      <div id="demo-leader-link" style="margin-top:0.75rem; display:none;">
+        <a class="btn btn-secondary btn-sm" href="/auth/demo/login?as=leader">Try Demo Mode instead (leader)</a>
+        <a class="btn btn-secondary btn-sm" href="/auth/demo/login?as=admin">Try Demo Mode instead (admin)</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <h1>Parents and carers</h1>
+      <p class="muted">Use the email and password set up for you by a Portal Administrator. If you have not set a password yet, use the invite link you were sent.</p>
+      <form id="parent-login-form">
+        <div class="field">
+          <label for="email">Email</label>
+          <input type="email" id="email" required autocomplete="username">
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" required autocomplete="current-password">
+        </div>
+        <button class="btn btn-primary" type="submit">Log in</button>
+        <a class="btn btn-secondary btn-sm" href="/auth/demo/login?as=parent">Try Demo Mode instead (parent)</a>
+      </form>
+      <p class="field help" style="margin-top:1rem;">Trouble signing in? Contact your section leader or the Portal Administrator. Password resets for your OSM account itself are handled directly in OSM.</p>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/login.js"></script>
+</body>
+</html>

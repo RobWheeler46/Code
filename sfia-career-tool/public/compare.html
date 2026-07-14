@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Compare Roles - SFIA Career Tool</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header id="app-nav" class="app-nav"></header>
+  <div class="container">
+    <div class="card">
+      <h1>Compare two role profiles</h1>
+      <p class="muted">Select your current role and an aspirational role to see the SFIA skill and level gap between them.</p>
+      <div id="compare-alert"></div>
+      <div class="grid cols-2">
+        <div class="field">
+          <label for="current-role">Current role</label>
+          <select id="current-role"><option value="">Select a role...</option></select>
+        </div>
+        <div class="field">
+          <label for="aspirational-role">Aspirational role</label>
+          <select id="aspirational-role"><option value="">Select a role...</option></select>
+        </div>
+      </div>
+      <div class="actions-row">
+        <button class="btn btn-primary" id="compare-btn" type="button">Compare roles</button>
+      </div>
+    </div>
+
+    <div id="results"></div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/compare.js"></script>
+</body>
+</html>

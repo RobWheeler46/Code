@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Signal Detail - Market Research Desk</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="app-nav" id="app-nav"></header>
+  <div class="container">
+    <a href="signals.html">&larr; All signals</a>
+    <div style="display:flex; justify-content:space-between; align-items:start; margin-top:0.5rem">
+      <h1 id="signal-title"></h1>
+    </div>
+
+    <div class="grid cols-2">
+      <div class="card">
+        <h2>Explanation</h2>
+        <p id="signal-explanation"></p>
+        <h3>Score</h3>
+        <div class="score-bar-wrap"><div class="score-bar" id="score-bar"></div></div>
+        <p id="score-text"></p>
+        <h3>Triggered Rules</h3>
+        <ul id="triggered-rules"></ul>
+        <h3>Score Breakdown</h3>
+        <table id="score-breakdown"></table>
+      </div>
+      <div class="card">
+        <h2>Context</h2>
+        <table>
+          <tr><td>Asset</td><td id="ctx-asset"></td></tr>
+          <tr><td>Price at signal</td><td id="ctx-price"></td></tr>
+          <tr><td>Created</td><td id="ctx-created"></td></tr>
+          <tr><td>Expires</td><td id="ctx-expiry"></td></tr>
+          <tr><td>Status</td><td id="ctx-status"></td></tr>
+          <tr><td>Outcome</td><td id="ctx-outcome"></td></tr>
+        </table>
+        <div id="conflict-warning"></div>
+
+        <h3>Your Feedback</h3>
+        <div class="actions-row">
+          <button class="btn btn-secondary btn-sm" onclick="submitFeedback('useful')">Useful</button>
+          <button class="btn btn-secondary btn-sm" onclick="submitFeedback('not_useful')">Not useful</button>
+          <button class="btn btn-secondary btn-sm" onclick="submitFeedback('false_positive')">False positive</button>
+          <button class="btn btn-secondary btn-sm" onclick="submitFeedback('missed_context')">Missed context</button>
+          <button class="btn btn-secondary btn-sm" onclick="submitFeedback('needs_rule_adjustment')">Needs rule adjustment</button>
+        </div>
+        <p id="feedback-current" class="muted"></p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Outcome Tracking</h2>
+      <p class="muted">Price checkpoints since this signal fired (FR-057 to FR-060). Filled in automatically as time passes.</p>
+      <table>
+        <thead><tr><th>Checkpoint</th><th>Price</th><th>Change vs signal</th></tr></thead>
+        <tbody id="outcome-checkpoints"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/signal-detail.js"></script>
+</body>
+</html>

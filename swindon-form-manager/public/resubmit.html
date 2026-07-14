@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Resubmit Activity Approval Request - 7th Swindon Form Manager</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header id="app-nav" class="app-nav"></header>
+  <div class="container">
+    <div class="card">
+      <h1>Resubmit: <span id="reference-label"></span></h1>
+      <p class="muted">This request was rejected. Update the details below as needed and resubmit &mdash; the approval workflow will restart from the beginning.</p>
+      <div class="alert alert-info" id="rejection-reason"></div>
+    </div>
+
+    <div id="alert-box"></div>
+
+    <form id="request-form">
+      <div class="card">
+        <h2>1. Leader in charge</h2>
+        <div class="grid cols-2">
+          <div class="field">
+            <label for="leader_name">Name *</label>
+            <input type="text" id="leader_name" name="leader_name" required>
+          </div>
+          <div class="field">
+            <label for="leader_phone">Phone number *</label>
+            <input type="tel" id="leader_phone" name="leader_phone" required>
+          </div>
+          <div class="field">
+            <label for="leader_email">Email address *</label>
+            <input type="email" id="leader_email" name="leader_email" required>
+          </div>
+          <div class="field">
+            <label for="leader_section_role">Section or role *</label>
+            <select id="leader_section_role" name="leader_section_role" required></select>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>2. Activity details</h2>
+        <div class="field">
+          <label for="activity_description">Description of activity *</label>
+          <textarea id="activity_description" name="activity_description" required></textarea>
+        </div>
+        <div class="grid cols-2">
+          <div class="field">
+            <label for="activity_location">Location *</label>
+            <input type="text" id="activity_location" name="activity_location" required>
+          </div>
+          <div class="field">
+            <label for="activity_date">Date *</label>
+            <input type="date" id="activity_date" name="activity_date" required>
+          </div>
+          <div class="field">
+            <label for="activity_start_time">Start time *</label>
+            <input type="time" id="activity_start_time" name="activity_start_time" required>
+          </div>
+          <div class="field">
+            <label for="activity_finish_time">Finish time *</label>
+            <input type="time" id="activity_finish_time" name="activity_finish_time" required>
+          </div>
+        </div>
+        <div class="field">
+          <label>Away from usual meeting place? *</label>
+          <div class="radio-group" data-yesno="away_from_meeting_place"></div>
+        </div>
+        <div class="field">
+          <label>Joint activity between 7th Swindon sections? *</label>
+          <div class="radio-group" data-yesno="joint_activity"></div>
+        </div>
+        <div class="field" id="joint_activity_details_wrap" style="display:none">
+          <label for="joint_activity_details">Joint activity details *</label>
+          <textarea id="joint_activity_details" name="joint_activity_details"></textarea>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>3. Participants</h2>
+        <div class="field">
+          <label>Section(s) attending *</label>
+          <div class="checkbox-group" id="attending_sections_group"></div>
+        </div>
+        <div class="grid cols-2">
+          <div class="field">
+            <label for="young_people_count">Estimated number of young people *</label>
+            <input type="number" min="0" id="young_people_count" name="young_people_count" required>
+          </div>
+          <div class="field">
+            <label for="adults_count">Estimated number of adults *</label>
+            <input type="number" min="0" id="adults_count" name="adults_count" required>
+          </div>
+        </div>
+        <div class="field">
+          <label>Additional needs, adjustments or specific considerations? *</label>
+          <div class="radio-group" data-yesno="additional_needs"></div>
+        </div>
+        <div class="field" id="additional_needs_details_wrap" style="display:none">
+          <label for="additional_needs_details">Additional details *</label>
+          <textarea id="additional_needs_details" name="additional_needs_details"></textarea>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>4. Permits, qualifications and providers</h2>
+        <div class="field">
+          <label>Does the activity require a Scout permit, external qualification or specialist instructor? *</label>
+          <div class="radio-group" data-yesnonotsure="requires_permit"></div>
+        </div>
+        <div class="field" id="permit_details_wrap" style="display:none">
+          <label for="permit_details">Permit, qualification or instructor details *</label>
+          <textarea id="permit_details" name="permit_details"></textarea>
+        </div>
+        <div class="field">
+          <label>Is an external provider being used? *</label>
+          <div class="radio-group" data-yesno="external_provider"></div>
+        </div>
+        <div class="field" id="external_provider_details_wrap" style="display:none">
+          <label for="external_provider_details">External provider details *</label>
+          <textarea id="external_provider_details" name="external_provider_details"></textarea>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>5. Safety</h2>
+        <div class="field">
+          <label for="in_touch_process">In Touch process *</label>
+          <textarea id="in_touch_process" name="in_touch_process" required></textarea>
+          <div class="help">Describe the process and include relevant contact numbers.</div>
+        </div>
+        <div class="field">
+          <label for="first_aid_arrangements">First aid arrangements *</label>
+          <textarea id="first_aid_arrangements" name="first_aid_arrangements" required></textarea>
+        </div>
+        <div class="field">
+          <label for="transport_arrangements">Transport arrangements *</label>
+          <textarea id="transport_arrangements" name="transport_arrangements" required></textarea>
+        </div>
+        <div class="field">
+          <div class="checkbox-row">
+            <input type="checkbox" id="risk_assessment_confirmed" name="risk_assessment_confirmed" value="true" required>
+            <label for="risk_assessment_confirmed" id="risk_assessment_confirmed_label" style="font-weight:normal"></label>
+          </div>
+        </div>
+        <div class="field">
+          <label for="risk_assessment">Replace risk assessment upload (leave blank to keep the existing one)</label>
+          <input type="file" id="risk_assessment" name="risk_assessment" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif">
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>6. Documents</h2>
+        <div class="field">
+          <label>Existing documents</label>
+          <div id="existing-documents"></div>
+        </div>
+        <div class="field">
+          <label for="supporting_documents">Add supporting documents (optional)</label>
+          <input type="file" id="supporting_documents" name="supporting_documents" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif">
+          <div class="help" id="file-help"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>7. Final confirmations</h2>
+        <div class="field">
+          <div class="checkbox-row">
+            <input type="checkbox" id="rules_confirmed" name="rules_confirmed" value="true" required>
+            <label for="rules_confirmed" id="rules_confirmed_label" style="font-weight:normal"></label>
+          </div>
+        </div>
+        <div class="field">
+          <div class="checkbox-row">
+            <input type="checkbox" id="accuracy_confirmed" name="accuracy_confirmed" value="true" required>
+            <label for="accuracy_confirmed" id="accuracy_confirmed_label" style="font-weight:normal"></label>
+          </div>
+        </div>
+      </div>
+
+      <div class="actions-row">
+        <button type="submit" class="btn btn-primary" id="submit-btn">Resubmit request</button>
+        <a class="btn btn-secondary" id="cancel-link" href="index.html">Cancel</a>
+      </div>
+    </form>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/activity-form.js"></script>
+  <script src="js/resubmit.js"></script>
+</body>
+</html>

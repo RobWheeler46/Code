@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Watchlists - Market Research Desk</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="app-nav" id="app-nav"></header>
+  <div class="container">
+    <div id="list-view">
+      <h1>Watchlists</h1>
+      <div class="card">
+        <h2>Create Watchlist</h2>
+        <div id="create-alert"></div>
+        <form id="create-form">
+          <div class="grid cols-2">
+            <div class="field">
+              <label for="wl-name">Name</label>
+              <input type="text" id="wl-name" required>
+            </div>
+            <div class="field">
+              <label for="wl-category">Category</label>
+              <input type="text" id="wl-category" placeholder="e.g. penny shares, crypto">
+            </div>
+          </div>
+          <div class="field">
+            <label for="wl-description">Description</label>
+            <input type="text" id="wl-description">
+          </div>
+          <button class="btn btn-primary" type="submit">Create Watchlist</button>
+        </form>
+      </div>
+      <div id="watchlist-cards"></div>
+    </div>
+
+    <div id="detail-view" style="display:none">
+      <a href="watchlists.html">&larr; All watchlists</a>
+      <h1 id="detail-name"></h1>
+      <p class="muted" id="detail-description"></p>
+      <div id="detail-alert"></div>
+
+      <div class="card">
+        <h2>Add Asset</h2>
+        <div class="field">
+          <label for="asset-search-input">Search US shares, UK shares or crypto</label>
+          <input type="search" id="asset-search-input" placeholder="e.g. AAPL, Vodafone, Bitcoin">
+        </div>
+        <div id="asset-search-results"></div>
+      </div>
+
+      <div class="card">
+        <h2>Assets</h2>
+        <table>
+          <thead>
+            <tr><th>Symbol</th><th>Name</th><th>Class</th><th>Price</th><th>24h</th><th>Status</th><th></th></tr>
+          </thead>
+          <tbody id="asset-rows"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/watchlists.js"></script>
+</body>
+</html>

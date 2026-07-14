@@ -1,0 +1,41 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "flight-tracker",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "-p", "3000", "."],
+      "port": 3000
+    },
+    {
+      "name": "swindon-form-manager",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["swindon-form-manager/src/server.js"],
+      "port": 3010
+    },
+    {
+      "name": "market-research-tool",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["market-research-tool/src/server.js"],
+      "port": 3020
+    },
+    {
+      "name": "sfia-career-tool",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["sfia-career-tool/src/server.js"],
+      "port": 3030
+    },
+    {
+      "name": "7thportal",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["7thportal/src/server.js"],
+      "port": 3040
+    },
+    {
+      "name": "7thportal-php",
+      "runtimeExecutable": "C:\\Users\\rob\\AppData\\Local\\Microsoft\\WinGet\\Packages\\PHP.PHP.8.3_Microsoft.Winget.Source_8wekyb3d8bbwe\\php.exe",
+      "runtimeArgs": ["-S", "localhost:8040", "-t", "7thportal-php/webroot", "7thportal-php/webroot/index.php"],
+      "port": 8040
+    }
+  ]
+}

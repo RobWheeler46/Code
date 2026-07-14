@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UK Postcode Flight Tracker</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 16px 24px;
+      background: #1a1d27;
+      border-bottom: 1px solid #2d3148;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    h1 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: #7dd3fc;
+      white-space: nowrap;
+    }
+
+    .search-row {
+      display: flex;
+      gap: 8px;
+      flex: 1;
+      min-width: 260px;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid #3d4268;
+      background: #12141e;
+      color: #e2e8f0;
+      font-size: 1rem;
+      outline: none;
+      max-width: 220px;
+      text-transform: uppercase;
+    }
+
+    input[type="text"]:focus { border-color: #7dd3fc; }
+
+    button {
+      padding: 8px 20px;
+      border-radius: 8px;
+      border: none;
+      background: #3b82f6;
+      color: #fff;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+
+    button:hover { background: #2563eb; }
+    button:disabled { background: #374151; cursor: not-allowed; }
+
+    .status {
+      font-size: 0.85rem;
+      color: #94a3b8;
+      margin-left: auto;
+      white-space: nowrap;
+    }
+
+    .main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    #map { flex: 1; }
+
+    .sidebar {
+      width: 320px;
+      background: #1a1d27;
+      border-left: 1px solid #2d3148;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid #2d3148;
+      font-size: 0.85rem;
+      color: #94a3b8;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .back-btn {
+      background: none;
+      border: none;
+      color: #7dd3fc;
+      font-size: 1rem;
+      cursor: pointer;
+      padding: 0 4px 0 0;
+      line-height: 1;
+      display: none;
+    }
+    .back-btn:hover { background: none; color: #bae6fd; }
+
+    .flight-list {
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .flight-item {
+      padding: 12px 16px;
+      border-bottom: 1px solid #1e2235;
+      cursor: pointer;
+      transition: background 0.1s;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .flight-item:hover { background: #1e2235; }
+    .flight-item.active { background: #1e3a5f; }
+
+    .flight-item-body { flex: 1; min-width: 0; }
+
+    .flight-callsign {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #7dd3fc;
+      letter-spacing: 0.05em;
+    }
+
+    .flight-detail {
+      font-size: 0.78rem;
+      color: #64748b;
+      margin-top: 3px;
+      line-height: 1.5;
+    }
+
+    .flight-alt {
+      font-size: 0.82rem;
+      color: #a3e635;
+      font-weight: 600;
+      margin-top: 2px;
+    }
+
+    .flight-chevron {
+      color: #374151;
+      font-size: 0.9rem;
+      flex-shrink: 0;
+    }
+
+    /* Detail panel */
+    .detail-panel {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+      overflow-y: auto;
+    }
+    .detail-panel.visible { display: flex; }
+    .flight-list.hidden { display: none; }
+
+    .detail-hero {
+      padding: 20px 16px 16px;
+      border-bottom: 1px solid #2d3148;
+      background: #12141e;
+    }
+
+    .detail-callsign {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: #7dd3fc;
+      letter-spacing: 0.06em;
+    }
+
+    .detail-reg {
+      font-size: 0.85rem;
+      color: #94a3b8;
+      margin-top: 4px;
+    }
+
+    .detail-type-badge {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      background: #1e3a5f;
+      color: #7dd3fc;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      background: #2d3148;
+      border-bottom: 1px solid #2d3148;
+    }
+
+    .detail-cell {
+      background: #1a1d27;
+      padding: 14px 16px;
+    }
+
+    .detail-cell-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #4b5563;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .detail-cell-value {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #e2e8f0;
+    }
+
+    .detail-cell-value.green  { color: #a3e635; }
+    .detail-cell-value.yellow { color: #facc15; }
+    .detail-cell-value.red    { color: #f87171; }
+    .detail-cell-value.blue   { color: #7dd3fc; }
+
+    .detail-section {
+      padding: 14px 16px;
+      border-bottom: 1px solid #1e2235;
+    }
+
+    .detail-section-title {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #4b5563;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5px 0;
+      border-bottom: 1px solid #1e2235;
+      font-size: 0.82rem;
+    }
+
+    .detail-row:last-child { border-bottom: none; }
+    .detail-row-label { color: #64748b; }
+    .detail-row-value { color: #e2e8f0; font-weight: 500; }
+
+    .climb-indicator {
+      font-size: 0.75rem;
+      margin-left: 4px;
+    }
+
+    .squawk-7700 { color: #f87171; font-weight: 700; }
+    .squawk-7600 { color: #facc15; font-weight: 700; }
+    .squawk-7500 { color: #f87171; font-weight: 700; }
+
+    /* Map legend */
+    .map-legend {
+      position: absolute;
+      bottom: 30px;
+      left: 10px;
+      z-index: 1000;
+      background: rgba(26,29,39,0.92);
+      border: 1px solid #2d3148;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 0.75rem;
+      color: #94a3b8;
+      pointer-events: none;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 5px;
+    }
+    .legend-item:last-child { margin-bottom: 0; }
+    .legend-dot {
+      font-size: 14px;
+      line-height: 1;
+    }
+
+    /* List colour dots */
+    .type-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .empty-state {
+      padding: 40px 20px;
+      text-align: center;
+      color: #4b5563;
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+
+    .error-msg { color: #f87171; }
+
+    .refresh-bar {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 24px;
+      background: #12141e;
+      border-bottom: 1px solid #2d3148;
+      font-size: 0.8rem;
+      color: #64748b;
+    }
+
+    .refresh-bar.active { display: flex; }
+
+    .refresh-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #22c55e;
+      flex-shrink: 0;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    .refresh-dot.fetching { background: #facc15; animation: none; }
+
+    .refresh-countdown { margin-left: auto; }
+
+    @media (max-width: 640px) {
+      .sidebar { display: none; }
+      .status { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>&#9992; UK Flight Tracker</h1>
+  <div class="search-row">
+    <input type="text" id="postcode" placeholder="e.g. SW1A 1AA" maxlength="8" />
+    <button id="searchBtn" onclick="search()">Search</button>
+  </div>
+  <span class="status" id="status">Enter a UK postcode to begin</span>
+</header>
+
+<div class="refresh-bar" id="refreshBar">
+  <div class="refresh-dot" id="refreshDot"></div>
+  <span id="refreshLabel">Monitoring live — refreshes every 30 s</span>
+  <span class="refresh-countdown" id="refreshCountdown"></span>
+  <button id="stopBtn" onclick="stopMonitoring()" style="padding:3px 10px;font-size:0.75rem;background:#374151;">Stop</button>
+</div>
+
+<div class="main">
+  <div id="map">
+    <div class="map-legend" id="mapLegend" style="display:none">
+      <div class="legend-item"><span class="legend-dot" style="color:#7dd3fc">&#9992;</span> Commercial (scheduled)</div>
+      <div class="legend-item"><span class="legend-dot" style="color:#fb923c">&#9992;</span> Private / Military / Cargo</div>
+      <div class="legend-item"><span class="legend-dot" style="color:#facc15">&#9992;</span> Selected aircraft</div>
+    </div>
+  </div>
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <button class="back-btn" id="backBtn" onclick="showList()" title="Back to list">&#8592;</button>
+      <span id="sidebarTitle">Nearby Aircraft</span>
+    </div>
+    <div class="flight-list" id="flightList">
+      <div class="empty-state">Search a postcode to see<br>flights within 20 miles.</div>
+    </div>
+    <div class="detail-panel" id="detailPanel"></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  const RADIUS_MILES = 50;
+  const RADIUS_NM    = RADIUS_MILES / 1.15078;  // nautical miles for airplanes.live
+  const RADIUS_KM    = RADIUS_MILES * 1.60934;
+  const KM_PER_DEG   = 111.32;
+
+  let map = L.map('map').setView([54.5, -3], 6);
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+    maxZoom: 14
+  }).addTo(map);
+
+  let radiusCircle = null;
+  let centerMarker = null;
+  let planeMarkers = [];
+
+  const REFRESH_INTERVAL = 30;
+  let monitorInterval = null;
+  let countdownInterval = null;
+  let monitorLat = null, monitorLon = null, monitorPostcode = null;
+  let secondsLeft = REFRESH_INTERVAL;
+
+  function toRad(d) { return d * Math.PI / 180; }
+
+  function distKm(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  function fmtAlt(ft) {
+    return ft == null ? 'N/A' : Math.round(ft).toLocaleString() + ' ft';
+  }
+
+  function fmtSpd(kts) {
+    return kts == null ? 'N/A' : Math.round(kts) + ' kts';
+  }
+
+  function planeIcon(a, active) {
+    const color = categoryColor(a, active);
+    const rot   = (a.track ?? 0);
+    return L.divIcon({
+      className: '',
+      html: `<div style="transform:rotate(${rot}deg);font-size:22px;line-height:1;filter:drop-shadow(0 0 4px ${color});color:${color}">&#9992;</div>`,
+      iconSize: [26, 26],
+      iconAnchor: [13, 13]
+    });
+  }
+
+  function setStatus(msg, err) {
+    const el = document.getElementById('status');
+    el.textContent  = msg;
+    el.className    = 'status' + (err ? ' error-msg' : '');
+  }
+
+  // airplanes.live: free, no key, CORS-enabled. Radius in nautical miles.
+  async function fetchFlights(lat, lon, postcode) {
+    const dot = document.getElementById('refreshDot');
+    if (dot) dot.className = 'refresh-dot fetching';
+
+    const url = `https://api.airplanes.live/v2/point/${lat}/${lon}/${Math.ceil(RADIUS_NM)}`;
+    const res  = await fetch(url);
+    if (!res.ok) throw new Error(`Flight API returned ${res.status} — please try again shortly.`);
+
+    const json = await res.json();
+    // Each aircraft object: { flight, hex, r, t, lat, lon, alt_baro, gs, track, on_ground, ... }
+    const aircraft = (json.ac || []).filter(a => a.lat != null && a.lon != null);
+
+    renderMap(lat, lon, postcode, aircraft);
+    renderList(lat, lon, aircraft);
+
+    const now = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    setStatus(`${aircraft.length} aircraft within ${RADIUS_MILES} miles of ${postcode} · updated ${now}`);
+
+    if (dot) dot.className = 'refresh-dot';
+    return aircraft;
+  }
+
+  function startMonitoring(lat, lon, postcode) {
+    stopMonitoring();
+    monitorLat = lat; monitorLon = lon; monitorPostcode = postcode;
+
+    document.getElementById('refreshBar').classList.add('active');
+
+    secondsLeft = REFRESH_INTERVAL;
+    updateCountdown();
+
+    countdownInterval = setInterval(() => {
+      secondsLeft--;
+      updateCountdown();
+      if (secondsLeft <= 0) {
+        secondsLeft = REFRESH_INTERVAL;
+        fetchFlights(monitorLat, monitorLon, monitorPostcode, true).catch(e => setStatus(e.message, true));
+      }
+    }, 1000);
+  }
+
+  function stopMonitoring() {
+    clearInterval(monitorInterval);
+    clearInterval(countdownInterval);
+    monitorInterval = countdownInterval = null;
+    document.getElementById('refreshBar').classList.remove('active');
+    document.getElementById('refreshCountdown').textContent = '';
+  }
+
+  function updateCountdown() {
+    document.getElementById('refreshCountdown').textContent = `Next refresh in ${secondsLeft}s`;
+  }
+
+  async function search() {
+    const raw = document.getElementById('postcode').value.trim().toUpperCase().replace(/\s+/g,'');
+    if (!raw) return;
+
+    const btn = document.getElementById('searchBtn');
+    btn.disabled = true;
+    stopMonitoring();
+    setStatus('Looking up postcode…');
+
+    try {
+      const pcRes  = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(raw)}`);
+      const pcJson = await pcRes.json();
+      if (pcJson.status !== 200) throw new Error('Postcode not found — please check and try again.');
+
+      const { latitude: lat, longitude: lon, postcode } = pcJson.result;
+      setStatus('Fetching live flight data…');
+
+      await fetchFlights(lat, lon, postcode, false);
+      startMonitoring(lat, lon, postcode);
+
+    } catch (e) {
+      setStatus(e.message, true);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function callsign(a) {
+    return (a.flight || a.r || a.hex || 'Unknown').trim();
+  }
+
+  // Returns 'commercial' if ICAO airline callsign pattern (e.g. BAW123), else 'other'
+  function planeCategory(a) {
+    const fl = (a.flight || '').trim();
+    return /^[A-Z]{3}\d{1,4}[A-Z]?$/.test(fl) ? 'commercial' : 'other';
+  }
+
+  function categoryColor(a, active) {
+    if (active) return '#facc15';
+    return planeCategory(a) === 'commercial' ? '#7dd3fc' : '#fb923c';
+  }
+
+  function renderMap(lat, lon, label, aircraft) {
+    planeMarkers.forEach(m => map.removeLayer(m));
+    planeMarkers = [];
+    if (radiusCircle) map.removeLayer(radiusCircle);
+    if (centerMarker) map.removeLayer(centerMarker);
+
+    radiusCircle = L.circle([lat, lon], {
+      radius: RADIUS_KM * 1000,
+      color: '#3b82f6', weight: 1.5,
+      fill: true, fillColor: '#3b82f6', fillOpacity: 0.05
+    }).addTo(map);
+
+    centerMarker = L.marker([lat, lon], {
+      icon: L.divIcon({
+        className: '',
+        html: '<div style="width:12px;height:12px;background:#f87171;border-radius:50%;border:2px solid #fff;box-shadow:0 0 6px #f87171"></div>',
+        iconSize: [12,12], iconAnchor: [6,6]
+      })
+    }).addTo(map).bindTooltip(label);
+
+    map.fitBounds(radiusCircle.getBounds(), { padding: [20, 20] });
+
+    aircraft.forEach(a => {
+      const cs = callsign(a);
+      const m  = L.marker([a.lat, a.lon], { icon: planeIcon(a, false) })
+        .addTo(map)
+        .bindTooltip(`<b>${cs}</b><br>${fmtAlt(a.alt_baro)} &middot; ${fmtSpd(a.gs)}`, { direction: 'top' });
+      m._cs = cs;
+      m._a  = a;
+      m.on('click', () => highlight(cs, m));
+      planeMarkers.push(m);
+    });
+
+    document.getElementById('mapLegend').style.display = aircraft.length ? 'block' : 'none';
+  }
+
+  function renderList(lat, lon, aircraft) {
+    const list  = document.getElementById('flightList');
+    const title = document.getElementById('sidebarTitle');
+
+    if (!aircraft.length) {
+      title.textContent = 'Nearby Aircraft (0)';
+      list.innerHTML = '<div class="empty-state">No aircraft detected within 20 miles right now.</div>';
+      return;
+    }
+
+    const sorted = aircraft
+      .map(a => ({ a, d: distKm(lat, lon, a.lat, a.lon) }))
+      .sort((x, y) => x.d - y.d);
+
+    title.textContent = `Nearby Aircraft (${aircraft.length})`;
+    list.innerHTML = '';
+
+    sorted.forEach(({ a, d }) => {
+      const cs    = callsign(a);
+      const dMi   = (d / 1.60934).toFixed(1);
+      const onGnd = a.on_ground;
+      const type  = a.t ? ` · ${a.t}` : '';
+
+      const div = document.createElement('div');
+      div.className        = 'flight-item';
+      div.dataset.callsign = cs;
+      const dotColor = categoryColor(a, false);
+      div.innerHTML = `
+        <div class="type-dot" style="background:${dotColor}"></div>
+        <div class="flight-item-body">
+          <div class="flight-callsign" style="color:${dotColor}">${cs}</div>
+          <div class="flight-detail">
+            ${dMi} miles away${type}<br>
+            ${onGnd ? 'On ground' : `Heading ${a.track != null ? Math.round(a.track) + '&deg;' : 'N/A'}`} &middot; ${fmtSpd(a.gs)}
+          </div>
+          <div class="flight-alt">${onGnd ? 'Ground' : fmtAlt(a.alt_baro)}</div>
+        </div>
+        <span class="flight-chevron">&#8250;</span>
+      `;
+
+      div.addEventListener('click', () => {
+        const marker = planeMarkers.find(m => m._cs === cs);
+        if (marker) { highlight(cs, marker); map.setView(marker.getLatLng(), 10); }
+        else showDetail(a);
+      });
+
+      list.appendChild(div);
+    });
+  }
+
+  function highlight(cs, clicked) {
+    planeMarkers.forEach(m => m.setIcon(planeIcon(m._a, false)));
+    document.querySelectorAll('.flight-item').forEach(el => el.classList.remove('active'));
+    clicked.setIcon(planeIcon(clicked._a, true));
+    const li = document.querySelector(`.flight-item[data-callsign="${CSS.escape(cs)}"]`);
+    if (li) { li.classList.add('active'); li.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+    showDetail(clicked._a);
+  }
+
+  function showList() {
+    document.getElementById('flightList').classList.remove('hidden');
+    document.getElementById('detailPanel').classList.remove('visible');
+    document.getElementById('backBtn').style.display = 'none';
+    document.getElementById('sidebarTitle').textContent =
+      document.getElementById('flightList').querySelector('.flight-item')
+        ? document.getElementById('sidebarTitle').dataset.listTitle || 'Nearby Aircraft'
+        : 'Nearby Aircraft';
+  }
+
+  function climbArrow(rate) {
+    if (rate == null) return '';
+    if (rate > 100)  return '<span class="climb-indicator" style="color:#a3e635">&#9650;</span>';
+    if (rate < -100) return '<span class="climb-indicator" style="color:#f87171">&#9660;</span>';
+    return '<span class="climb-indicator" style="color:#94a3b8">&#8211;</span>';
+  }
+
+  function squawkClass(sq) {
+    if (sq === '7700') return 'squawk-7700';
+    if (sq === '7600') return 'squawk-7600';
+    if (sq === '7500') return 'squawk-7500';
+    return '';
+  }
+
+  function squawkLabel(sq) {
+    if (sq === '7700') return ' &#9888; EMERGENCY';
+    if (sq === '7600') return ' &#9888; RADIO FAIL';
+    if (sq === '7500') return ' &#9888; HIJACK';
+    return '';
+  }
+
+  function row(label, value, cls) {
+    return `<div class="detail-row">
+      <span class="detail-row-label">${label}</span>
+      <span class="detail-row-value${cls ? ' ' + cls : ''}">${value}</span>
+    </div>`;
+  }
+
+  function cell(label, value, cls) {
+    return `<div class="detail-cell">
+      <div class="detail-cell-label">${label}</div>
+      <div class="detail-cell-value${cls ? ' ' + cls : ''}">${value}</div>
+    </div>`;
+  }
+
+  function renderDetail(a, route) {
+    const cs      = callsign(a);
+    const onGnd   = a.on_ground;
+    const rate    = a.baro_rate;
+    const rateStr = rate == null ? 'N/A' : (rate > 0 ? '+' : '') + Math.round(rate).toLocaleString() + ' ft/min';
+    const rateCls = rate == null ? '' : rate > 100 ? 'green' : rate < -100 ? 'red' : '';
+    const sq      = a.squawk || '—';
+    const sqCls   = squawkClass(a.squawk);
+    const altGeom = a.alt_geom != null ? fmtAlt(a.alt_geom) : 'N/A';
+    const ias     = a.ias  != null ? Math.round(a.ias) + ' kts' : null;
+    const mach    = a.mach != null ? a.mach.toFixed(3) : null;
+    const oat     = a.oat  != null ? a.oat + '°C' : null;
+    const tat     = a.tat  != null ? a.tat + '°C' : null;
+    const windSpd = a.wind_speed != null ? Math.round(a.wind_speed) + ' kts' : null;
+    const windDir = a.wind_dir   != null ? Math.round(a.wind_dir) + '°' : null;
+    const nav     = a.nav_modes ? a.nav_modes.join(', ') : null;
+    const emergency = a.emergency && a.emergency !== 'none' ? a.emergency.toUpperCase() : null;
+
+    const orig    = route?.origin;
+    const dest    = route?.destination;
+    const airline = route?.airline;
+
+    function airportLine(ap) {
+      if (!ap) return '<span style="color:#4b5563">Unknown</span>';
+      const iata = ap.iata_code ? `<span style="font-weight:700;color:#7dd3fc">${ap.iata_code}</span> · ` : '';
+      const name = ap.name || ap.icao_code || '—';
+      const loc  = [ap.municipality, ap.country_name].filter(Boolean).join(', ');
+      return `${iata}${name}<br><span style="font-size:0.75rem;color:#64748b">${loc}</span>`;
+    }
+
+    return `
+      <div class="detail-hero">
+        <div class="detail-callsign">${cs}</div>
+        <div class="detail-reg">${a.r ? 'Reg: ' + a.r : ''}${a.hex ? (a.r ? ' &nbsp;·&nbsp; ' : '') + 'ICAO: ' + a.hex.toUpperCase() : ''}</div>
+        ${airline ? `<div style="font-size:0.9rem;color:#e2e8f0;margin-top:6px;font-weight:500">${airline.name}${airline.callsign ? `<span style="color:#64748b;font-weight:400"> · ${airline.callsign}</span>` : ''}</div>` : ''}
+        <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px">
+          ${a.t ? `<span class="detail-type-badge">&#9992; ${a.t}</span>` : ''}
+          ${airline?.iata ? `<span class="detail-type-badge" style="background:#1e3a5f">${airline.iata}${airline.icao ? ' / ' + airline.icao : ''}</span>` : ''}
+          ${emergency ? `<span class="detail-type-badge" style="background:#7f1d1d;color:#f87171">&#9888; ${emergency}</span>` : ''}
+        </div>
+      </div>
+
+      <div class="detail-grid">
+        ${cell('Altitude', onGnd ? 'Ground' : fmtAlt(a.alt_baro), onGnd ? '' : 'green')}
+        ${cell('Speed (GS)', fmtSpd(a.gs), 'blue')}
+        ${cell('Heading', a.track != null ? Math.round(a.track) + '°' : 'N/A', 'yellow')}
+        ${cell('Climb Rate', rateStr + (rate != null ? climbArrow(rate) : ''), rateCls)}
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">Route</div>
+        <div style="display:grid;grid-template-columns:1fr 24px 1fr;align-items:start;gap:6px;padding:4px 0">
+          <div>
+            <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:.08em;color:#4b5563;margin-bottom:4px">From</div>
+            <div style="font-size:0.82rem;line-height:1.5" id="routeOrig">${orig ? airportLine(orig) : '<span style="color:#4b5563">Loading…</span>'}</div>
+          </div>
+          <div style="text-align:center;color:#374151;padding-top:18px;font-size:1rem">&#8594;</div>
+          <div>
+            <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:.08em;color:#4b5563;margin-bottom:4px">To</div>
+            <div style="font-size:0.82rem;line-height:1.5" id="routeDest">${dest ? airportLine(dest) : '<span style="color:#4b5563">Loading…</span>'}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">Flight</div>
+        ${row('Status', onGnd ? 'On Ground' : 'Airborne')}
+        ${row('Squawk', `<span class="${sqCls}">${sq}${squawkLabel(a.squawk)}</span>`)}
+        ${airline?.name    ? row('Airline', airline.name) : ''}
+        ${airline?.country ? row('Airline Country', airline.country) : ''}
+        ${a.flight ? row('Callsign', a.flight.trim()) : ''}
+        ${a.r      ? row('Registration', a.r) : ''}
+        ${a.t      ? row('Aircraft Type', a.t) : ''}
+        ${a.hex    ? row('ICAO Hex', a.hex.toUpperCase()) : ''}
+        ${nav      ? row('Nav Modes', nav) : ''}
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">Altitude &amp; Speed</div>
+        ${row('Baro Altitude', onGnd ? 'Ground' : fmtAlt(a.alt_baro))}
+        ${row('Geom Altitude', onGnd ? 'Ground' : altGeom)}
+        ${row('Ground Speed', fmtSpd(a.gs))}
+        ${ias  ? row('IAS', ias) : ''}
+        ${mach ? row('Mach', mach) : ''}
+        ${row('Climb/Descent', rateStr)}
+      </div>
+
+      ${(oat || tat || windSpd) ? `
+      <div class="detail-section">
+        <div class="detail-section-title">Atmosphere</div>
+        ${oat     ? row('Ext Air Temp', oat) : ''}
+        ${tat     ? row('Total Air Temp', tat) : ''}
+        ${windSpd ? row('Wind Speed', windSpd) : ''}
+        ${windDir ? row('Wind Direction', windDir) : ''}
+      </div>` : ''}
+
+      <div class="detail-section">
+        <div class="detail-section-title">Position</div>
+        ${row('Latitude',  a.lat != null ? a.lat.toFixed(5) : 'N/A')}
+        ${row('Longitude', a.lon != null ? a.lon.toFixed(5) : 'N/A')}
+        ${a.seen     != null ? row('Last seen',     a.seen     + 's ago') : ''}
+        ${a.seen_pos != null ? row('Last position', a.seen_pos + 's ago') : ''}
+      </div>
+    `;
+  }
+
+  async function showDetail(a) {
+    const panel = document.getElementById('detailPanel');
+    const cs    = callsign(a);
+
+    // Render immediately with "Loading…" placeholders for route
+    panel.innerHTML = renderDetail(a, null);
+    document.getElementById('flightList').classList.add('hidden');
+    panel.classList.add('visible');
+    document.getElementById('backBtn').style.display = 'inline';
+    const title = document.getElementById('sidebarTitle');
+    title.dataset.listTitle = title.textContent;
+    title.textContent = cs;
+
+    // Fetch route in background and patch in
+    const rawCs = (a.flight || '').trim();
+    if (rawCs) {
+      try {
+        const res  = await fetch(`https://api.adsbdb.com/v0/callsign/${encodeURIComponent(rawCs)}`);
+        const json = await res.json();
+        const route = json?.response?.flightroute;
+        if (route) {
+          // Only patch if panel is still showing the same aircraft
+          if (document.getElementById('sidebarTitle').textContent === cs) {
+            panel.innerHTML = renderDetail(a, route);
+          }
+        } else {
+          patchRouteUnknown();
+        }
+      } catch (_) {
+        patchRouteUnknown();
+      }
+    } else {
+      patchRouteUnknown();
+    }
+  }
+
+  function patchRouteUnknown() {
+    const orig = document.getElementById('routeOrig');
+    const dest = document.getElementById('routeDest');
+    const na   = '<span style="color:#4b5563">Not available</span>';
+    if (orig) orig.innerHTML = na;
+    if (dest) dest.innerHTML = na;
+  }
+
+  document.getElementById('postcode').addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+</script>
+</body>
+</html>

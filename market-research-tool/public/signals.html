@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Signals - Market Research Desk</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="app-nav" id="app-nav"></header>
+  <div class="container">
+    <h1>Signals</h1>
+    <div class="card">
+      <div class="grid cols-4">
+        <div class="field">
+          <label for="filter-status">Status</label>
+          <select id="filter-status">
+            <option value="">All</option>
+            <option value="active" selected>Active</option>
+            <option value="expired">Expired</option>
+            <option value="superseded">Superseded</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="filter-type">Type</label>
+          <select id="filter-type">
+            <option value="">All</option>
+            <option value="positive_setup">Positive Setup</option>
+            <option value="sell_risk">Sell Risk</option>
+            <option value="watch">Watch</option>
+            <option value="momentum_alert">Momentum Alert</option>
+            <option value="unusual_volume">Unusual Volume</option>
+            <option value="high_risk_warning">High-Risk Warning</option>
+            <option value="volatility_alert">Volatility Alert</option>
+            <option value="breakout_watch">Breakout Watch</option>
+            <option value="breakdown_watch">Breakdown Watch</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="filter-min-score">Min score</label>
+          <input type="number" id="filter-min-score" min="0" max="100" value="0">
+        </div>
+        <div class="field">
+          <label for="filter-outcome">Outcome</label>
+          <select id="filter-outcome">
+            <option value="">All</option>
+            <option value="positive">Positive</option>
+            <option value="neutral">Neutral</option>
+            <option value="negative">Negative</option>
+            <option value="still_open">Still open</option>
+            <option value="insufficient_data">Insufficient data</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid cols-4" style="margin-top:1rem">
+        <div class="field">
+          <label for="filter-feedback">Your feedback</label>
+          <select id="filter-feedback">
+            <option value="">All</option>
+            <option value="useful">Useful</option>
+            <option value="not_useful">Not useful</option>
+            <option value="false_positive">False positive</option>
+            <option value="missed_context">Missed context</option>
+            <option value="needs_rule_adjustment">Needs rule adjustment</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="filter-date-from">From date</label>
+          <input type="date" id="filter-date-from">
+        </div>
+        <div class="field">
+          <label for="filter-date-to">To date</label>
+          <input type="date" id="filter-date-to">
+        </div>
+        <div class="field" style="display:flex; align-items:end">
+          <button class="btn btn-primary" id="filter-apply" style="width:100%">Apply</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Rule Performance</h2>
+      <p class="muted">How each signal type has performed once graded against later price checkpoints (FR-062).</p>
+      <table>
+        <thead>
+          <tr><th>Signal Type</th><th>Total</th><th>Positive</th><th>Neutral</th><th>Negative</th><th>Still Open</th><th>Positive Rate</th><th>Useful Feedback</th></tr>
+        </thead>
+        <tbody id="rule-performance"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div id="signal-list"></div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/signals.js"></script>
+</body>
+</html>

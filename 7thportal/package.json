@@ -1,0 +1,22 @@
+{
+  "name": "7thportal",
+  "version": "1.0.0",
+  "description": "Parent and Leader Portal for 7th Swindon Scout Group - reads OSM data and links back to OSM for actions",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node src/server.js",
+    "build": "node scripts/build-deploy.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-session": "^1.18.0",
+    "jimp": "^1.6.1",
+    "multer": "^2.2.0",
+    "nodemailer": "^9.0.3"
+  }
+}

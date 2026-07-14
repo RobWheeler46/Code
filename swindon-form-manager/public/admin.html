@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Admin - 7th Swindon Form Manager</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header id="app-nav" class="app-nav"></header>
+  <div class="container">
+    <div class="card">
+      <h1>Administration</h1>
+    </div>
+
+    <div class="tabs" id="admin-tabs">
+      <button data-tab="requests" class="active">All requests</button>
+      <button data-tab="users">Users</button>
+      <button data-tab="groups">Groups</button>
+    </div>
+
+    <div id="requests-tab" class="card"></div>
+    <div id="users-tab" class="card" style="display:none"></div>
+    <div id="groups-tab" class="card" style="display:none"></div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>

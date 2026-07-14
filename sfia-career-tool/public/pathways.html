@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Career Pathways - SFIA Career Tool</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header id="app-nav" class="app-nav"></header>
+
+  <div class="hero">
+    <h1>Explore career pathways</h1>
+    <p>See how roles connect to each other, and find realistic routes from where you are to where you want to be.</p>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <div class="filters-row">
+        <div class="field">
+          <label for="family-filter">Role family</label>
+          <select id="family-filter"><option value="">All role families</option></select>
+        </div>
+        <div class="field">
+          <label for="type-filter">Pathway type</label>
+          <select id="type-filter">
+            <option value="">All types</option>
+            <option value="IC">Individual Contributor</option>
+            <option value="Management">Management</option>
+            <option value="Architecture">Architecture</option>
+            <option value="Specialist">Specialist</option>
+            <option value="Hybrid">Hybrid</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div id="pathway-list"></div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/pathways.js"></script>
+</body>
+</html>

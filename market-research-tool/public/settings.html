@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Settings - Market Research Desk</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="app-nav" id="app-nav"></header>
+  <div class="container">
+    <h1>Settings</h1>
+
+    <div class="card">
+      <h2>Refresh &amp; Alerts</h2>
+      <div id="refresh-info"></div>
+    </div>
+
+    <div class="card">
+      <h2>Signal &amp; Alert Thresholds</h2>
+      <p class="muted">These control when signals and alerts are generated (FR-071). Changes apply to the next data refresh.</p>
+      <div id="threshold-alert"></div>
+      <form id="threshold-form">
+        <div class="grid cols-2" id="threshold-fields"></div>
+        <button class="btn btn-primary" type="submit" style="margin-top:1rem">Save Thresholds</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>System Health</h2>
+      <div id="system-health"></div>
+      <h3>Recent Ingestion Log</h3>
+      <table>
+        <thead><tr><th>Time</th><th>Source</th><th>Status</th><th>Message</th></tr></thead>
+        <tbody id="ingestion-log"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/settings.js"></script>
+</body>
+</html>
