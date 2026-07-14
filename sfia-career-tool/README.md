@@ -14,14 +14,28 @@ the frontend. No frameworks, no build tooling &mdash; matches the style of the o
 
 - Node.js 22.5 or later (uses the built-in `node:sqlite` module; tested on Node 24)
 
-## SFIA content is placeholder data, not the real licensed catalogue
+## Content: real role/skill data, imported from a spreadsheet
 
-SFIA is a licensed framework. Rather than scrape or hardcode the real SFIA skill catalogue, the seed
-script populates the database with **fictional example data** (skill codes prefixed `EX-`, a framework
-version literally named "Example Framework v1 (placeholder)", generic level names). The schema and admin
-UI fully support entering the real SFIA 9 catalogue once a licence is confirmed &mdash; an administrator
-would replace the placeholder skills/levels/categories through Admin > SFIA skills, or a future import
-script could load a real dataset.
+`npm run seed` still seeds **fictional placeholder** demo content (skill codes prefixed `EX-`, a framework
+version literally named "Example Framework v1 (placeholder)") &mdash; useful for a fresh local checkout or
+for testing, but not what's actually running in production.
+
+The deployed app's real content comes from `src/import-career-paths.js`, a one-off script that replaces
+the placeholder data with 33 real role profiles across 8 tracks, imported from the user's own
+`EngineeringCareerPathsV3.xlsx` (an internal engineering career framework, not the official SFIA
+catalogue). It uses **real SFIA 9 skill codes** (e.g. `PROG`, `ARCH`, `DATM`) with real per-role levels,
+but SFIA is a licensed framework and the source spreadsheet only contained codes and levels, not official
+skill names or descriptions &mdash; so every imported skill has **`skill_name` set to its code** (e.g.
+"PROG") and no description, deliberately, rather than risk asserting an incorrect official SFIA name from
+memory. An administrator with access to the organisation's SFIA licence should fill in the real names and
+descriptions via Admin &gt; SFIA skills (built for exactly this).
+
+Run it with `node src/import-career-paths.js` (needs `ADMIN_EMAIL` already seeded via the normal seed
+script first, so a super admin exists to own the imported content). It is **destructive**: it deletes all
+existing role families, capability areas, SFIA skills/categories/versions, role profiles, learning
+resources, and career pathways before importing &mdash; it does not touch users/admin roles/audit log.
+Re-running it is safe in the sense that it produces the same result each time, but anything an admin has
+added on top since the last run will be lost.
 
 ## Setup
 
@@ -41,6 +55,24 @@ users tab currently supports role/status changes but not self-service password c
 follow-up). Running the seed script again is safe: it only inserts records that don't already exist.
 
 The SQLite database lives at `data/sfia-career-tool.db` (gitignored).
+
+## Deployment (Railway)
+
+Deployed at `https://sfia-tool.up.railway.app` (project `radiant-enthusiasm`, service
+`shimmering-caring`), building from this repo's `sfia-career-tool` subfolder (root directory set in
+Railway service settings, since the repo is a monorepo with no top-level `package.json`).
+
+**A persistent Volume must be attached at `/app/data`.** Without one, `/app/data` is ordinary container
+storage and the SQLite database is wiped on every redeploy &mdash; this happened once during setup (a
+volume was believed to be attached but wasn't; `railway volume list` showed none, confirmed by `/proc/mounts`
+inside the container). Check `railway status` shows a `volume:` line before assuming data will survive a
+deploy.
+
+To run the seed or import scripts against the live deployment (not your local machine): the environment
+variables (`ADMIN_EMAIL`, `SESSION_SECRET`) live in Railway's Variables tab, not this repo's `.env`. Use
+`railway ssh npm run seed` or `railway ssh node src/import-career-paths.js` &mdash; `railway ssh` connects
+into the actual running container (with the volume mounted), unlike `railway run`, which executes locally
+with Railway's env vars injected and can't reach a volume that only exists inside the container.
 
 ## What's implemented
 
@@ -95,8 +127,10 @@ The SQLite database lives at `data/sfia-career-tool.db` (gitignored).
   card set the FRD describes (seniority/role type/capability/core-skill-count are already derived from
   existing columns and rendered directly, so the JSON field only needs to carry the one thing that isn't
   already structured data). Revisit if at-a-glance cards need more admin-authored content later.
-- **No real SFIA content** &mdash; see above. This is the biggest thing to do before real users see the
-  tool.
+- **Real SFIA skill codes, but no official names/descriptions yet** &mdash; see the content section above.
+  An admin with SFIA licence access should fill these in via Admin &gt; SFIA skills.
+- **No learning resources imported.** The source spreadsheet didn't include any, so every skill gap on the
+  live site currently shows "No learning resources are linked yet." until an admin adds real ones.
 - **No approval workflow for role profile changes.** Publishing is immediate for anyone with `canPublish`;
   the FRD lists this as an open question (19.5), not a Phase 1 requirement.
 - **No PDF export, no bulk upload** for role profiles or SFIA mappings &mdash; listed as open questions /
