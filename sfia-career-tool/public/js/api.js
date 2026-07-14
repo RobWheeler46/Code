@@ -51,6 +51,11 @@ function levelLabel(number, name) {
   return `Level ${number} — ${name}`;
 }
 
+function skillLabel(code, name) {
+  if (!name || name === code) return code;
+  return `${name} (${code})`;
+}
+
 function statusBadge(status) {
   return `<span class="badge" data-status="${escapeHtml(status)}">${escapeHtml(status)}</span>`;
 }

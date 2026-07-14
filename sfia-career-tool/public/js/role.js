@@ -34,7 +34,7 @@ function renderWhatThisRoleDoes(role) {
   return `
     <div class="card">
       <h2>What this role does</h2>
-      ${sections.map(s => `<h3>${escapeHtml(s.heading)}</h3><p>${escapeHtml(s.body)}</p>`).join('')}
+      ${sections.map(s => `<h3>${escapeHtml(s.heading)}</h3><p class="rich-text">${escapeHtml(s.body)}</p>`).join('')}
     </div>
   `;
 }
@@ -151,7 +151,7 @@ function renderSkillDetail(s) {
     <details class="skill-detail" id="skill-${s.sfia_skill_id}" ${s.show_full_description ? 'open' : ''}>
       <summary>
         <div class="skill-summary-main">
-          <span class="skill-name">${escapeHtml(s.skill_name)} <span class="muted">(${escapeHtml(s.skill_code)})</span></span>
+          <span class="skill-name">${escapeHtml(skillLabel(s.skill_code, s.skill_name))}</span>
           <span class="skill-summary-meta">${importanceBadge(s.importance)} Level ${s.level_number}${s.level_name && s.level_name !== `Level ${s.level_number}` ? ' &mdash; ' + escapeHtml(s.level_name) : ''}</span>
         </div>
         ${s.short_description ? `<p class="skill-short-desc">${escapeHtml(s.short_description)}</p>` : ''}

@@ -229,6 +229,8 @@ textarea { min-height: 5rem; resize: vertical; }
 .role-hero .hero-breadcrumb { opacity: 0.85; margin: 0 0 0.4rem; font-size: 0.9rem; }
 .role-hero h1 { color: #fff; font-size: 2rem; margin: 0 0 0.5rem; }
 .role-hero .hero-purpose { opacity: 0.95; max-width: 720px; font-size: 1.05rem; margin: 0 0 1.25rem; }
+
+.rich-text { white-space: pre-line; }
 .role-hero .tag-row { margin-bottom: 0.75rem; }
 
 .tag-badge {
