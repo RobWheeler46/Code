@@ -104,6 +104,18 @@ with Railway's env vars injected and can't reach a volume that only exists insid
 - Role-to-role gap analysis engine (FRD 10.1) with gap severity (no gap / minor / moderate / significant /
   new skill required) and learning-resource matching by skill, level range, role family, capability area
   and gap type, ordered by priority
+- Enhanced role comparison layout (FRD v0.15): a comparison hero with a plain-English overall-alignment
+  summary, filterable skill-by-skill cards (all / level uplifts / new skills / aligned / high priority),
+  and a side-by-side detail panel per skill showing the current and target SFIA skill-at-level (or generic
+  level) description together with a plain-English difference explanation &mdash; stacks to one column on
+  mobile. Account-dependent parts (evidence confidence, add-to-development-plan) and AI Career Coach
+  integration are out of scope, same as elsewhere in this build
+- Single SFIA version per role profile (FRD v0.17, s.70): `role_profiles.sfia_version_id` is now a
+  mandatory field (added via an additive `ALTER TABLE` migration in `src/db.js`, safe to run against the
+  live database without data loss). The admin API rejects adding a skill mapping from a different SFIA
+  version than the role, and blocks publishing a role profile with any cross-version skill mapping. The
+  admin skill-mapping picker also restricts the level dropdown to levels with imported skill-at-level data
+  for the selected skill, where that data exists (FRD v0.17 s.69.1)
 - Admin backend with four permission levels (Super Admin / Admin / Content Editor / Viewer), enforced both
   server-side (403 on unauthorised actions) and in the UI (buttons hidden when not permitted)
 - Admin: full CRUD for role families, capability areas, SFIA versions/categories/skills/levels (including
@@ -135,6 +147,18 @@ with Railway's env vars injected and can't reach a volume that only exists insid
 
 ## Known gaps / follow-ups (deliberately out of scope for this first pass)
 
+- **FRD v0.17 s.69's full "validated SFIA selection" admin workflow is only partly built.** Skill and
+  level mapping have always been controlled dropdowns (never free text, so most of s.69 was already
+  satisfied architecturally), and level options are now filtered by imported skill-at-level data where it
+  exists. Not built: a description preview step before saving a mapping, and an explicit admin validation
+  panel listing all mapping issues (today, invalid attempts are just rejected with an error message).
+- **No SFIA version switcher or migration workflow.** `role_profiles.sfia_version_id` is enforced, but
+  since only one SFIA version has ever existed in this app, there's no UI to change a role's version or
+  migrate mappings between versions &mdash; the FRD's own delivery notes defer this to "a later sprint if
+  multiple SFIA versions are active."
+- **Comparison AI Career Coach integration and account-dependent parts of FRD v0.15 are not built** (explain
+  this difference / what should I focus on first / evidence confidence / add-to-development-plan) &mdash;
+  same reasoning as the guided-assessment/coach deferral below.
 - **Guided role-based SFIA self-assessment (FRD v0.7 Part E) and the AI Career Coach (FRD v0.7 Parts
   F&ndash;I) are not built.** Both are large new feature sets (question banks, scored attempts, save/resume,
   an LLM-backed coach with prompt templates, session/feedback logging, 20 test scenarios) that depend on

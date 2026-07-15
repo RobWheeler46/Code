@@ -274,13 +274,16 @@ router.post('/role-profiles', requireEdit, (req, res) => {
     purposeStatement, focusArea, typicalOutputs, dayInTheLife, successIndicators, progressionSummary, displayTags
   } = req.body || {};
   if (!title) return res.status(400).json({ error: 'Title is required.' });
+  // FRD v0.17 s.70: every role profile is pinned to a single SFIA version, defaulting to the current
+  // published version - there is no version picker in the UI yet since only one version has ever existed.
+  const activeVersion = db.prepare(`SELECT id FROM sfia_versions WHERE status = 'active' ORDER BY id DESC LIMIT 1`).get();
   const result = db.prepare(`
     INSERT INTO role_profiles (role_family_id, capability_area_id, title, summary, responsibilities, seniority_level, role_type, owner_user_id, effective_from, review_date,
-      purpose_statement, role_at_a_glance, typical_outputs, day_in_the_life, success_indicators, progression_summary, display_tags)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      purpose_statement, role_at_a_glance, typical_outputs, day_in_the_life, success_indicators, progression_summary, display_tags, sfia_version_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(roleFamilyId || null, capabilityAreaId || null, title, summary || null, responsibilities || null, seniorityLevel || null, roleType || 'Individual Contributor', req.user.id, effectiveFrom || null, reviewDate || null,
     purposeStatement || null, focusArea ? JSON.stringify({ focusArea }) : null, typicalOutputs || null, dayInTheLife || null, successIndicators || null, progressionSummary || null,
-    Array.isArray(displayTags) ? JSON.stringify(displayTags) : null);
+    Array.isArray(displayTags) ? JSON.stringify(displayTags) : null, activeVersion ? activeVersion.id : null);
   logAudit({ ...auditCtx(req), action: 'create', entityType: 'role_profile', entityId: result.lastInsertRowid });
   res.status(201).json(db.prepare(`SELECT * FROM role_profiles WHERE id = ?`).get(result.lastInsertRowid));
 });
@@ -348,6 +351,19 @@ router.post('/role-profiles/:id/publish', requirePublish, (req, res) => {
   if (!role.title || skillCount === 0) {
     return res.status(400).json({ error: 'A role profile needs a title and at least one mapped SFIA skill before it can be published.' });
   }
+  // FRD v0.17 SFIA-ROLE-VER-005: a role profile with mixed SFIA versions must not be published.
+  if (role.sfia_version_id) {
+    const crossVersion = db.prepare(`
+      SELECT sk.skill_code FROM role_profile_skills rps
+      JOIN sfia_skills sk ON sk.id = rps.sfia_skill_id
+      WHERE rps.role_profile_id = ? AND sk.sfia_version_id != ?
+    `).all(role.id, role.sfia_version_id);
+    if (crossVersion.length > 0) {
+      return res.status(400).json({
+        error: `Cannot publish: ${crossVersion.length} mapped skill(s) belong to a different SFIA version than this role profile (${crossVersion.map(s => s.skill_code).join(', ')}). Remap them to the role's SFIA version first.`
+      });
+    }
+  }
   db.prepare(`
     UPDATE role_profiles SET status = 'published', published_at = datetime('now'), published_by = ?, updated_at = datetime('now')
     WHERE id = ?
@@ -379,6 +395,13 @@ router.post('/role-profiles/:id/skills', requireEdit, (req, res) => {
   if (!sfiaSkillId || !requiredSfiaLevelId) return res.status(400).json({ error: 'A SFIA skill and required level are required.' });
   const duplicate = db.prepare(`SELECT id FROM role_profile_skills WHERE role_profile_id = ? AND sfia_skill_id = ?`).get(role.id, sfiaSkillId);
   if (duplicate) return res.status(409).json({ error: 'This skill is already mapped to this role profile.' });
+  // FRD v0.17 SFIA-ROLE-VER-002: every mapped skill must belong to the role profile's single SFIA version.
+  if (role.sfia_version_id) {
+    const skill = db.prepare(`SELECT sfia_version_id FROM sfia_skills WHERE id = ?`).get(sfiaSkillId);
+    if (skill && skill.sfia_version_id !== role.sfia_version_id) {
+      return res.status(400).json({ error: 'This SFIA skill belongs to a different SFIA version than this role profile.' });
+    }
+  }
   const result = db.prepare(`
     INSERT INTO role_profile_skills (role_profile_id, sfia_skill_id, required_sfia_level_id, importance, rationale, display_order, role_specific_display_notes, show_full_description)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)

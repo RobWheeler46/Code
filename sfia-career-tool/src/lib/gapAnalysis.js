@@ -3,13 +3,27 @@ const db = require('../db');
 function loadRoleSkills(roleProfileId) {
   return db.prepare(`
     SELECT rps.sfia_skill_id, rps.importance, rps.rationale,
-           sk.skill_code, sk.skill_name, sk.sfia_category_id,
-           lv.id AS level_id, lv.level_number, lv.level_name
+           sk.skill_code, sk.skill_name, sk.sfia_category_id, sk.short_description AS skill_short_description,
+           sk.full_description AS skill_full_description, sc.name AS category_name,
+           lv.id AS level_id, lv.level_number, lv.level_name, lv.level_full_description,
+           sld.skill_level_description
     FROM role_profile_skills rps
     JOIN sfia_skills sk ON sk.id = rps.sfia_skill_id
     JOIN sfia_levels lv ON lv.id = rps.required_sfia_level_id
+    LEFT JOIN sfia_categories sc ON sc.id = sk.sfia_category_id
+    LEFT JOIN sfia_skill_level_descriptions sld ON sld.sfia_skill_id = sk.id AND sld.sfia_level_id = lv.id AND sld.status = 'active'
     WHERE rps.role_profile_id = ?
   `).all(roleProfileId);
+}
+
+function levelDetail(skillRow) {
+  if (!skillRow) return null;
+  return {
+    number: skillRow.level_number,
+    name: skillRow.level_name,
+    levelFullDescription: skillRow.level_full_description,
+    skillLevelDescription: skillRow.skill_level_description
+  };
 }
 
 function gapSeverity(levelDiff) {
@@ -93,9 +107,12 @@ function compareRoles(currentRoleProfile, aspirationalRoleProfile) {
       sfiaSkillId: aspSkill.sfia_skill_id,
       skillCode: aspSkill.skill_code,
       skillName: aspSkill.skill_name,
+      categoryName: aspSkill.category_name,
+      skillShortDescription: aspSkill.skill_short_description,
+      skillFullDescription: aspSkill.skill_full_description,
       importance: aspSkill.importance,
-      currentLevel: curSkill ? { number: curSkill.level_number, name: curSkill.level_name } : null,
-      aspirationalLevel: { number: aspSkill.level_number, name: aspSkill.level_name },
+      currentLevel: levelDetail(curSkill),
+      aspirationalLevel: levelDetail(aspSkill),
       levelDiff,
       gapStatus,
       gapSeverity: gapSeverityLabel,
@@ -110,8 +127,11 @@ function compareRoles(currentRoleProfile, aspirationalRoleProfile) {
       sfiaSkillId: curSkill.sfia_skill_id,
       skillCode: curSkill.skill_code,
       skillName: curSkill.skill_name,
+      categoryName: curSkill.category_name,
+      skillShortDescription: curSkill.skill_short_description,
+      skillFullDescription: curSkill.skill_full_description,
       importance: curSkill.importance,
-      currentLevel: { number: curSkill.level_number, name: curSkill.level_name },
+      currentLevel: levelDetail(curSkill),
       aspirationalLevel: null,
       levelDiff: null,
       gapStatus: 'current_role_strength',

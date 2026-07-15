@@ -169,7 +169,7 @@ async function renderRoleEditor(id) {
     <div class="card">
       <button class="btn btn-secondary btn-sm" id="back-to-roles">&larr; Back to role profiles</button>
       <h2>${role ? 'Edit role profile' : 'New role profile'}</h2>
-      ${role ? `<p>${statusBadge(role.status)} <span class="muted">Version ${role.version_number}</span></p>` : ''}
+      ${role ? `<p>${statusBadge(role.status)} <span class="muted">Version ${role.version_number}</span>${role.sfia_version_id ? ` <span class="muted">&middot; SFIA version: ${escapeHtml(refData.versions.find(v => v.id === role.sfia_version_id)?.version_name || 'Unknown')}</span>` : ''}</p>` : ''}
       <div id="role-form-alert"></div>
       <form id="role-form">
         <div class="field"><label for="rf-title">Title</label><input type="text" id="rf-title" required value="${role ? escapeHtml(role.title) : ''}"></div>
@@ -292,7 +292,9 @@ function renderRoleSkillsSection(role) {
       <div id="add-skill-alert"></div>
       <div class="grid cols-2">
         <div class="field"><label for="as-skill">SFIA skill</label><select id="as-skill">${skillOptions()}</select></div>
-        <div class="field"><label for="as-level">Required level</label><select id="as-level">${levelOptions()}</select></div>
+        <div class="field"><label for="as-level">Required level</label><select id="as-level">${levelOptions()}</select>
+          <p class="help" id="as-level-help"></p>
+        </div>
       </div>
       <div class="grid cols-2">
         <div class="field"><label for="as-importance">Importance</label>
@@ -346,7 +348,32 @@ function renderMappingEditModal(role, mapping) {
   });
 }
 
+async function updateLevelOptionsForSkill(skillId) {
+  const levelSelect = document.getElementById('as-level');
+  const help = document.getElementById('as-level-help');
+  if (!levelSelect || !skillId) return;
+  // FRD v0.17 s.69.1: where a SFIA skill only has descriptions for certain levels, restrict the
+  // level picker to valid skill-at-level combinations. Falls back to all 7 levels for the skills
+  // that don't have imported skill-at-level data (e.g. the unmatched non-SFIA-9 codes).
+  const descriptions = await Api.get(`/api/admin/sfia-skill-level-descriptions?sfiaSkillId=${skillId}`);
+  const validLevelIds = new Set(descriptions.map(d => d.sfia_level_id));
+  if (validLevelIds.size === 0) {
+    levelSelect.innerHTML = levelOptions();
+    help.textContent = '';
+    return;
+  }
+  levelSelect.innerHTML = refData.levels
+    .filter(l => validLevelIds.has(l.id))
+    .map(l => `<option value="${l.id}">${escapeHtml(levelLabel(l.level_number, l.level_name))}</option>`).join('');
+  help.textContent = `Only levels with imported SFIA skill-at-level data for this skill are shown (${validLevelIds.size} of 7).`;
+}
+
 function bindRoleSkillsSection(role) {
+  const skillSelect = document.getElementById('as-skill');
+  if (skillSelect) {
+    skillSelect.addEventListener('change', () => updateLevelOptionsForSkill(skillSelect.value));
+    updateLevelOptionsForSkill(skillSelect.value);
+  }
   document.getElementById('add-skill-btn')?.addEventListener('click', async () => {
     const alertBox = document.getElementById('add-skill-alert');
     alertBox.innerHTML = '';

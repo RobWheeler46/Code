@@ -227,9 +227,14 @@ router.post('/compare', (req, res) => {
     roleProfileId: currentRole.id,
     aspirationalRoleProfileId: aspirationalRole.id
   });
+  const versionName = (roleProfile) => {
+    if (!roleProfile.sfia_version_id) return null;
+    return db.prepare(`SELECT version_name FROM sfia_versions WHERE id = ?`).get(roleProfile.sfia_version_id)?.version_name || null;
+  };
+
   res.json({
-    currentRole: { id: currentRole.id, title: currentRole.title },
-    aspirationalRole: { id: aspirationalRole.id, title: aspirationalRole.title },
+    currentRole: { id: currentRole.id, title: currentRole.title, sfiaVersion: versionName(currentRole) },
+    aspirationalRole: { id: aspirationalRole.id, title: aspirationalRole.title, sfiaVersion: versionName(aspirationalRole) },
     ...result
   });
 });

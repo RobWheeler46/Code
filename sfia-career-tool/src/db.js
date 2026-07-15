@@ -288,4 +288,18 @@ CREATE INDEX IF NOT EXISTS idx_career_pathway_roles_role ON career_pathway_roles
 CREATE INDEX IF NOT EXISTS idx_career_pathway_connections_lookup ON career_pathway_connections(career_pathway_id, from_role_profile_id);
 `);
 
+// Additive migration (FRD v0.17 s.70: every role profile must be pinned to a single SFIA version).
+// Uses ALTER TABLE rather than a schema-in-place rewrite because, unlike earlier schema changes in
+// this project, the production database now holds real imported content that must not be wiped.
+const roleProfileColumns = db.prepare(`PRAGMA table_info(role_profiles)`).all().map(c => c.name);
+if (!roleProfileColumns.includes('sfia_version_id')) {
+  db.exec(`ALTER TABLE role_profiles ADD COLUMN sfia_version_id INTEGER REFERENCES sfia_versions(id)`);
+  db.exec(`
+    UPDATE role_profiles SET sfia_version_id = (
+      SELECT id FROM sfia_versions WHERE status = 'active' ORDER BY id DESC LIMIT 1
+    )
+    WHERE sfia_version_id IS NULL
+  `);
+}
+
 module.exports = db;
