@@ -26,13 +26,19 @@ the placeholder data with 33 real role profiles across 8 tracks, imported from t
 catalogue). It uses **real SFIA 9 skill codes** (e.g. `PROG`, `ARCH`, `DATM`) with real per-role levels.
 
 `src/update-sfia-content.js` is a second, non-destructive one-off script that fills in real skill names,
-skill overviews and level-specific descriptions, transcribed from the official SFIA 9 framework reference
-PDF the user supplied (and confirmed is cleared for public display). It only touches the 24 of the
-spreadsheet's 37 codes that actually match a real SFIA 9 skill; the other 13 (`BUAN`, `QUMT`, `VUIM`,
-`AUTH`, `OPSG`, `INAN`, `MLEN`, `SYAS`, `STRP`, `SADM`, `PLMT`, `STAD`, `STRT`) don't correspond to any
-code in the official SFIA 9 reference &mdash; likely a different SFIA version or spreadsheet-author
-shorthand &mdash; and are left showing their raw code pending review. An administrator can correct or
-fill these in via Admin &gt; SFIA skills.
+overviews, guidance notes and level-specific descriptions (plus official SFIA source URLs), extracted
+directly from the official SFIA 9 source workbook (`sfia-9_current-standard_en_260521.xlsx`) the user
+supplied and confirmed is cleared for public display &mdash; the same workbook the FRD's Part K describes
+as the authoritative source. Data lives in `src/data/sfia-skills-content.json` and
+`src/data/sfia-levels-content.json`, generated from that workbook (the workbook itself isn't committed,
+just the extracted content). It only touches the 24 of the spreadsheet's 37 codes that actually match a
+real SFIA 9 skill; the other 13 (`BUAN`, `QUMT`, `VUIM`, `AUTH`, `OPSG`, `INAN`, `MLEN`, `SYAS`, `STRP`,
+`SADM`, `PLMT`, `STAD`, `STRT`) don't correspond to any of the workbook's 147 skills &mdash; checked
+against the complete official list, not just a partial index, so this is a confirmed finding, not a
+guess &mdash; likely a different SFIA version or spreadsheet-author shorthand, and are left showing their
+raw code pending review. An administrator can correct or fill these in via Admin &gt; SFIA skills.
+(An earlier version of this script used text extracted from the official SFIA 9 PDF reference, before the
+source workbook was available; the two sources agreed on every value checked.)
 
 Run it with `node src/import-career-paths.js` (needs `ADMIN_EMAIL` already seeded via the normal seed
 script first, so a super admin exists to own the imported content). It is **destructive**: it deletes all

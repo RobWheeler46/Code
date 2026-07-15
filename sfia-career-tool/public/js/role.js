@@ -159,9 +159,9 @@ function renderSkillDetail(s) {
       <div class="skill-detail-body">
         ${s.role_specific_display_notes ? `<h4>Why this matters for this role</h4><p>${escapeHtml(s.role_specific_display_notes)}</p>` : ''}
         ${s.rationale ? `<h4>Rationale</h4><p>${escapeHtml(s.rationale)}</p>` : ''}
-        ${s.skill_level_description ? `<h4>What this looks like at Level ${s.level_number}</h4><p>${escapeHtml(s.skill_level_description)}</p>${s.skill_level_guidance_notes ? `<p class="muted">${escapeHtml(s.skill_level_guidance_notes)}</p>` : ''}` : ''}
-        ${s.skill_full_description ? `<h4>Full skill description</h4><p>${escapeHtml(s.skill_full_description)}</p>` : ''}
-        ${s.level_full_description ? `<h4>Full level description</h4><p>${escapeHtml(s.level_full_description)}</p>` : ''}
+        ${s.skill_level_description ? `<h4>What this looks like at Level ${s.level_number}</h4><p class="rich-text">${escapeHtml(s.skill_level_description)}</p>${s.skill_level_guidance_notes ? `<p class="muted rich-text">${escapeHtml(s.skill_level_guidance_notes)}</p>` : ''}` : ''}
+        ${s.skill_full_description ? `<h4>Full skill description</h4><p class="rich-text">${escapeHtml(s.skill_full_description)}</p>` : ''}
+        ${s.level_full_description ? `<h4>Full level description</h4><p class="rich-text">${escapeHtml(s.level_full_description)}</p>` : ''}
       </div>
     </details>
   `;

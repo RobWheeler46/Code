@@ -1,0 +1,37 @@
+{
+ "1": {
+  "name": "Follow",
+  "text": "Essence of the level: Performs routine tasks under close supervision, follows instructions, and requires guidance to complete their work. Learns and applies basic skills and knowledge.\n\nAutonomy: Follows instructions and works under close direction. Receives specific instructions and guidance, has work closely reviewed.\n\nInfluence: When required, contributes to team discussions with immediate colleagues.\n\nComplexity: Performs routine activities in a structured environment.\n\nKnowledge: Applies basic knowledge to perform routine, well-defined, predictable role-specific tasks.",
+  "sourceUrl": "https://sfia-online.org/en/lor/9/1"
+ },
+ "2": {
+  "name": "Assist",
+  "text": "Essence of the level: Provides assistance to others, works under routine supervision, and uses their discretion to address routine problems. Actively learns through training and on-the-job experiences.\n\nAutonomy: Works under routine direction. Receives instructions and guidance, has work regularly reviewed.\n\nInfluence: Is expected to contribute to team discussions with immediate team members. Works alongside team members, contributing to team decisions. When the role requires, interacts with people outside their team, including internal colleagues and external contacts.\n\nComplexity: Performs a range of work activities in varied environments.\n\nKnowledge: Applies knowledge of common workplace tasks and practices to support team activities under guidance.",
+  "sourceUrl": "https://sfia-online.org/en/lor/9/2"
+ },
+ "3": {
+  "name": "Apply",
+  "text": "Essence of the level: Performs varied tasks, sometimes complex and non-routine, using standard methods and procedures. Works under general direction, exercises discretion, and manages own work within deadlines. Proactively enhances skills and impact in the workplace.\n\nAutonomy: Works under general direction to complete assigned tasks. Receives guidance and has work reviewed at agreed milestones. When required, delegates routine tasks to others within own team.\n\nInfluence: Works with and influences team decisions. Has a transactional level of contact with people outside their team, including internal colleagues and external contacts.\n\nComplexity: Performs a range of work, sometimes complex and non-routine, in varied environments.\n\nKnowledge: Applies knowledge of a range of role-specific practices to complete tasks within defined boundaries and has an appreciation of how this knowledge applies to the wider business context.",
+  "sourceUrl": "https://sfia-online.org/en/lor/9/3"
+ },
+ "4": {
+  "name": "Enable",
+  "text": "Essence of the level: Performs diverse complex activities, supports and guides others, delegates tasks when appropriate, works autonomously under general direction, and contributes expertise to deliver team objectives.\n\nAutonomy: Works under general direction within a clear framework of accountability. Exercises considerable personal responsibility and autonomy. When required, plans, schedules, and delegates work to others, typically within own team.\n\nInfluence: Influences projects and team objectives. Has a tactical level of contact with people outside their team, including internal colleagues and external contacts.\n\nComplexity: Work includes a broad range of complex technical or professional activities in varied contexts.\n\nKnowledge: Applies knowledge across different areas in their field, integrating this knowledge to perform complex and diverse tasks. Applies a working knowledge of the organisation’s domain.",
+  "sourceUrl": "https://sfia-online.org/en/lor/9/4"
+ },
+ "5": {
+  "name": "Ensure, advise",
+  "text": "Essence of the level: Provides authoritative guidance in their field and works under broad direction. Accountable for delivering significant work outcomes, from analysis through execution to evaluation.\n\nAutonomy: Works under broad direction. Work is self-initiated, consistent with agreed operational and budgetary requirements for meeting allocated technical and/or group objectives. Defines tasks and delegates work to teams and individuals within area of responsibility.\n\nInfluence: Influences critical decisions in their domain.  Has operational level contact impacting execution and implementation with internal colleagues and external contacts. Has significant influence over the allocation and management of resources required to deliver projects.\n\nComplexity: Performs an extensive range of complex technical and/or professional work activities, requiring the application of fundamental principles in a range of unpredictable contexts.\n\nKnowledge: Applies knowledge to interpret complex situations and offer authoritative advice. Applies in-depth expertise in specific fields, with a broader understanding across industry/business.",
+  "sourceUrl": "https://sfia-online.org/en/lor/9/5"
+ },
+ "6": {
+  "name": "Initiate, influence",
+  "text": "Essence of the level: Has significant organisational influence, makes high-level decisions, shapes policies, demonstrates leadership, promotes organisational collaboration, and accepts accountability in key areas.\n\nAutonomy: Guides high level decisions and strategies within the organisation’s overall policies and objectives. Has defined authority and accountability for actions and decisions within a significant area of work, including technical, financial and quality aspects. Delegates responsibility for operational objectives.\n\nInfluence: Influences the formation of strategy and the execution of business plans. Has a significant management level of contact with internal colleagues and external contacts. Has organisational leadership and influence over the appointment and management of resources related to the implementation of strategic initiatives.\n\nComplexity: Performs highly complex work activities covering technical, financial and quality aspects.\n\nKnowledge: Applies broad business knowledge to enable strategic leadership and decision-making across various domains.",
+  "sourceUrl": "https://sfia-online.org/en/lor/9/6"
+ },
+ "7": {
+  "name": "Set strategy, inspire, mobilise",
+  "text": "Essence of the level: Operates at the highest organisational level, determines overall organisational vision and strategy, and assumes accountability for overall success.\n\nAutonomy: Defines and leads the organisation’s vision and strategy within over-arching business objectives. Is fully accountable for actions taken and decisions made, both by self and others to whom responsibilities have been assigned. Delegates authority and responsibility for strategic business objectives.\n\nInfluence: Directs, influences and inspires the strategic direction and development of the organisation. Has an extensive leadership level of contact with internal colleagues and external contacts. Authorises the appointment of required resources.\n\nComplexity: Performs extensive strategic leadership in delivering business value through vision, governance and executive management.\n\nKnowledge: Applies strategic and broad-based knowledge to shape organisational strategy, anticipate future industry trends, and prepare the organisation to adapt and lead.",
+  "sourceUrl": "https://sfia-online.org/en/lor/9/7"
+ }
+}
