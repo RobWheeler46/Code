@@ -60,10 +60,6 @@ function statusBadge(status) {
   return `<span class="badge" data-status="${escapeHtml(status)}">${escapeHtml(status)}</span>`;
 }
 
-function importanceBadge(importance) {
-  return `<span class="badge" data-importance="${escapeHtml(importance)}">${escapeHtml(importance)}</span>`;
-}
-
 function gapBadge(label) {
   return `<span class="badge" data-gap="${escapeHtml(label)}">${escapeHtml(label)}</span>`;
 }

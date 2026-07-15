@@ -119,13 +119,6 @@ router.get('/roles/:id', (req, res) => {
     ORDER BY rps.display_order, sk.skill_code
   `).all(role.id);
 
-  const relatedRoles = db.prepare(`
-    SELECT id, title, summary, seniority_level FROM role_profiles
-    WHERE status = 'published' AND role_family_id = ? AND id != ?
-    ORDER BY title LIMIT 5
-  `).all(role.role_family_id, role.id);
-
-  const coreSkillCount = skills.filter(s => s.importance === 'core').length;
   const learningPreview = learningPreviewForRole(role, skills);
 
   const sfiaVersions = db.prepare(`
@@ -147,11 +140,7 @@ router.get('/roles/:id', (req, res) => {
   logUsageEvent({ sessionId: req.sessionID, eventType: 'view_role', roleProfileId: role.id });
   res.json({
     ...role,
-    roleAtAGlance: parseJson(role.role_at_a_glance),
-    displayTags: parseJson(role.display_tags) || [],
     skills,
-    coreSkillCount,
-    relatedRoles,
     learningPreview,
     pathways,
     sfiaVersions
@@ -233,8 +222,8 @@ router.post('/compare', (req, res) => {
   };
 
   res.json({
-    currentRole: { id: currentRole.id, title: currentRole.title, sfiaVersion: versionName(currentRole) },
-    aspirationalRole: { id: aspirationalRole.id, title: aspirationalRole.title, sfiaVersion: versionName(aspirationalRole) },
+    currentRole: { id: currentRole.id, title: currentRole.title, grade: currentRole.grade, sfiaVersion: versionName(currentRole) },
+    aspirationalRole: { id: aspirationalRole.id, title: aspirationalRole.title, grade: aspirationalRole.grade, sfiaVersion: versionName(aspirationalRole) },
     ...result
   });
 });

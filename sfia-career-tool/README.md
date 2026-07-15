@@ -86,30 +86,41 @@ with Railway's env vars injected and can't reach a volume that only exists insid
 
 ## What's implemented
 
+- **Simplified role profile model (FRD v0.19/v0.20, superseding the earlier "engaging content" model
+  from v0.3/section 8.1)**: a role profile's public-facing business data is now just Role Name, Grade
+  (optional, organisation-defined, separate from SFIA level), Role Description, and validated SFIA
+  skills/levels. The richer v0.3 fields (purpose statement, at-a-glance cards, day-in-the-life,
+  success indicators, related-roles roster, skill importance core/important/optional) were explicitly
+  listed by the FRD as "removed or demoted" &mdash; they're no longer collected via the primary admin
+  form or shown on the public page, but the underlying database columns and existing data were
+  **deliberately not dropped or deleted** (kept editable via a collapsed "Legacy enrichment fields"
+  section in the admin role editor, in case they're needed again) since the FRD itself frames them as
+  "may be reintroduced later as optional enrichment," and destroying real imported content for 33 live
+  roles over a wording change would be irreversible. See "Known gaps" for the confirmation trail on this
+  decision.
 - Public site: browse/search/filter published role profiles, compare any two roles to get a skill-by-skill
   gap analysis (level uplift / new skill required / aligned / current-role-strength), with matching
   learning resources and practical development suggestions shown against each gap
-- Engaging role profile detail page (FRD v0.3, section 8.1): hero with purpose statement and tags,
-  at-a-glance cards, "what this role does" (outputs / day-in-the-life / success indicators), a skills
-  landscape grouped by importance, a progression panel with related roles, and a learning preview &mdash;
-  all built with accessible, keyboard-operable `<details>`/`<summary>` and real `<a>` links (no
-  click-only `<div>`s)
+- Role profile detail page: hero (Role Name, Grade, SFIA version badge), Role Description, a skills
+  landscape, and full SFIA skill/level detail on demand &mdash; all built with accessible, keyboard-operable
+  `<details>`/`<summary>` and real `<a>` links (no click-only `<div>`s)
 - Full SFIA skill/level detail on demand: each mapped skill expands to show the full SFIA skill
-  description, the full level responsibility description, and (where an admin has added one) the exact
-  skill-at-level wording, alongside role-specific notes and rationale
-- SFIA skills & levels comparison table (FRD v0.7, section 8.2): a scannable table of every mapped skill
-  (importance / SFIA code / skill / required level / summary / jump-to-detail), groupable by importance,
+  description, the full level responsibility description, and (where imported) the exact skill-at-level
+  wording
+- SFIA skills & levels table (FRD v0.7 section 8.2, columns simplified per v0.19/v0.20): a scannable table
+  of every mapped skill (SFIA code / skill / required level / summary / jump-to-detail), groupable by
   required level or SFIA category, responsive (stacks to cards on mobile via `data-label`), and
   print-friendly (forces closed `<details>` open under `@media print`)
 - Role-to-role gap analysis engine (FRD 10.1) with gap severity (no gap / minor / moderate / significant /
   new skill required) and learning-resource matching by skill, level range, role family, capability area
   and gap type, ordered by priority
-- Enhanced role comparison layout (FRD v0.15): a comparison hero with a plain-English overall-alignment
-  summary, filterable skill-by-skill cards (all / level uplifts / new skills / aligned / high priority),
-  and a side-by-side detail panel per skill showing the current and target SFIA skill-at-level (or generic
-  level) description together with a plain-English difference explanation &mdash; stacks to one column on
-  mobile. Account-dependent parts (evidence confidence, add-to-development-plan) and AI Career Coach
-  integration are out of scope, same as elsewhere in this build
+- Enhanced role comparison layout (FRD v0.15, importance-based filter replaced with a severity-based one
+  per v0.19/v0.20's removal of skill importance): a comparison hero with a plain-English overall-alignment
+  summary and Grade (where set), filterable skill-by-skill cards (all / level uplifts / new skills /
+  aligned / bigger gaps), and a side-by-side detail panel per skill showing the current and target SFIA
+  skill-at-level (or generic level) description together with a plain-English difference explanation
+  &mdash; stacks to one column on mobile. Account-dependent parts (evidence confidence,
+  add-to-development-plan) and AI Career Coach integration are out of scope, same as elsewhere in this build
 - Single SFIA version per role profile (FRD v0.17, s.70): `role_profiles.sfia_version_id` is now a
   mandatory field (added via an additive `ALTER TABLE` migration in `src/db.js`, safe to run against the
   live database without data loss). The admin API rejects adding a skill mapping from a different SFIA
@@ -147,6 +158,21 @@ with Railway's env vars injected and can't reach a volume that only exists insid
 
 ## Known gaps / follow-ups (deliberately out of scope for this first pass)
 
+- **FRD v0.19/v0.20's "removed" role profile fields were removed from the experience, not deleted from
+  the database.** The FRD explicitly lists role family, capability area, role type, seniority, purpose
+  statement, day-in-the-life, evidence examples, related-roles roster, role-specific SFIA rationale and
+  skill importance (core/important/optional) as fields to remove from the MVP role profile. Confirmed with
+  the user before implementing (given this reverses functionality built for an earlier FRD version, v0.3,
+  and affects 33 live published roles with real imported content) that: (1) the public page should
+  actually stop showing this content rather than just make it non-mandatory, (2) skill importance should
+  be removed even though it drove the comparison page's severity/priority logic, and (3) Grade should stay
+  optional with no invented values for existing roles, since the source spreadsheet import never had a
+  grade concept. The database columns and existing data were kept (not dropped/nulled) &mdash; still
+  editable via a "Legacy enrichment fields" section in the admin role editor &mdash; per the FRD's own
+  "may be reintroduced later as optional enrichment" framing, and because destroying real content over a
+  UI simplification would be irreversible. `role_description` was backfilled for the 33 existing roles by
+  consolidating their existing purpose_statement/summary/responsibilities text (not invented content) so
+  the simplified page isn't blank; `grade` was left null since there's no real source data for it.
 - **FRD v0.17 s.69's full "validated SFIA selection" admin workflow is only partly built.** Skill and
   level mapping have always been controlled dropdowns (never free text, so most of s.69 was already
   satisfied architecturally), and level options are now filtered by imported skill-at-level data where it

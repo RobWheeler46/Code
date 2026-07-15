@@ -270,18 +270,18 @@ router.get('/role-profiles/:id', (req, res) => {
 
 router.post('/role-profiles', requireEdit, (req, res) => {
   const {
-    roleFamilyId, capabilityAreaId, title, summary, responsibilities, seniorityLevel, roleType, effectiveFrom, reviewDate,
+    roleFamilyId, capabilityAreaId, title, grade, roleDescription, summary, responsibilities, seniorityLevel, roleType, effectiveFrom, reviewDate,
     purposeStatement, focusArea, typicalOutputs, dayInTheLife, successIndicators, progressionSummary, displayTags
   } = req.body || {};
-  if (!title) return res.status(400).json({ error: 'Title is required.' });
+  if (!title) return res.status(400).json({ error: 'Role Name is required.' });
   // FRD v0.17 s.70: every role profile is pinned to a single SFIA version, defaulting to the current
   // published version - there is no version picker in the UI yet since only one version has ever existed.
   const activeVersion = db.prepare(`SELECT id FROM sfia_versions WHERE status = 'active' ORDER BY id DESC LIMIT 1`).get();
   const result = db.prepare(`
-    INSERT INTO role_profiles (role_family_id, capability_area_id, title, summary, responsibilities, seniority_level, role_type, owner_user_id, effective_from, review_date,
+    INSERT INTO role_profiles (role_family_id, capability_area_id, title, grade, role_description, summary, responsibilities, seniority_level, role_type, owner_user_id, effective_from, review_date,
       purpose_statement, role_at_a_glance, typical_outputs, day_in_the_life, success_indicators, progression_summary, display_tags, sfia_version_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(roleFamilyId || null, capabilityAreaId || null, title, summary || null, responsibilities || null, seniorityLevel || null, roleType || 'Individual Contributor', req.user.id, effectiveFrom || null, reviewDate || null,
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(roleFamilyId || null, capabilityAreaId || null, title, grade || null, roleDescription || null, summary || null, responsibilities || null, seniorityLevel || null, roleType || 'Individual Contributor', req.user.id, effectiveFrom || null, reviewDate || null,
     purposeStatement || null, focusArea ? JSON.stringify({ focusArea }) : null, typicalOutputs || null, dayInTheLife || null, successIndicators || null, progressionSummary || null,
     Array.isArray(displayTags) ? JSON.stringify(displayTags) : null, activeVersion ? activeVersion.id : null);
   logAudit({ ...auditCtx(req), action: 'create', entityType: 'role_profile', entityId: result.lastInsertRowid });
@@ -292,7 +292,7 @@ router.patch('/role-profiles/:id', requireEdit, (req, res) => {
   const existing = db.prepare(`SELECT * FROM role_profiles WHERE id = ?`).get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Role profile not found.' });
   const {
-    roleFamilyId, capabilityAreaId, title, summary, responsibilities, seniorityLevel, roleType, effectiveFrom, reviewDate,
+    roleFamilyId, capabilityAreaId, title, grade, roleDescription, summary, responsibilities, seniorityLevel, roleType, effectiveFrom, reviewDate,
     purposeStatement, focusArea, typicalOutputs, dayInTheLife, successIndicators, progressionSummary, displayTags
   } = req.body || {};
 
@@ -300,6 +300,8 @@ router.patch('/role-profiles/:id', requireEdit, (req, res) => {
     role_family_id: roleFamilyId ?? existing.role_family_id,
     capability_area_id: capabilityAreaId ?? existing.capability_area_id,
     title: title ?? existing.title,
+    grade: grade ?? existing.grade,
+    role_description: roleDescription ?? existing.role_description,
     summary: summary ?? existing.summary,
     responsibilities: responsibilities ?? existing.responsibilities,
     seniority_level: seniorityLevel ?? existing.seniority_level,
@@ -319,11 +321,11 @@ router.patch('/role-profiles/:id', requireEdit, (req, res) => {
   const nextVersion = wasPublished ? existing.version_number + 1 : existing.version_number;
 
   db.prepare(`
-    UPDATE role_profiles SET role_family_id = ?, capability_area_id = ?, title = ?, summary = ?, responsibilities = ?,
+    UPDATE role_profiles SET role_family_id = ?, capability_area_id = ?, title = ?, grade = ?, role_description = ?, summary = ?, responsibilities = ?,
       seniority_level = ?, role_type = ?, effective_from = ?, review_date = ?, version_number = ?, updated_at = datetime('now'),
       purpose_statement = ?, role_at_a_glance = ?, typical_outputs = ?, day_in_the_life = ?, success_indicators = ?, progression_summary = ?, display_tags = ?
     WHERE id = ?
-  `).run(newValues.role_family_id, newValues.capability_area_id, newValues.title, newValues.summary, newValues.responsibilities,
+  `).run(newValues.role_family_id, newValues.capability_area_id, newValues.title, newValues.grade, newValues.role_description, newValues.summary, newValues.responsibilities,
     newValues.seniority_level, newValues.role_type, newValues.effective_from, newValues.review_date, nextVersion,
     newValues.purpose_statement, newValues.role_at_a_glance, newValues.typical_outputs, newValues.day_in_the_life,
     newValues.success_indicators, newValues.progression_summary, newValues.display_tags, req.params.id);

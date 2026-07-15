@@ -3,7 +3,7 @@ const GAP_FILTERS = {
   uplift: { label: 'Level uplifts', test: d => d.gapStatus === 'level_uplift' },
   new_skill: { label: 'New skills', test: d => d.gapStatus === 'new_skill_required' },
   aligned: { label: 'Aligned', test: d => d.gapStatus === 'no_gap' },
-  priority: { label: 'High priority', test: d => d.importance === 'core' && (d.gapStatus === 'new_skill_required' || d.gapStatus === 'level_uplift') }
+  significant: { label: 'Bigger gaps', test: d => d.gapSeverity === 'Moderate gap' || d.gapSeverity === 'Significant gap' }
 };
 
 function movementLabel(d) {
@@ -56,11 +56,11 @@ function renderDetailRow(d) {
   const practical = d.learningResources.filter(r => PRACTICAL_RESOURCE_TYPES.includes(r.resourceType));
 
   return `
-    <details class="skill-detail compare-row" data-gap-status="${escapeHtml(d.gapStatus)}" data-importance="${escapeHtml(d.importance)}">
+    <details class="skill-detail compare-row" data-gap-status="${escapeHtml(d.gapStatus)}">
       <summary>
         <div class="skill-summary-main">
           <span class="skill-name">${escapeHtml(d.skillName)} <span class="muted">(${escapeHtml(d.skillCode)})</span></span>
-          <span class="skill-summary-meta">${importanceBadge(d.importance)} ${gapBadge(d.gapSeverity)}</span>
+          <span class="skill-summary-meta">${gapBadge(d.gapSeverity)}</span>
         </div>
         <p class="skill-short-desc">
           ${d.currentLevel ? `Level ${d.currentLevel.number}` : '&mdash;'} &rarr; ${d.aspirationalLevel ? `Level ${d.aspirationalLevel.number}` : '&mdash;'}
@@ -131,7 +131,7 @@ async function runComparison() {
 
   resultsBox.innerHTML = `
     <div class="card compare-hero">
-      <h2>${escapeHtml(currentRole.title)} &rarr; ${escapeHtml(aspirationalRole.title)}</h2>
+      <h2>${escapeHtml(currentRole.title)}${currentRole.grade ? ` (Grade ${escapeHtml(currentRole.grade)})` : ''} &rarr; ${escapeHtml(aspirationalRole.title)}${aspirationalRole.grade ? ` (Grade ${escapeHtml(aspirationalRole.grade)})` : ''}</h2>
       <p>${escapeHtml(overallAlignment(summary))}</p>
       ${currentRole.sfiaVersion || aspirationalRole.sfiaVersion ? `
         <p class="muted">

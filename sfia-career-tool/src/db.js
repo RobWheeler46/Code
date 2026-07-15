@@ -302,4 +302,27 @@ if (!roleProfileColumns.includes('sfia_version_id')) {
   `);
 }
 
+// Additive migration (FRD v0.19/v0.20: simplified role profile model - Role Name, Grade, Role
+// Description and validated SFIA mappings only). Adds the two new fields without touching or
+// dropping any existing columns/data - the richer "engaging content" fields (purpose_statement,
+// day_in_the_life, etc.) stay in the database, just unused by the simplified admin form and public
+// page, per the FRD's own "may be reintroduced later as optional enrichment" framing.
+const roleProfileColumns2 = db.prepare(`PRAGMA table_info(role_profiles)`).all().map(c => c.name);
+if (!roleProfileColumns2.includes('grade')) {
+  db.exec(`ALTER TABLE role_profiles ADD COLUMN grade TEXT`);
+}
+if (!roleProfileColumns2.includes('role_description')) {
+  db.exec(`ALTER TABLE role_profiles ADD COLUMN role_description TEXT`);
+  // One-time backfill so existing published roles aren't left with a blank description on the new
+  // simplified page - consolidates the narrative content that's already there, doesn't invent anything.
+  const rolesNeedingBackfill = db.prepare(`
+    SELECT id, purpose_statement, summary, responsibilities FROM role_profiles WHERE role_description IS NULL
+  `).all();
+  const updateDescription = db.prepare(`UPDATE role_profiles SET role_description = ? WHERE id = ?`);
+  for (const r of rolesNeedingBackfill) {
+    const parts = [r.purpose_statement, r.summary, r.responsibilities].filter(Boolean);
+    if (parts.length > 0) updateDescription.run(parts.join('\n\n'), r.id);
+  }
+}
+
 module.exports = db;
