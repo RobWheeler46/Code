@@ -149,6 +149,10 @@ with Railway's env vars injected and can't reach a volume that only exists insid
   already structured data). Revisit if at-a-glance cards need more admin-authored content later.
 - **13 of the 37 imported SFIA skill codes don't match the official SFIA 9 reference** &mdash; see the
   content section above. They still show their raw code as `skill_name` until an admin reviews them.
+  `src/flag-unmatched-skills.js` (non-destructive, safe to re-run) replaces the generic "not yet
+  populated" placeholder text with an explicit "not an official SFIA 9 code" explanation on these 13
+  records, so it's clear to any visitor rather than silently looking unfinished &mdash; deliberately does
+  not guess at what the code should actually mean.
 - **No learning resources imported.** The source spreadsheet didn't include any, so every skill gap on the
   live site currently shows "No learning resources are linked yet." until an admin adds real ones.
 - **No approval workflow for role profile changes.** Publishing is immediate for anyone with `canPublish`;
