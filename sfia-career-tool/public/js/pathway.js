@@ -68,6 +68,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }));
 
   const stages = [...new Set(pathway.roles.map(r => r.pathwayStage))].sort((a, b) => a - b);
+  const highlightStage = highlightId ? pathway.roles.find(r => String(r.id) === String(highlightId))?.pathwayStage : null;
 
   container.innerHTML = `
     <div class="card">
@@ -77,27 +78,35 @@ document.addEventListener('DOMContentLoaded', async () => {
       <p>${escapeHtml(pathway.pathway_description || '')}</p>
     </div>
 
+    ${stages.length > 1 ? `
+      <div class="pathway-stage-nav">
+        ${stages.map(stage => `<a href="#pathway-stage-${stage}">Stage ${stage}</a>`).join('')}
+      </div>
+    ` : ''}
+
     <div class="pathway-map">
       ${stages.map(stage => `
-        <div class="pathway-stage">
-          <h2>Stage ${stage}</h2>
+        <details class="pathway-stage" id="pathway-stage-${stage}" ${stage === highlightStage || !highlightStage ? 'open' : ''}>
+          <summary>Stage ${stage} <span class="stage-role-count">${pathway.roles.filter(r => r.pathwayStage === stage).length} role${pathway.roles.filter(r => r.pathwayStage === stage).length === 1 ? '' : 's'}</span></summary>
           <div class="pathway-stage-roles">
             ${pathway.roles.filter(r => r.pathwayStage === stage).map(r => renderRoleCard(r, connections, highlightId)).join('')}
           </div>
-        </div>
+        </details>
       `).join('')}
     </div>
   `;
 
+  function revealAndScrollTo(roleId) {
+    const target = document.getElementById(`pathway-role-${roleId}`);
+    if (!target) return;
+    const stageEl = target.closest('details.pathway-stage');
+    if (stageEl) stageEl.open = true;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
   container.querySelectorAll('[data-jump-role]').forEach(link => {
-    link.addEventListener('click', () => {
-      const target = document.getElementById(`pathway-role-${link.dataset.jumpRole}`);
-      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    });
+    link.addEventListener('click', () => revealAndScrollTo(link.dataset.jumpRole));
   });
 
-  if (highlightId) {
-    const target = document.getElementById(`pathway-role-${highlightId}`);
-    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }
+  if (highlightId) revealAndScrollTo(highlightId);
 });

@@ -245,11 +245,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   container.innerHTML = `
     <div class="role-hero">
+      ${role.sfiaVersions && role.sfiaVersions.length > 0 ? `<div class="sfia-version-badge">SFIA version: ${escapeHtml(role.sfiaVersions.join(', '))}</div>` : ''}
       ${breadcrumb ? `<p class="hero-breadcrumb">${breadcrumb}${role.seniority_level ? ' &middot; ' + escapeHtml(role.seniority_level) : ''}</p>` : ''}
       <h1>${escapeHtml(role.title)}</h1>
       ${tags ? `<div class="tag-row">${tags}</div>` : ''}
       <p class="hero-purpose">${escapeHtml(role.purpose_statement || role.summary || '')}</p>
       <a class="btn btn-primary" href="compare.html?current=${role.id}">Compare this role</a>
+    </div>
+
+    <div class="mobile-sticky-actions" aria-label="Primary actions">
+      <a class="btn btn-primary" href="compare.html?current=${role.id}">Compare</a>
+      <a class="btn btn-secondary" href="compare.html?aspirational=${role.id}">Select aspirational</a>
     </div>
 
     <div class="container">

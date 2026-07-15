@@ -110,12 +110,22 @@ with Railway's env vars injected and can't reach a volume that only exists insid
   recorded and filterable), content-review dashboard (overdue / due soon / no review date), and a basic
   reporting tab (most viewed/compared roles, common aspirational roles, common comparisons)
 - Usage events logged for public role views and comparisons, feeding the admin reports
-- Career pathway map (FRD v0.8, Part J): admin-managed pathways group role profiles into stages with
-  labelled connections (progression / lateral / specialisation / management / architecture / stretch /
-  alternative). Public pathway list (filterable by role family/type) and detail view render stages as
-  columns of role cards, each showing level range and core-skill count, with "View role", "Compare from
-  here" and "Set as aspirational" actions, plus an "Explore career paths from this role" link on the role
-  profile page that opens the pathway with that role highlighted
+- Career pathway map (FRD v0.8 Part J, layout reworked per FRD v0.10): admin-managed pathways group role
+  profiles into stages with labelled connections (progression / lateral / specialisation / management /
+  architecture / stretch / alternative). Public pathway detail view renders stages as a **vertical,
+  collapsible list** (not a horizontal row) &mdash; each stage is a `<details>` section the user can expand
+  or collapse, with a quick-jump nav row at the top, so a pathway with 7&ndash;8 roles stays scannable on
+  both mobile and desktop. Role cards keep "View role", "Compare from here" and "Set as aspirational"
+  actions, plus an "Explore career paths from this role" link on the role profile page that opens the
+  pathway with that role highlighted (and its stage auto-expanded)
+- Aviva-inspired visual design (FRD v0.9): navy/blue/yellow/green colour palette applied via the existing
+  CSS custom properties, yellow reserved for primary calls to action per the FRD's "use sparingly"
+  guidance, 44px-minimum touch targets on buttons and nav links, and a mobile sticky action bar (Compare /
+  Select aspirational) on the role profile page. Colour values are product-design tokens inspired by
+  Aviva's public brand colours, not official Aviva brand assets &mdash; no Aviva logos or brand assets are
+  used, per the FRD's own explicit restriction
+- SFIA version badge on role profile pages (FRD v0.11 MVP-foundation slice only) &mdash; every SFIA skill
+  and level was already scoped to a `sfia_version_id`, so this just surfaces it in the UI
 
 ## Known gaps / follow-ups (deliberately out of scope for this first pass)
 
@@ -155,3 +165,16 @@ with Railway's env vars injected and can't reach a volume that only exists insid
   include the future-phase tables from the FRD's data model (User Career Profile, User Skill Assessment,
   Saved Comparison, Personal Development Plan, Development Plan Item, Evidence, Sharing Permission,
   Notification) &mdash; add them when that phase is scoped.
+- **FRD v0.11's full multi-version SFIA support is not built.** Only the MVP-foundation slice (data already
+  version-scoped, version badge shown on role profiles) is in place. Admin version-lifecycle management
+  (draft/active/published-default/legacy/archived), cross-version comparison blocking, and the migration
+  review workflow are all explicitly Phase 2&ndash;4 in the FRD's own suggested delivery approach, and
+  there's only one SFIA version in use today &mdash; build these if/when a second version is actually needed.
+- **FRD v0.13 Part K / Appendix L's SFIA workbook import pipeline is not built.** This specs a full
+  admin-facing import system (upload &rarr; staging tables &rarr; validation &rarr; approval &rarr; publish,
+  plus cross-version migration mapping) for a source file
+  (`sfia-9_current-standard_en_260521.xlsx`) that wasn't provided alongside the FRD. The practical outcome
+  this section is aiming for &mdash; real SFIA 9 content in the app &mdash; is already achieved via the
+  one-off `src/import-career-paths.js` and `src/update-sfia-content.js` scripts documented above. Revisit
+  as a proper admin feature only if SFIA content needs to be re-imported/updated regularly rather than as
+  an occasional one-off.

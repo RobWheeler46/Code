@@ -128,6 +128,14 @@ router.get('/roles/:id', (req, res) => {
   const coreSkillCount = skills.filter(s => s.importance === 'core').length;
   const learningPreview = learningPreviewForRole(role, skills);
 
+  const sfiaVersions = db.prepare(`
+    SELECT DISTINCT v.version_name
+    FROM role_profile_skills rps
+    JOIN sfia_skills sk ON sk.id = rps.sfia_skill_id
+    JOIN sfia_versions v ON v.id = sk.sfia_version_id
+    WHERE rps.role_profile_id = ?
+  `).all(role.id).map(r => r.version_name);
+
   const pathways = db.prepare(`
     SELECT DISTINCT cp.id, cp.pathway_name
     FROM career_pathway_roles cpr
@@ -145,7 +153,8 @@ router.get('/roles/:id', (req, res) => {
     coreSkillCount,
     relatedRoles,
     learningPreview,
-    pathways
+    pathways,
+    sfiaVersions
   });
 });
 
