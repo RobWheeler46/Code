@@ -63,7 +63,7 @@ function renderDetailRow(d) {
           <span class="skill-summary-meta">${gapBadge(d.gapSeverity)}</span>
         </div>
         <p class="skill-short-desc">
-          ${d.currentLevel ? `Level ${d.currentLevel.number}` : '&mdash;'} &rarr; ${d.aspirationalLevel ? `Level ${d.aspirationalLevel.number}` : '&mdash;'}
+          ${d.currentLevel ? `<span class="level-pill">L${d.currentLevel.number}</span>` : '<span class="muted">&mdash;</span>'} &rarr; ${d.aspirationalLevel ? `<span class="level-pill">L${d.aspirationalLevel.number}</span>` : '<span class="muted">&mdash;</span>'}
           <span class="muted">(${movementLabel(d)})</span>
         </p>
       </summary>

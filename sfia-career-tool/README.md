@@ -160,12 +160,19 @@ with Railway's env vars injected and can't reach a volume that only exists insid
   both mobile and desktop. Role cards keep "View role", "Compare from here" and "Set as aspirational"
   actions, plus an "Explore career paths from this role" link on the role profile page that opens the
   pathway with that role highlighted (and its stage auto-expanded)
-- Aviva-inspired visual design (FRD v0.9): navy/blue/yellow/green colour palette applied via the existing
-  CSS custom properties, yellow reserved for primary calls to action per the FRD's "use sparingly"
-  guidance, 44px-minimum touch targets on buttons and nav links, and a mobile sticky action bar (Compare /
-  Select aspirational) on the role profile page. Colour values are product-design tokens inspired by
-  Aviva's public brand colours, not official Aviva brand assets &mdash; no Aviva logos or brand assets are
-  used, per the FRD's own explicit restriction
+- Visual design aligned to the FRD wireframe images (not just the design *text*): light-tinted hero panels
+  with an inline mountain/pathway SVG illustration, a mobile **bottom tab bar** (Home / Roles / Compare /
+  Pathways) alongside the desktop top nav, icon-tiled action cards on the home page, role cards showing
+  Grade, `Ln` level pills in tables and comparisons, and soft-tinted gap badges (minor uplift amber, new
+  skill lilac). Primary buttons are **solid blue** with yellow kept as a small accent (nav active-underline,
+  hero flag) &mdash; this follows the wireframe images, which differ from the v0.9 *text*'s "yellow for
+  primary CTAs" wording; where the wireframes and the written requirements conflicted, the wireframes won
+  per the product owner's instruction, **except** the role-profile wireframe's Importance column, which was
+  left out because v0.19/v0.20 explicitly removed skill importance (the wireframes predate that change).
+  Wireframe elements for deferred Phase-2 features (the "Start assessment" button, "Ask AI Career Coach"
+  panels, and the bottom-nav "Coach" tab) are intentionally omitted rather than shown as dead controls.
+  Colour values are product-design tokens inspired by Aviva's public brand colours, not official Aviva
+  brand assets &mdash; no Aviva logos or brand assets are used, per the FRD's own explicit restriction.
 - SFIA version badge on role profile pages (FRD v0.11 MVP-foundation slice only) &mdash; every SFIA skill
   and level was already scoped to a `sfia_version_id`, so this just surfaces it in the UI
 

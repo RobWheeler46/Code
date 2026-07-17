@@ -25,7 +25,7 @@ function skillsComparisonTableRows(skills) {
     <tr>
       <td data-label="SFIA code">${escapeHtml(s.skill_code)}</td>
       <td data-label="SFIA skill">${escapeHtml(s.skill_name)}</td>
-      <td data-label="Required level">Level ${s.level_number}${s.level_name && s.level_name !== `Level ${s.level_number}` ? ' &mdash; ' + escapeHtml(s.level_name) : ''}</td>
+      <td data-label="Required level"><span class="level-pill">L${s.level_number}</span>${s.level_name && s.level_name !== `Level ${s.level_number}` ? ' <span class="muted">' + escapeHtml(s.level_name) + '</span>' : ''}</td>
       <td data-label="Summary">${escapeHtml(s.short_description || '')}</td>
       <td data-label="Action"><a href="#skill-${s.sfia_skill_id}" class="btn btn-secondary btn-sm" data-jump-skill="${s.sfia_skill_id}">View full detail</a></td>
     </tr>
@@ -165,13 +165,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
+  const pills = [];
+  if (role.grade) pills.push(`<span class="grade-pill">Grade ${escapeHtml(role.grade)}</span>`);
+  if (role.sfiaVersions && role.sfiaVersions.length > 0) pills.push(`<span class="sfia-version-badge">${escapeHtml(role.sfiaVersions.join(', '))}</span>`);
+
   container.innerHTML = `
     <div class="role-hero">
-      ${role.sfiaVersions && role.sfiaVersions.length > 0 ? `<div class="sfia-version-badge">SFIA version: ${escapeHtml(role.sfiaVersions.join(', '))}</div>` : ''}
-      <h1>${escapeHtml(role.title)}</h1>
-      ${role.grade ? `<p class="hero-breadcrumb">Grade ${escapeHtml(role.grade)}</p>` : ''}
-      <p class="hero-purpose">${escapeHtml(role.role_description || '')}</p>
-      <a class="btn btn-primary" href="compare.html?current=${role.id}">Compare this role</a>
+      <div class="role-hero-head">
+        <span class="icon-tile lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 8 5 12 9 16"/><polyline points="15 8 19 12 15 16"/></svg></span>
+        <div>
+          <h1>${escapeHtml(role.title)}</h1>
+          ${pills.length ? `<div class="tag-row">${pills.join('')}</div>` : ''}
+        </div>
+      </div>
+      <p class="hero-purpose rich-text">${escapeHtml(role.role_description || '')}</p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="compare.html?current=${role.id}">Compare role</a>
+      </div>
     </div>
 
     <div class="mobile-sticky-actions" aria-label="Primary actions">

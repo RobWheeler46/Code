@@ -2,39 +2,33 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Browse Role Profiles - SFIA Career Tool</title>
+<title>SFIA Career - Explore roles and plan your growth</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <header id="app-nav" class="app-nav"></header>
 
-  <div class="hero">
-    <h1>Find your next role, and what it takes to get there</h1>
-    <p>Browse role profiles mapped to SFIA skills and levels, then compare any two roles to see the skills gap and learning recommendations.</p>
-  </div>
+  <div id="home-hero"></div>
 
   <div class="container">
-    <div class="card">
-      <div class="filters-row">
-        <div class="field">
-          <label for="search">Search</label>
-          <input type="search" id="search" placeholder="Search by title or keyword">
-        </div>
-        <div class="field">
-          <label for="family-filter">Role family</label>
-          <select id="family-filter"><option value="">All role families</option></select>
-        </div>
-        <div class="field">
-          <label for="area-filter">Capability area</label>
-          <select id="area-filter"><option value="">All capability areas</option></select>
-        </div>
-        <div class="field" style="flex:0;">
-          <button class="btn btn-secondary" id="clear-filters" type="button">Clear</button>
-        </div>
+    <div id="action-grid"></div>
+
+    <div class="filters-row">
+      <div class="field">
+        <label for="family-filter">Role family</label>
+        <select id="family-filter"><option value="">All role families</option></select>
+      </div>
+      <div class="field">
+        <label for="area-filter">Capability area</label>
+        <select id="area-filter"><option value="">All capability areas</option></select>
+      </div>
+      <div class="field" style="flex:0;">
+        <button class="btn btn-secondary" id="clear-filters" type="button">Clear</button>
       </div>
     </div>
 
+    <h2 id="roles-heading">Featured roles</h2>
     <div id="role-list"></div>
   </div>
 

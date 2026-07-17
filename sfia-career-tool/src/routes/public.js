@@ -64,7 +64,7 @@ router.get('/capability-areas', (req, res) => {
 router.get('/roles', (req, res) => {
   const { search, roleFamilyId, capabilityAreaId, seniorityLevel } = req.query;
   let sql = `
-    SELECT rp.id, rp.title, rp.summary, rp.seniority_level, rp.role_type,
+    SELECT rp.id, rp.title, rp.summary, rp.role_description, rp.grade, rp.seniority_level, rp.role_type,
            rf.id AS role_family_id, rf.name AS role_family_name,
            ca.id AS capability_area_id, ca.name AS capability_area_name
     FROM role_profiles rp
@@ -74,8 +74,8 @@ router.get('/roles', (req, res) => {
   `;
   const params = [];
   if (search) {
-    sql += ` AND (rp.title LIKE ? OR rp.summary LIKE ?)`;
-    params.push(`%${search}%`, `%${search}%`);
+    sql += ` AND (rp.title LIKE ? OR rp.summary LIKE ? OR rp.role_description LIKE ?)`;
+    params.push(`%${search}%`, `%${search}%`, `%${search}%`);
   }
   if (roleFamilyId) {
     sql += ` AND rp.role_family_id = ?`;
