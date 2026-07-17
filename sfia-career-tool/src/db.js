@@ -372,4 +372,29 @@ CREATE INDEX IF NOT EXISTS idx_sfia_attributes_code ON sfia_attributes(attribute
 CREATE INDEX IF NOT EXISTS idx_sfia_attribute_level_desc_lookup ON sfia_attribute_level_descriptions(sfia_attribute_id, sfia_level_id);
 `);
 
+// Phase 2 (registered end-user accounts): the first slice is personal saved items. End users reuse the
+// existing `users` table (an end user is simply a users row with no admin_roles). These tables are
+// additive and reference users(id); nothing existing is changed.
+db.exec(`
+CREATE TABLE IF NOT EXISTS saved_roles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  role_profile_id INTEGER NOT NULL REFERENCES role_profiles(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(user_id, role_profile_id)
+);
+
+CREATE TABLE IF NOT EXISTS saved_comparisons (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  current_role_profile_id INTEGER NOT NULL REFERENCES role_profiles(id),
+  aspirational_role_profile_id INTEGER NOT NULL REFERENCES role_profiles(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(user_id, current_role_profile_id, aspirational_role_profile_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_saved_roles_user ON saved_roles(user_id);
+CREATE INDEX IF NOT EXISTS idx_saved_comparisons_user ON saved_comparisons(user_id);
+`);
+
 module.exports = db;

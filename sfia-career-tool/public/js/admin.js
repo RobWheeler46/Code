@@ -71,6 +71,7 @@ const TABS = {
   pathways: renderPathwaysTab,
   review: renderReviewTab,
   audit: renderAuditTab,
+  endusers: renderEndUsersTab,
   users: renderUsersTab
 };
 
@@ -1439,6 +1440,68 @@ async function renderUsersTab() {
   document.querySelectorAll('[data-status-for]').forEach(sel => {
     sel.addEventListener('change', async () => {
       await Api.patch(`/api/admin/users/${sel.dataset.statusFor}`, { accountStatus: sel.value });
+    });
+  });
+}
+
+// End users (Phase 2): admin-invite registered end-user accounts (no admin role).
+async function renderEndUsersTab() {
+  const content = document.getElementById('tab-content');
+  const users = await Api.get('/api/admin/end-users');
+  content.innerHTML = `
+    <div class="card">
+      <h2>Invite an end user</h2>
+      <p class="muted">Creates a registered end-user account (no admin access). Registration is admin-invite only. Give them the email and initial password; they sign in at <code>/signin.html</code> and can change nothing yet but their saved items.</p>
+      <div id="euser-form-alert"></div>
+      <div class="grid cols-2">
+        <div class="field"><label for="eu-first">First name</label><input type="text" id="eu-first"></div>
+        <div class="field"><label for="eu-last">Last name</label><input type="text" id="eu-last"></div>
+      </div>
+      <div class="grid cols-2">
+        <div class="field"><label for="eu-email">Email</label><input type="email" id="eu-email"></div>
+        <div class="field"><label for="eu-password">Initial password</label><input type="text" id="eu-password" placeholder="Share this with the user"></div>
+      </div>
+      <button class="btn btn-primary btn-sm" id="add-euser-btn" type="button">Invite user</button>
+    </div>
+    <div class="card">
+      <h2>End users (${users.length})</h2>
+      ${users.length === 0 ? '<p class="muted">No end users yet.</p>' : `
+      <table>
+        <tr><th>Name</th><th>Email</th><th>Status</th><th>Last login</th></tr>
+        ${users.map(u => `
+          <tr>
+            <td>${escapeHtml(u.first_name)} ${escapeHtml(u.last_name)}</td>
+            <td>${escapeHtml(u.email)}</td>
+            <td>
+              <select data-eu-status="${u.id}">
+                ${['active', 'suspended'].map(s => `<option value="${s}" ${u.account_status === s ? 'selected' : ''}>${s}</option>`).join('')}
+              </select>
+            </td>
+            <td>${u.last_login_at ? formatDateTime(u.last_login_at) : 'Never'}</td>
+          </tr>
+        `).join('')}
+      </table>`}
+    </div>
+  `;
+
+  document.getElementById('add-euser-btn').addEventListener('click', async () => {
+    const alertBox = document.getElementById('euser-form-alert');
+    alertBox.innerHTML = '';
+    try {
+      await Api.post('/api/admin/end-users', {
+        firstName: document.getElementById('eu-first').value,
+        lastName: document.getElementById('eu-last').value,
+        email: document.getElementById('eu-email').value,
+        password: document.getElementById('eu-password').value
+      });
+      renderEndUsersTab();
+    } catch (err) {
+      alertBox.innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+    }
+  });
+  document.querySelectorAll('[data-eu-status]').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      await Api.patch(`/api/admin/end-users/${sel.dataset.euStatus}`, { accountStatus: sel.value });
     });
   });
 }

@@ -37,8 +37,13 @@
       const email = document.getElementById('email').value.trim();
       const password = document.getElementById('password').value;
       try {
-        await Api.post('/api/login', { email, password });
-        location.href = 'admin.html';
+        const res = await Api.post('/api/login', { email, password });
+        if (res.isAdmin) {
+          location.href = 'admin.html';
+        } else {
+          await Api.post('/api/logout');
+          alertBox.innerHTML = '<div class="alert alert-error">This login is for administrators. Please use the main site to sign in.</div>';
+        }
       } catch (err) {
         alertBox.innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
       }

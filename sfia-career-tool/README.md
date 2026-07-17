@@ -246,12 +246,18 @@ with Railway's env vars injected and can't reach a volume that only exists insid
 - **Sessions are in-memory.** Restarting the server logs admins out. Fine for a small deployment; swap in
   a persistent session store (e.g. `connect-sqlite3`) if that becomes annoying.
 - **No self-service password change or reset flow** for admin users.
-- **Phases 2&ndash;5 are not built**: user registration, self-assessment, personal gap analysis, saved
-  comparisons, development plans, evidence, sharing with managers/mentors/coaches, and aggregated
-  organisational reporting are all out of scope here. The schema in `src/db.js` intentionally does not yet
-  include the future-phase tables from the FRD's data model (User Career Profile, User Skill Assessment,
-  Saved Comparison, Personal Development Plan, Development Plan Item, Evidence, Sharing Permission,
-  Notification) &mdash; add them when that phase is scoped.
+- **Phase 2 has started on the `phase-2` git branch** (not merged to `main`, not on the live Railway
+  site). Built so far: the **registered end-user accounts foundation** (end users share the `users`
+  table, distinguished by having no admin role; admin-invite-only registration via Admin &gt; End users;
+  `/api/login` now admits any active user and the client routes on `isAdmin`; a `requireUser` middleware
+  gates the new `/api/user/*` routes) and the **first personal feature: saved roles + saved comparisons +
+  a personal dashboard** (`saved_roles`/`saved_comparisons` tables, "Save role" on the role page, "Save
+  comparison" on the compare page, `dashboard.html`, and an auth-aware nav showing Sign in vs My
+  dashboard/Sign out). No email service is configured, so no self-service sign-up or email-based password
+  reset yet. Still to come in Phase 2+: guided self-assessment (Part E), personal development plans,
+  evidence, sharing with managers/mentors/coaches, the AI Career Coach (Parts F&ndash;I), and aggregated
+  organisational reporting. The FRD's future-phase entities for those (User Skill Assessment, Development
+  Plan Item, Evidence, Sharing Permission, Notification, &hellip;) are not in `src/db.js` yet.
 - **FRD v0.11's full multi-version SFIA support is not built.** Only the MVP-foundation slice (data already
   version-scoped, version badge shown on role profiles) is in place. Admin version-lifecycle management
   (draft/active/published-default/legacy/archived), cross-version comparison blocking, and the migration

@@ -19,16 +19,13 @@ router.post('/login', (req, res) => {
     return res.status(403).json({ error: 'Your account is not active. Contact a super administrator.' });
   }
 
+  // Phase 2: any active user may log in (admins and registered end users share the users table).
+  // Admin-only areas are still protected server-side by requireAuth; the client routes on isAdmin.
   const permissions = userPermissions(user.id);
-  if (!permissions.isAdmin) {
-    logAudit({ userId: user.id, action: 'login_denied_no_admin_role', ipAddress: req.ip });
-    return res.status(403).json({ error: 'Your account does not have admin access.' });
-  }
-
   db.prepare(`UPDATE users SET last_login_at = datetime('now') WHERE id = ?`).run(user.id);
   req.session.userId = user.id;
   logAudit({ userId: user.id, action: 'login', ipAddress: req.ip });
-  res.json({ ok: true });
+  res.json({ ok: true, isAdmin: permissions.isAdmin });
 });
 
 router.post('/logout', (req, res) => {

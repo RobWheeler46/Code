@@ -181,6 +181,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       <p class="hero-purpose rich-text">${escapeHtml(role.role_description || '')}</p>
       <div class="hero-actions">
         <a class="btn btn-primary" href="compare.html?current=${role.id}">Compare role</a>
+        <button class="btn btn-secondary" id="save-role-btn" type="button" style="display:none;">Save role</button>
       </div>
     </div>
 
@@ -215,6 +216,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateSkillsComparisonTable(role.skills, 'none');
     document.getElementById('skills-table-group').addEventListener('change', (e) => {
       updateSkillsComparisonTable(role.skills, e.target.value);
+    });
+  }
+
+  // Phase 2: show "Save role" for signed-in users, reflecting whether it's already saved.
+  const me = await getMe();
+  if (me) {
+    const btn = document.getElementById('save-role-btn');
+    btn.style.display = '';
+    const saved = await Api.get('/api/user/saved-roles').catch(() => []);
+    let isSaved = saved.some(s => String(s.role_profile_id) === String(role.id));
+    const paint = () => { btn.textContent = isSaved ? 'Saved ✓' : 'Save role'; };
+    paint();
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        if (isSaved) { await Api.delete(`/api/user/saved-roles/${role.id}`); isSaved = false; }
+        else { await Api.post('/api/user/saved-roles', { roleProfileId: role.id }); isSaved = true; }
+        paint();
+      } finally { btn.disabled = false; }
     });
   }
 });

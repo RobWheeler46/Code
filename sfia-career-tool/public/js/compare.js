@@ -139,6 +139,7 @@ async function runComparison() {
         </p>
       ` : ''}
       ${versionMismatch ? '<div class="alert alert-info">These two roles use different SFIA versions, so this comparison may not be exactly like-for-like.</div>' : ''}
+      <div class="actions-row"><button class="btn btn-secondary btn-sm" id="save-comparison-btn" type="button" style="display:none;">Save comparison</button></div>
       <div class="summary-stats">
         <div class="stat-tile"><div class="num">${summary.totalGaps}</div><div class="label">Total gaps</div></div>
         <div class="stat-tile"><div class="num">${summary.newSkillsRequired}</div><div class="label">New skills required</div></div>
@@ -163,6 +164,33 @@ async function runComparison() {
   document.querySelectorAll('#compare-filters button').forEach(btn => {
     btn.addEventListener('click', () => applyFilter(btn.dataset.filter));
   });
+
+  // Phase 2: signed-in users can save this comparison to their dashboard.
+  const me = await getMe();
+  if (me) {
+    const saveBtn = document.getElementById('save-comparison-btn');
+    saveBtn.style.display = '';
+    const saved = await Api.get('/api/user/saved-comparisons').catch(() => []);
+    let isSaved = saved.some(s => String(s.current_role_profile_id) === String(currentRole.id) && String(s.aspirational_role_profile_id) === String(aspirationalRole.id));
+    const savedId = () => (saved.find(s => String(s.current_role_profile_id) === String(currentRole.id) && String(s.aspirational_role_profile_id) === String(aspirationalRole.id)) || {}).id;
+    const paint = () => { saveBtn.textContent = isSaved ? 'Saved ✓' : 'Save comparison'; };
+    paint();
+    saveBtn.addEventListener('click', async () => {
+      saveBtn.disabled = true;
+      try {
+        if (isSaved) {
+          const id = savedId();
+          if (id) await Api.delete(`/api/user/saved-comparisons/${id}`);
+          isSaved = false;
+        } else {
+          const r = await Api.post('/api/user/saved-comparisons', { currentRoleId: currentRole.id, aspirationalRoleId: aspirationalRole.id });
+          saved.push({ id: r.id, current_role_profile_id: currentRole.id, aspirational_role_profile_id: aspirationalRole.id });
+          isSaved = true;
+        }
+        paint();
+      } finally { saveBtn.disabled = false; }
+    });
+  }
 }
 
 document.addEventListener('DOMContentLoaded', async () => {

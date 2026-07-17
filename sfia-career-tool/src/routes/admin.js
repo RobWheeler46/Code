@@ -763,6 +763,46 @@ router.patch('/users/:id', requireManageAdmins, (req, res) => {
   res.json(db.prepare(`SELECT id, first_name, last_name, email, account_status FROM users WHERE id = ?`).get(req.params.id));
 });
 
+// End users (Phase 2): registered end-user accounts have no admin role. Admin-invite only - any
+// admin can create/suspend end users (this is not the same as managing admin privileges, which stays
+// super-admin-only via the /users routes above).
+
+router.get('/end-users', (req, res) => {
+  const rows = db.prepare(`
+    SELECT u.id, u.first_name, u.last_name, u.email, u.account_status, u.last_login_at, u.created_at
+    FROM users u
+    WHERE NOT EXISTS (SELECT 1 FROM user_admin_roles uar WHERE uar.user_id = u.id)
+    ORDER BY u.last_name, u.first_name
+  `).all();
+  res.json(rows);
+});
+
+router.post('/end-users', (req, res) => {
+  const { firstName, lastName, email, password } = req.body || {};
+  if (!firstName || !lastName || !email || !password) {
+    return res.status(400).json({ error: 'First name, last name, email and an initial password are required.' });
+  }
+  const normalizedEmail = String(email).trim().toLowerCase();
+  const existing = db.prepare(`SELECT id FROM users WHERE email = ?`).get(normalizedEmail);
+  if (existing) return res.status(409).json({ error: 'A user with this email already exists.' });
+  const result = db.prepare(`INSERT INTO users (first_name, last_name, email, password_hash) VALUES (?, ?, ?, ?)`)
+    .run(firstName, lastName, normalizedEmail, hashPassword(password));
+  logAudit({ ...auditCtx(req), action: 'create', entityType: 'end_user', entityId: result.lastInsertRowid });
+  res.status(201).json(db.prepare(`SELECT id, first_name, last_name, email, account_status FROM users WHERE id = ?`).get(result.lastInsertRowid));
+});
+
+router.patch('/end-users/:id', (req, res) => {
+  const user = db.prepare(`SELECT * FROM users WHERE id = ?`).get(req.params.id);
+  if (!user) return res.status(404).json({ error: 'User not found.' });
+  const isAdminUser = db.prepare(`SELECT 1 FROM user_admin_roles WHERE user_id = ?`).get(user.id);
+  if (isAdminUser) return res.status(400).json({ error: 'This is an admin account - manage it via the Admin users section.' });
+  const { accountStatus, password } = req.body || {};
+  if (accountStatus) db.prepare(`UPDATE users SET account_status = ?, updated_at = datetime('now') WHERE id = ?`).run(accountStatus, user.id);
+  if (password) db.prepare(`UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?`).run(hashPassword(password), user.id);
+  logAudit({ ...auditCtx(req), action: 'edit', entityType: 'end_user', entityId: user.id });
+  res.json(db.prepare(`SELECT id, first_name, last_name, email, account_status FROM users WHERE id = ?`).get(user.id));
+});
+
 // Audit log
 
 router.get('/audit-log', (req, res) => {

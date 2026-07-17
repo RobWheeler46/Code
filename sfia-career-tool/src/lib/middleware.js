@@ -1,14 +1,21 @@
 const db = require('../db');
 const { userPermissions } = require('./helpers');
 
-function requireAuth(req, res, next) {
+// Any active logged-in user (admin or registered end user). Used by Phase-2 personal routes.
+function requireUser(req, res, next) {
   if (!req.session.userId) return res.status(401).json({ error: 'Not logged in.' });
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
   if (!user || user.account_status !== 'active') return res.status(401).json({ error: 'Not logged in.' });
   req.user = user;
   req.permissions = userPermissions(user.id);
-  if (!req.permissions.isAdmin) return res.status(403).json({ error: 'Administrator access required.' });
   next();
+}
+
+function requireAuth(req, res, next) {
+  requireUser(req, res, () => {
+    if (!req.permissions.isAdmin) return res.status(403).json({ error: 'Administrator access required.' });
+    next();
+  });
 }
 
 function requireEdit(req, res, next) {
@@ -26,4 +33,4 @@ function requireManageAdmins(req, res, next) {
   next();
 }
 
-module.exports = { requireAuth, requireEdit, requirePublish, requireManageAdmins };
+module.exports = { requireUser, requireAuth, requireEdit, requirePublish, requireManageAdmins };

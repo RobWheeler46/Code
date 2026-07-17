@@ -20,7 +20,9 @@ function renderPublicNav() {
         <a href="pathways.html" class="${isActive(['pathways.html', 'pathway.html'])}">Pathways</a>
         <a href="login.html">Admin</a>
       </nav>
+      <span class="nav-auth" id="nav-auth"></span>
     `;
+    updatePublicNavAuth();
   }
 
   // Mobile bottom tab bar (FRD v0.9/v0.20 wireframes). Deferred "Coach" tab omitted since the AI
@@ -38,6 +40,35 @@ function renderPublicNav() {
     `;
     document.body.appendChild(bottom);
   }
+}
+
+// Populates the nav's auth slot: "Sign in" when logged out, or the user's name + "Sign out" when a
+// registered end user (or admin) is signed in. Cached on window so it's fetched once per page load.
+async function updatePublicNavAuth() {
+  const slot = document.getElementById('nav-auth');
+  if (!slot) return;
+  let me = null;
+  try { me = await Api.get('/api/me'); } catch (e) { me = null; }
+  if (me) {
+    slot.innerHTML = `
+      <a href="dashboard.html">My dashboard</a>
+      <a href="#" id="nav-signout">Sign out</a>
+    `;
+    slot.querySelector('#nav-signout').addEventListener('click', async (e) => {
+      e.preventDefault();
+      await Api.post('/api/logout');
+      location.href = 'index.html';
+    });
+  } else {
+    slot.innerHTML = `<a href="signin.html" class="btn btn-primary btn-sm">Sign in</a>`;
+  }
+}
+
+// Returns the signed-in user (or null) - lets pages show/hide save buttons. Single shared fetch.
+let _mePromise;
+function getMe() {
+  if (!_mePromise) _mePromise = Api.get('/api/me').catch(() => null);
+  return _mePromise;
 }
 
 // Reusable mountain + winding-path hero illustration from the wireframes (inline SVG so it themes

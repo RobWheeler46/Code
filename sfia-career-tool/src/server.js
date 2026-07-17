@@ -8,6 +8,7 @@ require('./db'); // ensure schema is initialized
 const authRoutes = require('./routes/auth');
 const publicRoutes = require('./routes/public');
 const adminRoutes = require('./routes/admin');
+const userRoutes = require('./routes/user');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -25,6 +26,7 @@ app.use(session({
 app.use('/api', authRoutes);
 app.use('/api', publicRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/user', userRoutes);
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
 

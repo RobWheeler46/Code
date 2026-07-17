@@ -585,3 +585,9 @@ textarea { min-height: 5rem; resize: vertical; }
 .role-hero-head { display: flex; align-items: center; gap: 1rem; }
 .role-hero-head h1 { margin: 0; }
 .skills-table td .level-pill { margin-right: 0.35rem; }
+
+/* Phase 2: nav auth slot (Sign in / My dashboard + Sign out). Sibling of the collapsible nav, so it
+   stays visible in the top bar on mobile even when the main nav links are hidden. */
+.nav-auth { display: flex; align-items: center; gap: 1rem; }
+.nav-auth a:not(.btn) { color: var(--text); font-weight: 600; font-size: 0.9rem; text-decoration: none; }
+.nav-auth a:not(.btn):hover { color: var(--teal); }
