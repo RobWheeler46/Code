@@ -34,14 +34,39 @@ function renderSavedComparisons(comps) {
   `).join('')}</div>`;
 }
 
+function renderAssessments(items) {
+  if (items.length === 0) return '<p class="muted">No assessments yet. Open a role profile and choose &ldquo;Start assessment&rdquo; to rate yourself against it.</p>';
+  return `<div class="role-cards">${items.map(a => `
+    <div class="role-card">
+      <div class="role-card-title">
+        <h3>${escapeHtml(a.title)}</h3>
+        <div class="role-card-grade">${a.status === 'completed'
+          ? `<span class="readiness-label" data-ready="${escapeHtml(a.readinessLabel)}">${escapeHtml(a.readinessLabel)}</span> · ${a.percent}% met`
+          : `In progress · ${a.answered}/${a.total} answered`}</div>
+      </div>
+      <div class="actions-row" style="margin-top:0.5rem;">
+        ${a.status === 'completed'
+          ? `<a class="btn btn-secondary btn-sm" href="assessment.html?id=${a.id}&results=1">View results</a>`
+          : `<a class="btn btn-primary btn-sm" href="assessment.html?id=${a.id}">Continue</a>`}
+        <button class="btn btn-secondary btn-sm" data-remove-assessment="${a.id}" type="button">Remove</button>
+      </div>
+    </div>
+  `).join('')}</div>`;
+}
+
 async function loadDashboard() {
   const container = document.getElementById('dashboard-container');
-  const [roles, comps] = await Promise.all([
+  const [roles, comps, assessments] = await Promise.all([
     Api.get('/api/user/saved-roles'),
-    Api.get('/api/user/saved-comparisons')
+    Api.get('/api/user/saved-comparisons'),
+    Api.get('/api/user/assessments')
   ]);
   container.innerHTML = `
     <h1>My dashboard</h1>
+    <div class="card">
+      <h2>My assessments</h2>
+      <div id="assessments">${renderAssessments(assessments)}</div>
+    </div>
     <div class="card">
       <h2>Saved roles</h2>
       <div id="saved-roles">${renderSavedRoles(roles)}</div>
@@ -51,6 +76,13 @@ async function loadDashboard() {
       <div id="saved-comparisons">${renderSavedComparisons(comps)}</div>
     </div>
   `;
+
+  container.querySelectorAll('[data-remove-assessment]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await Api.delete(`/api/user/assessments/${btn.dataset.removeAssessment}`);
+      loadDashboard();
+    });
+  });
 
   container.querySelectorAll('[data-remove-role]').forEach(btn => {
     btn.addEventListener('click', async () => {

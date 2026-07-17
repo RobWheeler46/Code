@@ -591,3 +591,30 @@ textarea { min-height: 5rem; resize: vertical; }
 .nav-auth { display: flex; align-items: center; gap: 1rem; }
 .nav-auth a:not(.btn) { color: var(--text); font-weight: 600; font-size: 0.9rem; text-decoration: none; }
 .nav-auth a:not(.btn):hover { color: var(--teal); }
+
+/* Phase 2: guided self-assessment stepper + results */
+.assessment-progress { height: 8px; background: var(--border); border-radius: 999px; overflow: hidden; margin-top: 1rem; }
+.assessment-progress-bar { height: 100%; background: var(--teal); border-radius: 999px; transition: width 0.2s; }
+.assess-options { display: flex; flex-direction: column; gap: 0.6rem; }
+.assess-option {
+  display: flex; gap: 0.7rem; align-items: flex-start;
+  border: 1px solid var(--border); border-radius: var(--radius); padding: 0.8rem 1rem; cursor: pointer;
+}
+.assess-option:hover { border-color: var(--teal); }
+.assess-option.selected { border-color: var(--teal); background: var(--sky); }
+.assess-option input { width: auto; margin-top: 0.2rem; flex: 0 0 auto; }
+.assess-option strong { display: block; color: var(--navy); }
+.assess-option-desc { display: block; color: var(--text); font-size: 0.88rem; margin-top: 0.2rem; }
+.confidence-scale { display: flex; align-items: center; gap: 0.5rem; }
+.confidence-dot {
+  width: 2.4rem; height: 2.4rem; border-radius: 999px; border: 1px solid var(--teal);
+  background: #fff; color: var(--teal); font-weight: 700; cursor: pointer;
+}
+.confidence-dot.selected { background: var(--teal); color: #fff; }
+.readiness-label {
+  display: inline-block; font-weight: 700; border-radius: 999px; padding: 0.15rem 0.7rem; font-size: 0.85rem;
+  background: var(--sky); color: var(--teal);
+}
+.readiness-label[data-ready="Ready for this role"] { background: #e2f6e2; color: #2e7d32; }
+.readiness-label[data-ready="Nearly there"] { background: #fdf1cf; color: #8a6d10; }
+.readiness-label[data-ready="Development needed"] { background: #f8d7d7; color: #a12b2b; }

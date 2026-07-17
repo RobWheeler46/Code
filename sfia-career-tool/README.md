@@ -254,10 +254,18 @@ with Railway's env vars injected and can't reach a volume that only exists insid
   a personal dashboard** (`saved_roles`/`saved_comparisons` tables, "Save role" on the role page, "Save
   comparison" on the compare page, `dashboard.html`, and an auth-aware nav showing Sign in vs My
   dashboard/Sign out). No email service is configured, so no self-service sign-up or email-based password
-  reset yet. Still to come in Phase 2+: guided self-assessment (Part E), personal development plans,
-  evidence, sharing with managers/mentors/coaches, the AI Career Coach (Parts F&ndash;I), and aggregated
-  organisational reporting. The FRD's future-phase entities for those (User Skill Assessment, Development
-  Plan Item, Evidence, Sharing Permission, Notification, &hellip;) are not in `src/db.js` yet.
+  reset yet.
+  Also built (2nd Phase-2 feature): **guided role-based SFIA self-assessment (FRD Part E)** &mdash; from a
+  role page a signed-in user starts an assessment (the wireframe's "Start assessment", now real on this
+  branch), works through a one-skill-per-step flow rating their current level against each required SFIA
+  skill (the answer options are the **real imported skill-at-level descriptions**, so no hand-authored
+  question bank or LLM is needed &mdash; skills without imported level text fall back to the 7 generic
+  levels), with optional evidence + a confidence score, save &amp; resume (autosave per skill), then a
+  **readiness result** (self-assessed vs required level per skill &rarr; met / minor / moderate /
+  significant gap, an overall Ready / Nearly there / Development needed label and % met). Attempts appear
+  on the dashboard. Tables: `assessment_attempts`, `assessment_responses`. Still to come in Phase 2+:
+  personal development plans, evidence, sharing with managers/mentors/coaches, the AI Career Coach (Parts
+  F&ndash;I), and aggregated organisational reporting.
 - **FRD v0.11's full multi-version SFIA support is not built.** Only the MVP-foundation slice (data already
   version-scoped, version badge shown on role profiles) is in place. Admin version-lifecycle management
   (draft/active/published-default/legacy/archived), cross-version comparison blocking, and the migration

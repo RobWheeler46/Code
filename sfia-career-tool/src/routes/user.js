@@ -68,4 +68,156 @@ router.delete('/saved-comparisons/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// ---- Guided self-assessment (FRD Part E) ----
+
+// The SFIA skills a role requires, with the user's required level for each.
+function roleRequiredSkills(roleProfileId) {
+  return db.prepare(`
+    SELECT rps.sfia_skill_id, sk.skill_code, sk.skill_name, sk.short_description,
+           rps.required_sfia_level_id AS required_level_id, lv.level_number AS required_level_number, lv.level_name AS required_level_name
+    FROM role_profile_skills rps
+    JOIN sfia_skills sk ON sk.id = rps.sfia_skill_id
+    JOIN sfia_levels lv ON lv.id = rps.required_sfia_level_id
+    WHERE rps.role_profile_id = ?
+    ORDER BY rps.display_order, sk.skill_code
+  `).all(roleProfileId);
+}
+
+// Level options for a skill's question: prefer the imported skill-at-level descriptions; fall back to
+// the 7 generic levels (number + name) for skills that have no skill-at-level data (e.g. non-SFIA-9 codes).
+function skillLevelOptions(sfiaSkillId) {
+  const withDesc = db.prepare(`
+    SELECT lv.id AS level_id, lv.level_number, lv.level_name, sld.skill_level_description
+    FROM sfia_skill_level_descriptions sld
+    JOIN sfia_levels lv ON lv.id = sld.sfia_level_id
+    WHERE sld.sfia_skill_id = ? AND sld.status = 'active'
+    ORDER BY lv.level_number
+  `).all(sfiaSkillId);
+  if (withDesc.length > 0) return withDesc;
+  return db.prepare(`SELECT id AS level_id, level_number, level_name, NULL AS skill_level_description FROM sfia_levels ORDER BY level_number`).all();
+}
+
+function attemptOr404(req, res) {
+  const attempt = db.prepare(`SELECT * FROM assessment_attempts WHERE id = ? AND user_id = ?`).get(req.params.id, req.user.id);
+  if (!attempt) { res.status(404).json({ error: 'Assessment not found.' }); return null; }
+  return attempt;
+}
+
+function computeReadiness(attempt) {
+  const skills = roleRequiredSkills(attempt.role_profile_id);
+  const responses = db.prepare(`SELECT r.sfia_skill_id, r.self_assessed_level_id, r.confidence, r.evidence_text, lv.level_number AS self_level_number, lv.level_name AS self_level_name
+    FROM assessment_responses r LEFT JOIN sfia_levels lv ON lv.id = r.self_assessed_level_id WHERE r.attempt_id = ?`).all(attempt.id);
+  const byskill = Object.fromEntries(responses.map(r => [r.sfia_skill_id, r]));
+  let met = 0, gap = 0, unanswered = 0;
+  const details = skills.map(s => {
+    const resp = byskill[s.sfia_skill_id];
+    let status, levelDiff = null;
+    if (!resp || resp.self_assessed_level_id == null) { status = 'not_answered'; unanswered++; }
+    else {
+      levelDiff = s.required_level_number - resp.self_level_number;
+      if (levelDiff <= 0) { status = 'met'; met++; } else { status = 'gap'; gap++; }
+    }
+    return {
+      sfiaSkillId: s.sfia_skill_id, skillCode: s.skill_code, skillName: s.skill_name,
+      requiredLevel: { number: s.required_level_number, name: s.required_level_name },
+      selfLevel: resp && resp.self_assessed_level_id != null ? { number: resp.self_level_number, name: resp.self_level_name } : null,
+      confidence: resp ? resp.confidence : null, evidenceText: resp ? resp.evidence_text : null,
+      status, levelDiff
+    };
+  });
+  const total = skills.length;
+  const percent = total ? Math.round((met / total) * 100) : 0;
+  let label;
+  if (unanswered > 0 && attempt.status !== 'completed') label = 'In progress';
+  else if (gap === 0) label = 'Ready for this role';
+  else if (percent >= 60) label = 'Nearly there';
+  else label = 'Development needed';
+  return { total, met, gap, unanswered, percent, label, details };
+}
+
+// List attempts (dashboard).
+router.get('/assessments', (req, res) => {
+  const rows = db.prepare(`
+    SELECT a.id, a.role_profile_id, a.status, a.started_at, a.completed_at, rp.title, rp.grade
+    FROM assessment_attempts a JOIN role_profiles rp ON rp.id = a.role_profile_id
+    WHERE a.user_id = ? ORDER BY a.updated_at DESC
+  `).all(req.user.id);
+  res.json(rows.map(a => {
+    const r = computeReadiness(a);
+    return { ...a, readinessLabel: r.label, percent: r.percent, answered: r.total - r.unanswered, total: r.total };
+  }));
+});
+
+// Start (or resume the existing in-progress attempt) for a role.
+router.post('/assessments', (req, res) => {
+  const { roleProfileId } = req.body || {};
+  if (!roleProfileId) return res.status(400).json({ error: 'A role profile is required.' });
+  const role = db.prepare(`SELECT id FROM role_profiles WHERE id = ? AND status = 'published'`).get(roleProfileId);
+  if (!role) return res.status(404).json({ error: 'Role profile not found.' });
+  if (roleRequiredSkills(roleProfileId).length === 0) return res.status(400).json({ error: 'This role has no SFIA skills mapped, so it cannot be assessed yet.' });
+  const existing = db.prepare(`SELECT id FROM assessment_attempts WHERE user_id = ? AND role_profile_id = ? AND status = 'in_progress'`).get(req.user.id, roleProfileId);
+  if (existing) return res.json({ ok: true, id: existing.id, resumed: true });
+  const result = db.prepare(`INSERT INTO assessment_attempts (user_id, role_profile_id) VALUES (?, ?)`).run(req.user.id, roleProfileId);
+  res.status(201).json({ ok: true, id: result.lastInsertRowid });
+});
+
+// Attempt detail with per-skill questions + any saved responses.
+router.get('/assessments/:id', (req, res) => {
+  const attempt = attemptOr404(req, res); if (!attempt) return;
+  const role = db.prepare(`SELECT id, title, grade FROM role_profiles WHERE id = ?`).get(attempt.role_profile_id);
+  const responses = Object.fromEntries(db.prepare(`SELECT sfia_skill_id, self_assessed_level_id, confidence, evidence_text FROM assessment_responses WHERE attempt_id = ?`).all(attempt.id).map(r => [r.sfia_skill_id, r]));
+  const questions = roleRequiredSkills(attempt.role_profile_id).map(s => {
+    const resp = responses[s.sfia_skill_id];
+    return {
+      sfiaSkillId: s.sfia_skill_id, skillCode: s.skill_code, skillName: s.skill_name, shortDescription: s.short_description,
+      requiredLevel: { id: s.required_level_id, number: s.required_level_number, name: s.required_level_name },
+      options: skillLevelOptions(s.sfia_skill_id),
+      response: resp ? { selfAssessedLevelId: resp.self_assessed_level_id, confidence: resp.confidence, evidenceText: resp.evidence_text } : null
+    };
+  });
+  res.json({ id: attempt.id, status: attempt.status, role, questions });
+});
+
+// Save/update one skill's response (autosave supports save & resume).
+router.put('/assessments/:id/responses', (req, res) => {
+  const attempt = attemptOr404(req, res); if (!attempt) return;
+  if (attempt.status === 'completed') return res.status(409).json({ error: 'This assessment is already completed.' });
+  const { sfiaSkillId, selfAssessedLevelId, confidence, evidenceText } = req.body || {};
+  if (!sfiaSkillId) return res.status(400).json({ error: 'A skill is required.' });
+  const isRequired = db.prepare(`SELECT 1 FROM role_profile_skills WHERE role_profile_id = ? AND sfia_skill_id = ?`).get(attempt.role_profile_id, sfiaSkillId);
+  if (!isRequired) return res.status(400).json({ error: 'That skill is not part of this role assessment.' });
+  db.prepare(`
+    INSERT INTO assessment_responses (attempt_id, sfia_skill_id, self_assessed_level_id, confidence, evidence_text)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(attempt_id, sfia_skill_id) DO UPDATE SET
+      self_assessed_level_id = excluded.self_assessed_level_id, confidence = excluded.confidence,
+      evidence_text = excluded.evidence_text, updated_at = datetime('now')
+  `).run(attempt.id, sfiaSkillId, selfAssessedLevelId || null, confidence || null, evidenceText || null);
+  db.prepare(`UPDATE assessment_attempts SET updated_at = datetime('now') WHERE id = ?`).run(attempt.id);
+  res.json({ ok: true });
+});
+
+// Complete - requires every skill answered.
+router.post('/assessments/:id/complete', (req, res) => {
+  const attempt = attemptOr404(req, res); if (!attempt) return;
+  const readiness = computeReadiness(attempt);
+  if (readiness.unanswered > 0) return res.status(400).json({ error: `Answer all ${readiness.total} skills before completing (${readiness.unanswered} left).` });
+  db.prepare(`UPDATE assessment_attempts SET status = 'completed', completed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`).run(attempt.id);
+  res.json({ ok: true });
+});
+
+// Readiness results.
+router.get('/assessments/:id/results', (req, res) => {
+  const attempt = attemptOr404(req, res); if (!attempt) return;
+  const role = db.prepare(`SELECT id, title, grade FROM role_profiles WHERE id = ?`).get(attempt.role_profile_id);
+  res.json({ id: attempt.id, status: attempt.status, role, ...computeReadiness(attempt) });
+});
+
+router.delete('/assessments/:id', (req, res) => {
+  const attempt = attemptOr404(req, res); if (!attempt) return;
+  db.prepare(`DELETE FROM assessment_responses WHERE attempt_id = ?`).run(attempt.id);
+  db.prepare(`DELETE FROM assessment_attempts WHERE id = ?`).run(attempt.id);
+  res.json({ ok: true });
+});
+
 module.exports = router;

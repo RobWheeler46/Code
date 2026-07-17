@@ -181,6 +181,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       <p class="hero-purpose rich-text">${escapeHtml(role.role_description || '')}</p>
       <div class="hero-actions">
         <a class="btn btn-primary" href="compare.html?current=${role.id}">Compare role</a>
+        <button class="btn btn-secondary" id="start-assessment-btn" type="button" style="display:none;">Start assessment</button>
         <button class="btn btn-secondary" id="save-role-btn" type="button" style="display:none;">Save role</button>
       </div>
     </div>
@@ -236,5 +237,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         paint();
       } finally { btn.disabled = false; }
     });
+
+    // Start (or resume) a guided self-assessment for this role.
+    if (role.skills.length > 0) {
+      const assessBtn = document.getElementById('start-assessment-btn');
+      assessBtn.style.display = '';
+      assessBtn.addEventListener('click', async () => {
+        assessBtn.disabled = true;
+        try {
+          const r = await Api.post('/api/user/assessments', { roleProfileId: role.id });
+          location.href = `assessment.html?id=${r.id}`;
+        } catch (err) {
+          assessBtn.disabled = false;
+          alert(err.message);
+        }
+      });
+    }
   }
 });

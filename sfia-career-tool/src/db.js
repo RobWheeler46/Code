@@ -397,4 +397,34 @@ CREATE INDEX IF NOT EXISTS idx_saved_roles_user ON saved_roles(user_id);
 CREATE INDEX IF NOT EXISTS idx_saved_comparisons_user ON saved_comparisons(user_id);
 `);
 
+// Phase 2 feature: guided role-based SFIA self-assessment (FRD Part E). An attempt targets one role
+// profile; the user self-rates their level for each SFIA skill the role requires (options come from the
+// imported skill-at-level descriptions), optionally adding evidence + a confidence score. Readiness is
+// derived by comparing the self-assessed level to the role's required level per skill. Additive tables.
+db.exec(`
+CREATE TABLE IF NOT EXISTS assessment_attempts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  role_profile_id INTEGER NOT NULL REFERENCES role_profiles(id),
+  status TEXT NOT NULL DEFAULT 'in_progress' CHECK(status IN ('in_progress','completed')),
+  started_at TEXT NOT NULL DEFAULT (datetime('now')),
+  completed_at TEXT,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS assessment_responses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  attempt_id INTEGER NOT NULL REFERENCES assessment_attempts(id),
+  sfia_skill_id INTEGER NOT NULL REFERENCES sfia_skills(id),
+  self_assessed_level_id INTEGER REFERENCES sfia_levels(id),
+  confidence INTEGER,
+  evidence_text TEXT,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(attempt_id, sfia_skill_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_assessment_attempts_user ON assessment_attempts(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_assessment_responses_attempt ON assessment_responses(attempt_id);
+`);
+
 module.exports = db;
