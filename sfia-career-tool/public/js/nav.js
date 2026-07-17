@@ -12,7 +12,7 @@ function renderPublicNav() {
   const target = document.getElementById('app-nav');
   if (target) {
     target.innerHTML = `
-      <a class="brand" href="index.html">SFIA Career</a>
+      <a class="brand" href="index.html">Career Explorer</a>
       <nav>
         <a href="index.html" class="${isActive(['index.html', 'role.html', ''])}">Home</a>
         <a href="index.html" class="${isActive(['browse'])}">Roles</a>
@@ -65,7 +65,7 @@ async function requireAdminNav() {
   }
   if (target) {
     target.innerHTML = `
-      <a class="brand" href="admin.html">SFIA Career Tool - Admin</a>
+      <a class="brand" href="admin.html">Career Explorer - Admin</a>
       <nav>
         <a href="index.html" target="_blank">View public site</a>
         <span class="user-info">${escapeHtml(me.firstName)} ${escapeHtml(me.lastName)} (${me.roles.join(', ')})</span>

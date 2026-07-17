@@ -34,5 +34,5 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`SFIA Career Tool running at http://localhost:${PORT}`);
+  console.log(`Career Explorer running at http://localhost:${PORT}`);
 });
