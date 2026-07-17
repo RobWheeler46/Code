@@ -325,4 +325,51 @@ if (!roleProfileColumns2.includes('role_description')) {
   }
 }
 
+// Additive migration (FRD v0.21-v0.23 Part K: SFIA 9 source workbook import).
+// Adds columns/tables needed to import the full official SFIA 9 reference dataset (147 skills,
+// 672 skill-level descriptions, 16 attributes, 112 attribute-level descriptions, 7 levels) from
+// the clean import template - see src/import-sfia-9-reference-data.js. Nothing here touches or
+// drops existing columns/rows.
+const sfiaSkillColumns = db.prepare(`PRAGMA table_info(sfia_skills)`).all().map(c => c.name);
+if (!sfiaSkillColumns.includes('subcategory')) {
+  db.exec(`ALTER TABLE sfia_skills ADD COLUMN subcategory TEXT`);
+}
+if (!sfiaSkillColumns.includes('guidance_notes')) {
+  // Distinct from sfia_skill_level_descriptions.guidance_notes (per level) - this is the
+  // skill-level overall guidance text from the SFIA source (FRD K4: Skills.Guidance notes).
+  db.exec(`ALTER TABLE sfia_skills ADD COLUMN guidance_notes TEXT`);
+}
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS sfia_attributes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sfia_version_id INTEGER NOT NULL REFERENCES sfia_versions(id),
+  attribute_code TEXT NOT NULL,
+  attribute_name TEXT NOT NULL,
+  attribute_type TEXT,
+  overall_description TEXT,
+  guidance_notes TEXT,
+  source_reference TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','inactive')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(sfia_version_id, attribute_code)
+);
+
+CREATE TABLE IF NOT EXISTS sfia_attribute_level_descriptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sfia_version_id INTEGER NOT NULL REFERENCES sfia_versions(id),
+  sfia_attribute_id INTEGER NOT NULL REFERENCES sfia_attributes(id),
+  sfia_level_id INTEGER NOT NULL REFERENCES sfia_levels(id),
+  level_description TEXT NOT NULL,
+  source_reference TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(sfia_attribute_id, sfia_level_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_sfia_attributes_code ON sfia_attributes(attribute_code);
+CREATE INDEX IF NOT EXISTS idx_sfia_attribute_level_desc_lookup ON sfia_attribute_level_descriptions(sfia_attribute_id, sfia_level_id);
+`);
+
 module.exports = db;

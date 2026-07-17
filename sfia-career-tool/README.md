@@ -25,20 +25,30 @@ the placeholder data with 33 real role profiles across 8 tracks, imported from t
 `EngineeringCareerPathsV3.xlsx` (an internal engineering career framework, not the official SFIA
 catalogue). It uses **real SFIA 9 skill codes** (e.g. `PROG`, `ARCH`, `DATM`) with real per-role levels.
 
-`src/update-sfia-content.js` is a second, non-destructive one-off script that fills in real skill names,
-overviews, guidance notes and level-specific descriptions (plus official SFIA source URLs), extracted
-directly from the official SFIA 9 source workbook (`sfia-9_current-standard_en_260521.xlsx`) the user
-supplied and confirmed is cleared for public display &mdash; the same workbook the FRD's Part K describes
-as the authoritative source. Data lives in `src/data/sfia-skills-content.json` and
-`src/data/sfia-levels-content.json`, generated from that workbook (the workbook itself isn't committed,
-just the extracted content). It only touches the 24 of the spreadsheet's 37 codes that actually match a
-real SFIA 9 skill; the other 13 (`BUAN`, `QUMT`, `VUIM`, `AUTH`, `OPSG`, `INAN`, `MLEN`, `SYAS`, `STRP`,
-`SADM`, `PLMT`, `STAD`, `STRT`) don't correspond to any of the workbook's 147 skills &mdash; checked
-against the complete official list, not just a partial index, so this is a confirmed finding, not a
-guess &mdash; likely a different SFIA version or spreadsheet-author shorthand, and are left showing their
-raw code pending review. An administrator can correct or fill these in via Admin &gt; SFIA skills.
-(An earlier version of this script used text extracted from the official SFIA 9 PDF reference, before the
-source workbook was available; the two sources agreed on every value checked.)
+`src/update-sfia-content.js` was an early, non-destructive one-off script that filled in real skill names,
+overviews, guidance notes and level-specific descriptions (plus official SFIA source URLs) for the 24 of
+37 skill codes that could be hand-verified before a structured source workbook was available - extracted
+first from the official SFIA 9 PDF reference, later cross-checked against the source workbook itself. Kept
+for history; superseded by the import below.
+
+**`src/import-sfia-9-reference-data.js`** (added for FRD v0.21-v0.23 Part K / the "SFIA 9 Workbook
+Re-check and Clean Import Template" appendix) is the current, complete source of SFIA reference data. It
+imports the **full official SFIA 9 catalogue** - all 147 professional skills, 672 skill-at-level
+descriptions, 7 levels of responsibility, 16 attributes/business skills and 112 attribute-at-level
+descriptions - from `SFIA_9_Clean_Import_Template_v0_23.xlsx` (a pre-cleaned, validated export of the
+official source workbook the user supplied; see `Appendix and Import Model Validation` for how that
+extraction was checked). Safe to re-run: every write is an update-if-exists/insert-if-not against a stable
+natural key (skill code, level number, attribute code), so existing `sfia_skills` rows keep their id and
+`role_profile_skills` foreign keys are never disturbed.
+
+Run it with `node src/import-sfia-9-reference-data.js "<path to Clean Import Template xlsx>"` (needs
+`node_modules/xlsx` - installed as a `devDependency` from SheetJS's own CDN rather than the npm registry
+build, which has known unpatched CVEs; see `package.json`). Of the 37 skill codes referenced by the
+imported role profiles, 13 (`BUAN`, `QUMT`, `VUIM`, `AUTH`, `OPSG`, `INAN`, `MLEN`, `SYAS`, `STRP`, `SADM`,
+`PLMT`, `STAD`, `STRT`) still don't correspond to any of the 147 official skills - confirmed against the
+complete list, not a guess - likely a different SFIA version or spreadsheet-author shorthand, and are left
+showing their raw code pending review (`src/flag-unmatched-skills.js`, unchanged). An administrator can
+correct or remap these via Admin &gt; SFIA skills.
 
 Run it with `node src/import-career-paths.js` (needs `ADMIN_EMAIL` already seeded via the normal seed
 script first, so a super admin exists to own the imported content). It is **destructive**: it deletes all
@@ -202,7 +212,14 @@ with Railway's env vars injected and can't reach a volume that only exists insid
   `src/flag-unmatched-skills.js` (non-destructive, safe to re-run) replaces the generic "not yet
   populated" placeholder text with an explicit "not an official SFIA 9 code" explanation on these 13
   records, so it's clear to any visitor rather than silently looking unfinished &mdash; deliberately does
-  not guess at what the code should actually mean.
+  not guess at what the code should actually mean. (This is now the only remaining data gap - the other
+  123 of the 147 official skills are fully imported as of `import-sfia-9-reference-data.js`, browsable in
+  the admin role-creation wizard even though 110 of them aren't mapped to any role profile yet.)
+- **`sfia_attributes`/`sfia_attribute_level_descriptions` (all 16 attributes, 112 level descriptions) are
+  imported but not surfaced anywhere in the UI yet.** The FRD frames these as supporting data for the
+  future guided-assessment and AI-coach features (Parts E/F), which this build deliberately doesn't
+  include (see below) - imported now anyway since the source data was available and re-importing later
+  would be needless repeated work, not because anything in Phase 1 reads them yet.
 - **No learning resources imported.** The source spreadsheet didn't include any, so every skill gap on the
   live site currently shows "No learning resources are linked yet." until an admin adds real ones.
 - **No approval workflow for role profile changes.** Publishing is immediate for anyone with `canPublish`;
