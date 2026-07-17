@@ -245,6 +245,28 @@ textarea { min-height: 5rem; resize: vertical; }
 .tabs button.active { color: var(--teal); border-bottom-color: var(--teal); font-weight: 600; }
 .actions-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem; }
 .filters-row { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; align-items: flex-end; }
+
+/* Role-creation wizard (FRD v0.20 admin wireframe): 3-column stepper / content / sidebar layout. */
+.wizard-layout { display: grid; grid-template-columns: 240px 1fr 260px; gap: 1.25rem; align-items: start; }
+@media (max-width: 900px) { .wizard-layout { grid-template-columns: 1fr; } }
+.wizard-nav, .wizard-sidebar { position: sticky; top: 1rem; }
+.wizard-content > h2:first-of-type { margin-top: 0; }
+.wizard-steps { list-style: none; padding: 0; margin: 1rem 0 0; }
+.wizard-step { display: flex; gap: 0.6rem; align-items: flex-start; padding: 0.6rem; border-radius: var(--radius); cursor: pointer; }
+.wizard-step:hover:not(.disabled) { background: var(--sky); }
+.wizard-step.disabled { cursor: default; opacity: 0.55; }
+.wizard-step.active { background: var(--sky); }
+.wizard-step-num {
+  flex: 0 0 auto; width: 1.6rem; height: 1.6rem; border-radius: 999px;
+  background: var(--border); color: var(--navy); font-weight: 700; font-size: 0.85rem;
+  display: flex; align-items: center; justify-content: center;
+}
+.wizard-step.active .wizard-step-num { background: var(--yellow); }
+.wizard-step-text { font-size: 0.85rem; line-height: 1.3; }
+.wizard-rules { padding-left: 1.1rem; margin: 0.5rem 0 1rem; font-size: 0.85rem; color: var(--text); }
+.wizard-rules li { margin-bottom: 0.4rem; }
+.wizard-actions { display: flex; flex-direction: column; gap: 0.5rem; }
+.wizard-actions .btn { width: 100%; }
 .filters-row .field { margin-bottom: 0; min-width: 160px; flex: 1; }
 
 .hero {
@@ -420,5 +442,54 @@ textarea { min-height: 5rem; resize: vertical; }
 .modal-backdrop {
   position: fixed; inset: 0; background: rgba(23,36,42,0.5); display: flex;
   align-items: flex-start; justify-content: center; padding: 3rem 1rem; z-index: 50; overflow-y: auto;
+}
+
+/* Role profile creation wizard (FRD v0.20/v0.23 admin wireframe) */
+.checkbox-row { display: flex; align-items: center; gap: 0.5rem; font-weight: 400; }
+.checkbox-row input[type="checkbox"] { width: auto; }
+
+.wizard-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 1.25rem;
+}
+@media (min-width: 900px) {
+  .wizard-layout { grid-template-columns: 220px 1fr 260px; }
+}
+
+.wizard-nav { align-self: start; }
+.wizard-nav h3 { margin: 0.75rem 0 1rem; font-size: 1rem; }
+
+.wizard-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+.wizard-step {
+  display: flex; align-items: flex-start; gap: 0.6rem;
+  padding: 0.5rem 0.4rem; border-radius: var(--radius); cursor: pointer;
+}
+.wizard-step:hover:not(.disabled) { background: var(--sky); }
+.wizard-step.active { background: var(--sky); }
+.wizard-step.disabled { cursor: not-allowed; opacity: 0.5; }
+.wizard-step-num {
+  flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%;
+  background: var(--border); color: var(--text); font-size: 0.8rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.wizard-step.active .wizard-step-num { background: var(--teal); color: #fff; }
+.wizard-step-text { font-size: 0.85rem; line-height: 1.3; }
+
+.wizard-content { min-height: 320px; }
+.wizard-content h2 { margin-top: 0; }
+
+.wizard-sidebar { align-self: start; }
+.wizard-sidebar h3 { margin: 0 0 0.6rem; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.02em; color: var(--muted); }
+.wizard-sidebar h3:not(:first-child) { margin-top: 1.25rem; }
+.wizard-rules { margin: 0; padding-left: 1.1rem; font-size: 0.85rem; color: var(--text); }
+.wizard-rules li { margin-bottom: 0.4rem; }
+.wizard-actions { display: flex; flex-direction: column; gap: 0.5rem; }
+.wizard-actions .btn { width: 100%; }
+
+@media (max-width: 720px) {
+  .wizard-layout { grid-template-columns: 1fr; }
+  .wizard-steps { flex-direction: row; flex-wrap: wrap; }
+  .wizard-step { flex: 1; min-width: 140px; }
 }
 .modal { background: #fff; border-radius: var(--radius); padding: 1.5rem; max-width: 560px; width: 100%; }

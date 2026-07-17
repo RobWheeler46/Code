@@ -155,8 +155,16 @@ async function renderRolesTab() {
   });
 }
 
-async function renderRoleEditor(id) {
-  const content = document.getElementById('tab-content');
+// ---------- Role profile creation wizard (FRD v0.20 admin wireframe) ----------
+
+const WIZARD_STEPS = [
+  { n: 1, title: 'Role details', desc: 'Role name, grade and description' },
+  { n: 2, title: 'SFIA version', desc: 'Select one controlled version' },
+  { n: 3, title: 'SFIA skills', desc: 'Add validated skill-level rows' },
+  { n: 4, title: 'Review & publish', desc: 'Check validation and publish' }
+];
+
+async function renderRoleEditor(id, step) {
   const role = id ? await Api.get(`/api/admin/role-profiles/${id}`) : null;
   let roleAtAGlance = null;
   let displayTags = [];
@@ -164,26 +172,107 @@ async function renderRoleEditor(id) {
     try { roleAtAGlance = role.role_at_a_glance ? JSON.parse(role.role_at_a_glance) : null; } catch (e) { roleAtAGlance = null; }
     try { displayTags = role.display_tags ? JSON.parse(role.display_tags) : []; } catch (e) { displayTags = []; }
   }
+  renderWizard(role, step || 1, roleAtAGlance, displayTags);
+}
 
-  content.innerHTML = `
-    <div class="card">
-      <button class="btn btn-secondary btn-sm" id="back-to-roles">&larr; Back to role profiles</button>
-      <h2>${role ? 'Edit role profile' : 'New role profile'}</h2>
-      ${role ? `<p>${statusBadge(role.status)} <span class="muted">Version ${role.version_number}</span>${role.sfia_version_id ? ` <span class="muted">&middot; SFIA version: ${escapeHtml(refData.versions.find(v => v.id === role.sfia_version_id)?.version_name || 'Unknown')}</span>` : ''}</p>` : ''}
-      <div id="role-form-alert"></div>
-      <form id="role-form">
-        <p class="muted">Simplified role profile model (FRD v0.19/v0.20): Role Name, Grade, Role Description and validated SFIA skills/levels are the only business fields required to publish.</p>
-        <div class="field"><label for="rf-title">Role Name</label><input type="text" id="rf-title" required value="${role ? escapeHtml(role.title) : ''}"></div>
-        <div class="field"><label for="rf-grade">Grade</label><input type="text" id="rf-grade" placeholder="e.g. C, D, E - optional, organisation-defined" value="${role ? escapeHtml(role.grade || '') : ''}"></div>
-        <div class="field"><label for="rf-description">Role Description</label><textarea id="rf-description" placeholder="Plain-English description of the role, its purpose and expected contribution">${role ? escapeHtml(role.role_description || '') : ''}</textarea></div>
-        <div class="actions-row">
-          <button class="btn btn-primary" type="submit">Save</button>
-          ${role && me.canPublish && role.status !== 'published' ? '<button class="btn btn-success" type="button" id="publish-btn">Publish</button>' : ''}
-          ${role && me.canPublish && role.status === 'published' ? '<button class="btn btn-secondary" type="button" id="unpublish-btn">Unpublish</button>' : ''}
-          ${role && me.canPublish && role.status !== 'archived' ? '<button class="btn btn-danger" type="button" id="archive-btn">Archive</button>' : ''}
+function wizardStepContent(role, step, roleAtAGlance, displayTags) {
+  if (step === 2) {
+    const version = refData.versions.find(v => v.id === role?.sfia_version_id);
+    return `
+      <h2>2. Select SFIA version</h2>
+      <div class="field" style="max-width:320px;">
+        <label for="rf-sfia-version">SFIA Version</label>
+        <select id="rf-sfia-version" disabled><option>${escapeHtml(version?.version_name || 'SFIA 9')}</option></select>
+        <p class="help">Skills and levels in the next step are filtered to this version. Only one SFIA version is currently published, so this is fixed for now (FRD v0.17/v0.18).</p>
+      </div>
+      <div class="actions-row">
+        <button class="btn btn-secondary" id="step2-back-btn" type="button">&larr; Back</button>
+        <button class="btn btn-primary" id="step2-next-btn" type="button">Next: SFIA skills &rarr;</button>
+      </div>
+    `;
+  }
+  if (step === 3) {
+    const version = refData.versions.find(v => v.id === role.sfia_version_id);
+    return `
+      <h2>3. Add validated SFIA skills and levels</h2>
+      <p class="muted">Skills and levels are selected from the role profile's SFIA version only - free text isn't allowed (FRD v0.17/v0.20).</p>
+      <table>
+        <tr><th>SFIA Code</th><th>Skill</th><th>Valid Level</th><th>Level name</th><th>Actions</th></tr>
+        ${role.skills.map(s => `
+          <tr>
+            <td>${escapeHtml(s.skill_code)}</td>
+            <td>${escapeHtml(s.skill_name)}</td>
+            <td>Level ${s.level_number}</td>
+            <td>${escapeHtml(s.level_name || '')}</td>
+            <td>
+              <button class="btn btn-secondary btn-sm" data-edit-mapping="${s.mapping_id}">Edit</button>
+              <button class="btn btn-danger btn-sm" data-remove-skill="${s.mapping_id}">Remove</button>
+            </td>
+          </tr>
+        `).join('')}
+      </table>
+      ${role.skills.length === 0 ? '<p class="muted">No skills added yet.</p>' : ''}
+      <div style="margin-top:1rem;">
+        <div class="grid cols-2">
+          <div class="field"><label for="as-skill">SFIA skill</label><select id="as-skill">${skillOptions()}</select></div>
+          <div class="field"><label for="as-level">Valid level</label><select id="as-level">${levelOptions()}</select>
+            <p class="help" id="as-level-help"></p>
+          </div>
         </div>
-      </form>
-      <details class="skill-detail" style="margin-top:1.25rem;">
+        <div class="field"><label class="checkbox-row"><input type="checkbox" id="as-show-open" style="width:auto;"> Show full SFIA detail expanded by default on the public page</label></div>
+        <div id="add-skill-alert"></div>
+        <button class="btn btn-secondary btn-sm" id="add-skill-btn" type="button">+ Add skill</button>
+      </div>
+      ${role.skills.length > 0
+        ? `<div class="alert alert-success" style="margin-top:1rem;">&#10003; Validation passed: role uses ${escapeHtml(version?.version_name || 'its SFIA version')} only and all selected levels are valid for their skills.</div>`
+        : '<div class="alert alert-info" style="margin-top:1rem;">Add at least one SFIA skill and level before this role can be published.</div>'}
+      <div class="actions-row" style="margin-top:1rem;">
+        <button class="btn btn-secondary" id="step3-back-btn" type="button">&larr; Back</button>
+        <button class="btn btn-primary" id="step3-next-btn" type="button">Next: Review &amp; publish &rarr;</button>
+      </div>
+    `;
+  }
+  if (step === 4) {
+    const version = refData.versions.find(v => v.id === role.sfia_version_id);
+    const ready = role.title && role.role_description && role.skills.length > 0;
+    return `
+      <h2>4. Review &amp; publish</h2>
+      <div class="grid cols-2">
+        <div><span class="muted">Role Name</span><p><strong>${escapeHtml(role.title)}</strong></p></div>
+        <div><span class="muted">Grade</span><p><strong>${escapeHtml(role.grade || 'Not set')}</strong></p></div>
+      </div>
+      <span class="muted">Role Description</span>
+      <p class="rich-text">${escapeHtml(role.role_description || 'Not set')}</p>
+      <span class="muted">SFIA Version</span>
+      <p><strong>${escapeHtml(version?.version_name || 'Not set')}</strong></p>
+      <span class="muted">SFIA skills (${role.skills.length})</span>
+      <ul>${role.skills.map(s => `<li>${escapeHtml(s.skill_code)} - ${escapeHtml(s.skill_name)} (Level ${s.level_number})</li>`).join('') || '<li class="muted">None yet</li>'}</ul>
+      ${ready
+        ? '<div class="alert alert-success">&#10003; All validation checks passed. This role is ready to publish.</div>'
+        : '<div class="alert alert-error">Role Name, Role Description and at least one SFIA skill are required before this role can be published.</div>'}
+      <div class="actions-row" style="margin-top:1rem;">
+        <button class="btn btn-secondary" id="step4-back-btn" type="button">&larr; Back</button>
+      </div>
+    `;
+  }
+  // Step 1 (default)
+  return `
+    <h2>1. Role details</h2>
+    <div class="grid cols-2">
+      <div class="field"><label for="rf-title">Role Name</label><input type="text" id="rf-title" required value="${role ? escapeHtml(role.title) : ''}"></div>
+      <div class="field"><label for="rf-grade">Grade</label><input type="text" id="rf-grade" placeholder="e.g. C, D, E - optional" value="${role ? escapeHtml(role.grade || '') : ''}"></div>
+    </div>
+    <div class="field"><label for="rf-description">Role Description</label><textarea id="rf-description" placeholder="Plain-English description of the role, its purpose and expected contribution">${role ? escapeHtml(role.role_description || '') : ''}</textarea></div>
+    <div class="actions-row">
+      <button class="btn btn-primary" id="step1-next-btn" type="button">Next: SFIA version &rarr;</button>
+    </div>
+  `;
+}
+
+function renderLegacyFieldsSection(role, roleAtAGlance, displayTags) {
+  return `
+    <div class="card">
+      <details class="skill-detail">
         <summary><strong>Legacy enrichment fields</strong> <span class="muted">(optional, no longer part of the simplified MVP model - kept editable in case you still need them)</span></summary>
         <div class="skill-detail-body">
           <form id="legacy-role-form">
@@ -192,63 +281,161 @@ async function renderRoleEditor(id) {
               <div class="field"><label for="rf-area">Capability area</label><select id="rf-area">${areaOptions(role?.capability_area_id, role?.role_family_id)}</select></div>
             </div>
             <div class="grid cols-2">
-              <div class="field"><label for="rf-seniority">Seniority level</label><input type="text" id="rf-seniority" value="${role ? escapeHtml(role.seniority_level || '') : ''}" placeholder="e.g. Senior"></div>
+              <div class="field"><label for="rf-seniority">Seniority level</label><input type="text" id="rf-seniority" value="${escapeHtml(role.seniority_level || '')}" placeholder="e.g. Senior"></div>
               <div class="field"><label for="rf-type">Role type</label>
                 <select id="rf-type">
-                  ${['Individual Contributor', 'Management', 'Hybrid'].map(t => `<option ${role?.role_type === t ? 'selected' : ''}>${t}</option>`).join('')}
+                  ${['Individual Contributor', 'Management', 'Hybrid'].map(t => `<option ${role.role_type === t ? 'selected' : ''}>${t}</option>`).join('')}
                 </select>
               </div>
             </div>
-            <div class="field"><label for="rf-summary">Summary</label><textarea id="rf-summary">${role ? escapeHtml(role.summary || '') : ''}</textarea></div>
-            <div class="field"><label for="rf-responsibilities">Responsibilities</label><textarea id="rf-responsibilities">${role ? escapeHtml(role.responsibilities || '') : ''}</textarea></div>
+            <div class="field"><label for="rf-summary">Summary</label><textarea id="rf-summary">${escapeHtml(role.summary || '')}</textarea></div>
+            <div class="field"><label for="rf-responsibilities">Responsibilities</label><textarea id="rf-responsibilities">${escapeHtml(role.responsibilities || '')}</textarea></div>
             <div class="grid cols-2">
-              <div class="field"><label for="rf-effective">Effective from</label><input type="date" id="rf-effective" value="${role?.effective_from || ''}"></div>
-              <div class="field"><label for="rf-review">Review date</label><input type="date" id="rf-review" value="${role?.review_date || ''}"></div>
+              <div class="field"><label for="rf-effective">Effective from</label><input type="date" id="rf-effective" value="${role.effective_from || ''}"></div>
+              <div class="field"><label for="rf-review">Review date</label><input type="date" id="rf-review" value="${role.review_date || ''}"></div>
             </div>
-            <div class="field"><label for="rf-purpose">Purpose statement</label><textarea id="rf-purpose">${role ? escapeHtml(role.purpose_statement || '') : ''}</textarea></div>
+            <div class="field"><label for="rf-purpose">Purpose statement</label><textarea id="rf-purpose">${escapeHtml(role.purpose_statement || '')}</textarea></div>
             <div class="grid cols-2">
-              <div class="field"><label for="rf-focus">Focus area</label><input type="text" id="rf-focus" value="${role ? escapeHtml(roleAtAGlance?.focusArea || '') : ''}"></div>
-              <div class="field"><label for="rf-tags">Display tags (comma separated)</label><input type="text" id="rf-tags" value="${role ? escapeHtml(displayTags.join(', ')) : ''}"></div>
+              <div class="field"><label for="rf-focus">Focus area</label><input type="text" id="rf-focus" value="${escapeHtml(roleAtAGlance?.focusArea || '')}"></div>
+              <div class="field"><label for="rf-tags">Display tags (comma separated)</label><input type="text" id="rf-tags" value="${escapeHtml(displayTags.join(', '))}"></div>
             </div>
-            <div class="field"><label for="rf-outputs">Typical outputs</label><textarea id="rf-outputs">${role ? escapeHtml(role.typical_outputs || '') : ''}</textarea></div>
-            <div class="field"><label for="rf-day">A day in the life</label><textarea id="rf-day">${role ? escapeHtml(role.day_in_the_life || '') : ''}</textarea></div>
-            <div class="field"><label for="rf-success">What good looks like</label><textarea id="rf-success">${role ? escapeHtml(role.success_indicators || '') : ''}</textarea></div>
-            <div class="field"><label for="rf-progression">Progression summary</label><textarea id="rf-progression">${role ? escapeHtml(role.progression_summary || '') : ''}</textarea></div>
+            <div class="field"><label for="rf-outputs">Typical outputs</label><textarea id="rf-outputs">${escapeHtml(role.typical_outputs || '')}</textarea></div>
+            <div class="field"><label for="rf-day">A day in the life</label><textarea id="rf-day">${escapeHtml(role.day_in_the_life || '')}</textarea></div>
+            <div class="field"><label for="rf-success">What good looks like</label><textarea id="rf-success">${escapeHtml(role.success_indicators || '')}</textarea></div>
+            <div class="field"><label for="rf-progression">Progression summary</label><textarea id="rf-progression">${escapeHtml(role.progression_summary || '')}</textarea></div>
             <button class="btn btn-secondary btn-sm" type="submit">Save legacy fields</button>
           </form>
         </div>
       </details>
     </div>
-    ${role ? renderRoleSkillsSection(role) : '<div class="card"><p class="muted">Save the role profile before mapping SFIA skills.</p></div>'}
+  `;
+}
+
+function renderWizard(role, step, roleAtAGlance, displayTags) {
+  const content = document.getElementById('tab-content');
+  content.innerHTML = `
+    <div class="wizard-layout">
+      <div class="card wizard-nav">
+        <button class="btn btn-secondary btn-sm" id="back-to-roles">&larr; Back to role profiles</button>
+        <h3>${role ? 'Edit role profile' : 'Create role profile'}</h3>
+        ${role ? `<p>${statusBadge(role.status)}</p>` : ''}
+        <ol class="wizard-steps">
+          ${WIZARD_STEPS.map(s => `
+            <li class="wizard-step ${s.n === step ? 'active' : ''} ${role || s.n === 1 ? '' : 'disabled'}" data-step="${s.n}">
+              <span class="wizard-step-num">${s.n}</span>
+              <span class="wizard-step-text"><strong>${escapeHtml(s.title)}</strong><br><span class="muted">${escapeHtml(s.desc)}</span></span>
+            </li>
+          `).join('')}
+        </ol>
+      </div>
+
+      <div class="card wizard-content">
+        <div id="role-form-alert"></div>
+        ${wizardStepContent(role, step, roleAtAGlance, displayTags)}
+      </div>
+
+      <div class="card wizard-sidebar">
+        <h3>Rules</h3>
+        <ul class="wizard-rules">
+          <li>Role Name and Role Description are mandatory; Grade is optional.</li>
+          <li>A role must use one SFIA version only.</li>
+          <li>SFIA skills must be selected from the published import.</li>
+          <li>Levels are filtered to valid levels for the selected skill, where known.</li>
+          <li>Free-text SFIA skills and levels are not allowed.</li>
+        </ul>
+        <h3>Actions</h3>
+        <div class="wizard-actions">
+          <button class="btn btn-secondary" id="wizard-save-draft-btn" type="button">Save draft</button>
+          ${me.canPublish ? `<button class="btn btn-primary" id="wizard-publish-btn" type="button" ${role?.status === 'published' ? 'disabled' : ''}>${role?.status === 'published' ? 'Published' : 'Publish role'}</button>` : ''}
+          <button class="btn btn-secondary" id="wizard-cancel-btn" type="button">Cancel</button>
+        </div>
+        ${role && me.canPublish && role.status === 'published' ? '<p style="margin-top:0.75rem;"><button class="btn btn-secondary btn-sm" id="unpublish-btn" type="button">Unpublish</button></p>' : ''}
+        ${role && me.canPublish && role.status !== 'archived' ? '<p style="margin-top:0.5rem;"><button class="btn btn-danger btn-sm" id="archive-btn" type="button">Archive</button></p>' : ''}
+        <h3>Deferred from MVP</h3>
+        <p class="muted" style="font-size:0.85rem;">Role family, capability area, role type, seniority, day-in-life and evidence examples are optional future enhancements &mdash; still editable via "Legacy enrichment fields" below.</p>
+      </div>
+    </div>
+
+    ${role ? renderLegacyFieldsSection(role, roleAtAGlance, displayTags) : ''}
   `;
 
+  bindWizard(role, step);
+}
+
+async function saveStep1(role) {
+  const titleEl = document.getElementById('rf-title');
+  if (!titleEl) return role; // Not on step 1 - role details already saved incrementally.
+  const alertBox = document.getElementById('role-form-alert');
+  alertBox.innerHTML = '';
+  const payload = {
+    title: titleEl.value,
+    grade: document.getElementById('rf-grade').value,
+    roleDescription: document.getElementById('rf-description').value
+  };
+  if (!payload.title || !payload.roleDescription) {
+    alertBox.innerHTML = '<div class="alert alert-error">Role Name and Role Description are required.</div>';
+    return null;
+  }
+  try {
+    if (role) {
+      await Api.patch(`/api/admin/role-profiles/${role.id}`, payload);
+      return await Api.get(`/api/admin/role-profiles/${role.id}`);
+    }
+    return await Api.post('/api/admin/role-profiles', payload);
+  } catch (err) {
+    alertBox.innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+    return null;
+  }
+}
+
+function bindWizard(role, step) {
   document.getElementById('back-to-roles').addEventListener('click', renderRolesTab);
+
+  document.querySelectorAll('.wizard-step:not(.disabled)').forEach(el => {
+    el.addEventListener('click', () => renderRoleEditor(role?.id, Number(el.dataset.step)));
+  });
+
+  if (step === 1) {
+    document.getElementById('step1-next-btn').addEventListener('click', async () => {
+      const saved = await saveStep1(role);
+      if (saved) renderRoleEditor(saved.id, 2);
+    });
+  } else if (step === 2) {
+    document.getElementById('step2-back-btn').addEventListener('click', () => renderRoleEditor(role.id, 1));
+    document.getElementById('step2-next-btn').addEventListener('click', () => renderRoleEditor(role.id, 3));
+  } else if (step === 3) {
+    document.getElementById('step3-back-btn').addEventListener('click', () => renderRoleEditor(role.id, 2));
+    document.getElementById('step3-next-btn').addEventListener('click', () => renderRoleEditor(role.id, 4));
+    bindSkillsStep(role);
+  } else if (step === 4) {
+    document.getElementById('step4-back-btn').addEventListener('click', () => renderRoleEditor(role.id, 3));
+  }
+
+  document.getElementById('wizard-save-draft-btn').addEventListener('click', async () => {
+    const saved = await saveStep1(role);
+    if (saved) renderRoleEditor(saved.id, step);
+  });
+  document.getElementById('wizard-publish-btn')?.addEventListener('click', async () => {
+    const saved = await saveStep1(role);
+    if (!saved) return;
+    try {
+      await Api.post(`/api/admin/role-profiles/${saved.id}/publish`);
+      renderRoleEditor(saved.id, 4);
+    } catch (err) {
+      document.getElementById('role-form-alert').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+    }
+  });
+  document.getElementById('wizard-cancel-btn').addEventListener('click', renderRolesTab);
+  document.getElementById('unpublish-btn')?.addEventListener('click', async () => {
+    await Api.post(`/api/admin/role-profiles/${role.id}/unpublish`); renderRoleEditor(role.id, step);
+  });
+  document.getElementById('archive-btn')?.addEventListener('click', async () => {
+    await Api.post(`/api/admin/role-profiles/${role.id}/archive`); renderRoleEditor(role.id, step);
+  });
+
   document.getElementById('rf-family')?.addEventListener('change', () => {
     document.getElementById('rf-area').innerHTML = areaOptions(null, document.getElementById('rf-family').value);
   });
-
-  document.getElementById('role-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const alertBox = document.getElementById('role-form-alert');
-    alertBox.innerHTML = '';
-    const payload = {
-      title: document.getElementById('rf-title').value,
-      grade: document.getElementById('rf-grade').value,
-      roleDescription: document.getElementById('rf-description').value
-    };
-    try {
-      if (role) {
-        await Api.patch(`/api/admin/role-profiles/${role.id}`, payload);
-        renderRoleEditor(role.id);
-      } else {
-        const created = await Api.post('/api/admin/role-profiles', payload);
-        renderRoleEditor(created.id);
-      }
-    } catch (err) {
-      alertBox.innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
-    }
-  });
-
   document.getElementById('legacy-role-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const alertBox = document.getElementById('role-form-alert');
@@ -272,62 +459,14 @@ async function renderRoleEditor(id) {
     };
     try {
       await Api.patch(`/api/admin/role-profiles/${role.id}`, payload);
-      renderRoleEditor(role.id);
+      renderRoleEditor(role.id, step);
     } catch (err) {
       alertBox.innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
     }
   });
-
-  if (role) {
-    document.getElementById('publish-btn')?.addEventListener('click', async () => {
-      try { await Api.post(`/api/admin/role-profiles/${role.id}/publish`); renderRoleEditor(role.id); }
-      catch (err) { document.getElementById('role-form-alert').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`; }
-    });
-    document.getElementById('unpublish-btn')?.addEventListener('click', async () => {
-      await Api.post(`/api/admin/role-profiles/${role.id}/unpublish`); renderRoleEditor(role.id);
-    });
-    document.getElementById('archive-btn')?.addEventListener('click', async () => {
-      await Api.post(`/api/admin/role-profiles/${role.id}/archive`); renderRoleEditor(role.id);
-    });
-    bindRoleSkillsSection(role);
-  }
 }
 
-function renderRoleSkillsSection(role) {
-  return `
-    <div class="card">
-      <h2>SFIA skill mappings</h2>
-      <table>
-        <tr><th>Skill</th><th>Level</th><th>Shown open?</th><th></th></tr>
-        ${role.skills.map(s => `
-          <tr>
-            <td>${escapeHtml(s.skill_code)} - ${escapeHtml(s.skill_name)}</td>
-            <td>Level ${s.level_number}</td>
-            <td>${s.show_full_description ? 'Yes' : 'No'}</td>
-            <td>
-              <button class="btn btn-secondary btn-sm" data-edit-mapping="${s.mapping_id}">Edit</button>
-              <button class="btn btn-danger btn-sm" data-remove-skill="${s.mapping_id}">Remove</button>
-            </td>
-          </tr>
-        `).join('')}
-      </table>
-      ${role.skills.length === 0 ? '<p class="muted">No skills mapped yet.</p>' : ''}
-      <h3>Add a skill</h3>
-      <p class="muted">Skills and levels are selected from the role profile's SFIA version only - free text isn't allowed (FRD v0.17/v0.20).</p>
-      <div id="add-skill-alert"></div>
-      <div class="grid cols-2">
-        <div class="field"><label for="as-skill">SFIA skill</label><select id="as-skill">${skillOptions()}</select></div>
-        <div class="field"><label for="as-level">Required level</label><select id="as-level">${levelOptions()}</select>
-          <p class="help" id="as-level-help"></p>
-        </div>
-      </div>
-      <div class="field"><label class="checkbox-row"><input type="checkbox" id="as-show-open" style="width:auto;"> Show full SFIA detail expanded by default on the public page</label></div>
-      <button class="btn btn-primary btn-sm" id="add-skill-btn" type="button">Add skill</button>
-    </div>
-  `;
-}
-
-function renderMappingEditModal(role, mapping) {
+function renderMappingEditModal(role, mapping, step) {
   openModal(`
     <h2>Edit skill mapping</h2>
     <p class="muted">${escapeHtml(mapping.skill_code)} - ${escapeHtml(mapping.skill_name)}</p>
@@ -349,7 +488,7 @@ function renderMappingEditModal(role, mapping) {
         showFullDescription: document.getElementById('em-show-open').checked
       });
       closeModal();
-      renderRoleEditor(role.id);
+      renderRoleEditor(role.id, step);
     } catch (err) {
       alertBox.innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
     }
@@ -376,7 +515,7 @@ async function updateLevelOptionsForSkill(skillId) {
   help.textContent = `Only levels with imported SFIA skill-at-level data for this skill are shown (${validLevelIds.size} of 7).`;
 }
 
-function bindRoleSkillsSection(role) {
+function bindSkillsStep(role) {
   const skillSelect = document.getElementById('as-skill');
   if (skillSelect) {
     skillSelect.addEventListener('change', () => updateLevelOptionsForSkill(skillSelect.value));
@@ -391,7 +530,7 @@ function bindRoleSkillsSection(role) {
         requiredSfiaLevelId: document.getElementById('as-level').value,
         showFullDescription: document.getElementById('as-show-open').checked
       });
-      renderRoleEditor(role.id);
+      renderRoleEditor(role.id, 3);
     } catch (err) {
       alertBox.innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
     }
@@ -399,19 +538,19 @@ function bindRoleSkillsSection(role) {
   document.querySelectorAll('[data-edit-mapping]').forEach(btn => {
     btn.addEventListener('click', () => {
       const mapping = role.skills.find(s => String(s.mapping_id) === btn.dataset.editMapping);
-      if (mapping) renderMappingEditModal(role, mapping);
+      if (mapping) renderMappingEditModal(role, mapping, 3);
     });
   });
   document.querySelectorAll('[data-remove-skill]').forEach(btn => {
     btn.addEventListener('click', async () => {
       try {
         await Api.delete(`/api/admin/role-profiles/${role.id}/skills/${btn.dataset.removeSkill}`);
-        renderRoleEditor(role.id);
+        renderRoleEditor(role.id, 3);
       } catch (err) {
         if (err.requiresConfirmation) {
           confirmAction(`${err.message} Remove anyway?`, async () => {
             await Api.delete(`/api/admin/role-profiles/${role.id}/skills/${btn.dataset.removeSkill}`, { confirmRemove: true });
-            renderRoleEditor(role.id);
+            renderRoleEditor(role.id, 3);
           });
         }
       }
