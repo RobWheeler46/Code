@@ -143,7 +143,7 @@ async function renderResults(id) {
     <div class="card">
       <h2>Skill-by-skill readiness</h2>
       <table class="skills-table">
-        <thead><tr><th>SFIA code</th><th>Skill</th><th>Required</th><th>Your level</th><th>Status</th></tr></thead>
+        <thead><tr><th>SFIA code</th><th>Skill</th><th>Required</th><th>Your level</th><th>Status</th><th>Action</th></tr></thead>
         <tbody>
           ${r.details.map(d => `
             <tr>
@@ -152,16 +152,28 @@ async function renderResults(id) {
               <td data-label="Required"><span class="level-pill">L${d.requiredLevel.number}</span></td>
               <td data-label="Your level">${d.selfLevel ? `<span class="level-pill">L${d.selfLevel.number}</span>` : '&mdash;'}</td>
               <td data-label="Status">${statusChip(d.status, d.levelDiff)}</td>
+              <td data-label="Action">${d.status === 'gap' ? `<button class="btn btn-secondary btn-sm" data-add-plan="${d.sfiaSkillId}" data-level="${d.requiredLevel.number}" type="button">Add to plan</button>` : ''}</td>
             </tr>
           `).join('')}
         </tbody>
       </table>
       <div class="actions-row">
+        <a class="btn btn-secondary" href="plan.html">My development plan</a>
         <a class="btn btn-secondary" href="dashboard.html">Back to dashboard</a>
         <a class="btn btn-secondary" href="role.html?id=${r.role.id}">View role profile</a>
       </div>
     </div>
   `;
+
+  container.querySelectorAll('[data-add-plan]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        await Api.post('/api/user/development-plan', { sfiaSkillId: Number(btn.dataset.addPlan), targetRoleProfileId: r.role.id, targetLevelNumber: Number(btn.dataset.level) });
+        btn.textContent = 'Added ✓';
+      } catch (e) { btn.disabled = false; alert(e.message); }
+    });
+  });
 }
 
 document.addEventListener('DOMContentLoaded', async () => {

@@ -263,9 +263,14 @@ with Railway's env vars injected and can't reach a volume that only exists insid
   levels), with optional evidence + a confidence score, save &amp; resume (autosave per skill), then a
   **readiness result** (self-assessed vs required level per skill &rarr; met / minor / moderate /
   significant gap, an overall Ready / Nearly there / Development needed label and % met). Attempts appear
-  on the dashboard. Tables: `assessment_attempts`, `assessment_responses`. Still to come in Phase 2+:
-  personal development plans, evidence, sharing with managers/mentors/coaches, the AI Career Coach (Parts
-  F&ndash;I), and aggregated organisational reporting.
+  on the dashboard. Tables: `assessment_attempts`, `assessment_responses`.
+  Also built (3rd Phase-2 feature): **personal development plan** &mdash; a signed-in user builds a plan of
+  SFIA skills to develop, each toward a target role + level with a status (not started / in progress /
+  done), notes, and any matching learning suggestions. Items are added with one click from an **assessment
+  gap** ("Add to plan" on the readiness results) or a **role-comparison gap** ("Add to development plan" on
+  a gap row), or tracked on the plan page (`plan.html`); a summary shows on the dashboard. Table:
+  `development_plan_items`. Still to come in Phase 2+: evidence capture, sharing with managers/mentors/
+  coaches, the AI Career Coach (Parts F&ndash;I), and aggregated organisational reporting.
 - **FRD v0.11's full multi-version SFIA support is not built.** Only the MVP-foundation slice (data already
   version-scoped, version badge shown on role profiles) is in place. Admin version-lifecycle management
   (draft/active/published-default/legacy/archived), cross-version comparison blocking, and the migration

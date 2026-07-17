@@ -618,3 +618,10 @@ textarea { min-height: 5rem; resize: vertical; }
 .readiness-label[data-ready="Ready for this role"] { background: #e2f6e2; color: #2e7d32; }
 .readiness-label[data-ready="Nearly there"] { background: #fdf1cf; color: #8a6d10; }
 .readiness-label[data-ready="Development needed"] { background: #f8d7d7; color: #a12b2b; }
+
+/* Phase 2: development plan */
+.plan-item-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+.badge[data-plan-status="not_started"] { background: #eef1f5; color: var(--muted); }
+.badge[data-plan-status="in_progress"] { background: #fdf1cf; color: #8a6d10; }
+.badge[data-plan-status="done"] { background: #e2f6e2; color: #2e7d32; }
+.add-to-plan { margin-top: 0.5rem; }

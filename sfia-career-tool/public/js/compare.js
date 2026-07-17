@@ -69,6 +69,8 @@ function renderDetailRow(d) {
       </summary>
       <div class="skill-detail-body">
         ${renderSideBySide(d)}
+        ${(d.gapStatus === 'level_uplift' || d.gapStatus === 'new_skill_required') && d.aspirationalLevel ? `
+          <button class="btn btn-secondary btn-sm add-to-plan" data-add-plan="${d.sfiaSkillId}" data-level="${d.aspirationalLevel.number}" type="button">Add to development plan</button>` : ''}
         ${d.gapStatus !== 'no_gap' && d.gapStatus !== 'current_role_strength' ? `
           <h4>Suggested learning</h4>
           ${renderResourceList(formal)}
@@ -190,6 +192,19 @@ async function runComparison() {
         paint();
       } finally { saveBtn.disabled = false; }
     });
+
+    // "Add to development plan" on each gap row (signed-in users).
+    document.querySelectorAll('.add-to-plan[data-add-plan]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          await Api.post('/api/user/development-plan', { sfiaSkillId: Number(btn.dataset.addPlan), targetRoleProfileId: aspirationalRole.id, targetLevelNumber: Number(btn.dataset.level) });
+          btn.textContent = 'Added to plan ✓';
+        } catch (e) { btn.disabled = false; alert(e.message); }
+      });
+    });
+  } else {
+    document.querySelectorAll('.add-to-plan').forEach(b => b.style.display = 'none');
   }
 }
 

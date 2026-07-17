@@ -427,4 +427,25 @@ CREATE INDEX IF NOT EXISTS idx_assessment_attempts_user ON assessment_attempts(u
 CREATE INDEX IF NOT EXISTS idx_assessment_responses_attempt ON assessment_responses(attempt_id);
 `);
 
+// Phase 2 feature: personal development plan (FRD Phase-2 "Personal Development Plan" / "Development Plan
+// Item"). Each user has one implicit plan made of items; an item is a SFIA skill the user wants to
+// develop, optionally toward a target role and target level, with a status. Items are typically added
+// from an assessment gap or a role comparison, or manually. Additive table.
+db.exec(`
+CREATE TABLE IF NOT EXISTS development_plan_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  sfia_skill_id INTEGER NOT NULL REFERENCES sfia_skills(id),
+  target_role_profile_id INTEGER REFERENCES role_profiles(id),
+  target_level_id INTEGER REFERENCES sfia_levels(id),
+  status TEXT NOT NULL DEFAULT 'not_started' CHECK(status IN ('not_started','in_progress','done')),
+  notes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(user_id, sfia_skill_id, target_role_profile_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_development_plan_user ON development_plan_items(user_id, status);
+`);
+
 module.exports = db;

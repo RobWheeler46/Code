@@ -2,6 +2,7 @@
 const express = require('express');
 const db = require('../db');
 const { requireUser } = require('../lib/middleware');
+const { learningResourcesForSkill } = require('../lib/gapAnalysis');
 
 const router = express.Router();
 router.use(requireUser);
@@ -217,6 +218,64 @@ router.delete('/assessments/:id', (req, res) => {
   const attempt = attemptOr404(req, res); if (!attempt) return;
   db.prepare(`DELETE FROM assessment_responses WHERE attempt_id = ?`).run(attempt.id);
   db.prepare(`DELETE FROM assessment_attempts WHERE id = ?`).run(attempt.id);
+  res.json({ ok: true });
+});
+
+// ---- Personal development plan (FRD Phase-2 Development Plan) ----
+
+router.get('/development-plan', (req, res) => {
+  const items = db.prepare(`
+    SELECT dpi.id, dpi.sfia_skill_id, dpi.target_role_profile_id, dpi.target_level_id, dpi.status, dpi.notes, dpi.created_at,
+           sk.skill_code, sk.skill_name, rp.title AS target_role_title,
+           lv.level_number AS target_level_number, lv.level_name AS target_level_name
+    FROM development_plan_items dpi
+    JOIN sfia_skills sk ON sk.id = dpi.sfia_skill_id
+    LEFT JOIN role_profiles rp ON rp.id = dpi.target_role_profile_id
+    LEFT JOIN sfia_levels lv ON lv.id = dpi.target_level_id
+    WHERE dpi.user_id = ?
+    ORDER BY CASE dpi.status WHEN 'in_progress' THEN 0 WHEN 'not_started' THEN 1 ELSE 2 END, dpi.created_at DESC
+  `).all(req.user.id);
+  // Attach up to 3 learning suggestions per item's skill (reuses the Phase-1 gap-analysis matcher).
+  const withLearning = items.map(it => ({
+    ...it,
+    learning: learningResourcesForSkill({ sfiaSkillId: it.sfia_skill_id, targetLevelNumber: it.target_level_number, gapType: null }).slice(0, 3)
+  }));
+  res.json(withLearning);
+});
+
+router.post('/development-plan', (req, res) => {
+  const { sfiaSkillId, targetRoleProfileId, targetLevelNumber, notes } = req.body || {};
+  if (!sfiaSkillId) return res.status(400).json({ error: 'A SFIA skill is required.' });
+  const skill = db.prepare(`SELECT id FROM sfia_skills WHERE id = ?`).get(sfiaSkillId);
+  if (!skill) return res.status(404).json({ error: 'Skill not found.' });
+  let targetLevelId = null;
+  if (targetLevelNumber) {
+    const lv = db.prepare(`SELECT id FROM sfia_levels WHERE level_number = ?`).get(targetLevelNumber);
+    targetLevelId = lv ? lv.id : null;
+  }
+  const roleId = targetRoleProfileId || null;
+  const existing = db.prepare(`SELECT id FROM development_plan_items WHERE user_id = ? AND sfia_skill_id = ? AND ${roleId === null ? 'target_role_profile_id IS NULL' : 'target_role_profile_id = ?'}`)
+    .get(...(roleId === null ? [req.user.id, sfiaSkillId] : [req.user.id, sfiaSkillId, roleId]));
+  if (existing) return res.status(200).json({ ok: true, id: existing.id, alreadyAdded: true });
+  const result = db.prepare(`
+    INSERT INTO development_plan_items (user_id, sfia_skill_id, target_role_profile_id, target_level_id, notes)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(req.user.id, sfiaSkillId, roleId, targetLevelId, notes || null);
+  res.status(201).json({ ok: true, id: result.lastInsertRowid });
+});
+
+router.patch('/development-plan/:id', (req, res) => {
+  const item = db.prepare(`SELECT * FROM development_plan_items WHERE id = ? AND user_id = ?`).get(req.params.id, req.user.id);
+  if (!item) return res.status(404).json({ error: 'Development plan item not found.' });
+  const { status, notes } = req.body || {};
+  if (status && !['not_started', 'in_progress', 'done'].includes(status)) return res.status(400).json({ error: 'Invalid status.' });
+  db.prepare(`UPDATE development_plan_items SET status = ?, notes = ?, updated_at = datetime('now') WHERE id = ?`)
+    .run(status ?? item.status, notes !== undefined ? notes : item.notes, item.id);
+  res.json({ ok: true });
+});
+
+router.delete('/development-plan/:id', (req, res) => {
+  db.prepare(`DELETE FROM development_plan_items WHERE id = ? AND user_id = ?`).run(req.params.id, req.user.id);
   res.json({ ok: true });
 });
 

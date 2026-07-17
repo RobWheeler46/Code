@@ -56,13 +56,27 @@ function renderAssessments(items) {
 
 async function loadDashboard() {
   const container = document.getElementById('dashboard-container');
-  const [roles, comps, assessments] = await Promise.all([
+  const [roles, comps, assessments, plan] = await Promise.all([
     Api.get('/api/user/saved-roles'),
     Api.get('/api/user/saved-comparisons'),
-    Api.get('/api/user/assessments')
+    Api.get('/api/user/assessments'),
+    Api.get('/api/user/development-plan')
   ]);
+  const planCounts = { not_started: 0, in_progress: 0, done: 0 };
+  plan.forEach(i => planCounts[i.status]++);
   container.innerHTML = `
     <h1>My dashboard</h1>
+    <div class="card">
+      <h2>My development plan</h2>
+      ${plan.length === 0
+        ? '<p class="muted">No development goals yet. Add skills from an assessment or comparison gap.</p>'
+        : `<div class="summary-stats">
+            <div class="stat-tile"><div class="num">${planCounts.in_progress}</div><div class="label">In progress</div></div>
+            <div class="stat-tile"><div class="num">${planCounts.not_started}</div><div class="label">Not started</div></div>
+            <div class="stat-tile"><div class="num">${planCounts.done}</div><div class="label">Done</div></div>
+          </div>`}
+      <div class="actions-row"><a class="btn btn-secondary btn-sm" href="plan.html">Open development plan</a></div>
+    </div>
     <div class="card">
       <h2>My assessments</h2>
       <div id="assessments">${renderAssessments(assessments)}</div>
