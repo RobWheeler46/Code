@@ -1,45 +1,38 @@
 // One-off reference-data import (FRD v0.21-v0.23 Part K / final appendix "SFIA 9 Workbook
 // Re-check and Clean Import Template").
 //
-// Loads the full official SFIA 9 catalogue from SFIA_9_Clean_Import_Template_v0_23.xlsx - 147
-// professional skills, 672 skill-at-level descriptions, 7 levels of responsibility, 16
-// attributes/business skills and 112 attribute-at-level descriptions - and writes it into the
-// live database. This supersedes the earlier hand-curated subset in update-sfia-content.js,
-// which only covered the 24 (of 37) skill codes referenced by imported role profiles that could
-// be manually verified before this structured source workbook was available.
+// Loads the full official SFIA 9 catalogue - 147 professional skills, 672 skill-at-level
+// descriptions, 7 levels of responsibility, 16 attributes/business skills and 112
+// attribute-at-level descriptions - and writes it into the database. This supersedes the earlier
+// hand-curated subset in update-sfia-content.js, which only covered the 24 (of 37) skill codes
+// referenced by imported role profiles that could be manually verified before the structured
+// source workbook was available.
+//
+// The reference data lives in src/data/sfia9-reference.json, generated once from the SFIA 9 Clean
+// Import Template (SFIA_9_Clean_Import_Template_v0_23.xlsx). Committing the extracted JSON rather
+// than the xlsx keeps the import runnable in any environment (incl. the Railway production
+// container) with no xlsx dependency and no binary workbook in the repo - matching how the rest of
+// this project ships reference data (see src/data/sfia-skills-content.json).
 //
 // Safe to re-run: every write is an UPDATE-if-exists/INSERT-if-not against a stable natural key
 // (skill_code, level_number, attribute_code), never a delete-and-recreate. Existing sfia_skills
 // rows keep their id, so role_profile_skills foreign keys are never disturbed. The 13 skill codes
 // used by role profiles that don't match any official SFIA 9 code (flagged by
-// flag-unmatched-skills.js) are untouched, because they simply never match a row in the source
-// workbook.
+// flag-unmatched-skills.js) are untouched, because they simply never match a row in the source data.
 //
-// Run locally:  node src/import-sfia-9-reference-data.js "C:\path\to\SFIA_9_Clean_Import_Template_v0_23.xlsx"
-// Run on Railway: railway ssh node src/import-sfia-9-reference-data.js <path>
+// Run locally:  node src/import-sfia-9-reference-data.js
+// Run on Railway: railway ssh node src/import-sfia-9-reference-data.js
 
-const XLSX = require('xlsx');
+const path = require('path');
 const db = require('./db'); // ensures schema/migrations (incl. this feature's new columns/tables) are applied first
 
-const filePath = process.argv[2];
-if (!filePath) {
-  console.error('Usage: node src/import-sfia-9-reference-data.js <path to Clean Import Template xlsx>');
-  process.exit(1);
-}
-
-function sheetRows(wb, name) {
-  const sheet = wb.Sheets[name];
-  if (!sheet) throw new Error(`Required worksheet "${name}" not found in workbook`);
-  return XLSX.utils.sheet_to_json(sheet, { defval: null });
-}
-
 function main() {
-  const wb = XLSX.readFile(filePath);
-  const skillsRows = sheetRows(wb, 'SFIA_Skills');
-  const skillLevelRows = sheetRows(wb, 'Skill_Level_Descriptions');
-  const levelRows = sheetRows(wb, 'SFIA_Levels');
-  const attributeRows = sheetRows(wb, 'SFIA_Attributes');
-  const attributeLevelRows = sheetRows(wb, 'Attribute_Level_Descriptions');
+  const data = require(path.join(__dirname, 'data', 'sfia9-reference.json'));
+  const skillsRows = data.skills;
+  const skillLevelRows = data.skillLevelDescriptions;
+  const levelRows = data.levels;
+  const attributeRows = data.attributes;
+  const attributeLevelRows = data.attributeLevelDescriptions;
 
   const versionRow = db.prepare("SELECT id FROM sfia_versions WHERE version_name = 'SFIA 9' AND status = 'active'").get();
   if (!versionRow) throw new Error('No active "SFIA 9" row found in sfia_versions - run src/seed.js first');

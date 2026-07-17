@@ -35,15 +35,18 @@ for history; superseded by the import below.
 Re-check and Clean Import Template" appendix) is the current, complete source of SFIA reference data. It
 imports the **full official SFIA 9 catalogue** - all 147 professional skills, 672 skill-at-level
 descriptions, 7 levels of responsibility, 16 attributes/business skills and 112 attribute-at-level
-descriptions - from `SFIA_9_Clean_Import_Template_v0_23.xlsx` (a pre-cleaned, validated export of the
-official source workbook the user supplied; see `Appendix and Import Model Validation` for how that
-extraction was checked). Safe to re-run: every write is an update-if-exists/insert-if-not against a stable
-natural key (skill code, level number, attribute code), so existing `sfia_skills` rows keep their id and
-`role_profile_skills` foreign keys are never disturbed.
+descriptions - from `src/data/sfia9-reference.json`. That JSON was generated once from
+`SFIA_9_Clean_Import_Template_v0_23.xlsx` (a pre-cleaned, validated export of the official source workbook
+the user supplied; see `Appendix and Import Model Validation` for how that extraction was checked) and
+committed, so the import needs no xlsx dependency and no binary workbook in the repo or the deployment
+container - the same "extract to committed JSON" pattern used for `src/data/sfia-skills-content.json`.
+Safe to re-run: every write is an update-if-exists/insert-if-not against a stable natural key (skill code,
+level number, attribute code), so existing `sfia_skills` rows keep their id and `role_profile_skills`
+foreign keys are never disturbed.
 
-Run it with `node src/import-sfia-9-reference-data.js "<path to Clean Import Template xlsx>"` (needs
-`node_modules/xlsx` - installed as a `devDependency` from SheetJS's own CDN rather than the npm registry
-build, which has known unpatched CVEs; see `package.json`). Of the 37 skill codes referenced by the
+Run it with `node src/import-sfia-9-reference-data.js` (locally) or `railway ssh node
+src/import-sfia-9-reference-data.js` (production) - no arguments, it reads the committed JSON. Of the 37
+skill codes referenced by the
 imported role profiles, 13 (`BUAN`, `QUMT`, `VUIM`, `AUTH`, `OPSG`, `INAN`, `MLEN`, `SYAS`, `STRP`, `SADM`,
 `PLMT`, `STAD`, `STRT`) still don't correspond to any of the 147 official skills - confirmed against the
 complete list, not a guess - likely a different SFIA version or spreadsheet-author shorthand, and are left
