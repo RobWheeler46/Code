@@ -2,6 +2,7 @@ const express = require('express');
 const db = require('../db');
 const { compareRoles, learningPreviewForRole } = require('../lib/gapAnalysis');
 const { logUsageEvent } = require('../lib/helpers');
+const { computeReadiness, developmentPlanItems } = require('../lib/assessment');
 
 function parseJson(value) {
   if (!value) return null;
@@ -226,6 +227,23 @@ router.post('/compare', (req, res) => {
     aspirationalRole: { id: aspirationalRole.id, title: aspirationalRole.title, grade: aspirationalRole.grade, sfiaVersion: versionName(aspirationalRole) },
     ...result
   });
+});
+
+// Public read-only view of a shared item (FRD Phase-2 sharing). No auth: the token is the credential.
+router.get('/shared/:token', (req, res) => {
+  const link = db.prepare(`SELECT * FROM share_links WHERE token = ?`).get(req.params.token);
+  if (!link) return res.status(404).json({ error: 'This shared link is not valid or has been revoked.' });
+  const owner = db.prepare(`SELECT first_name, last_name FROM users WHERE id = ?`).get(link.user_id);
+  const ownerName = owner ? `${owner.first_name} ${owner.last_name}` : 'A user';
+
+  if (link.share_type === 'assessment') {
+    const attempt = db.prepare(`SELECT * FROM assessment_attempts WHERE id = ? AND user_id = ?`).get(link.resource_id, link.user_id);
+    if (!attempt) return res.status(404).json({ error: 'The shared assessment no longer exists.' });
+    const role = db.prepare(`SELECT id, title, grade FROM role_profiles WHERE id = ?`).get(attempt.role_profile_id);
+    return res.json({ shareType: 'assessment', ownerName, role, ...computeReadiness(attempt) });
+  }
+  // Development plan
+  return res.json({ shareType: 'plan', ownerName, items: developmentPlanItems(link.user_id) });
 });
 
 module.exports = router;

@@ -163,7 +163,10 @@ async function renderResults(id) {
         <a class="btn btn-secondary" href="role.html?id=${r.role.id}">View role profile</a>
       </div>
     </div>
+    <div class="card" id="share-card"></div>
   `;
+
+  initShareControl({ mount: document.getElementById('share-card'), shareType: 'assessment', resourceId: Number(id), label: 'this assessment result' });
 
   container.querySelectorAll('[data-add-plan]').forEach(btn => {
     btn.addEventListener('click', async () => {

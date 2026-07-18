@@ -274,8 +274,16 @@ with Railway's env vars injected and can't reach a volume that only exists insid
   (`evidence.html`) where a signed-in user records evidence items (title, description, optional link) each
   demonstrating a SFIA skill, grouped by skill with inline edit. Reachable from a development-plan item's
   "Add evidence" (which pre-selects the skill) and summarised on the dashboard. Tables: `evidence_items`;
-  a lightweight `/api/user/skills` endpoint backs the skill picker. Still to come in Phase 2+: sharing with
-  managers/mentors/coaches, aggregated organisational reporting, and the AI Career Coach (Parts F&ndash;I,
+  a lightweight `/api/user/skills` endpoint backs the skill picker.
+  Also built (5th Phase-2 feature): **read-only sharing** &mdash; a signed-in user can mint a shareable
+  link for an **assessment result** (from the results page) or their **development plan** (from
+  `plan.html`), copy it, and revoke it at any time. The link's random token *is* the credential: the
+  public view (`shared.html`, served by an unauthenticated `GET /api/shared/:token`) shows a read-only,
+  attributed copy (owner name, no edit controls, no nav into the app) and returns a graceful "not valid or
+  revoked" message once the link is revoked. Links are stable &mdash; re-sharing the same resource reuses
+  the existing token rather than minting a new one. The readiness/plan rendering is shared with the
+  authenticated routes via `src/lib/assessment.js` so both views stay in lock-step. Table: `share_links`.
+  Still to come in Phase 2+: aggregated organisational reporting, and the AI Career Coach (Parts F&ndash;I,
   the only piece needing an LLM &mdash; deliberately left until last).
 - **FRD v0.11's full multi-version SFIA support is not built.** Only the MVP-foundation slice (data already
   version-scoped, version badge shown on role profiles) is in place. Admin version-lifecycle management

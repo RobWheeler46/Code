@@ -466,4 +466,21 @@ CREATE TABLE IF NOT EXISTS evidence_items (
 CREATE INDEX IF NOT EXISTS idx_evidence_user ON evidence_items(user_id, sfia_skill_id);
 `);
 
+// Phase 2 feature: read-only share links (FRD Phase-2 sharing with managers/mentors). A user mints an
+// unguessable token that grants a read-only view of one assessment result, or of their development plan.
+// Revoking simply deletes the row. Anyone with the link can view - the token IS the credential, so it is
+// long and random. Additive table.
+db.exec(`
+CREATE TABLE IF NOT EXISTS share_links (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  token TEXT NOT NULL UNIQUE,
+  share_type TEXT NOT NULL CHECK(share_type IN ('assessment','plan')),
+  resource_id INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_share_links_user ON share_links(user_id);
+`);
+
 module.exports = db;

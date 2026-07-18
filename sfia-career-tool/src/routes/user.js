@@ -1,8 +1,10 @@
 // Phase 2 personal routes (registered end users). Mounted at /api/user, all gated by requireUser.
 const express = require('express');
 const db = require('../db');
+const crypto = require('crypto');
 const { requireUser } = require('../lib/middleware');
 const { learningResourcesForSkill } = require('../lib/gapAnalysis');
+const { roleRequiredSkills, skillLevelOptions, computeReadiness, developmentPlanItems } = require('../lib/assessment');
 
 const router = express.Router();
 router.use(requireUser);
@@ -71,69 +73,10 @@ router.delete('/saved-comparisons/:id', (req, res) => {
 
 // ---- Guided self-assessment (FRD Part E) ----
 
-// The SFIA skills a role requires, with the user's required level for each.
-function roleRequiredSkills(roleProfileId) {
-  return db.prepare(`
-    SELECT rps.sfia_skill_id, sk.skill_code, sk.skill_name, sk.short_description,
-           rps.required_sfia_level_id AS required_level_id, lv.level_number AS required_level_number, lv.level_name AS required_level_name
-    FROM role_profile_skills rps
-    JOIN sfia_skills sk ON sk.id = rps.sfia_skill_id
-    JOIN sfia_levels lv ON lv.id = rps.required_sfia_level_id
-    WHERE rps.role_profile_id = ?
-    ORDER BY rps.display_order, sk.skill_code
-  `).all(roleProfileId);
-}
-
-// Level options for a skill's question: prefer the imported skill-at-level descriptions; fall back to
-// the 7 generic levels (number + name) for skills that have no skill-at-level data (e.g. non-SFIA-9 codes).
-function skillLevelOptions(sfiaSkillId) {
-  const withDesc = db.prepare(`
-    SELECT lv.id AS level_id, lv.level_number, lv.level_name, sld.skill_level_description
-    FROM sfia_skill_level_descriptions sld
-    JOIN sfia_levels lv ON lv.id = sld.sfia_level_id
-    WHERE sld.sfia_skill_id = ? AND sld.status = 'active'
-    ORDER BY lv.level_number
-  `).all(sfiaSkillId);
-  if (withDesc.length > 0) return withDesc;
-  return db.prepare(`SELECT id AS level_id, level_number, level_name, NULL AS skill_level_description FROM sfia_levels ORDER BY level_number`).all();
-}
-
 function attemptOr404(req, res) {
   const attempt = db.prepare(`SELECT * FROM assessment_attempts WHERE id = ? AND user_id = ?`).get(req.params.id, req.user.id);
   if (!attempt) { res.status(404).json({ error: 'Assessment not found.' }); return null; }
   return attempt;
-}
-
-function computeReadiness(attempt) {
-  const skills = roleRequiredSkills(attempt.role_profile_id);
-  const responses = db.prepare(`SELECT r.sfia_skill_id, r.self_assessed_level_id, r.confidence, r.evidence_text, lv.level_number AS self_level_number, lv.level_name AS self_level_name
-    FROM assessment_responses r LEFT JOIN sfia_levels lv ON lv.id = r.self_assessed_level_id WHERE r.attempt_id = ?`).all(attempt.id);
-  const byskill = Object.fromEntries(responses.map(r => [r.sfia_skill_id, r]));
-  let met = 0, gap = 0, unanswered = 0;
-  const details = skills.map(s => {
-    const resp = byskill[s.sfia_skill_id];
-    let status, levelDiff = null;
-    if (!resp || resp.self_assessed_level_id == null) { status = 'not_answered'; unanswered++; }
-    else {
-      levelDiff = s.required_level_number - resp.self_level_number;
-      if (levelDiff <= 0) { status = 'met'; met++; } else { status = 'gap'; gap++; }
-    }
-    return {
-      sfiaSkillId: s.sfia_skill_id, skillCode: s.skill_code, skillName: s.skill_name,
-      requiredLevel: { number: s.required_level_number, name: s.required_level_name },
-      selfLevel: resp && resp.self_assessed_level_id != null ? { number: resp.self_level_number, name: resp.self_level_name } : null,
-      confidence: resp ? resp.confidence : null, evidenceText: resp ? resp.evidence_text : null,
-      status, levelDiff
-    };
-  });
-  const total = skills.length;
-  const percent = total ? Math.round((met / total) * 100) : 0;
-  let label;
-  if (unanswered > 0 && attempt.status !== 'completed') label = 'In progress';
-  else if (gap === 0) label = 'Ready for this role';
-  else if (percent >= 60) label = 'Nearly there';
-  else label = 'Development needed';
-  return { total, met, gap, unanswered, percent, label, details };
 }
 
 // List attempts (dashboard).
@@ -317,6 +260,42 @@ router.patch('/evidence/:id', (req, res) => {
 
 router.delete('/evidence/:id', (req, res) => {
   db.prepare(`DELETE FROM evidence_items WHERE id = ? AND user_id = ?`).run(req.params.id, req.user.id);
+  res.json({ ok: true });
+});
+
+// ---- Read-only share links (FRD Phase-2 sharing) ----
+
+router.get('/share', (req, res) => {
+  const rows = db.prepare(`
+    SELECT sl.id, sl.token, sl.share_type, sl.resource_id, sl.created_at, rp.title AS assessment_role_title
+    FROM share_links sl
+    LEFT JOIN assessment_attempts a ON a.id = sl.resource_id AND sl.share_type = 'assessment'
+    LEFT JOIN role_profiles rp ON rp.id = a.role_profile_id
+    WHERE sl.user_id = ? ORDER BY sl.created_at DESC
+  `).all(req.user.id);
+  res.json(rows);
+});
+
+router.post('/share', (req, res) => {
+  const { shareType, resourceId } = req.body || {};
+  if (!['assessment', 'plan'].includes(shareType)) return res.status(400).json({ error: 'Invalid share type.' });
+  let resId = null;
+  if (shareType === 'assessment') {
+    const attempt = db.prepare(`SELECT id FROM assessment_attempts WHERE id = ? AND user_id = ? AND status = 'completed'`).get(resourceId, req.user.id);
+    if (!attempt) return res.status(404).json({ error: 'Completed assessment not found.' });
+    resId = attempt.id;
+  }
+  // Reuse an existing active link for the same resource so links stay stable.
+  const existing = db.prepare(`SELECT token FROM share_links WHERE user_id = ? AND share_type = ? AND ${resId === null ? 'resource_id IS NULL' : 'resource_id = ?'}`)
+    .get(...(resId === null ? [req.user.id, shareType] : [req.user.id, shareType, resId]));
+  if (existing) return res.json({ ok: true, token: existing.token, reused: true });
+  const token = crypto.randomBytes(24).toString('hex');
+  const result = db.prepare(`INSERT INTO share_links (user_id, token, share_type, resource_id) VALUES (?, ?, ?, ?)`).run(req.user.id, token, shareType, resId);
+  res.status(201).json({ ok: true, id: result.lastInsertRowid, token });
+});
+
+router.delete('/share/:id', (req, res) => {
+  db.prepare(`DELETE FROM share_links WHERE id = ? AND user_id = ?`).run(req.params.id, req.user.id);
   res.json({ ok: true });
 });
 

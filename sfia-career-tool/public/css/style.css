@@ -625,3 +625,7 @@ textarea { min-height: 5rem; resize: vertical; }
 .badge[data-plan-status="in_progress"] { background: #fdf1cf; color: #8a6d10; }
 .badge[data-plan-status="done"] { background: #e2f6e2; color: #2e7d32; }
 .add-to-plan { margin-top: 0.5rem; }
+
+/* Phase 2: read-only share link control */
+.share-url-row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-top: 0.5rem; }
+.share-url-row input[type="text"] { flex: 1 1 260px; min-width: 0; font-family: monospace; font-size: 0.85rem; }

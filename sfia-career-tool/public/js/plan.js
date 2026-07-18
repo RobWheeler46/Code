@@ -47,7 +47,12 @@ async function loadPlan() {
       <p class="muted" style="margin-bottom:0;">Add skills from an <a href="dashboard.html">assessment</a> or a <a href="compare.html">role comparison</a> gap, then track your progress here.</p>
     </div>
     ${items.length === 0 ? '<div class="card"><div class="empty-state">Your development plan is empty. Run an assessment or compare two roles, then use &ldquo;Add to plan&rdquo; on a gap.</div></div>' : items.map(planItemCard).join('')}
+    ${items.length ? '<div class="card" id="share-card"></div>' : ''}
   `;
+
+  if (items.length) {
+    initShareControl({ mount: document.getElementById('share-card'), shareType: 'plan', resourceId: null, label: 'your development plan' });
+  }
 
   container.querySelectorAll('[data-status]').forEach(sel => {
     sel.addEventListener('change', async () => { await Api.patch(`/api/user/development-plan/${sel.dataset.status}`, { status: sel.value }); loadPlan(); });
