@@ -629,3 +629,10 @@ textarea { min-height: 5rem; resize: vertical; }
 /* Phase 2: read-only share link control */
 .share-url-row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-top: 0.5rem; }
 .share-url-row input[type="text"] { flex: 1 1 260px; min-width: 0; font-family: monospace; font-size: 0.85rem; }
+
+/* Phase 2: org insights meter bars */
+.meter { display: inline-block; width: 90px; height: 8px; border-radius: 999px; background: #eef1f5; vertical-align: middle; overflow: hidden; margin-right: 0.4rem; }
+.meter-fill { display: block; height: 100%; border-radius: 999px; background: var(--teal); }
+.meter-fill[data-tone="good"] { background: #2e7d32; }
+.meter-fill[data-tone="warn"] { background: #b8860b; }
+.meter-fill[data-tone="bad"] { background: #c0392b; }

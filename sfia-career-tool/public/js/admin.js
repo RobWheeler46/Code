@@ -72,6 +72,7 @@ const TABS = {
   review: renderReviewTab,
   audit: renderAuditTab,
   endusers: renderEndUsersTab,
+  orginsights: renderOrgInsightsTab,
   users: renderUsersTab
 };
 
@@ -1504,6 +1505,83 @@ async function renderEndUsersTab() {
       await Api.patch(`/api/admin/end-users/${sel.dataset.euStatus}`, { accountStatus: sel.value });
     });
   });
+}
+
+// Org insights (Phase 2): aggregated, privacy-preserving reporting over registered end-user activity.
+async function renderOrgInsightsTab() {
+  const content = document.getElementById('tab-content');
+  const r = await Api.get('/api/admin/org-reports');
+  const s = r.summary;
+  const meter = (pct, tone) => `<span class="meter" title="${pct}%"><span class="meter-fill" data-tone="${tone || ''}" style="width:${pct}%"></span></span>`;
+
+  content.innerHTML = `
+    <div class="card">
+      <h2>Engagement</h2>
+      <div class="summary-stats">
+        <div class="stat-tile"><div class="num">${s.endUsers}</div><div class="label">End users</div></div>
+        <div class="stat-tile"><div class="num">${s.engagedUsers}</div><div class="label">Active (have used a tool)</div></div>
+        <div class="stat-tile"><div class="num">${s.assessmentsCompleted}</div><div class="label">Assessments completed</div></div>
+        <div class="stat-tile"><div class="num">${s.assessmentsInProgress}</div><div class="label">Assessments in progress</div></div>
+        <div class="stat-tile"><div class="num">${s.planItems}</div><div class="label">Development-plan items</div></div>
+        <div class="stat-tile"><div class="num">${s.evidenceItems}</div><div class="label">Evidence items</div></div>
+        <div class="stat-tile"><div class="num">${s.savedRoles}</div><div class="label">Saved roles</div></div>
+        <div class="stat-tile"><div class="num">${s.savedComparisons}</div><div class="label">Saved comparisons</div></div>
+      </div>
+      <p class="muted" style="margin-bottom:0;">These figures are aggregated across all end users. No individual is identified &mdash; this view is for spotting organisation-wide skills trends, not individual performance.</p>
+    </div>
+
+    <div class="card">
+      <h2>Role readiness (from completed assessments)</h2>
+      ${r.roleReadiness.length === 0 ? '<p class="muted">No completed assessments yet.</p>' : `
+      <table>
+        <tr><th>Role</th><th>Assessments</th><th>Avg. readiness</th><th>Avg. gaps</th></tr>
+        ${r.roleReadiness.map(x => `
+          <tr>
+            <td>${escapeHtml(x.title)}</td>
+            <td>${x.attempts}</td>
+            <td>${meter(x.avgPercent, x.avgPercent >= 80 ? 'good' : x.avgPercent >= 60 ? 'warn' : 'bad')} ${x.avgPercent}%</td>
+            <td>${x.avgGaps}</td>
+          </tr>
+        `).join('')}
+      </table>`}
+    </div>
+
+    <div class="card">
+      <h2>Top skill gaps (from assessments)</h2>
+      <p class="muted" style="margin-top:0;">SFIA skills where end users most often self-assess below the level their target role requires &mdash; a signal of where to focus learning provision.</p>
+      ${r.assessmentGaps.length === 0 ? '<p class="muted">No skill gaps recorded yet.</p>' : `
+      <table>
+        <tr><th>SFIA</th><th>Skill</th><th>Below required</th><th>Gap rate</th></tr>
+        ${r.assessmentGaps.map(g => `
+          <tr>
+            <td>${escapeHtml(g.skillCode)}</td>
+            <td>${escapeHtml(g.skillName)}</td>
+            <td>${g.gaps} of ${g.assessed}</td>
+            <td>${meter(g.gapRate, g.gapRate >= 60 ? 'bad' : g.gapRate >= 30 ? 'warn' : 'good')} ${g.gapRate}%</td>
+          </tr>
+        `).join('')}
+      </table>`}
+    </div>
+
+    <div class="card">
+      <h2>Where the org is developing (development plans)</h2>
+      <p class="muted" style="margin-top:0;">SFIA skills most often added to personal development plans.</p>
+      ${r.planFocus.length === 0 ? '<p class="muted">No development-plan items yet.</p>' : `
+      <table>
+        <tr><th>SFIA</th><th>Skill</th><th>Plans</th><th>Users</th><th>In progress</th><th>Done</th></tr>
+        ${r.planFocus.map(p => `
+          <tr>
+            <td>${escapeHtml(p.skill_code)}</td>
+            <td>${escapeHtml(p.skill_name)}</td>
+            <td>${p.items}</td>
+            <td>${p.users}</td>
+            <td>${p.in_progress}</td>
+            <td>${p.done}</td>
+          </tr>
+        `).join('')}
+      </table>`}
+    </div>
+  `;
 }
 
 function debounceAdmin(fn, ms) {

@@ -283,8 +283,17 @@ with Railway's env vars injected and can't reach a volume that only exists insid
   revoked" message once the link is revoked. Links are stable &mdash; re-sharing the same resource reuses
   the existing token rather than minting a new one. The readiness/plan rendering is shared with the
   authenticated routes via `src/lib/assessment.js` so both views stay in lock-step. Table: `share_links`.
-  Still to come in Phase 2+: aggregated organisational reporting, and the AI Career Coach (Parts F&ndash;I,
-  the only piece needing an LLM &mdash; deliberately left until last).
+  Also built (6th Phase-2 feature): **aggregated organisational reporting** &mdash; an admin **Org insights**
+  tab (`GET /api/admin/org-reports`) surfacing organisation-wide, **privacy-preserving** analytics over
+  registered end-user activity: an engagement summary (end users, active users, assessments completed/in
+  progress, plan items, evidence, saved roles/comparisons); **role readiness** from completed assessments
+  (per role: attempts, average % readiness, average gaps, reusing the shared `computeReadiness`); **top
+  skill gaps** (SFIA skills most often self-assessed below the target role's required level &mdash; where to
+  focus learning provision); and **development focus** (skills most often added to development plans). Every
+  figure is an aggregate count/ranking &mdash; no individual end user is named or identifiable, and the tab
+  says so. "End users" are accounts with no admin role.
+  Still to come in Phase 2+: the AI Career Coach (Parts F&ndash;I, the only piece needing an LLM &mdash;
+  deliberately left until last).
 - **FRD v0.11's full multi-version SFIA support is not built.** Only the MVP-foundation slice (data already
   version-scoped, version badge shown on role profiles) is in place. Admin version-lifecycle management
   (draft/active/published-default/legacy/archived), cross-version comparison blocking, and the migration

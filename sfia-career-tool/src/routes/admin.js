@@ -2,6 +2,7 @@ const express = require('express');
 const db = require('../db');
 const { requireAuth, requireEdit, requirePublish, requireManageAdmins } = require('../lib/middleware');
 const { hashPassword, logAudit, recordVersion } = require('../lib/helpers');
+const { computeReadiness } = require('../lib/assessment');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -894,6 +895,77 @@ router.get('/reports', (req, res) => {
   };
 
   res.json({ mostViewedRoles, mostComparedRoles, commonAspirationalRoles, commonGaps, counts });
+});
+
+// Organisational reporting (Phase 2): aggregated, privacy-preserving analytics over registered end-user
+// activity. Everything returned here is an aggregate count or ranking - no individual end user is named
+// or made identifiable. "End users" are accounts with no admin role.
+router.get('/org-reports', (req, res) => {
+  const endUserIds = `SELECT u.id FROM users u WHERE NOT EXISTS (SELECT 1 FROM user_admin_roles uar WHERE uar.user_id = u.id)`;
+  const scalar = (sql) => db.prepare(sql).get().n;
+
+  const summary = {
+    endUsers: scalar(`SELECT COUNT(*) AS n FROM (${endUserIds})`),
+    activeAccounts: scalar(`SELECT COUNT(*) AS n FROM users u WHERE u.account_status = 'active' AND u.id IN (${endUserIds})`),
+    engagedUsers: scalar(`SELECT COUNT(*) AS n FROM (
+        SELECT user_id FROM assessment_attempts
+        UNION SELECT user_id FROM development_plan_items
+        UNION SELECT user_id FROM evidence_items
+        UNION SELECT user_id FROM saved_roles
+      ) act WHERE act.user_id IN (${endUserIds})`),
+    assessmentsCompleted: scalar(`SELECT COUNT(*) AS n FROM assessment_attempts WHERE status = 'completed' AND user_id IN (${endUserIds})`),
+    assessmentsInProgress: scalar(`SELECT COUNT(*) AS n FROM assessment_attempts WHERE status = 'in_progress' AND user_id IN (${endUserIds})`),
+    planItems: scalar(`SELECT COUNT(*) AS n FROM development_plan_items WHERE user_id IN (${endUserIds})`),
+    usersWithPlan: scalar(`SELECT COUNT(DISTINCT user_id) AS n FROM development_plan_items WHERE user_id IN (${endUserIds})`),
+    evidenceItems: scalar(`SELECT COUNT(*) AS n FROM evidence_items WHERE user_id IN (${endUserIds})`),
+    savedRoles: scalar(`SELECT COUNT(*) AS n FROM saved_roles WHERE user_id IN (${endUserIds})`),
+    savedComparisons: scalar(`SELECT COUNT(*) AS n FROM saved_comparisons WHERE user_id IN (${endUserIds})`)
+  };
+
+  // Derive role readiness and skill-gap frequency from completed assessments (reusing the shared
+  // computeReadiness so admin figures match what each user sees).
+  const completed = db.prepare(`SELECT * FROM assessment_attempts WHERE status = 'completed' AND user_id IN (${endUserIds})`).all();
+  const roleTitle = {};
+  const roleAgg = {};   // roleId -> { attempts, percentSum, gapSum }
+  const gapAgg = {};    // skillId -> { code, name, assessed, gaps }
+  for (const a of completed) {
+    const r = computeReadiness(a);
+    if (!roleTitle[a.role_profile_id]) roleTitle[a.role_profile_id] = db.prepare(`SELECT title FROM role_profiles WHERE id = ?`).get(a.role_profile_id)?.title || 'Unknown role';
+    const ra = roleAgg[a.role_profile_id] || (roleAgg[a.role_profile_id] = { attempts: 0, percentSum: 0, gapSum: 0 });
+    ra.attempts += 1; ra.percentSum += r.percent; ra.gapSum += r.gap;
+    for (const d of r.details) {
+      const g = gapAgg[d.sfiaSkillId] || (gapAgg[d.sfiaSkillId] = { code: d.skillCode, name: d.skillName, assessed: 0, gaps: 0 });
+      g.assessed += 1;
+      if (d.status === 'gap') g.gaps += 1;
+    }
+  }
+
+  const roleReadiness = Object.entries(roleAgg).map(([id, a]) => ({
+    roleId: Number(id), title: roleTitle[id], attempts: a.attempts,
+    avgPercent: Math.round(a.percentSum / a.attempts), avgGaps: Math.round((a.gapSum / a.attempts) * 10) / 10
+  })).sort((x, y) => y.attempts - x.attempts || y.avgPercent - x.avgPercent);
+
+  const assessmentGaps = Object.values(gapAgg).filter(g => g.gaps > 0).map(g => ({
+    skillCode: g.code, skillName: g.name, assessed: g.assessed, gaps: g.gaps,
+    gapRate: Math.round((g.gaps / g.assessed) * 100)
+  })).sort((x, y) => y.gaps - x.gaps || y.gapRate - x.gapRate).slice(0, 15);
+
+  // Where the org is actively investing development effort (development-plan items by skill).
+  const planFocus = db.prepare(`
+    SELECT sk.skill_code, sk.skill_name,
+           COUNT(*) AS items,
+           COUNT(DISTINCT dpi.user_id) AS users,
+           SUM(CASE WHEN dpi.status = 'in_progress' THEN 1 ELSE 0 END) AS in_progress,
+           SUM(CASE WHEN dpi.status = 'done' THEN 1 ELSE 0 END) AS done
+    FROM development_plan_items dpi
+    JOIN sfia_skills sk ON sk.id = dpi.sfia_skill_id
+    WHERE dpi.user_id IN (${endUserIds})
+    GROUP BY dpi.sfia_skill_id
+    ORDER BY items DESC, users DESC
+    LIMIT 15
+  `).all();
+
+  res.json({ summary, roleReadiness, assessmentGaps, planFocus });
 });
 
 module.exports = router;
