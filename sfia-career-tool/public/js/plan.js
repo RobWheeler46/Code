@@ -23,6 +23,7 @@ function planItemCard(it) {
       </div>
       ${it.learning && it.learning.length ? `<div><span class="muted" style="font-size:0.8rem;">Suggested learning:</span> ${it.learning.map(l => `<a href="${escapeHtml(l.url || '#')}" target="_blank" rel="noopener">${escapeHtml(l.title)}</a>`).join(' · ')}</div>` : ''}
       <div class="actions-row">
+        <a class="btn btn-secondary btn-sm" href="evidence.html?skill=${it.sfia_skill_id}">Add evidence</a>
         <a class="btn btn-secondary btn-sm" href="role.html?id=${it.target_role_profile_id || ''}" ${it.target_role_profile_id ? '' : 'style="display:none;"'}>View role</a>
         <button class="btn btn-secondary btn-sm" data-remove="${it.id}" type="button">Remove</button>
       </div>

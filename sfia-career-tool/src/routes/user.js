@@ -279,4 +279,45 @@ router.delete('/development-plan/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// Active SFIA skills for pickers (e.g. the evidence skill selector). Lightweight, logged-in users only.
+router.get('/skills', (req, res) => {
+  res.json(db.prepare(`SELECT id, skill_code, skill_name FROM sfia_skills WHERE status = 'active' ORDER BY skill_code`).all());
+});
+
+// ---- Evidence portfolio (FRD Phase-2 Evidence) ----
+
+router.get('/evidence', (req, res) => {
+  res.json(db.prepare(`
+    SELECT e.id, e.sfia_skill_id, e.title, e.description, e.url, e.created_at,
+           sk.skill_code, sk.skill_name
+    FROM evidence_items e JOIN sfia_skills sk ON sk.id = e.sfia_skill_id
+    WHERE e.user_id = ?
+    ORDER BY sk.skill_code, e.created_at DESC
+  `).all(req.user.id));
+});
+
+router.post('/evidence', (req, res) => {
+  const { sfiaSkillId, title, description, url } = req.body || {};
+  if (!sfiaSkillId || !title) return res.status(400).json({ error: 'A skill and a title are required.' });
+  const skill = db.prepare(`SELECT id FROM sfia_skills WHERE id = ?`).get(sfiaSkillId);
+  if (!skill) return res.status(404).json({ error: 'Skill not found.' });
+  const result = db.prepare(`INSERT INTO evidence_items (user_id, sfia_skill_id, title, description, url) VALUES (?, ?, ?, ?, ?)`)
+    .run(req.user.id, sfiaSkillId, String(title).trim(), description || null, url || null);
+  res.status(201).json({ ok: true, id: result.lastInsertRowid });
+});
+
+router.patch('/evidence/:id', (req, res) => {
+  const item = db.prepare(`SELECT * FROM evidence_items WHERE id = ? AND user_id = ?`).get(req.params.id, req.user.id);
+  if (!item) return res.status(404).json({ error: 'Evidence not found.' });
+  const { title, description, url } = req.body || {};
+  db.prepare(`UPDATE evidence_items SET title = ?, description = ?, url = ?, updated_at = datetime('now') WHERE id = ?`)
+    .run(title !== undefined ? String(title).trim() : item.title, description !== undefined ? description : item.description, url !== undefined ? url : item.url, item.id);
+  res.json({ ok: true });
+});
+
+router.delete('/evidence/:id', (req, res) => {
+  db.prepare(`DELETE FROM evidence_items WHERE id = ? AND user_id = ?`).run(req.params.id, req.user.id);
+  res.json({ ok: true });
+});
+
 module.exports = router;

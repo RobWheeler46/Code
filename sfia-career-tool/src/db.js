@@ -448,4 +448,22 @@ CREATE TABLE IF NOT EXISTS development_plan_items (
 CREATE INDEX IF NOT EXISTS idx_development_plan_user ON development_plan_items(user_id, status);
 `);
 
+// Phase 2 feature: evidence capture (FRD Phase-2 "Evidence"). A personal, reusable portfolio of evidence
+// items, each demonstrating a SFIA skill (e.g. a project, a review, a document). Referenced when
+// self-assessing or building a development plan. Additive table.
+db.exec(`
+CREATE TABLE IF NOT EXISTS evidence_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  sfia_skill_id INTEGER NOT NULL REFERENCES sfia_skills(id),
+  title TEXT NOT NULL,
+  description TEXT,
+  url TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_user ON evidence_items(user_id, sfia_skill_id);
+`);
+
 module.exports = db;

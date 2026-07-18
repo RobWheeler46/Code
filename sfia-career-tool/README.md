@@ -269,8 +269,14 @@ with Railway's env vars injected and can't reach a volume that only exists insid
   done), notes, and any matching learning suggestions. Items are added with one click from an **assessment
   gap** ("Add to plan" on the readiness results) or a **role-comparison gap** ("Add to development plan" on
   a gap row), or tracked on the plan page (`plan.html`); a summary shows on the dashboard. Table:
-  `development_plan_items`. Still to come in Phase 2+: evidence capture, sharing with managers/mentors/
-  coaches, the AI Career Coach (Parts F&ndash;I), and aggregated organisational reporting.
+  `development_plan_items`.
+  Also built (4th Phase-2 feature): **evidence capture** &mdash; a personal, reusable portfolio
+  (`evidence.html`) where a signed-in user records evidence items (title, description, optional link) each
+  demonstrating a SFIA skill, grouped by skill with inline edit. Reachable from a development-plan item's
+  "Add evidence" (which pre-selects the skill) and summarised on the dashboard. Tables: `evidence_items`;
+  a lightweight `/api/user/skills` endpoint backs the skill picker. Still to come in Phase 2+: sharing with
+  managers/mentors/coaches, aggregated organisational reporting, and the AI Career Coach (Parts F&ndash;I,
+  the only piece needing an LLM &mdash; deliberately left until last).
 - **FRD v0.11's full multi-version SFIA support is not built.** Only the MVP-foundation slice (data already
   version-scoped, version badge shown on role profiles) is in place. Admin version-lifecycle management
   (draft/active/published-default/legacy/archived), cross-version comparison blocking, and the migration
