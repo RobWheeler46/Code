@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AI Career Coach - Career Explorer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header id="app-nav" class="app-nav"></header>
+  <div class="container narrow">
+    <div class="card coach-coming-soon" style="text-align:center; max-width:560px; margin:2rem auto;">
+      <div class="coach-badge" id="coach-icon" aria-hidden="true"></div>
+      <h1 style="margin:0.4rem 0;">AI Career Coach</h1>
+      <p class="pill" style="margin-bottom:1rem;">Coming soon</p>
+      <p class="muted">The Career Coach will give you plain-English, context-aware guidance &mdash; explaining what a role needs, what a skill gap means in practice, and what to focus on next &mdash; drawn from your comparisons, assessments and development plan.</p>
+      <p class="muted">It isn't switched on yet. In the meantime, you can already explore roles, compare two roles side by side, run a guided self-assessment, and build a development plan.</p>
+      <div class="actions-row" style="justify-content:center;">
+        <a class="btn btn-primary" href="index.html">Explore roles</a>
+        <a class="btn btn-secondary" href="compare.html">Compare roles</a>
+      </div>
+    </div>
+  </div>
+  <script src="js/api.js"></script>
+  <script src="js/nav.js"></script>
+  <script>
+    renderPublicNav();
+    document.getElementById('coach-icon').innerHTML = svgIcon('coach', { className: 'coach-badge-svg' });
+  </script>
+</body>
+</html>
