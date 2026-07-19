@@ -491,6 +491,7 @@ CREATE INDEX IF NOT EXISTS idx_share_links_user ON share_links(user_id);
 db.exec(`
 CREATE TABLE IF NOT EXISTS interview_questions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  external_id TEXT UNIQUE,
   sfia_version_id INTEGER REFERENCES sfia_versions(id),
   sfia_skill_id INTEGER NOT NULL REFERENCES sfia_skills(id),
   sfia_level_id INTEGER NOT NULL REFERENCES sfia_levels(id),
@@ -521,5 +522,13 @@ CREATE TABLE IF NOT EXISTS generated_interview_packs (
 
 CREATE INDEX IF NOT EXISTS idx_generated_packs_role ON generated_interview_packs(role_profile_id);
 `);
+
+// external_id lets the question-bank importer upsert idempotently (natural key = the workbook's
+// Question_ID). Guarded ALTER for DBs whose interview_questions table predates this column.
+const interviewQuestionColumns = db.prepare(`PRAGMA table_info(interview_questions)`).all().map(c => c.name);
+if (!interviewQuestionColumns.includes('external_id')) {
+  db.exec(`ALTER TABLE interview_questions ADD COLUMN external_id TEXT`);
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_interview_questions_external ON interview_questions(external_id)`);
+}
 
 module.exports = db;

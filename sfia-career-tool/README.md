@@ -307,6 +307,16 @@ with Railway's env vars injected and can't reach a volume that only exists insid
   rather than a new permission tier); the alternative-group model is simplified to a `question_type`
   (`strength_based`/`alternative`) per skill+level; pack templates/branding profiles and the separate
   Question Bank Approver role are not separate entities yet.
+  **Question bank content (v0.25 import):** the bank is populated from `SFIA_9_Interview_Question_Bank_Import_v0_25.xlsx`
+  &mdash; 3360 strength-based questions (5 variants A&ndash;E per SFIA skill+level, each with "what good
+  looks like", evidence indicators and probes), extracted to committed `src/data/interview-questions.json`
+  and loaded by `src/import-interview-questions.js` (idempotent upsert on the workbook's `Question_ID` via
+  the `interview_questions.external_id` column). Variants A/B/C become the primary strength-based pool and
+  D/E the alternative pool, so the generator draws a randomised real question for both slots; the generic
+  fallback now only appears for skill+level combinations the bank doesn't cover (e.g. a level outside a
+  skill's official SFIA range, or the 13 non-SFIA-9 codes). Imported as `approved` so they are immediately
+  usable. Run `node src/import-interview-questions.js` to (re)load; it reads the committed JSON, so it works
+  the same locally and in the Railway container.
   Still to come in Phase 2+: the AI Career Coach (Parts F&ndash;I, the only piece needing an LLM &mdash;
   deliberately left until last). The v0.25 improved-comparison redesign and the v0.26 change-password
   feature are specified but not yet built (deferred by the user in favour of this generator).
