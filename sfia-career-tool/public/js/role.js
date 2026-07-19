@@ -1,19 +1,3 @@
-function renderSkillsLandscape(skills) {
-  return `
-    <div class="card">
-      <h2>Skills landscape</h2>
-      <p class="muted">Select a skill to jump to its full detail below.</p>
-      <div class="landscape-chips">
-        ${skills.map(s => `
-          <a href="#skill-${s.sfia_skill_id}" class="landscape-chip" data-jump-skill="${s.sfia_skill_id}">
-            ${escapeHtml(s.skill_name)} <span class="chip-level">L${s.level_number}</span>
-          </a>
-        `).join('')}
-      </div>
-    </div>
-  `;
-}
-
 const SKILL_TABLE_GROUPINGS = {
   none: { label: 'No grouping', groupOf: () => '', order: () => 0 },
   level: { label: 'Required level', groupOf: s => `Level ${s.level_number}`, order: s => s.level_number },
@@ -136,18 +120,6 @@ function renderLearningPreview(role) {
   `;
 }
 
-function renderNextSteps(role) {
-  return `
-    <div class="card">
-      <h2>What next?</h2>
-      <div class="actions-row">
-        <a class="btn btn-primary" href="compare.html?current=${role.id}">Compare this role</a>
-        <a class="btn btn-secondary" href="compare.html?aspirational=${role.id}">Select as aspirational role</a>
-      </div>
-    </div>
-  `;
-}
-
 document.addEventListener('DOMContentLoaded', async () => {
   renderPublicNav();
   const id = new URLSearchParams(location.search).get('id');
@@ -180,37 +152,41 @@ document.addEventListener('DOMContentLoaded', async () => {
       </div>
       <p class="hero-purpose rich-text">${escapeHtml(role.role_description || '')}</p>
       <div class="hero-actions">
-        <a class="btn btn-primary" href="compare.html?current=${role.id}">Compare role</a>
-        <button class="btn btn-secondary" id="start-assessment-btn" type="button" style="display:none;">Start assessment</button>
-        <button class="btn btn-secondary" id="save-role-btn" type="button" style="display:none;">Save role</button>
+        <a class="btn btn-primary" href="compare.html?current=${role.id}">${svgIcon('compare', { className: 'btn-icon' })} Compare role</a>
+        <button class="btn btn-secondary" id="start-assessment-btn" type="button" style="display:none;">${svgIcon('assess', { className: 'btn-icon' })} Start assessment</button>
+        <details class="more-menu">
+          <summary class="btn btn-secondary">More actions ${svgIcon('more', { className: 'btn-icon' })}</summary>
+          <div class="more-menu-panel">
+            <button id="save-role-btn" type="button" style="display:none;">Save role</button>
+            <a href="compare.html?aspirational=${role.id}">Set as target role</a>
+            <a href="coach.html">Ask the Coach</a>
+          </div>
+        </details>
       </div>
     </div>
 
     <div class="mobile-sticky-actions" aria-label="Primary actions">
-      <a class="btn btn-primary" href="compare.html?current=${role.id}">Compare</a>
-      <a class="btn btn-secondary" href="compare.html?aspirational=${role.id}">Select aspirational</a>
+      <a class="btn btn-primary" href="compare.html?current=${role.id}">Compare role</a>
     </div>
 
     <div class="container">
-      ${role.skills.length > 0 ? renderSkillsLandscape(role.skills) : ''}
       ${role.skills.length > 0 ? renderSkillsComparisonTable(role.skills) : ''}
 
       <div class="card">
         <h2>Full SFIA detail</h2>
+        <p class="muted">Expand any skill to see what it looks like at the required level.</p>
         ${role.skills.length === 0 ? '<p class="muted">No skills mapped yet.</p>' : role.skills.map(renderSkillDetail).join('')}
       </div>
 
       ${renderProgressionPanel(role)}
       ${renderLearningPreview(role)}
-      ${renderNextSteps(role)}
     </div>
   `;
 
-  container.querySelectorAll('.landscape-chip[data-jump-skill]').forEach(link => {
-    link.addEventListener('click', () => {
-      const target = document.getElementById(`skill-${link.dataset.jumpSkill}`);
-      if (target) target.open = true;
-    });
+  // Close the More-actions menu when clicking elsewhere.
+  document.addEventListener('click', (e) => {
+    const menu = container.querySelector('.more-menu[open]');
+    if (menu && !menu.contains(e.target)) menu.open = false;
   });
 
   if (role.skills.length > 0) {

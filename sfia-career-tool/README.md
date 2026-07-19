@@ -329,9 +329,23 @@ with Railway's env vars injected and can't reach a volume that only exists insid
   confirmation *email* is recorded as a pending notification in the audit log rather than sent (no mail
   service is configured), and cross-device session invalidation isn't possible with the in-memory session
   store (only the current session id is rotated); SSO redirect is N/A (no external IdP in this build).
+  Also built (FRD v0.25 + v0.27 UX simplification): the **role comparison** screen is now a guided
+  experience &mdash; direction-of-travel header, plain-English "what changes" summary, **Top 3 differences**,
+  a filterable gap list (priority / level uplifts / new skills / aligned / strengths) with a **side-by-side
+  selected-gap detail** (current vs target SFIA level descriptions, what-changes-in-practice, evidence,
+  learning, actions), desktop split-view / mobile stacked cards, and an action footer (start assessment,
+  ask coach, export). Priority is **derived from gap size** (no importance field was reintroduced), and it's
+  frontend-only (the compare API already returned both-side level detail). **Nav & flow simplification
+  (FR-UX1/2/6):** public navigation is trimmed to four items (Home, Roles, Compare, **Coach**), with
+  Pathways and Assessment surfaced contextually and Admin moved to a discreet auth-slot link; the homepage
+  leads with three primary choices (Find a role, Compare roles, Ask the Coach); the role page has a single
+  primary action (Compare) plus Start assessment, with other actions in a **More actions** menu, and keeps
+  progressive-disclosure expandable SFIA detail. **Imagery/icons (FR-UX4/5):** a shared `svgIcon()` helper +
+  consistent inline-SVG icon set (nav, homepage, compare, role, results, coach), decorative images marked
+  `aria-hidden`. A **Coach** page (`coach.html`) is a clearly-labelled "coming soon" stub until the LLM
+  feature is built.
   Still to come in Phase 2+: the AI Career Coach (Parts F&ndash;I, the only piece needing an LLM &mdash;
-  deliberately left until last), and the v0.25 improved-comparison redesign (specified with wireframes but
-  not yet built).
+  deliberately left until last).
 - **FRD v0.11's full multi-version SFIA support is not built.** Only the MVP-foundation slice (data already
   version-scoped, version badge shown on role profiles) is in place. Admin version-lifecycle management
   (draft/active/published-default/legacy/archived), cross-version comparison blocking, and the migration

@@ -158,7 +158,8 @@ async function renderResults(id) {
         </tbody>
       </table>
       <div class="actions-row">
-        <a class="btn btn-secondary" href="plan.html">My development plan</a>
+        <a class="btn btn-primary" href="plan.html">${svgIcon('plan', { className: 'btn-icon' })} My development plan</a>
+        <a class="btn btn-secondary" href="coach.html">${svgIcon('coach', { className: 'btn-icon' })} Ask the Coach</a>
         <a class="btn btn-secondary" href="dashboard.html">Back to dashboard</a>
         <a class="btn btn-secondary" href="role.html?id=${r.role.id}">View role profile</a>
       </div>

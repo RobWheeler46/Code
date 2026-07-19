@@ -17,21 +17,23 @@ function renderHomeHero() {
 }
 
 function renderActionGrid() {
+  // FRD v0.27: three primary choices on the homepage — find a role, compare roles, ask the coach.
+  // Career pathways is surfaced contextually from role profiles and results rather than as a top choice.
   document.getElementById('action-grid').innerHTML = `
     <div class="action-grid">
       <a class="action-card" href="#roles-heading">
-        <span class="icon-tile">${ROLE_ICON}</span>
-        <span class="action-body"><strong>Browse roles</strong><span>Explore roles and find the right fit.</span></span>
+        <span class="icon-tile">${svgIcon('roles')}</span>
+        <span class="action-body"><strong>Find a role</strong><span>Browse roles and find the right fit.</span></span>
         <span class="chev">&rsaquo;</span>
       </a>
       <a class="action-card" href="compare.html">
-        <span class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/></svg></span>
-        <span class="action-body"><strong>Compare roles</strong><span>Compare roles side by side.</span></span>
+        <span class="icon-tile">${svgIcon('compare')}</span>
+        <span class="action-body"><strong>Compare roles</strong><span>See what changes between two roles.</span></span>
         <span class="chev">&rsaquo;</span>
       </a>
-      <a class="action-card" href="pathways.html">
-        <span class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"/><circle cx="18" cy="6" r="2"/><path d="M8 18h6a4 4 0 0 0 4-4V8"/></svg></span>
-        <span class="action-body"><strong>Career pathways</strong><span>Discover pathways to reach your goals.</span></span>
+      <a class="action-card" href="coach.html">
+        <span class="icon-tile">${svgIcon('coach')}</span>
+        <span class="action-body"><strong>Ask the Coach</strong><span>Get plain-English career guidance.</span></span>
         <span class="chev">&rsaquo;</span>
       </a>
     </div>

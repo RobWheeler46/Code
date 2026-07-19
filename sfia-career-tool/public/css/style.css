@@ -684,3 +684,20 @@ textarea { min-height: 5rem; resize: vertical; }
 .level-block-target { border-left: 3px solid var(--teal); padding-left: 0.75rem; }
 .gap-detail-actions { margin-top: 1rem; }
 .compare-footer { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+
+/* v0.27 FR-UX2: "More actions" dropdown menu (progressive disclosure of secondary actions) */
+.more-menu { position: relative; display: inline-block; }
+.more-menu > summary { list-style: none; cursor: pointer; }
+.more-menu > summary::-webkit-details-marker { display: none; }
+.more-menu-panel {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 30;
+  background: #fff; border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(11,31,58,0.12); min-width: 200px; padding: 0.35rem;
+  display: flex; flex-direction: column;
+}
+.more-menu-panel > a, .more-menu-panel > button {
+  text-align: left; background: none; border: none; color: var(--text);
+  font: inherit; font-size: 0.9rem; padding: 0.55rem 0.7rem; border-radius: 8px;
+  text-decoration: none; cursor: pointer; min-height: 40px;
+}
+.more-menu-panel > a:hover, .more-menu-panel > button:hover { background: var(--sky); color: var(--teal-dark); }
