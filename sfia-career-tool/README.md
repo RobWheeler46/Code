@@ -317,9 +317,21 @@ with Railway's env vars injected and can't reach a volume that only exists insid
   skill's official SFIA range, or the 13 non-SFIA-9 codes). Imported as `approved` so they are immediately
   usable. Run `node src/import-interview-questions.js` to (re)load; it reads the committed JSON, so it works
   the same locally and in the Railway container.
+  Also built (FRD v0.26): **self-service change password** &mdash; any signed-in local account (admin or
+  end user) can change its own password from `change-password.html` (linked in both the public nav-auth
+  slot and the admin nav). `POST /api/user/change-password` verifies the current password, enforces the
+  policy in `src/lib/passwordPolicy.js` (&ge;12 chars, not a common password, must not contain the user's
+  name/email, must differ from the current and last 5 passwords &mdash; the last 5 held as hashes in a new
+  `password_history` table), rate-limits repeated attempts, audits success and failed attempts, and rotates
+  the session id so the change invalidates the pre-change session while keeping the user signed in on this
+  device. `GET /api/user/password-policy` feeds the on-screen rules so they always match enforcement. New
+  columns `users.password_updated_at` / `users.force_password_change`. **Gaps vs the FRD:** the required
+  confirmation *email* is recorded as a pending notification in the audit log rather than sent (no mail
+  service is configured), and cross-device session invalidation isn't possible with the in-memory session
+  store (only the current session id is rotated); SSO redirect is N/A (no external IdP in this build).
   Still to come in Phase 2+: the AI Career Coach (Parts F&ndash;I, the only piece needing an LLM &mdash;
-  deliberately left until last). The v0.25 improved-comparison redesign and the v0.26 change-password
-  feature are specified but not yet built (deferred by the user in favour of this generator).
+  deliberately left until last), and the v0.25 improved-comparison redesign (specified with wireframes but
+  not yet built).
 - **FRD v0.11's full multi-version SFIA support is not built.** Only the MVP-foundation slice (data already
   version-scoped, version badge shown on role profiles) is in place. Admin version-lifecycle management
   (draft/active/published-default/legacy/archived), cross-version comparison blocking, and the migration

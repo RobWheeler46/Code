@@ -531,4 +531,19 @@ if (!interviewQuestionColumns.includes('external_id')) {
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_interview_questions_external ON interview_questions(external_id)`);
 }
 
+// Change password feature (FRD v0.26): track when a local password was last changed and whether a change
+// is forced at next login, and keep a short history of previous hashes for reuse prevention. Additive.
+const userColumns = db.prepare(`PRAGMA table_info(users)`).all().map(c => c.name);
+if (!userColumns.includes('password_updated_at')) db.exec(`ALTER TABLE users ADD COLUMN password_updated_at TEXT`);
+if (!userColumns.includes('force_password_change')) db.exec(`ALTER TABLE users ADD COLUMN force_password_change INTEGER NOT NULL DEFAULT 0`);
+db.exec(`
+CREATE TABLE IF NOT EXISTS password_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  password_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_password_history_user ON password_history(user_id, created_at);
+`);
+
 module.exports = db;

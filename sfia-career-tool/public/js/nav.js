@@ -52,6 +52,7 @@ async function updatePublicNavAuth() {
   if (me) {
     slot.innerHTML = `
       <a href="dashboard.html">My dashboard</a>
+      <a href="change-password.html">Change password</a>
       <a href="#" id="nav-signout">Sign out</a>
     `;
     slot.querySelector('#nav-signout').addEventListener('click', async (e) => {
@@ -100,6 +101,7 @@ async function requireAdminNav() {
       <nav>
         <a href="index.html" target="_blank">View public site</a>
         <span class="user-info">${escapeHtml(me.firstName)} ${escapeHtml(me.lastName)} (${me.roles.join(', ')})</span>
+        <a href="change-password.html">Change password</a>
         <a href="#" id="logout-link">Log out</a>
       </nav>
     `;

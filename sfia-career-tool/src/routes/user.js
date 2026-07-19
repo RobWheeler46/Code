@@ -3,8 +3,16 @@ const express = require('express');
 const db = require('../db');
 const crypto = require('crypto');
 const { requireUser } = require('../lib/middleware');
+const { hashPassword, verifyPassword, logAudit } = require('../lib/helpers');
 const { learningResourcesForSkill } = require('../lib/gapAnalysis');
 const { roleRequiredSkills, skillLevelOptions, computeReadiness, developmentPlanItems } = require('../lib/assessment');
+const { HISTORY_DEPTH, POLICY_RULES, MIN_LENGTH, validatePasswordString } = require('../lib/passwordPolicy');
+
+// Simple in-memory rate limiter for password-change attempts (per user). MemoryStore-friendly; resets on
+// success or after the window. Deters brute-forcing the current password from a hijacked session.
+const changePwAttempts = new Map();
+const CHANGE_PW_MAX_ATTEMPTS = 5;
+const CHANGE_PW_WINDOW_MS = 15 * 60 * 1000;
 
 const router = express.Router();
 router.use(requireUser);
@@ -297,6 +305,75 @@ router.post('/share', (req, res) => {
 router.delete('/share/:id', (req, res) => {
   db.prepare(`DELETE FROM share_links WHERE id = ? AND user_id = ?`).run(req.params.id, req.user.id);
   res.json({ ok: true });
+});
+
+// ---- Change password (FRD v0.26) ----
+
+// The policy rules to show the user (kept in sync with server enforcement via the shared policy module).
+router.get('/password-policy', (req, res) => {
+  res.json({ minLength: MIN_LENGTH, rules: POLICY_RULES });
+});
+
+router.post('/change-password', (req, res) => {
+  const user = db.prepare(`SELECT * FROM users WHERE id = ?`).get(req.user.id);
+  // Only local-credential accounts can change a password here (no external SSO in this build).
+  if (!user || !user.password_hash) {
+    return res.status(400).json({ error: 'This account is managed elsewhere and cannot change its password here.' });
+  }
+
+  // Rate limit repeated attempts (mostly guards the current-password check).
+  const now = Date.now();
+  const rl = changePwAttempts.get(user.id);
+  if (rl && rl.count >= CHANGE_PW_MAX_ATTEMPTS && now < rl.resetAt) {
+    return res.status(429).json({ error: 'Too many attempts. Please wait a few minutes and try again.' });
+  }
+  const recordFailure = () => {
+    const cur = changePwAttempts.get(user.id);
+    if (!cur || now >= cur.resetAt) changePwAttempts.set(user.id, { count: 1, resetAt: now + CHANGE_PW_WINDOW_MS });
+    else cur.count += 1;
+  };
+
+  const { currentPassword, newPassword, confirmPassword } = req.body || {};
+
+  if (!currentPassword || !verifyPassword(currentPassword, user.password_hash)) {
+    recordFailure();
+    logAudit({ userId: user.id, action: 'change_password_failed', entityType: 'user', entityId: user.id, ipAddress: req.ip, userAgent: req.get('user-agent'), details: { reason: 'current_password_incorrect' } });
+    return res.status(400).json({ error: 'Your current password is incorrect.' });
+  }
+  if (!newPassword || newPassword !== confirmPassword) {
+    return res.status(400).json({ error: 'Your new password and confirmation do not match.' });
+  }
+  const check = validatePasswordString(newPassword, { email: user.email, firstName: user.first_name, lastName: user.last_name });
+  if (!check.ok) return res.status(400).json({ error: check.error });
+  if (verifyPassword(newPassword, user.password_hash)) {
+    return res.status(400).json({ error: 'Your new password must be different from your current password.' });
+  }
+  // Reuse prevention against the last HISTORY_DEPTH passwords.
+  const history = db.prepare(`SELECT password_hash FROM password_history WHERE user_id = ? ORDER BY created_at DESC LIMIT ?`).all(user.id, HISTORY_DEPTH);
+  if (history.some(h => verifyPassword(newPassword, h.password_hash))) {
+    return res.status(400).json({ error: `Please choose a password you have not used in your last ${HISTORY_DEPTH} passwords.` });
+  }
+
+  // Apply: keep the outgoing hash in history, set the new one, trim history.
+  const newHash = hashPassword(newPassword);
+  db.prepare(`INSERT INTO password_history (user_id, password_hash) VALUES (?, ?)`).run(user.id, user.password_hash);
+  db.prepare(`UPDATE users SET password_hash = ?, password_updated_at = datetime('now'), force_password_change = 0, updated_at = datetime('now') WHERE id = ?`).run(newHash, user.id);
+  db.prepare(`DELETE FROM password_history WHERE user_id = ? AND id NOT IN (SELECT id FROM password_history WHERE user_id = ? ORDER BY created_at DESC LIMIT ?)`).run(user.id, user.id, HISTORY_DEPTH);
+
+  changePwAttempts.delete(user.id);
+  logAudit({ userId: user.id, action: 'change_password', entityType: 'user', entityId: user.id, ipAddress: req.ip, userAgent: req.get('user-agent') });
+  // Notification: no email service is configured in this build, so the confirmation email is recorded as a
+  // pending notification rather than sent. (FRD v0.26 requires a notification on success.)
+  logAudit({ userId: user.id, action: 'notify_password_changed', entityType: 'user', entityId: user.id, details: { channel: 'email', status: 'not_sent_no_mailer' } });
+
+  // Rotate the session id so the change invalidates the pre-change session, keeping the user signed in on
+  // this device. (Enumerating and killing other devices' sessions isn't possible with the in-memory store.)
+  const userId = user.id;
+  req.session.regenerate((err) => {
+    if (err) return res.status(500).json({ error: 'Password changed, but refreshing your session failed. Please sign in again.' });
+    req.session.userId = userId;
+    req.session.save(() => res.json({ ok: true }));
+  });
 });
 
 module.exports = router;
