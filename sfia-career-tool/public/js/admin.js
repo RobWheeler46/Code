@@ -72,6 +72,7 @@ const TABS = {
   review: renderReviewTab,
   audit: renderAuditTab,
   endusers: renderEndUsersTab,
+  interview: renderInterviewQuestionsTab,
   orginsights: renderOrgInsightsTab,
   users: renderUsersTab
 };
@@ -144,7 +145,10 @@ async function renderRolesTab() {
             <td>${escapeHtml(r.grade || '')}</td>
             <td>${statusBadge(r.status)}</td>
             <td>${formatDateTime(r.updated_at)}</td>
-            <td><button class="btn btn-secondary btn-sm" data-edit-role="${r.id}">Edit</button></td>
+            <td>
+              <button class="btn btn-secondary btn-sm" data-edit-role="${r.id}">Edit</button>
+              ${r.status === 'published' ? `<button class="btn btn-secondary btn-sm" data-gen-pack="${r.id}" data-title="${escapeHtml(r.title)}">Interview pack</button>` : ''}
+            </td>
           </tr>
         `).join('')}
       </table>
@@ -155,6 +159,37 @@ async function renderRolesTab() {
   content.querySelectorAll('[data-edit-role]').forEach(btn => {
     btn.addEventListener('click', () => renderRoleEditor(btn.dataset.editRole));
   });
+  content.querySelectorAll('[data-gen-pack]').forEach(btn => {
+    btn.addEventListener('click', () => generateInterviewPack(btn.dataset.genPack, btn));
+  });
+}
+
+// Generate + download a strength-based interview pack (.docx) for a published role. Uses a raw fetch
+// because the Api helper only handles JSON, whereas this returns a binary Word document.
+async function generateInterviewPack(roleId, btn) {
+  const original = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Generating…';
+  try {
+    const res = await fetch(`/api/admin/role-profiles/${roleId}/interview-pack`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    if (!res.ok) {
+      let msg = `Request failed (${res.status})`;
+      try { msg = (await res.json()).error || msg; } catch (e) { /* non-JSON */ }
+      throw new Error(msg);
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="([^"]+)"/);
+    const filename = match ? match[1] : `interview-pack_${roleId}.docx`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+    a.remove(); URL.revokeObjectURL(url);
+    btn.textContent = 'Downloaded ✓';
+    setTimeout(() => { btn.textContent = original; btn.disabled = false; }, 2500);
+  } catch (err) {
+    alert('Could not generate interview pack: ' + err.message);
+    btn.textContent = original; btn.disabled = false;
+  }
 }
 
 // ---------- Role profile creation wizard (FRD v0.20 admin wireframe) ----------
@@ -1505,6 +1540,134 @@ async function renderEndUsersTab() {
       await Api.patch(`/api/admin/end-users/${sel.dataset.euStatus}`, { accountStatus: sel.value });
     });
   });
+}
+
+// Interview questions (FRD v0.24): manage the strength-based interview question bank used by the
+// interview pack generator. Editing gated by canEdit; approve/retire gated by canPublish.
+let iqEditingId = null;
+
+async function renderInterviewQuestionsTab() {
+  const content = document.getElementById('tab-content');
+  const activeSkills = (refData.skills || []).filter(s => s.status !== 'inactive');
+  const levels = refData.levels || [];
+  const STATUS_FILTER = window._iqStatusFilter || '';
+  const SKILL_FILTER = window._iqSkillFilter || '';
+
+  const params = new URLSearchParams();
+  if (STATUS_FILTER) params.set('status', STATUS_FILTER);
+  if (SKILL_FILTER) params.set('skillId', SKILL_FILTER);
+  const questions = await Api.get('/api/admin/interview-questions' + (params.toString() ? '?' + params.toString() : ''));
+
+  const skillOptions = activeSkills.map(s => `<option value="${s.id}">${escapeHtml(s.skill_code)} — ${escapeHtml(s.skill_name)}</option>`).join('');
+  const levelOptions = levels.map(l => `<option value="${l.id}">Level ${l.level_number}${l.level_name && l.level_name !== 'Level ' + l.level_number ? ' — ' + escapeHtml(l.level_name) : ''}</option>`).join('');
+  const statusPill = { draft: 'draft', approved: 'published', retired: 'archived' };
+
+  content.innerHTML = `
+    <div class="card">
+      <h2 id="iq-form-title">Add an interview question</h2>
+      <p class="muted" style="margin-top:0;">Questions become available to the interview pack generator only once <strong>approved</strong>. Where a skill+level has no approved question, packs use a clearly-flagged generic question.</p>
+      <div id="iq-form-alert"></div>
+      <div class="grid cols-2">
+        <div class="field"><label>SFIA skill</label><select id="iq-skill">${skillOptions}</select></div>
+        <div class="field"><label>Level</label><select id="iq-level">${levelOptions}</select></div>
+      </div>
+      <div class="grid cols-2">
+        <div class="field"><label>Question type</label><select id="iq-type">
+          <option value="strength_based">Strength-based (primary)</option>
+          <option value="alternative">Alternative</option>
+        </select></div>
+      </div>
+      <div class="field"><label>Question text</label><textarea id="iq-text" placeholder="Tell us about a time you…"></textarea></div>
+      <div class="field"><label>What good looks like (optional)</label><textarea id="iq-good" placeholder="Strong evidence shows…"></textarea></div>
+      <div class="field"><label>Suggested probes (optional)</label><textarea id="iq-probes" placeholder="What trade-offs did you make? Who did you influence?"></textarea></div>
+      <div class="actions-row">
+        <button class="btn btn-primary btn-sm" id="iq-save-btn" type="button">Add question</button>
+        <button class="btn btn-secondary btn-sm" id="iq-cancel-btn" type="button" style="display:none;">Cancel edit</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="filters-row">
+        <div class="field" style="margin-bottom:0;"><label>Filter by skill</label>
+          <select id="iq-filter-skill"><option value="">All skills</option>${activeSkills.map(s => `<option value="${s.id}" ${String(SKILL_FILTER) === String(s.id) ? 'selected' : ''}>${escapeHtml(s.skill_code)} — ${escapeHtml(s.skill_name)}</option>`).join('')}</select>
+        </div>
+        <div class="field" style="margin-bottom:0;"><label>Status</label>
+          <select id="iq-filter-status">${['', 'draft', 'approved', 'retired'].map(s => `<option value="${s}" ${STATUS_FILTER === s ? 'selected' : ''}>${s === '' ? 'All' : s}</option>`).join('')}</select>
+        </div>
+      </div>
+      <h2>Question bank (${questions.length})</h2>
+      ${questions.length === 0 ? '<div class="empty-state">No questions match. Add one above — approved questions feed the generator.</div>' : `
+      <table>
+        <tr><th>Skill</th><th>Level</th><th>Type</th><th>Question</th><th>Status</th><th>Used</th><th></th></tr>
+        ${questions.map(q => `
+          <tr>
+            <td>${escapeHtml(q.skill_code)}</td>
+            <td>L${q.level_number}</td>
+            <td>${q.question_type === 'alternative' ? 'Alt' : 'Primary'}</td>
+            <td style="max-width:340px;">${escapeHtml(q.question_text.length > 120 ? q.question_text.slice(0, 120) + '…' : q.question_text)}</td>
+            <td><span class="badge" data-status="${statusPill[q.status]}">${escapeHtml(q.status)}</span></td>
+            <td>${q.usage_count}</td>
+            <td style="white-space:nowrap;">
+              <button class="btn btn-secondary btn-sm" data-iq-edit="${q.id}">Edit</button>
+              ${me.canPublish && q.status !== 'approved' ? `<button class="btn btn-success btn-sm" data-iq-approve="${q.id}">Approve</button>` : ''}
+              ${me.canPublish && q.status !== 'retired' ? `<button class="btn btn-secondary btn-sm" data-iq-retire="${q.id}">Retire</button>` : ''}
+            </td>
+          </tr>
+        `).join('')}
+      </table>`}
+    </div>
+  `;
+
+  // Populate form when editing.
+  if (iqEditingId) {
+    const q = questions.find(x => x.id === iqEditingId);
+    if (q) {
+      document.getElementById('iq-form-title').textContent = `Edit question #${q.id}`;
+      document.getElementById('iq-skill').value = q.sfia_skill_id;
+      document.getElementById('iq-level').value = q.sfia_level_id;
+      document.getElementById('iq-type').value = q.question_type;
+      document.getElementById('iq-text').value = q.question_text;
+      document.getElementById('iq-good').value = q.what_good_looks_like || '';
+      document.getElementById('iq-probes').value = q.probe_prompts || '';
+      document.getElementById('iq-skill').disabled = true;
+      document.getElementById('iq-level').disabled = true;
+      document.getElementById('iq-save-btn').textContent = 'Save changes';
+      document.getElementById('iq-cancel-btn').style.display = '';
+    }
+  }
+
+  const saveBtn = document.getElementById('iq-save-btn');
+  saveBtn.addEventListener('click', async () => {
+    const alertBox = document.getElementById('iq-form-alert');
+    alertBox.innerHTML = '';
+    const payload = {
+      questionText: document.getElementById('iq-text').value,
+      whatGoodLooksLike: document.getElementById('iq-good').value || null,
+      probePrompts: document.getElementById('iq-probes').value || null,
+      questionType: document.getElementById('iq-type').value
+    };
+    try {
+      if (iqEditingId) {
+        await Api.patch(`/api/admin/interview-questions/${iqEditingId}`, payload);
+        iqEditingId = null;
+      } else {
+        await Api.post('/api/admin/interview-questions', {
+          ...payload,
+          sfiaSkillId: Number(document.getElementById('iq-skill').value),
+          sfiaLevelId: Number(document.getElementById('iq-level').value)
+        });
+      }
+      renderInterviewQuestionsTab();
+    } catch (err) {
+      alertBox.innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+    }
+  });
+  document.getElementById('iq-cancel-btn').addEventListener('click', () => { iqEditingId = null; renderInterviewQuestionsTab(); });
+  document.getElementById('iq-filter-skill').addEventListener('change', (e) => { window._iqSkillFilter = e.target.value; renderInterviewQuestionsTab(); });
+  document.getElementById('iq-filter-status').addEventListener('change', (e) => { window._iqStatusFilter = e.target.value; renderInterviewQuestionsTab(); });
+  content.querySelectorAll('[data-iq-edit]').forEach(b => b.addEventListener('click', () => { iqEditingId = Number(b.dataset.iqEdit); renderInterviewQuestionsTab(); }));
+  content.querySelectorAll('[data-iq-approve]').forEach(b => b.addEventListener('click', async () => { await Api.post(`/api/admin/interview-questions/${b.dataset.iqApprove}/approve`); renderInterviewQuestionsTab(); }));
+  content.querySelectorAll('[data-iq-retire]').forEach(b => b.addEventListener('click', async () => { await Api.post(`/api/admin/interview-questions/${b.dataset.iqRetire}/retire`); renderInterviewQuestionsTab(); }));
 }
 
 // Org insights (Phase 2): aggregated, privacy-preserving reporting over registered end-user activity.

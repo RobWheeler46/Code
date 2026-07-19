@@ -483,4 +483,43 @@ CREATE TABLE IF NOT EXISTS share_links (
 CREATE INDEX IF NOT EXISTS idx_share_links_user ON share_links(user_id);
 `);
 
+// Selected-user feature (FRD v0.24): Strength-Based Interview Pack Generator. An approvable question bank
+// holds strength-based interview questions aligned to a SFIA skill+level; a generated pack selects (with
+// randomisation) an approved question per skill mapped to a role, and produces a Word document. Only
+// approved (not draft/retired) questions are eligible; where none exists a generic fallback is used.
+// Additive tables.
+db.exec(`
+CREATE TABLE IF NOT EXISTS interview_questions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sfia_version_id INTEGER REFERENCES sfia_versions(id),
+  sfia_skill_id INTEGER NOT NULL REFERENCES sfia_skills(id),
+  sfia_level_id INTEGER NOT NULL REFERENCES sfia_levels(id),
+  question_type TEXT NOT NULL DEFAULT 'strength_based' CHECK(question_type IN ('strength_based','alternative')),
+  question_text TEXT NOT NULL,
+  what_good_looks_like TEXT,
+  probe_prompts TEXT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','approved','retired')),
+  usage_count INTEGER NOT NULL DEFAULT 0,
+  last_used_at TEXT,
+  created_by INTEGER REFERENCES users(id),
+  approved_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_interview_questions_lookup ON interview_questions(sfia_skill_id, sfia_level_id, status);
+
+CREATE TABLE IF NOT EXISTS generated_interview_packs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  role_profile_id INTEGER NOT NULL REFERENCES role_profiles(id),
+  sfia_version_id INTEGER REFERENCES sfia_versions(id),
+  generated_by INTEGER REFERENCES users(id),
+  question_ids TEXT,
+  skill_count INTEGER,
+  generated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_generated_packs_role ON generated_interview_packs(role_profile_id);
+`);
+
 module.exports = db;

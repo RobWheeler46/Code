@@ -3,6 +3,7 @@ const db = require('../db');
 const { requireAuth, requireEdit, requirePublish, requireManageAdmins } = require('../lib/middleware');
 const { hashPassword, logAudit, recordVersion } = require('../lib/helpers');
 const { computeReadiness } = require('../lib/assessment');
+const { roleForPack, packSkills, selectQuestions, buildPackDocx } = require('../lib/interviewPack');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -966,6 +967,115 @@ router.get('/org-reports', (req, res) => {
   `).all();
 
   res.json({ summary, roleReadiness, assessmentGaps, planFocus });
+});
+
+// ---- Interview pack generator (FRD v0.24 selected-user feature) ----
+// Question bank management + Word pack generation. Selected users = admins in this MVP; bank editing is
+// gated by canEdit and approval/retirement by canPublish, mapping onto existing content capabilities.
+
+router.get('/interview-questions', (req, res) => {
+  const { skillId, levelId, status } = req.query;
+  let sql = `
+    SELECT iq.*, sk.skill_code, sk.skill_name, lv.level_number, lv.level_name,
+           cu.first_name AS created_by_first, cu.last_name AS created_by_last
+    FROM interview_questions iq
+    JOIN sfia_skills sk ON sk.id = iq.sfia_skill_id
+    JOIN sfia_levels lv ON lv.id = iq.sfia_level_id
+    LEFT JOIN users cu ON cu.id = iq.created_by
+    WHERE 1=1
+  `;
+  const params = [];
+  if (skillId) { sql += ` AND iq.sfia_skill_id = ?`; params.push(skillId); }
+  if (levelId) { sql += ` AND iq.sfia_level_id = ?`; params.push(levelId); }
+  if (status) { sql += ` AND iq.status = ?`; params.push(status); }
+  sql += ` ORDER BY sk.skill_code, lv.level_number, iq.question_type, iq.id DESC`;
+  res.json(db.prepare(sql).all(...params));
+});
+
+router.post('/interview-questions', requireEdit, (req, res) => {
+  const { sfiaSkillId, sfiaLevelId, sfiaVersionId, questionType, questionText, whatGoodLooksLike, probePrompts } = req.body || {};
+  if (!sfiaSkillId || !sfiaLevelId || !questionText) {
+    return res.status(400).json({ error: 'A SFIA skill, level and question text are required.' });
+  }
+  const type = questionType === 'alternative' ? 'alternative' : 'strength_based';
+  const result = db.prepare(`
+    INSERT INTO interview_questions (sfia_version_id, sfia_skill_id, sfia_level_id, question_type, question_text, what_good_looks_like, probe_prompts, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(sfiaVersionId || null, sfiaSkillId, sfiaLevelId, type, questionText, whatGoodLooksLike || null, probePrompts || null, req.user.id);
+  logAudit({ ...auditCtx(req), action: 'create', entityType: 'interview_question', entityId: result.lastInsertRowid });
+  res.status(201).json(db.prepare(`SELECT * FROM interview_questions WHERE id = ?`).get(result.lastInsertRowid));
+});
+
+router.patch('/interview-questions/:id', requireEdit, (req, res) => {
+  const q = db.prepare(`SELECT * FROM interview_questions WHERE id = ?`).get(req.params.id);
+  if (!q) return res.status(404).json({ error: 'Question not found.' });
+  const { questionText, whatGoodLooksLike, probePrompts, questionType } = req.body || {};
+  db.prepare(`
+    UPDATE interview_questions
+    SET question_text = ?, what_good_looks_like = ?, probe_prompts = ?, question_type = ?, updated_at = datetime('now')
+    WHERE id = ?
+  `).run(
+    questionText != null ? questionText : q.question_text,
+    whatGoodLooksLike !== undefined ? whatGoodLooksLike : q.what_good_looks_like,
+    probePrompts !== undefined ? probePrompts : q.probe_prompts,
+    questionType === 'alternative' || questionType === 'strength_based' ? questionType : q.question_type,
+    q.id
+  );
+  logAudit({ ...auditCtx(req), action: 'edit', entityType: 'interview_question', entityId: q.id });
+  res.json(db.prepare(`SELECT * FROM interview_questions WHERE id = ?`).get(q.id));
+});
+
+router.post('/interview-questions/:id/approve', requirePublish, (req, res) => {
+  const q = db.prepare(`SELECT id FROM interview_questions WHERE id = ?`).get(req.params.id);
+  if (!q) return res.status(404).json({ error: 'Question not found.' });
+  db.prepare(`UPDATE interview_questions SET status = 'approved', approved_by = ?, updated_at = datetime('now') WHERE id = ?`).run(req.user.id, q.id);
+  logAudit({ ...auditCtx(req), action: 'approve', entityType: 'interview_question', entityId: q.id });
+  res.json(db.prepare(`SELECT * FROM interview_questions WHERE id = ?`).get(q.id));
+});
+
+router.post('/interview-questions/:id/retire', requirePublish, (req, res) => {
+  const q = db.prepare(`SELECT id FROM interview_questions WHERE id = ?`).get(req.params.id);
+  if (!q) return res.status(404).json({ error: 'Question not found.' });
+  db.prepare(`UPDATE interview_questions SET status = 'retired', updated_at = datetime('now') WHERE id = ?`).run(q.id);
+  logAudit({ ...auditCtx(req), action: 'retire', entityType: 'interview_question', entityId: q.id });
+  res.json(db.prepare(`SELECT * FROM interview_questions WHERE id = ?`).get(q.id));
+});
+
+// Generate a strength-based interview pack (.docx) for a published role profile.
+router.post('/role-profiles/:id/interview-pack', async (req, res) => {
+  try {
+    const role = roleForPack(req.params.id);
+    if (!role) return res.status(404).json({ error: 'Role profile not found.' });
+    const published = db.prepare(`SELECT 1 FROM role_profiles WHERE id = ? AND status = 'published'`).get(role.id);
+    if (!published) return res.status(400).json({ error: 'Interview packs can only be generated from published role profiles.' });
+
+    const skills = packSkills(role.id);
+    if (skills.length === 0) return res.status(400).json({ error: 'This role has no SFIA skills mapped, so no pack can be generated.' });
+
+    const { selections, usedQuestionIds } = selectQuestions(skills, role.sfia_version_id);
+
+    const packRow = db.prepare(`
+      INSERT INTO generated_interview_packs (role_profile_id, sfia_version_id, generated_by, question_ids, skill_count)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(role.id, role.sfia_version_id || null, req.user.id, JSON.stringify(usedQuestionIds), skills.length);
+    const packId = packRow.lastInsertRowid;
+
+    const generatedByName = `${req.user.first_name} ${req.user.last_name}`.trim();
+    const buffer = await buildPackDocx({ role, selections, meta: { packId, generatedByName } });
+
+    if (usedQuestionIds.length > 0) {
+      const upd = db.prepare(`UPDATE interview_questions SET usage_count = usage_count + 1, last_used_at = datetime('now') WHERE id = ?`);
+      for (const qid of usedQuestionIds) upd.run(qid);
+    }
+    logAudit({ ...auditCtx(req), action: 'generate', entityType: 'interview_pack', entityId: packId, details: { roleProfileId: role.id, skillCount: skills.length } });
+
+    const safeTitle = String(role.title).replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'role';
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename="interview-pack_${safeTitle}_${packId}.docx"`);
+    res.send(buffer);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to generate interview pack: ' + err.message });
+  }
 });
 
 module.exports = router;

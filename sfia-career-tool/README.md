@@ -292,8 +292,24 @@ with Railway's env vars injected and can't reach a volume that only exists insid
   focus learning provision); and **development focus** (skills most often added to development plans). Every
   figure is an aggregate count/ranking &mdash; no individual end user is named or identifiable, and the tab
   says so. "End users" are accounts with no admin role.
+  Also built (FRD v0.24 selected-user feature): **strength-based interview pack generator** &mdash; from a
+  published role's row in Admin &gt; Role profiles, **Interview pack** generates a real Microsoft Word
+  `.docx` (via the pure-JS `docx` dependency) of SFIA-aligned, strength-based interview questions: a cover
+  page, role overview, interviewer guidance, then per mapped SFIA skill+level the skill-at-level
+  description, a strength-based question, "what good looks like", an alternative question, suggested probes
+  and a notes area, plus version/audit metadata. Questions are drawn from an **approvable question bank**
+  (new **Interview questions** admin tab: add/edit gated by canEdit, approve/retire by canPublish) &mdash;
+  only `approved` questions are eligible, selection is randomised with a lower-usage preference, and where a
+  skill+level has no approved question a clearly-flagged **generic** question is generated so packs are
+  useful from day one. Generation increments each question's usage count and records a
+  `generated_interview_packs` row + audit entry. Tables: `interview_questions`, `generated_interview_packs`.
+  **MVP scoping vs the FRD:** "selected users" = admins for now (gated on the existing admin capabilities
+  rather than a new permission tier); the alternative-group model is simplified to a `question_type`
+  (`strength_based`/`alternative`) per skill+level; pack templates/branding profiles and the separate
+  Question Bank Approver role are not separate entities yet.
   Still to come in Phase 2+: the AI Career Coach (Parts F&ndash;I, the only piece needing an LLM &mdash;
-  deliberately left until last).
+  deliberately left until last). The v0.25 improved-comparison redesign and the v0.26 change-password
+  feature are specified but not yet built (deferred by the user in favour of this generator).
 - **FRD v0.11's full multi-version SFIA support is not built.** Only the MVP-foundation slice (data already
   version-scoped, version badge shown on role profiles) is in place. Admin version-lifecycle management
   (draft/active/published-default/legacy/archived), cross-version comparison blocking, and the migration
