@@ -26,12 +26,6 @@
       "port": 3030
     },
     {
-      "name": "7thportal",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["7thportal/src/server.js"],
-      "port": 3040
-    },
-    {
       "name": "7thportal-php",
       "runtimeExecutable": "C:\\Users\\rob\\AppData\\Local\\Microsoft\\WinGet\\Packages\\PHP.PHP.8.3_Microsoft.Winget.Source_8wekyb3d8bbwe\\php.exe",
       "runtimeArgs": ["-S", "localhost:8040", "-t", "7thportal-php/webroot", "7thportal-php/webroot/index.php"],
