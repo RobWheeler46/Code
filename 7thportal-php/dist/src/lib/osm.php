@@ -53,6 +53,11 @@ function osmBuildAuthorizeUrl(string $state): string
 
 function osmTokenRequest(array $formParams): array
 {
+    loginLog('POST /oauth/token', [
+        'grant_type' => $formParams['grant_type'] ?? null,
+        'clientIdPrefix' => substr((string) env('OSM_CLIENT_ID', ''), 0, 6) . '...',
+        'redirectUri' => env('OSM_REDIRECT_URI'),
+    ]);
     $ch = curl_init(OSM_BASE . '/oauth/token');
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
@@ -62,10 +67,23 @@ function osmTokenRequest(array $formParams): array
         CURLOPT_TIMEOUT => 20,
     ]);
     $body = curl_exec($ch);
-    if ($body === false) { $err = curl_error($ch); curl_close($ch); throw new Exception("OSM token request failed: $err"); }
+    if ($body === false) {
+        $err = curl_error($ch);
+        $errno = curl_errno($ch);
+        curl_close($ch);
+        // A curl-level failure (not an HTTP error response) usually means outbound
+        // requests are blocked or misconfigured on this host - common on locked-down
+        // shared hosting (curl disabled, outbound firewall, missing CA bundle for TLS).
+        loginLog('curl request to OSM FAILED (no HTTP response at all)', ['curlErrno' => $errno, 'curlError' => $err]);
+        throw new Exception("OSM token request failed: $err");
+    }
     $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
-    if ($status < 200 || $status >= 300) throw new Exception("OSM token request failed: $status $body");
+    if ($status < 200 || $status >= 300) {
+        loginLog('Token request FAILED', ['status' => $status, 'body' => substr($body, 0, 1000)]);
+        throw new Exception("OSM token request failed: $status $body");
+    }
+    loginLog('Token request OK', ['status' => $status]);
     $data = json_decode($body, true);
     return is_array($data) ? $data : [];
 }
@@ -100,17 +118,27 @@ function osmGet(string $accessToken, string $pathname, array $params = []): arra
         CURLOPT_TIMEOUT => 20,
     ]);
     $body = curl_exec($ch);
-    if ($body === false) { $err = curl_error($ch); curl_close($ch); throw new Exception("OSM API error on $pathname: $err"); }
+    if ($body === false) {
+        $err = curl_error($ch);
+        curl_close($ch);
+        loginLog('curl GET FAILED (no HTTP response)', ['pathname' => $pathname, 'curlError' => $err]);
+        throw new Exception("OSM API error on $pathname: $err");
+    }
     $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
-    if ($status < 200 || $status >= 300) throw new Exception("OSM API error $status on $pathname");
+    if ($status < 200 || $status >= 300) {
+        loginLog('GET FAILED', ['pathname' => $pathname, 'status' => $status, 'body' => substr($body, 0, 500)]);
+        throw new Exception("OSM API error $status on $pathname");
+    }
     $data = json_decode($body, true);
     return is_array($data) ? $data : [];
 }
 
 function osmGetStartupData(string $accessToken): array
 {
-    return osmGet($accessToken, '/ext/generic/startup/', ['action' => 'getDataPayload']);
+    $data = osmGet($accessToken, '/ext/generic/startup/', ['action' => 'getDataPayload']);
+    loginLog('startup payload received', ['topLevelKeys' => array_keys($data), 'globalsKeys' => array_keys($data['data']['globals'] ?? [])]);
+    return $data;
 }
 
 // Best-effort identity extraction - OSM's public OAuth token response carries
@@ -125,7 +153,11 @@ function osmExtractIdentity(array $startup): array
     $firstName = $g['firstname'] ?? $g['firstName'] ?? ($g['user']['firstname'] ?? null) ?? 'OSM';
     $lastName = $g['lastname'] ?? $g['lastName'] ?? ($g['user']['lastname'] ?? null) ?? 'User';
     $email = $g['email'] ?? ($g['user']['email'] ?? null);
-    if (!$userId) throw new Exception('Could not determine OSM user identity from startup payload - see README OSM integration notes.');
+    if (!$userId) {
+        loginLog('extractIdentity FAILED - no userId found. Full globals object for debugging', substr(json_encode($g), 0, 2000));
+        throw new Exception('Could not determine OSM user identity from startup payload - see README OSM integration notes.');
+    }
+    loginLog('extractIdentity OK', ['userId' => $userId, 'firstName' => $firstName, 'lastName' => $lastName, 'hasEmail' => !empty($email), 'roleCount' => count($roles)]);
     return ['osmUserId' => (string) $userId, 'firstName' => $firstName, 'lastName' => $lastName, 'email' => $email, 'roles' => $roles, 'terms' => $g['terms'] ?? []];
 }
 

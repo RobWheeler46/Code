@@ -28,6 +28,16 @@ ini_set('display_errors', $isProd ? '0' : '1');
 
 require_once __DIR__ . '/../src/db.php';
 require_once __DIR__ . '/../src/http.php';
+
+if (loginDebugEnabled() && preg_match('#^/(auth|api/auth|api/me|login\.html)#', $uri)) {
+    loginLog('--- New request ---', [
+        'method' => $method, 'uri' => $uri,
+        'APP_ENV' => env('APP_ENV', '(unset)'),
+        'osmConfigured' => !empty(env('OSM_CLIENT_ID')) && !empty(env('OSM_CLIENT_SECRET')) && !empty(env('OSM_REDIRECT_URI')),
+        'curlAvailable' => function_exists('curl_init'),
+        'phpVersion' => PHP_VERSION,
+    ]);
+}
 require_once __DIR__ . '/../src/router.php';
 require_once __DIR__ . '/../src/lib/helpers.php';
 require_once __DIR__ . '/../src/lib/middleware.php';
@@ -59,6 +69,22 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     ]);
     session_start();
     setcookie(session_name(), session_id(), time() + $maxAge, '/', '', $isProd, true);
+
+    if (loginDebugEnabled() && preg_match('#^/(auth|api/auth|api/me|login\.html)#', $uri)) {
+        loginLog('Request ' . $method . ' ' . $uri, [
+            'APP_ENV' => env('APP_ENV', '(unset)'),
+            'cookieSecure' => $isProd,
+            'protocol' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http',
+            'xForwardedProto' => $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? null,
+            'hasCookieHeader' => isset($_SERVER['HTTP_COOKIE']),
+            'sessionId' => session_id(),
+            'sessionUserId' => $_SESSION['userId'] ?? null,
+            'sessionSavePath' => session_save_path() ?: ini_get('session.save_path') ?: '(default)',
+        ]);
+        if ($isProd && empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && (empty($_SERVER['HTTPS']) || $_SERVER['HTTPS'] === 'off')) {
+            loginLog('WARNING: APP_ENV=production (cookie.secure=true) but this request looks like plain HTTP and carries no X-Forwarded-Proto header. If the site is actually reached over HTTPS through a proxy that does not forward that header, the session cookie will be marked Secure but PHP cannot tell the original request was HTTPS - this can cause "login redirects then bounces back" symptoms. Check your host\'s reverse proxy config forwards X-Forwarded-Proto, or check $_SERVER[\'HTTPS\'] is actually being set for HTTPS requests on this host.');
+        }
+    }
 }
 
 $router = new Router();
@@ -70,11 +96,17 @@ require_once __DIR__ . '/../src/routes/notices.php';
 require_once __DIR__ . '/../src/routes/admin.php';
 require_once __DIR__ . '/../src/routes/gallery.php';
 
+// NFR-007: never expose technical error details to end users - the response
+// body stays generic, but the server-side log (error_log + data/login-debug.log
+// for auth-path requests) gets full detail for debugging.
 try {
     if (!$router->dispatch($method, $uri)) {
         jsonResponse(['error' => 'Not found.'], 404);
     }
 } catch (Throwable $e) {
-    error_log('7thPortal error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+    error_log("[error] Unhandled error on $method $uri: " . $e->getMessage() . "\n" . $e->getTraceAsString());
+    if (loginDebugEnabled() && preg_match('#^/(auth|api/auth|api/me)#', $uri)) {
+        loginLog("Unhandled error on $method $uri", ['error' => $e->getMessage(), 'file' => $e->getFile(), 'line' => $e->getLine()]);
+    }
     jsonResponse(['error' => 'Something went wrong. Please try again.'], 500);
 }

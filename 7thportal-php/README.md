@@ -57,6 +57,19 @@ The third argument makes `index.php` act as a router script: it serves real stat
 
 Demo Mode, role model, notices, admin backend and the photo gallery all behave identically to the Node version - see its README for the full feature list and FRD traceability. Every workflow was re-verified against this PHP version directly (auth, dashboards, child/section views, notices, admin user/parent management, and the complete photo gallery pipeline including a real image upload, resize, EXIF-strip check, submit/approve/reject/unpublish, and parent viewing).
 
+## Debugging login issues
+
+Both login flows (`/auth/osm/login` → `/auth/osm/callback` and `/api/auth/local-login`) log every step server-side - never to the browser, which still only ever shows the existing safe, generic error messages (NFR-007). Two places to look, both controlled by `LOGIN_DEBUG` in `.env` (on by default, set to `false` once things are working):
+
+- **`data/login-debug.log`** - a plain text file, easiest to check on shared hosting since you don't need to know where the host puts its PHP error log. Open it directly via cPanel File Manager. Not web-accessible (outside `webroot/`, same protection as the database).
+- **PHP's normal `error_log()`** - also gets everything, in case you're already tailing that.
+
+What gets logged: for OSM login, every step (redirect URL built including the exact `redirect_uri` sent, callback received, code/state validity, token exchange result including OSM's raw error response on failure, startup payload keys, identity extraction, user upsert, final redirect) with a clear `Step N/4 OK` or `BLOCKED: <reason>` marker so you can see exactly where it stopped. If OSM itself redirects back with `?error=...` (e.g. `invalid_client`, `access_denied`) instead of a code, that's logged explicitly - this is the most common real failure mode when the app's redirect URI doesn't exactly match what's registered on OSM's My Apps page, or the app credentials have been revoked.
+
+For local (parent) login: email/password presence, whether a matching local-auth account was found, whether the password verified, and account status - each with a note on what a `false` there implies (e.g. `hasPasswordHash: false` means the account is still on an unused invite link, not that the password is wrong).
+
+One specific thing the startup log checks for: `APP_ENV=production` sets the session cookie's `Secure` flag, which requires PHP to know the original request was HTTPS. If the app sits behind a reverse proxy that terminates TLS (common on some hosts) and doesn't forward an `X-Forwarded-Proto: https` header, PHP sees the request as plain HTTP, the secure cookie gets set but the browser may not send it back correctly, and login *appears* to succeed (redirect happens, `SUCCESS` shows in the log) but bounces straight back to the login page. The log prints a `WARNING` line when it detects this specific combination.
+
 ## Known follow-ups
 
 Same open items as the Node version's README (OSM endpoint field-name confidence beyond the proven OAuth+badges calls, formal GDPR status, photo consent data source, session-timeout-requires-restart, no automated tests) - none of that changed by moving to PHP.

@@ -2,3 +2,4 @@
 data/*.db*
 data/gallery-uploads/*
 !data/gallery-uploads/.gitkeep
+data/login-debug.log
