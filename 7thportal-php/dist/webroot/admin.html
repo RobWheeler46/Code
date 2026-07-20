@@ -9,18 +9,14 @@
 <body>
   <header id="app-nav" class="app-nav"></header>
 
+  <div class="app-layout">
+  <aside id="app-sidebar" class="app-sidebar"></aside>
+  <main class="app-main">
   <div class="container">
     <h1>Admin</h1>
-    <div class="tabs">
-      <button data-tab="health" class="active">Integration health</button>
-      <button data-tab="notices">Notices</button>
-      <button data-tab="users">Users &amp; roles</button>
-      <button data-tab="parents">Parent accounts</button>
-      <button data-tab="gallery">Photo gallery</button>
-      <button data-tab="settings">Settings</button>
-      <button data-tab="audit">Audit log</button>
-    </div>
     <div id="tab-content"><p class="muted">Loading&hellip;</p></div>
+  </div>
+  </main>
   </div>
 
   <script src="js/api.js"></script>
