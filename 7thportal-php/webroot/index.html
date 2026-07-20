@@ -9,19 +9,32 @@
 <body>
   <header id="app-nav" class="app-nav"></header>
 
-  <div class="hero">
-    <h1>Your 7th Swindon front door</h1>
-    <p>7thPortal brings together the OSM information parents, carers and leaders use most - linked children, section details, programme, events and badges - in one clean, mobile-friendly place. OSM stays the source of truth: 7thPortal links back to it for updates, event sign-up and payments.</p>
-    <a class="btn btn-primary" href="login.html">Log in</a>
-  </div>
-
-  <div class="container narrow">
-    <div class="card">
-      <h2>What 7thPortal is for</h2>
-      <p>Parents and carers can see their child's section, upcoming programme and events, and badge progress at a glance. Leaders get a section dashboard to help prepare for meetings. Anything that needs updating - contact details, event responses, payments - is done in OSM, with a clear link back from every relevant page.</p>
+  <div class="container">
+    <div class="hero">
+      <h1>7thPortal</h1>
+      <p>Everything you need for your child's Scouting journey at 7th Swindon - linked children, section details, programme, events, badges and approved photos, in one clean, mobile-friendly place. OSM stays the source of truth: 7thPortal links back to it for updates, event sign-up and payments.</p>
+      <div class="actions-row">
+        <a class="btn btn-primary" href="login.html">Log in</a>
+        <a class="btn btn-secondary" href="#demo">Try Demo Mode</a>
+      </div>
     </div>
 
-    <div class="card" id="demo">
+    <div class="grid cols-3 feature-cards">
+      <div class="card card-accent">
+        <h2>Your child</h2>
+        <p class="muted">View section, programme, events, badges and profile details from OSM.</p>
+      </div>
+      <div class="card card-accent accent-green">
+        <h2>Photo gallery</h2>
+        <p class="muted">View approved photos from camps, events and section activities.</p>
+      </div>
+      <div class="card card-accent accent-yellow">
+        <h2>Group notices</h2>
+        <p class="muted">See 7th Swindon updates, reminders and useful links.</p>
+      </div>
+    </div>
+
+    <div class="card card-accent accent-teal" id="demo">
       <h2>Try it without signing in</h2>
       <p class="muted">Demo Mode uses sample data (no real 7th Swindon information) so you can explore the parent, leader and admin views before OSM is connected.</p>
       <div class="actions-row">

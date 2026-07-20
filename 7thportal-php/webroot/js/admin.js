@@ -1,23 +1,39 @@
 let ME = null;
 let SECTIONS_CACHE = null;
 
+const ADMIN_TABS = [
+  { tab: 'health', label: 'Integration health' },
+  { tab: 'notices', label: 'Notices' },
+  { tab: 'users', label: 'Users &amp; roles' },
+  { tab: 'parents', label: 'Parent accounts' },
+  { tab: 'gallery', label: 'Photo gallery' },
+  { tab: 'settings', label: 'Settings' },
+  { tab: 'audit', label: 'Audit log' },
+];
+
 (async () => {
   ME = await requireUserNav();
   if (!ME) return;
   if (ME.role !== 'admin') {
     document.getElementById('tab-content').innerHTML = '<div class="alert alert-error">Portal Administrator access required.</div>';
-    document.querySelectorAll('.tabs button').forEach(b => b.disabled = true);
     return;
   }
-  document.querySelectorAll('.tabs button').forEach(btn => {
+  // requireUserNav() renders the generic role sidebar (Dashboard/Gallery/etc) -
+  // the admin page replaces it with its own sub-navigation (these tabs) instead,
+  // since a top-level "Admin" link pointing at the page you're already on would
+  // be redundant here.
+  const sidebar = document.getElementById('app-sidebar');
+  sidebar.innerHTML = `<div class="sidebar-role">Admin</div><nav>${ADMIN_TABS.map(t => `<button class="admin-tab-btn" data-tab="${t.tab}">${t.label}</button>`).join('')}</nav>`;
+  document.querySelectorAll('.admin-tab-btn').forEach(btn => {
     btn.addEventListener('click', () => selectTab(btn.dataset.tab));
   });
   const params = new URLSearchParams(location.search);
-  selectTab(params.get('tab') && document.querySelector(`[data-tab="${params.get('tab')}"]`) ? params.get('tab') : 'health');
+  const requested = params.get('tab');
+  selectTab(requested && ADMIN_TABS.some(t => t.tab === requested) ? requested : 'health');
 })();
 
 function selectTab(tab) {
-  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.admin-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   const renderers = { health: renderHealth, notices: renderNotices, users: renderUsers, parents: renderParents, gallery: renderGallery, settings: renderSettings, audit: renderAudit };
   renderers[tab]();
 }
