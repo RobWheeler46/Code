@@ -60,6 +60,10 @@ $router->get('/api/admin/settings', function ($params) {
         'galleryEnabled' => ($map['gallery_enabled'] ?? null) === 'true',
         'galleryWatermarkDefault' => ($map['gallery_watermark_default'] ?? null) === 'true',
         'galleryRetentionDays' => (int) ($map['gallery_retention_days'] ?? 365),
+        'financeEnabled' => ($map['finance_enabled'] ?? null) === 'true',
+        'financeThresholdTier1' => (float) ($map['finance_threshold_tier1'] ?? 50),
+        'financeThresholdTier2' => (float) ($map['finance_threshold_tier2'] ?? 250),
+        'financeRetentionDays' => (int) ($map['finance_retention_days'] ?? 730),
     ]);
 });
 
@@ -75,8 +79,15 @@ $router->put('/api/admin/settings', function ($params) {
     if (array_key_exists('galleryEnabled', $body)) $upsert('gallery_enabled', $body['galleryEnabled'] ? 'true' : 'false');
     if (array_key_exists('galleryWatermarkDefault', $body)) $upsert('gallery_watermark_default', $body['galleryWatermarkDefault'] ? 'true' : 'false');
     if (!empty($body['galleryRetentionDays'])) $upsert('gallery_retention_days', (string) $body['galleryRetentionDays']);
+    if (array_key_exists('financeEnabled', $body)) {
+        $upsert('finance_enabled', $body['financeEnabled'] ? 'true' : 'false');
+        if ($body['financeEnabled']) financeSeedDemoDataIfMissing();
+    }
+    if (!empty($body['financeThresholdTier1'])) $upsert('finance_threshold_tier1', (string) $body['financeThresholdTier1']);
+    if (!empty($body['financeThresholdTier2'])) $upsert('finance_threshold_tier2', (string) $body['financeThresholdTier2']);
+    if (!empty($body['financeRetentionDays'])) $upsert('finance_retention_days', (string) $body['financeRetentionDays']);
 
-    logAudit(['userId' => $user['id'], 'action' => array_key_exists('galleryEnabled', $body) ? 'admin_toggle_gallery' : 'admin_update_settings', 'ipAddress' => clientIp(), 'details' => $body]);
+    logAudit(['userId' => $user['id'], 'action' => array_key_exists('galleryEnabled', $body) ? 'admin_toggle_gallery' : (array_key_exists('financeEnabled', $body) ? 'admin_toggle_finance' : 'admin_update_settings'), 'ipAddress' => clientIp(), 'details' => $body]);
     jsonResponse(['ok' => true]);
 });
 

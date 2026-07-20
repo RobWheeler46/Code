@@ -72,7 +72,7 @@ How to use this: work through each item, write the decision in the "Decision" li
 
 ### 9. Mileage rates and evidence
 - **Question:** What's the actual £/mile rate per vehicle type (car/van, motorcycle, bicycle), how often is it reviewed, and is route evidence (e.g. a map screenshot) required or optional? Confirm the declaration wording claimants must agree to.
-- **Decision:** _______________________________________________
+- **Decision:** Rates confirmed via `7th_Swindon_Scouts_Expenses_and_Mileage_Policy_Multi_Item_Claims.docx` section 13 - the 2026/27 HMRC AMAP rates: car/van 55p/mile for the first 10,000 miles in the tax year then 25p/mile, motorcycle 24p/mile flat, bicycle 20p/mile flat, effective from 6 April 2026. Route evidence and rate-review cadence still open - route evidence isn't built (optional per policy, not required at submission).
 
 ### 10. Trustee dashboard confidentiality
 - **Question:** Does the Trustee dashboard show claimant names by default, or aggregated/anonymised figures with names only on drill-down? Are hardship-fund claims visible to anyone beyond Chair + Treasurer?
@@ -81,6 +81,11 @@ How to use this: work through each item, write the decision in the "Decision" li
 ### 11. Accessibility and mobile testing approach
 - **Question:** Is WCAG 2.2 AA the actual target, and is there a specific set of devices (e.g. the phones leaders already use for photo upload) this should be tested on before pilot?
 - **Decision:** _______________________________________________
+
+### 12. Multi-item claims architecture
+- **Question:** Should one claim be able to contain several items (receipt purchases and mileage journeys mixed together, across different accounts), with approval/rejection/payment happening per item - or should the simpler one-claim-one-amount model stand?
+- **Decision:** Rebuild to the multi-item model, per `7thPortal_Final_Pack_with_Expenses_Technical_Appendices.zip` (`7thPortal_Expenses_Data_Model.docx` / `_Database_Schema.docx` / `_API_Requirements.docx`). A claim (`expense_claims`) is now a header; `expense_claim_items` carries the account, category, receipt(s), approval state and payment state per item, so one claim reference can cover a whole camp weekend's mixed costs. Simplified vs. the technical appendices for this project's actual scale (see README "Expenses, mileage and finance module" for the full list: integer IDs not UUID, no malware scanning, no idempotency/ETag concurrency control, no true split-amount partial payment, and no generic `ApprovalRule` matcher table since the real policy only ever varies by account + a global threshold pair).
+- **Also decided:** the "Leader document library" feature that appeared alongside the multi-item wireframes was explicitly skipped - unrelated to expenses, not part of any prior decision.
 
 ---
 

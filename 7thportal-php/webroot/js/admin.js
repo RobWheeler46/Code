@@ -7,6 +7,7 @@ const ADMIN_TABS = [
   { tab: 'users', label: 'Users &amp; roles' },
   { tab: 'parents', label: 'Parent accounts' },
   { tab: 'gallery', label: 'Photo gallery' },
+  { tab: 'finance', label: 'Finance' },
   { tab: 'settings', label: 'Settings' },
   { tab: 'audit', label: 'Audit log' },
 ];
@@ -34,7 +35,7 @@ const ADMIN_TABS = [
 
 function selectTab(tab) {
   document.querySelectorAll('.admin-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-  const renderers = { health: renderHealth, notices: renderNotices, users: renderUsers, parents: renderParents, gallery: renderGallery, settings: renderSettings, audit: renderAudit };
+  const renderers = { health: renderHealth, notices: renderNotices, users: renderUsers, parents: renderParents, gallery: renderGallery, finance: renderFinance, settings: renderSettings, audit: renderAudit };
   renderers[tab]();
 }
 
@@ -332,6 +333,21 @@ async function renderSettings() {
         <span id="gallery-settings-saved"></span>
       </form>
     </div>
+    <div class="card">
+      <h2>Expenses &amp; mileage</h2>
+      <p class="muted">Ships off by default until the accounts, approvers and thresholds in the "Finance" tab are set up for your pilot (see DECISIONS-finance-module.md).</p>
+      <form id="finance-settings-form">
+        <div class="field"><label style="font-weight:400;"><input type="checkbox" id="f-enabled" ${settings.financeEnabled ? 'checked' : ''}> Enable expenses and mileage claims</label></div>
+        <div class="grid cols-3">
+          <div class="field"><label>Single-approver threshold (&pound;)</label><input type="number" id="f-tier1" min="0" step="0.01" value="${settings.financeThresholdTier1}"></div>
+          <div class="field"><label>Second-approval threshold (&pound;)</label><input type="number" id="f-tier2" min="0" step="0.01" value="${settings.financeThresholdTier2}"></div>
+          <div class="field"><label>Claim/receipt retention (days)</label><input type="number" id="f-retention" min="30" value="${settings.financeRetentionDays}"></div>
+        </div>
+        <p class="help">Claims up to the first threshold need one account approver. Above the second threshold, a Treasurer or Chair must also approve before it counts as approved (FRD section 19).</p>
+        <button class="btn btn-primary" type="submit">Save</button>
+        <span id="finance-settings-saved"></span>
+      </form>
+    </div>
   `;
   document.getElementById('gallery-settings-form').addEventListener('submit', async e => {
     e.preventDefault();
@@ -341,6 +357,16 @@ async function renderSettings() {
       galleryRetentionDays: Number(document.getElementById('g-retention').value),
     });
     document.getElementById('gallery-settings-saved').textContent = 'Saved.';
+  });
+  document.getElementById('finance-settings-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    await Api.put('/api/admin/settings', {
+      financeEnabled: document.getElementById('f-enabled').checked,
+      financeThresholdTier1: Number(document.getElementById('f-tier1').value),
+      financeThresholdTier2: Number(document.getElementById('f-tier2').value),
+      financeRetentionDays: Number(document.getElementById('f-retention').value),
+    });
+    document.getElementById('finance-settings-saved').textContent = 'Saved.';
   });
   document.getElementById('settings-form').addEventListener('submit', async e => {
     e.preventDefault();
@@ -388,6 +414,157 @@ async function renderGallery() {
       `).join('')}</tbody></table>`}
     </div>
   `;
+}
+
+// ── Finance (expense accounts + mileage rates) ──────────────────────────────
+async function renderFinance() {
+  const box = document.getElementById('tab-content');
+  box.innerHTML = '<p class="muted">Loading&hellip;</p>';
+  const [accounts, candidates, categories, rates] = await Promise.all([
+    Api.get('/api/admin/finance/accounts'),
+    Api.get('/api/admin/finance/approver-candidates'),
+    Api.get('/api/admin/finance/categories'),
+    Api.get('/api/admin/finance/mileage-rates'),
+  ]);
+  const candidateOptions = (selectedId) => `<option value="">(none)</option>` + candidates.map(c => `<option value="${c.id}" ${c.id === selectedId ? 'selected' : ''}>${escapeHtml(c.name)} (${escapeHtml(c.roleLabel)})</option>`).join('');
+
+  box.innerHTML = `
+    <div class="card">
+      <h2>Add an expense account</h2>
+      <p class="muted">One row per budget account (e.g. Cubs, Scouts, Group). Claims route to whichever leader/admin user is set as the approver here.</p>
+      <form id="account-form">
+        <div class="grid cols-3">
+          <div class="field"><label>Name</label><input type="text" id="a-name" required placeholder="e.g. Cubs"></div>
+          <div class="field"><label>Approver</label><select id="a-approver">${candidateOptions(null)}</select></div>
+          <div class="field"><label>Deputy approver</label><select id="a-deputy">${candidateOptions(null)}</select></div>
+        </div>
+        <div id="account-error"></div>
+        <button class="btn btn-primary" type="submit">Add account</button>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Accounts</h2>
+      ${accounts.length === 0 ? '<p class="muted">No accounts yet.</p>' : `
+      <table><thead><tr><th>Name</th><th>Approver</th><th>Deputy</th><th>Active</th><th></th></tr></thead>
+      <tbody>${accounts.map(a => `
+        <tr>
+          <td>${escapeHtml(a.name)}</td>
+          <td><select data-acc-approver="${a.id}">${candidateOptions(a.approver ? a.approver.id : null)}</select></td>
+          <td><select data-acc-deputy="${a.id}">${candidateOptions(a.deputyApprover ? a.deputyApprover.id : null)}</select></td>
+          <td><input type="checkbox" data-acc-active="${a.id}" ${a.active ? 'checked' : ''}></td>
+          <td><button class="btn btn-secondary btn-sm" data-acc-save="${a.id}">Save</button></td>
+        </tr>`).join('')}</tbody></table>`}
+      <div id="accounts-error"></div>
+    </div>
+    <div class="card">
+      <h2>Add an expense category</h2>
+      <p class="muted">Reporting categories for claim items (e.g. Equipment, Travel &amp; mileage).</p>
+      <form id="category-form">
+        <div class="grid cols-2">
+          <div class="field"><label>Name</label><input type="text" id="cat-name" required placeholder="e.g. Equipment"></div>
+          <div class="field"><label>Code (optional)</label><input type="text" id="cat-code"></div>
+        </div>
+        <div id="category-error"></div>
+        <button class="btn btn-primary" type="submit">Add category</button>
+      </form>
+      ${categories.length === 0 ? '<p class="muted">No categories yet.</p>' : `
+      <table><thead><tr><th>Name</th><th>Active</th><th></th></tr></thead>
+      <tbody>${categories.map(c => `
+        <tr>
+          <td>${escapeHtml(c.name)}</td>
+          <td><input type="checkbox" data-cat-active="${c.id}" ${c.active ? 'checked' : ''}></td>
+          <td><button class="btn btn-secondary btn-sm" data-cat-save="${c.id}">Save</button></td>
+        </tr>`).join('')}</tbody></table>`}
+    </div>
+    <div class="card">
+      <h2>Mileage rates</h2>
+      <p class="muted">Annual threshold/rate after threshold implement the HMRC AMAP tiering for car/van (e.g. 10,000 miles/tax year) - leave both blank for a flat per-mile rate (motorcycle, bicycle).</p>
+      <form id="rate-form">
+        <div class="grid cols-3">
+          <div class="field"><label>Vehicle type</label><select id="r-vehicle">
+            <option value="car">Car/van</option><option value="motorcycle">Motorcycle</option>
+            <option value="bicycle">Bicycle</option><option value="other">Other</option>
+          </select></div>
+          <div class="field"><label>Rate per mile (&pound;)</label><input type="number" id="r-rate" step="0.01" min="0" required></div>
+          <div class="field"><label>Effective from</label><input type="date" id="r-from" required value="${new Date().toISOString().slice(0, 10)}"></div>
+        </div>
+        <div class="grid cols-2">
+          <div class="field"><label>Annual threshold miles (optional)</label><input type="number" id="r-threshold" min="0"></div>
+          <div class="field"><label>Rate after threshold (&pound;, optional)</label><input type="number" id="r-after-rate" step="0.01" min="0"></div>
+        </div>
+        <div id="rate-error"></div>
+        <button class="btn btn-primary" type="submit">Add rate</button>
+      </form>
+      ${rates.length === 0 ? '<p class="muted">No rates yet.</p>' : `
+      <table><thead><tr><th>Vehicle</th><th>Rate/mile</th><th>Annual threshold</th><th>Rate after threshold</th><th>Effective from</th><th></th></tr></thead>
+      <tbody>${rates.map(r => `<tr><td>${escapeHtml(r.vehicleType)}</td><td>&pound;${r.ratePerMile.toFixed(2)}</td><td>${r.annualThresholdMiles ? r.annualThresholdMiles + ' miles' : '&mdash;'}</td><td>${r.rateAfterThreshold ? '£' + r.rateAfterThreshold.toFixed(2) : '&mdash;'}</td><td>${formatDate(r.effectiveFrom)}</td><td><button class="btn btn-danger btn-sm" data-rate-delete="${r.id}">Delete</button></td></tr>`).join('')}</tbody></table>`}
+    </div>
+  `;
+
+  document.getElementById('account-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    try {
+      await Api.post('/api/admin/finance/accounts', {
+        name: document.getElementById('a-name').value,
+        approverUserId: document.getElementById('a-approver').value || null,
+        deputyApproverUserId: document.getElementById('a-deputy').value || null,
+      });
+      renderFinance();
+    } catch (err) {
+      document.getElementById('account-error').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+    }
+  });
+  document.querySelectorAll('[data-acc-save]').forEach(btn => btn.addEventListener('click', async () => {
+    const id = btn.dataset.accSave;
+    try {
+      await Api.patch(`/api/admin/finance/accounts/${id}`, {
+        approverUserId: document.querySelector(`[data-acc-approver="${id}"]`).value || null,
+        deputyApproverUserId: document.querySelector(`[data-acc-deputy="${id}"]`).value || null,
+        active: document.querySelector(`[data-acc-active="${id}"]`).checked,
+      });
+      renderFinance();
+    } catch (err) {
+      document.getElementById('accounts-error').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+    }
+  }));
+
+  document.getElementById('category-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    try {
+      await Api.post('/api/admin/finance/categories', {
+        name: document.getElementById('cat-name').value,
+        code: document.getElementById('cat-code').value || null,
+      });
+      renderFinance();
+    } catch (err) {
+      document.getElementById('category-error').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+    }
+  });
+  document.querySelectorAll('[data-cat-save]').forEach(btn => btn.addEventListener('click', async () => {
+    const id = btn.dataset.catSave;
+    await Api.patch(`/api/admin/finance/categories/${id}`, { active: document.querySelector(`[data-cat-active="${id}"]`).checked });
+    renderFinance();
+  }));
+
+  document.getElementById('rate-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    try {
+      await Api.post('/api/admin/finance/mileage-rates', {
+        vehicleType: document.getElementById('r-vehicle').value,
+        ratePerMile: Number(document.getElementById('r-rate').value),
+        effectiveFrom: document.getElementById('r-from').value,
+        annualThresholdMiles: document.getElementById('r-threshold').value ? Number(document.getElementById('r-threshold').value) : null,
+        rateAfterThreshold: document.getElementById('r-after-rate').value ? Number(document.getElementById('r-after-rate').value) : null,
+      });
+      renderFinance();
+    } catch (err) {
+      document.getElementById('rate-error').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+    }
+  });
+  document.querySelectorAll('[data-rate-delete]').forEach(btn => btn.addEventListener('click', async () => {
+    await Api.delete(`/api/admin/finance/mileage-rates/${btn.dataset.rateDelete}`);
+    renderFinance();
+  }));
 }
 
 // ── Audit log ──────────────────────────────────────────────────────────────

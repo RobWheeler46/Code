@@ -45,11 +45,13 @@ require_once __DIR__ . '/../src/lib/osm.php';
 require_once __DIR__ . '/../src/lib/osmData.php';
 require_once __DIR__ . '/../src/lib/mailer.php';
 require_once __DIR__ . '/../src/lib/gallery.php';
+require_once __DIR__ . '/../src/lib/finance.php';
 
 // Idempotent maintenance, mirrors the one-off boot tasks in the Node
 // version's server.js. Cheap enough to run every request at this app's scale.
 pruneAuditLog();
 pruneArchivedAlbums();
+pruneOldClaims();
 if ((dbGet('SELECT COUNT(*) AS n FROM notices')['n'] ?? 0) === 0) {
     dbRun("INSERT INTO notices (title, body, audience, start_date, status)
            VALUES ('Welcome to 7thPortal', 'This is your new 7th Swindon Scout Group portal. Head to OSM for anything this site cannot show yet.', 'all', date('now'), 'published')");
@@ -95,6 +97,7 @@ require_once __DIR__ . '/../src/routes/sections.php';
 require_once __DIR__ . '/../src/routes/notices.php';
 require_once __DIR__ . '/../src/routes/admin.php';
 require_once __DIR__ . '/../src/routes/gallery.php';
+require_once __DIR__ . '/../src/routes/finance.php';
 
 // NFR-007: never expose technical error details to end users - the response
 // body stays generic, but the server-side log (error_log + data/login-debug.log

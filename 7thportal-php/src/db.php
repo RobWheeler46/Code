@@ -41,6 +41,15 @@ function dbRun(string $sql, array $params = []): array
     return ['lastInsertId' => (int) db()->lastInsertId(), 'rowCount' => $stmt->rowCount()];
 }
 
+// Migration: mileage_rates gained annual_threshold_miles/rate_after_threshold
+// columns for the HMRC AMAP car/van tiering. It only ever held seeded demo
+// rates (no real data at stake), so drop-and-recreate is simpler than an
+// ALTER TABLE ADD COLUMN here.
+$mileageRatesSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='mileage_rates'")['sql'] ?? '';
+if ($mileageRatesSql && !str_contains($mileageRatesSql, 'annual_threshold_miles')) {
+    db()->exec('DROP TABLE mileage_rates');
+}
+
 db()->exec(<<<'SQL'
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -50,7 +59,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT,
   first_name TEXT NOT NULL,
   last_name TEXT NOT NULL,
-  portal_role TEXT NOT NULL CHECK(portal_role IN ('parent','section_leader','assistant_leader','group_leadership','trustee_viewer','admin')),
+  portal_role TEXT NOT NULL CHECK(portal_role IN ('parent','section_leader','assistant_leader','group_leadership','trustee_viewer','treasurer','chair','admin')),
   account_status TEXT NOT NULL DEFAULT 'active' CHECK(account_status IN ('active','suspended','deleted')),
   osm_roles_json TEXT,
   osm_access_token TEXT,
@@ -143,6 +152,155 @@ CREATE TABLE IF NOT EXISTS gallery_photos (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS expense_accounts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  code TEXT,
+  approver_user_id INTEGER REFERENCES users(id),
+  deputy_approver_user_id INTEGER REFERENCES users(id),
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- rate_after_threshold/annual_threshold_miles implement the 2026/27 HMRC AMAP
+-- car/van tiering (55p for the claimant's first 10,000 business miles in the
+-- UK tax year, 25p after) - both null for vehicle types with a flat rate
+-- (motorcycle, bicycle). See mileageRateForClaim() in lib/finance.php.
+CREATE TABLE IF NOT EXISTS mileage_rates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  vehicle_type TEXT NOT NULL CHECK(vehicle_type IN ('car','motorcycle','bicycle','other')),
+  rate_per_mile REAL NOT NULL,
+  annual_threshold_miles REAL,
+  rate_after_threshold REAL,
+  effective_from TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS expense_categories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  code TEXT,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Multi-item claims (7thPortal_Expenses_Data_Model.docx): a claim is a
+-- container: the financially meaningful records are its items. A claim can
+-- mix receipt and mileage items across different accounts under one claim
+-- reference; approval, rejection and payment all happen at item level, not
+-- claim level - claim_status is derived from item statuses, never set
+-- directly (see deriveClaimStatus() in lib/finance.php).
+CREATE TABLE IF NOT EXISTS expense_claims (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  claim_number TEXT NOT NULL UNIQUE,
+  claimant_user_id INTEGER NOT NULL REFERENCES users(id),
+  title TEXT NOT NULL,
+  notes TEXT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN (
+    'draft','submitted','partially_approved','approved','rejected','partially_paid','paid'
+  )),
+  submitted_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Item states per FRD 10.3 / Data Model section 11, applied per item rather
+-- than per claim: draft -> submitted -> (more_info_requested <-> submitted)
+-- -> [account approver approves] -> pending_second_approval (only if
+-- claimed_amount is over the tier-2 threshold, FRD 19) -> [Treasurer/Chair
+-- second-approves] -> approved -> [Treasurer selects it into a payment
+-- batch] -> paid -> archived (soft-archived past the retention window, never
+-- hard-deleted - see pruneOldClaims() in lib/finance.php). "adjustment" item
+-- type and true partial-amount payment splitting are explicitly out of scope
+-- for now (Data Model section 15 open question) - not built.
+CREATE TABLE IF NOT EXISTS expense_claim_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  claim_id INTEGER NOT NULL REFERENCES expense_claims(id),
+  item_number INTEGER NOT NULL,
+  item_type TEXT NOT NULL CHECK(item_type IN ('receipt','mileage')),
+  title TEXT NOT NULL,
+  account_id INTEGER NOT NULL REFERENCES expense_accounts(id),
+  category_id INTEGER REFERENCES expense_categories(id),
+  expense_date TEXT,
+  claimed_amount REAL,
+  approved_amount REAL,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN (
+    'draft','submitted','more_info_requested','pending_second_approval',
+    'approved','rejected','ready_for_payment','paid','archived'
+  )),
+  receipt_exception_reason TEXT,
+  second_approval_required INTEGER NOT NULL DEFAULT 0,
+  submitted_at TEXT,
+  approved_by INTEGER REFERENCES users(id),
+  approved_at TEXT,
+  second_approved_by INTEGER REFERENCES users(id),
+  second_approved_at TEXT,
+  rejected_by INTEGER REFERENCES users(id),
+  rejected_at TEXT,
+  rejection_reason TEXT,
+  more_info_requested_by INTEGER REFERENCES users(id),
+  more_info_requested_at TEXT,
+  more_info_note TEXT,
+  ready_for_payment_by INTEGER REFERENCES users(id),
+  ready_for_payment_at TEXT,
+  paid_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS expense_mileage_details (
+  claim_item_id INTEGER PRIMARY KEY REFERENCES expense_claim_items(id),
+  journey_purpose TEXT,
+  start_location TEXT,
+  end_location TEXT,
+  return_journey INTEGER NOT NULL DEFAULT 0,
+  miles_claimed REAL,
+  vehicle_type TEXT,
+  rate_applied REAL,
+  declaration_accepted INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS expense_receipts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  storage_key TEXT NOT NULL UNIQUE,
+  ext TEXT NOT NULL,
+  original_filename TEXT,
+  uploaded_by_user_id INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Many-to-many per policy doc section 15: "one receipt may support multiple
+-- items only if the system allows the receipt to be linked to each relevant
+-- item and the split is clear."
+CREATE TABLE IF NOT EXISTS expense_claim_item_receipts (
+  claim_item_id INTEGER NOT NULL REFERENCES expense_claim_items(id),
+  receipt_id INTEGER NOT NULL REFERENCES expense_receipts(id),
+  PRIMARY KEY (claim_item_id, receipt_id)
+);
+
+-- Lets the Treasurer mark several approved items paid in one action with one
+-- bank reference/date, rather than one at a time (Data Model section 10:
+-- "PaymentAllocation... allows partial payment of approved items" - this
+-- implements the "several items, one payment action" part; true split-amount
+-- partial payment of a single item is not built, see item 15 open question).
+CREATE TABLE IF NOT EXISTS expense_payment_batches (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  batch_reference TEXT NOT NULL,
+  created_by_user_id INTEGER REFERENCES users(id),
+  payment_date TEXT NOT NULL,
+  bank_reference TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS expense_payment_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  payment_batch_id INTEGER NOT NULL REFERENCES expense_payment_batches(id),
+  claim_item_id INTEGER NOT NULL UNIQUE REFERENCES expense_claim_items(id),
+  paid_amount REAL NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(portal_role, account_status);
 CREATE INDEX IF NOT EXISTS idx_parent_links_parent ON parent_child_links(parent_user_id);
 CREATE INDEX IF NOT EXISTS idx_notices_status ON notices(status, audience, start_date);
@@ -151,5 +309,61 @@ CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action, created_at)
 CREATE INDEX IF NOT EXISTS idx_gallery_albums_status ON gallery_albums(status, visibility_scope);
 CREATE INDEX IF NOT EXISTS idx_gallery_photos_album ON gallery_photos(album_id);
 CREATE INDEX IF NOT EXISTS idx_gallery_album_parents_parent ON gallery_album_parents(parent_user_id);
+CREATE INDEX IF NOT EXISTS idx_expense_accounts_active ON expense_accounts(active);
+CREATE INDEX IF NOT EXISTS idx_expense_claims_claimant ON expense_claims(claimant_user_id, status);
+CREATE INDEX IF NOT EXISTS idx_expense_claim_items_claim ON expense_claim_items(claim_id);
+CREATE INDEX IF NOT EXISTS idx_expense_claim_items_account ON expense_claim_items(account_id, status);
+CREATE INDEX IF NOT EXISTS idx_expense_claim_item_receipts_receipt ON expense_claim_item_receipts(receipt_id);
 SQL
 );
+
+// Migration: the finance module was rebuilt from a single-item-per-claim
+// model to the header+items model above (7thPortal_Expenses_Data_Model.docx).
+// The old `claims` table only ever held local test/demo data (this predates
+// any real deployment), so it's dropped outright rather than migrated -
+// no-op if it doesn't exist.
+db()->exec('DROP TABLE IF EXISTS claims');
+
+// Migration: widen users.portal_role to include 'treasurer' and 'chair' (added
+// for the Expenses/Mileage/Treasurer/Trustee finance module - see
+// 7thportal-php/DECISIONS-finance-module.md). SQLite can't ALTER a CHECK
+// constraint in place, so this rebuilds the table only if the narrower,
+// pre-finance-module constraint is still there - a no-op on fresh installs,
+// where the CREATE TABLE above already has the widened list.
+$usersTableSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'")['sql'] ?? '';
+if ($usersTableSql && !str_contains($usersTableSql, "'treasurer'")) {
+    // PRAGMA foreign_keys is a no-op inside a transaction, and SQLite refuses
+    // to DROP a table other tables still hold a foreign key against while
+    // it's ON - so this has to be toggled off before BEGIN, not inside it.
+    db()->exec('PRAGMA foreign_keys = OFF');
+    db()->exec('BEGIN TRANSACTION');
+    db()->exec(<<<'SQL'
+    CREATE TABLE users_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      auth_type TEXT NOT NULL CHECK(auth_type IN ('osm','local')),
+      osm_user_id TEXT UNIQUE,
+      email TEXT UNIQUE,
+      password_hash TEXT,
+      first_name TEXT NOT NULL,
+      last_name TEXT NOT NULL,
+      portal_role TEXT NOT NULL CHECK(portal_role IN ('parent','section_leader','assistant_leader','group_leadership','trustee_viewer','treasurer','chair','admin')),
+      account_status TEXT NOT NULL DEFAULT 'active' CHECK(account_status IN ('active','suspended','deleted')),
+      osm_roles_json TEXT,
+      osm_access_token TEXT,
+      osm_refresh_token TEXT,
+      osm_token_expires_at TEXT,
+      is_osm_service_account INTEGER NOT NULL DEFAULT 0,
+      invite_token TEXT,
+      invite_expires_at TEXT,
+      last_login_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    SQL);
+    db()->exec('INSERT INTO users_new SELECT * FROM users');
+    db()->exec('DROP TABLE users');
+    db()->exec('ALTER TABLE users_new RENAME TO users');
+    db()->exec('CREATE INDEX IF NOT EXISTS idx_users_role ON users(portal_role, account_status)');
+    db()->exec('COMMIT');
+    db()->exec('PRAGMA foreign_keys = ON');
+}

@@ -5,7 +5,7 @@
 // per-browser, which is what that Map was standing in for anyway.
 
 $router->get('/api/config', function ($params) {
-    jsonResponse(['osmConfigured' => osmIsConfigured(), 'demoModeAllowed' => osmDemoModeAllowed(), 'galleryEnabled' => galleryEnabled()]);
+    jsonResponse(['osmConfigured' => osmIsConfigured(), 'demoModeAllowed' => osmDemoModeAllowed(), 'galleryEnabled' => galleryEnabled(), 'financeEnabled' => financeEnabled()]);
 });
 
 $router->get('/auth/osm/login', function ($params) {
@@ -139,7 +139,7 @@ $router->get('/auth/osm/callback', function ($params) {
 // the app with fake data before OSM credentials are configured.
 $router->get('/auth/demo/login', function ($params) {
     if (!osmDemoModeAllowed()) { http_response_code(403); echo 'Demo mode is disabled on this server.'; exit; }
-    $as = in_array(queryParam('as'), ['parent', 'leader', 'admin'], true) ? queryParam('as') : 'parent';
+    $as = in_array(queryParam('as'), ['parent', 'leader', 'admin', 'treasurer', 'chair', 'trustee'], true) ? queryParam('as') : 'parent';
 
     if ($as === 'parent') {
         $user = dbGet("SELECT * FROM users WHERE email = 'demo.parent@example.com'");
@@ -153,7 +153,13 @@ $router->get('/auth/demo/login', function ($params) {
         }
     } else {
         $osmUserId = "demo-$as";
-        $portalRole = $as === 'admin' ? 'admin' : 'section_leader';
+        $portalRole = match ($as) {
+            'admin' => 'admin',
+            'treasurer' => 'treasurer',
+            'chair' => 'chair',
+            'trustee' => 'trustee_viewer',
+            default => 'section_leader',
+        };
         $user = dbGet('SELECT * FROM users WHERE osm_user_id = ?', [$osmUserId]);
         if (!$user) {
             $startup = osmDemoStartupForRole($as);

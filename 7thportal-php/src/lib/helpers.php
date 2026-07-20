@@ -6,14 +6,24 @@ const ROLE_LABELS = [
     'assistant_leader' => 'Assistant Leader or Section Volunteer',
     'group_leadership' => 'Group Leadership Team',
     'trustee_viewer' => 'Trustee Viewer',
+    'treasurer' => 'Treasurer',
+    'chair' => 'Chair',
     'admin' => 'Portal Administrator',
 ];
-const LEADER_ROLES = ['section_leader', 'assistant_leader', 'group_leadership', 'trustee_viewer', 'admin'];
+const LEADER_ROLES = ['section_leader', 'assistant_leader', 'group_leadership', 'trustee_viewer', 'treasurer', 'chair', 'admin'];
 
 function roleLabel(string $role): string { return ROLE_LABELS[$role] ?? $role; }
 function isLeaderRole(string $role): bool { return in_array($role, LEADER_ROLES, true); }
 function isAdminRole(string $role): bool { return $role === 'admin'; }
 function canSeeSensitiveChildData(string $role): bool { return in_array($role, ['section_leader', 'admin'], true); }
+
+// Finance-module roles (FRD Final Pack section 5/26) layered onto the
+// existing role model rather than replacing it - "approver" is per-account
+// (see expense_accounts.approver_user_id), not a portal_role of its own.
+function isTreasurerRole(string $role): bool { return in_array($role, ['treasurer', 'admin'], true); }
+function isChairRole(string $role): bool { return in_array($role, ['chair', 'admin'], true); }
+// Who may view the read-only Trustee Board finance dashboard.
+function isTrusteeDashboardRole(string $role): bool { return in_array($role, ['trustee_viewer', 'chair', 'treasurer', 'admin'], true); }
 
 // "Now" in milliseconds, matching the millisecond-epoch strings stored in
 // osm_token_expires_at (kept the same unit as the Node version for parity).
