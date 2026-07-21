@@ -97,6 +97,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadFilters();
   await loadRoles();
 
+  // The roles list is rendered by JS, so a #roles-heading hash in the URL (e.g. from the "Roles" nav
+  // link or "Find a role" card) can't be scrolled to until after this point — do it now.
+  if (location.hash) {
+    const target = document.querySelector(location.hash);
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   document.getElementById('search').addEventListener('input', debounce(loadRoles, 250));
   document.getElementById('family-filter').addEventListener('change', () => { refreshAreaOptions(); loadRoles(); });
   document.getElementById('area-filter').addEventListener('change', loadRoles);

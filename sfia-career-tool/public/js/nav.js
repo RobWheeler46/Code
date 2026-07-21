@@ -41,7 +41,7 @@ function renderPublicNav() {
       <a class="brand" href="index.html">Career Explorer</a>
       <nav>
         <a href="index.html" class="${isActive(['index.html', 'role.html', ''])}">Home</a>
-        <a href="index.html" class="${isActive(['browse'])}">Roles</a>
+        <a href="index.html#roles-heading">Roles</a>
         <a href="compare.html" class="${isActive(['compare.html'])}">Compare</a>
         <a href="coach.html" class="${isActive(['coach.html'])}">Coach</a>
       </nav>
@@ -59,7 +59,7 @@ function renderPublicNav() {
     bottom.setAttribute('aria-label', 'Primary');
     bottom.innerHTML = `
       <a href="index.html" class="${isActive(['index.html', 'role.html', ''])}">${NAV_ICONS.home}<span>Home</span></a>
-      <a href="index.html" class="${isActive(['browse'])}">${NAV_ICONS.roles}<span>Roles</span></a>
+      <a href="index.html#roles-heading">${NAV_ICONS.roles}<span>Roles</span></a>
       <a href="compare.html" class="${isActive(['compare.html'])}">${NAV_ICONS.compare}<span>Compare</span></a>
       <a href="coach.html" class="${isActive(['coach.html'])}">${NAV_ICONS.coach}<span>Coach</span></a>
     `;
