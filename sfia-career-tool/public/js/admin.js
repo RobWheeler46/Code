@@ -73,6 +73,7 @@ const TABS = {
   audit: renderAuditTab,
   endusers: renderEndUsersTab,
   interview: renderInterviewQuestionsTab,
+  packbuilder: renderPackBuilderTab,
   orginsights: renderOrgInsightsTab,
   users: renderUsersTab
 };
@@ -1668,6 +1669,129 @@ async function renderInterviewQuestionsTab() {
   content.querySelectorAll('[data-iq-edit]').forEach(b => b.addEventListener('click', () => { iqEditingId = Number(b.dataset.iqEdit); renderInterviewQuestionsTab(); }));
   content.querySelectorAll('[data-iq-approve]').forEach(b => b.addEventListener('click', async () => { await Api.post(`/api/admin/interview-questions/${b.dataset.iqApprove}/approve`); renderInterviewQuestionsTab(); }));
   content.querySelectorAll('[data-iq-retire]').forEach(b => b.addEventListener('click', async () => { await Api.post(`/api/admin/interview-questions/${b.dataset.iqRetire}/retire`); renderInterviewQuestionsTab(); }));
+}
+
+// Skills & Knowledge Framework Interview Pack Builder (FRD v0.28): pick a role + framework items/levels,
+// generate a Word pack (one primary + one different alternative question per item-level).
+const SKF_LEVELS = [{ n: 1, label: 'L1 Basic' }, { n: 2, label: 'L2 Working' }, { n: 3, label: 'L3 Advanced' }, { n: 4, label: 'L4 Expert' }];
+let pbSelections = [];
+let pbRoleId = '';
+
+async function renderPackBuilderTab() {
+  const content = document.getElementById('tab-content');
+  const [roles, families] = await Promise.all([
+    Api.get('/api/admin/role-profiles'),
+    Api.get('/api/admin/framework/families')
+  ]);
+  const publishedRoles = roles.filter(r => r.status === 'published');
+  content.innerHTML = `
+    <div class="card">
+      <h2>Interview Pack Builder</h2>
+      <p class="muted" style="margin-top:0;">Build a Word interview pack from a role and selected Skills &amp; Knowledge Framework items. Each item-level gets one primary and one different alternative strength-based question, with guidance.</p>
+      <div id="pb-alert"></div>
+      <div class="field" style="max-width:420px;"><label>Role</label>
+        <select id="pb-role"><option value="">Select a published role…</option>${publishedRoles.map(r => `<option value="${r.id}" ${String(pbRoleId) === String(r.id) ? 'selected' : ''}>${escapeHtml(r.title)}</option>`).join('')}</select>
+      </div>
+    </div>
+    <div class="grid cols-2" style="align-items:start;">
+      <div class="card">
+        <h2>Framework items</h2>
+        <div class="filters-row">
+          <div class="field" style="margin-bottom:0;"><label>Family</label>
+            <select id="pb-family"><option value="">All families (${families.length})</option>${families.map(f => `<option value="${escapeHtml(f.family)}">${escapeHtml(f.family)} (${f.itemCount})</option>`).join('')}</select>
+          </div>
+          <div class="field" style="margin-bottom:0;"><label>Search</label><input type="search" id="pb-search" placeholder="e.g. Python, Kubernetes"></div>
+        </div>
+        <div id="pb-items"></div>
+      </div>
+      <div class="card">
+        <h2>Selected (<span id="pb-count">0</span>)</h2>
+        <div id="pb-selected"></div>
+        <div class="actions-row">
+          <button class="btn btn-primary" id="pb-generate" type="button">Generate Word pack</button>
+          <button class="btn btn-secondary btn-sm" id="pb-clear" type="button">Clear</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('pb-role').addEventListener('change', e => { pbRoleId = e.target.value; });
+  document.getElementById('pb-family').addEventListener('change', loadPbItems);
+  document.getElementById('pb-search').addEventListener('input', debounceAdmin(loadPbItems, 250));
+  document.getElementById('pb-generate').addEventListener('click', generateSkfPack);
+  document.getElementById('pb-clear').addEventListener('click', () => { pbSelections = []; renderPbSelected(); });
+  await loadPbItems();
+  renderPbSelected();
+}
+
+async function loadPbItems() {
+  const family = document.getElementById('pb-family').value;
+  const search = document.getElementById('pb-search').value.trim();
+  const params = new URLSearchParams();
+  if (family) params.set('family', family);
+  if (search) params.set('search', search);
+  const items = await Api.get('/api/admin/framework/items' + (params.toString() ? '?' + params.toString() : ''));
+  const box = document.getElementById('pb-items');
+  box.innerHTML = items.length === 0 ? '<p class="muted">No items match.</p>' : `
+    <table>
+      <tr><th>Technology / capability</th><th>Family</th><th>Level</th><th></th></tr>
+      ${items.map(it => `
+        <tr>
+          <td><strong>${escapeHtml(it.technology_or_capability)}</strong><br><span class="muted" style="font-size:0.78rem;">${escapeHtml((it.short_description || '').slice(0, 80))}</span></td>
+          <td style="font-size:0.85rem;">${escapeHtml(it.family)}</td>
+          <td><select data-pb-level="${escapeHtml(it.id)}">${SKF_LEVELS.map(l => `<option value="${l.n}">${l.label}</option>`).join('')}</select></td>
+          <td><button class="btn btn-secondary btn-sm" data-pb-add="${escapeHtml(it.id)}" data-tech="${escapeHtml(it.technology_or_capability)}" data-family="${escapeHtml(it.family)}" type="button">Add</button></td>
+        </tr>`).join('')}
+    </table>`;
+  box.querySelectorAll('[data-pb-add]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const itemId = btn.dataset.pbAdd;
+      const level = Number(box.querySelector(`[data-pb-level="${CSS.escape(itemId)}"]`).value);
+      if (pbSelections.some(s => s.itemId === itemId && s.level === level)) return;
+      pbSelections.push({ itemId, level, tech: btn.dataset.tech, family: btn.dataset.family });
+      renderPbSelected();
+    });
+  });
+}
+
+function renderPbSelected() {
+  const countEl = document.getElementById('pb-count');
+  if (countEl) countEl.textContent = pbSelections.length;
+  const box = document.getElementById('pb-selected');
+  if (!box) return;
+  box.innerHTML = pbSelections.length === 0 ? '<p class="muted">No items selected yet. Add items from the left.</p>' :
+    pbSelections.map((s, i) => `
+      <div class="pb-chip">
+        <span>${escapeHtml(s.tech)} <span class="muted">· ${escapeHtml(s.family)} · ${SKF_LEVELS.find(l => l.n === s.level).label}</span></span>
+        <button class="btn btn-secondary btn-sm" data-pb-remove="${i}" type="button" aria-label="Remove">✕</button>
+      </div>`).join('');
+  box.querySelectorAll('[data-pb-remove]').forEach(btn => btn.addEventListener('click', () => { pbSelections.splice(Number(btn.dataset.pbRemove), 1); renderPbSelected(); }));
+}
+
+async function generateSkfPack() {
+  const alert = document.getElementById('pb-alert');
+  alert.innerHTML = '';
+  if (!pbRoleId) { alert.innerHTML = '<div class="alert alert-error">Select a role first.</div>'; return; }
+  if (pbSelections.length === 0) { alert.innerHTML = '<div class="alert alert-error">Add at least one framework item.</div>'; return; }
+  const btn = document.getElementById('pb-generate');
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Generating…';
+  try {
+    const res = await fetch('/api/admin/framework/interview-pack', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ roleProfileId: Number(pbRoleId), selections: pbSelections.map(s => ({ itemId: s.itemId, level: s.level })) })
+    });
+    if (!res.ok) { let m = `Request failed (${res.status})`; try { m = (await res.json()).error || m; } catch (e) { /* non-JSON */ } throw new Error(m); }
+    const blob = await res.blob();
+    const disp = res.headers.get('Content-Disposition') || '';
+    const match = disp.match(/filename="([^"]+)"/);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = match ? match[1] : 'skills-pack.docx';
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
+    btn.textContent = 'Downloaded ✓'; setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2500);
+  } catch (e) {
+    alert.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`;
+    btn.textContent = orig; btn.disabled = false;
+  }
 }
 
 // Org insights (Phase 2): aggregated, privacy-preserving reporting over registered end-user activity.

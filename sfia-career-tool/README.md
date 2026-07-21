@@ -328,6 +328,18 @@ with Railway's env vars injected and can't reach a volume that only exists insid
   skill's official SFIA range, or the 13 non-SFIA-9 codes). Imported as `approved` so they are immediately
   usable. Run `node src/import-interview-questions.js` to (re)load; it reads the committed JSON, so it works
   the same locally and in the Railway container.
+  Also built (FRD v0.28): **Skills &amp; Knowledge Framework + Interview Pack Builder** &mdash; a technical
+  skills catalogue alongside SFIA (50 families &rarr; 750 items &rarr; 3,000 item-levels &rarr; 15,000
+  strength-based questions, 5 variants per item-level, Levels 1&ndash;4 Basic/Working/Advanced/Expert),
+  imported from `Skills_Knowledge_Framework_Interview_Bank_Import_v0_28.xlsx`. The workbook is extracted to
+  committed **gzipped** JSON (`src/data/skf/*.json.gz`, ~0.4 MB total) and loaded by
+  `src/import-skf.js` (idempotent upsert on the workbook's natural ids; run it locally and in the container
+  the same way). Admin &rarr; **Pack builder** lets a user pick a published role, filter framework items by
+  family/search, add items with a target level, and generate a **Word interview pack** &mdash; for each
+  selected item-level it randomly selects **one primary + one different alternative** question (preferring
+  lower usage), with what-good-looks-like guidance, the level expectation, and score notes, plus the role's
+  SFIA context. Tables: `framework_items`, `framework_item_levels`, `framework_questions`,
+  `framework_pack_log` (audit + usage). Lib `src/lib/skfPack.js`; routes under `/api/admin/framework/*`.
   Also built (FRD v0.26): **self-service change password** &mdash; any signed-in local account (admin or
   end user) can change its own password from `change-password.html` (linked in both the public nav-auth
   slot and the admin nav). `POST /api/user/change-password` verifies the current password, enforces the

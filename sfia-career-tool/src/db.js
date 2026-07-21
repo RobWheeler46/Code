@@ -546,4 +546,66 @@ CREATE TABLE IF NOT EXISTS password_history (
 CREATE INDEX IF NOT EXISTS idx_password_history_user ON password_history(user_id, created_at);
 `);
 
+// Selected-user feature (FRD v0.28): Skills & Knowledge Framework + Interview Pack Builder. A technical
+// skills catalogue (50 families -> 750 items -> 3000 item-levels -> 15000 strength-based questions, 5
+// variants per item-level) imported from the v0.28 workbook. A pack selects a role plus framework items
+// and target levels and generates a Word interview pack (one primary + one different alternative question
+// per item-level). Text ids are the workbook's natural keys. Additive tables.
+db.exec(`
+CREATE TABLE IF NOT EXISTS framework_items (
+  id TEXT PRIMARY KEY,
+  rank INTEGER,
+  demand_band TEXT,
+  family TEXT,
+  domain TEXT,
+  item_type TEXT,
+  technology_or_capability TEXT NOT NULL,
+  short_description TEXT,
+  indicative_priority TEXT,
+  typical_role_families TEXT,
+  status TEXT NOT NULL DEFAULT 'Active',
+  framework_version TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_framework_items_family ON framework_items(family, rank);
+
+CREATE TABLE IF NOT EXISTS framework_item_levels (
+  id TEXT PRIMARY KEY,
+  framework_item_id TEXT NOT NULL REFERENCES framework_items(id),
+  level_number INTEGER NOT NULL,
+  level_name TEXT,
+  expectation TEXT,
+  status TEXT NOT NULL DEFAULT 'Active'
+);
+CREATE INDEX IF NOT EXISTS idx_framework_item_levels_item ON framework_item_levels(framework_item_id, level_number);
+
+CREATE TABLE IF NOT EXISTS framework_questions (
+  id TEXT PRIMARY KEY,
+  framework_item_level_id TEXT NOT NULL REFERENCES framework_item_levels(id),
+  framework_item_id TEXT,
+  level_number INTEGER,
+  variant INTEGER,
+  strength_theme TEXT,
+  question TEXT NOT NULL,
+  alt_eligible INTEGER NOT NULL DEFAULT 1,
+  what_good_looks_like TEXT,
+  evidence_expectation TEXT,
+  randomisation_group_id TEXT,
+  usage_count INTEGER NOT NULL DEFAULT 0,
+  last_used_at TEXT,
+  status TEXT NOT NULL DEFAULT 'Active'
+);
+CREATE INDEX IF NOT EXISTS idx_framework_questions_fil ON framework_questions(framework_item_level_id, status);
+
+CREATE TABLE IF NOT EXISTS framework_pack_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  role_profile_id INTEGER REFERENCES role_profiles(id),
+  selected_items TEXT,
+  question_ids TEXT,
+  item_count INTEGER,
+  generated_by INTEGER REFERENCES users(id),
+  generated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_framework_pack_log_role ON framework_pack_log(role_profile_id);
+`);
+
 module.exports = db;

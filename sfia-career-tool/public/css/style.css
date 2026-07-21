@@ -701,3 +701,7 @@ textarea { min-height: 5rem; resize: vertical; }
   text-decoration: none; cursor: pointer; min-height: 40px;
 }
 .more-menu-panel > a:hover, .more-menu-panel > button:hover { background: var(--sky); color: var(--teal-dark); }
+
+/* v0.28 Interview Pack Builder */
+.pb-chip { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.4rem 0.6rem; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 0.4rem; font-size: 0.9rem; }
+#pb-items table td { vertical-align: top; }
