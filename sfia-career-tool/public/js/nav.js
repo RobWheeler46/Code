@@ -75,7 +75,10 @@ async function updatePublicNavAuth() {
   let me = null;
   try { me = await Api.get('/api/me'); } catch (e) { me = null; }
   if (me) {
+    // Admins (real logins or ADMIN_AUTOLOGIN) get a link to the admin area from any public page, so the
+    // interview pack generator and other admin tools are reachable without typing the URL.
     slot.innerHTML = `
+      ${me.isAdmin ? '<a href="admin.html">Admin</a>' : ''}
       <a href="dashboard.html">My dashboard</a>
       <a href="change-password.html">Change password</a>
       <a href="#" id="nav-signout">Sign out</a>
