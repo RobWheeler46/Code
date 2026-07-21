@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db');
-const { verifyPassword, userPermissions, logAudit } = require('../lib/helpers');
+const { verifyPassword, userPermissions, logAudit, adminAutoLoginEnabled, bypassAdminUser } = require('../lib/helpers');
 
 const router = express.Router();
 
@@ -37,8 +37,15 @@ router.post('/logout', (req, res) => {
 });
 
 router.get('/me', (req, res) => {
-  if (!req.session.userId) return res.status(401).json({ error: 'Not logged in.' });
-  const user = db.prepare('SELECT id, first_name, last_name, email, account_status FROM users WHERE id = ?').get(req.session.userId);
+  let user = req.session.userId
+    ? db.prepare('SELECT id, first_name, last_name, email, account_status FROM users WHERE id = ?').get(req.session.userId)
+    : null;
+  let autoLogin = false;
+  // DEV/DEMO ONLY: with no session, ADMIN_AUTOLOGIN presents the bypass admin as the signed-in user.
+  if ((!user || user.account_status !== 'active') && adminAutoLoginEnabled()) {
+    const admin = bypassAdminUser();
+    if (admin) { user = admin; autoLogin = true; }
+  }
   if (!user || user.account_status !== 'active') return res.status(401).json({ error: 'Not logged in.' });
   const permissions = userPermissions(user.id);
   res.json({
@@ -46,6 +53,7 @@ router.get('/me', (req, res) => {
     firstName: user.first_name,
     lastName: user.last_name,
     email: user.email,
+    autoLogin,
     ...permissions
   });
 });

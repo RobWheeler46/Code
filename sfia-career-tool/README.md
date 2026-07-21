@@ -77,6 +77,17 @@ to the console &mdash; there is no password reset flow, so save it or change it 
 users tab currently supports role/status changes but not self-service password change; that would be a
 follow-up). Running the seed script again is safe: it only inserts records that don't already exist.
 
+### `ADMIN_AUTOLOGIN` — no-login admin (DEV/DEMO ONLY)
+
+Setting `ADMIN_AUTOLOGIN=true` makes the app treat **every** request as if signed in as an administrator,
+with no login at all (it acts as `ADMIN_EMAIL`, or the highest-privilege active admin if that is unset).
+It's a convenience for local development and throwaway demos so you don't have to log in to reach the admin
+area. It is an **authentication bypass**: while it's on, anyone who can reach the site has full admin
+access (content, users, password resets, pack generation). It defaults to **off** (any value other than the
+exact string `true`), the server prints a loud warning banner on boot when it's on, and it must **never** be
+enabled on the production/Railway deployment. Implemented in `requireUser` + `/api/me` via
+`adminAutoLoginEnabled()` / `bypassAdminUser()` in `src/lib/helpers.js`.
+
 The SQLite database lives at `data/sfia-career-tool.db` (gitignored).
 
 ## Deployment (Railway)

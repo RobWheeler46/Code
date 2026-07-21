@@ -35,6 +35,16 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Something went wrong.' });
 });
 
+const { adminAutoLoginEnabled } = require('./lib/helpers');
+
 app.listen(PORT, () => {
   console.log(`Career Explorer running at http://localhost:${PORT}`);
+  if (adminAutoLoginEnabled()) {
+    console.warn('\n**************************************************************************');
+    console.warn('*  SECURITY WARNING: ADMIN_AUTOLOGIN=true                                 *');
+    console.warn('*  Admin access is granted to EVERY visitor with NO login required.       *');
+    console.warn('*  This is a development/demo convenience only. NEVER enable it on a       *');
+    console.warn('*  public or production deployment.                                       *');
+    console.warn('**************************************************************************\n');
+  }
 });

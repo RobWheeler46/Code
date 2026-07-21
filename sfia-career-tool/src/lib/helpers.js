@@ -17,6 +17,31 @@ function verifyPassword(password, stored) {
   return crypto.timingSafeEqual(a, b);
 }
 
+// DEV/DEMO ONLY: when ADMIN_AUTOLOGIN=true, the app treats every request as if signed in as an
+// administrator, with no login required. This is an authentication bypass and must NEVER be enabled on a
+// production/public deployment. Default off (any value other than the string "true" is off).
+function adminAutoLoginEnabled() {
+  return String(process.env.ADMIN_AUTOLOGIN || '').trim().toLowerCase() === 'true';
+}
+
+// The admin account used for the no-login bypass: prefer ADMIN_EMAIL, otherwise the highest-privilege
+// active admin. Returns null if no active admin exists (in which case the bypass simply does nothing).
+function bypassAdminUser() {
+  const email = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+  let user = email ? db.prepare(`SELECT * FROM users WHERE email = ? AND account_status = 'active'`).get(email) : null;
+  if (!user) {
+    user = db.prepare(`
+      SELECT u.* FROM users u
+      JOIN user_admin_roles uar ON uar.user_id = u.id
+      JOIN admin_roles ar ON ar.id = uar.admin_role_id
+      WHERE u.account_status = 'active'
+      ORDER BY ar.can_manage_admins DESC, u.id ASC
+      LIMIT 1
+    `).get();
+  }
+  return user || null;
+}
+
 function userAdminRoles(userId) {
   return db.prepare(`
     SELECT ar.* FROM admin_roles ar
@@ -60,6 +85,8 @@ function logUsageEvent({ sessionId = null, eventType, roleProfileId = null, aspi
 module.exports = {
   hashPassword,
   verifyPassword,
+  adminAutoLoginEnabled,
+  bypassAdminUser,
   userAdminRoles,
   userPermissions,
   logAudit,
