@@ -1687,7 +1687,7 @@ async function renderPackBuilderTab() {
   content.innerHTML = `
     <div class="card">
       <h2>Interview Pack Builder</h2>
-      <p class="muted" style="margin-top:0;">Build a Word interview pack from a role and selected Skills &amp; Knowledge Framework items. Each item-level gets one primary and one different alternative strength-based question, with guidance.</p>
+      <p class="muted" style="margin-top:0;">The pack always includes the role&rsquo;s <strong>SFIA skills</strong> &mdash; a strength-based question, an alternative and &ldquo;what good looks like&rdquo; for each. Optionally add <strong>Skills &amp; Knowledge Framework</strong> items below for extra technical depth. Pick a role and generate.</p>
       <div id="pb-alert"></div>
       <div class="field" style="max-width:420px;"><label>Role</label>
         <select id="pb-role"><option value="">Select a published role…</option>${publishedRoles.map(r => `<option value="${r.id}" ${String(pbRoleId) === String(r.id) ? 'selected' : ''}>${escapeHtml(r.title)}</option>`).join('')}</select>
@@ -1758,7 +1758,7 @@ function renderPbSelected() {
   if (countEl) countEl.textContent = pbSelections.length;
   const box = document.getElementById('pb-selected');
   if (!box) return;
-  box.innerHTML = pbSelections.length === 0 ? '<p class="muted">No items selected yet. Add items from the left.</p>' :
+  box.innerHTML = pbSelections.length === 0 ? '<p class="muted">No framework items added (optional). The pack will still include the role&rsquo;s SFIA skills.</p>' :
     pbSelections.map((s, i) => `
       <div class="pb-chip">
         <span>${escapeHtml(s.tech)} <span class="muted">· ${escapeHtml(s.family)} · ${SKF_LEVELS.find(l => l.n === s.level).label}</span></span>
@@ -1771,7 +1771,6 @@ async function generateSkfPack() {
   const alert = document.getElementById('pb-alert');
   alert.innerHTML = '';
   if (!pbRoleId) { alert.innerHTML = '<div class="alert alert-error">Select a role first.</div>'; return; }
-  if (pbSelections.length === 0) { alert.innerHTML = '<div class="alert alert-error">Add at least one framework item.</div>'; return; }
   const btn = document.getElementById('pb-generate');
   const orig = btn.textContent;
   btn.disabled = true; btn.textContent = 'Generating…';

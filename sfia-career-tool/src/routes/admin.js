@@ -1101,34 +1101,40 @@ router.post('/framework/interview-pack', async (req, res) => {
     if (!role) return res.status(404).json({ error: 'Role profile not found.' });
     const published = db.prepare(`SELECT 1 FROM role_profiles WHERE id = ? AND status = 'published'`).get(role.id);
     if (!published) return res.status(400).json({ error: 'Interview packs can only be generated from published role profiles.' });
-    if (!Array.isArray(selections) || selections.length === 0) {
-      return res.status(400).json({ error: 'Select at least one framework item and level.' });
-    }
-    // Normalise + validate selections.
-    const clean = selections
+
+    // The pack is always built around the role's SFIA skills (a question + alternative + what-good per
+    // skill, from the SFIA question bank). Framework items are optional extras.
+    const sfiaSkills = packSkills(role.id);
+    const { selections: sfiaSelections, usedQuestionIds: sfiaUsedIds } = selectQuestions(sfiaSkills, role.sfia_version_id);
+
+    // Optional framework item selections.
+    const clean = (Array.isArray(selections) ? selections : [])
       .map(s => ({ itemId: String(s.itemId || ''), level: Number(s.level) }))
       .filter(s => s.itemId && s.level >= 1 && s.level <= 4);
-    if (clean.length === 0) return res.status(400).json({ error: 'No valid framework selections.' });
-
     const { blocks, usedIds } = skf.buildBlocks(clean);
-    if (blocks.length === 0) return res.status(400).json({ error: 'None of the selected items resolved to framework content.' });
 
-    const sfiaContext = skf.roleSfiaContext(role.id);
+    if (sfiaSelections.length === 0 && blocks.length === 0) {
+      return res.status(400).json({ error: 'This role has no SFIA skills mapped. Add framework items to build a pack.' });
+    }
 
     const packRow = db.prepare(`
       INSERT INTO framework_pack_log (role_profile_id, selected_items, question_ids, item_count, generated_by)
       VALUES (?, ?, ?, ?, ?)
-    `).run(role.id, JSON.stringify(clean), JSON.stringify(usedIds), blocks.length, req.user.id);
+    `).run(role.id, JSON.stringify(clean), JSON.stringify({ sfia: sfiaUsedIds, framework: usedIds }), blocks.length, req.user.id);
     const packId = packRow.lastInsertRowid;
 
     const generatedByName = `${req.user.first_name} ${req.user.last_name}`.trim();
-    const buffer = await skf.buildSkfPackDocx({ role, sfiaContext, blocks, meta: { packId, generatedByName } });
+    const buffer = await skf.buildSkfPackDocx({ role, sfiaSelections, blocks, meta: { packId, generatedByName } });
 
     if (usedIds.length > 0) {
       const upd = db.prepare(`UPDATE framework_questions SET usage_count = usage_count + 1, last_used_at = datetime('now') WHERE id = ?`);
       for (const qid of usedIds) upd.run(qid);
     }
-    logAudit({ ...auditCtx(req), action: 'generate', entityType: 'framework_interview_pack', entityId: packId, details: { roleProfileId: role.id, itemCount: blocks.length } });
+    if (sfiaUsedIds.length > 0) {
+      const updSfia = db.prepare(`UPDATE interview_questions SET usage_count = usage_count + 1, last_used_at = datetime('now') WHERE id = ?`);
+      for (const qid of sfiaUsedIds) updSfia.run(qid);
+    }
+    logAudit({ ...auditCtx(req), action: 'generate', entityType: 'framework_interview_pack', entityId: packId, details: { roleProfileId: role.id, sfiaSkills: sfiaSelections.length, itemCount: blocks.length } });
 
     const safeTitle = String(role.title).replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'role';
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
