@@ -340,6 +340,15 @@ with Railway's env vars injected and can't reach a volume that only exists insid
   lower usage), with what-good-looks-like guidance, the level expectation, and score notes, plus the role's
   SFIA context. Tables: `framework_items`, `framework_item_levels`, `framework_questions`,
   `framework_pack_log` (audit + usage). Lib `src/lib/skfPack.js`; routes under `/api/admin/framework/*`.
+  Also built (FRD v0.30): **Core &rarr; Business role profiles**. Existing role profiles are now treated as
+  **core** (reusable SFIA base; `role_profiles.is_core`). Admins create a **business role profile** from a
+  published core role (Admin &rarr; **Business roles**): it inherits the core role&rsquo;s SFIA skills/levels
+  (read-only) and adds selected **Skills &amp; Knowledge Framework** items+levels; it can only be published
+  once it has &ge;1 item and every assigned item-level has active questions. The **Pack builder** then has a
+  fast path: pick a published business role &rarr; **Prepare pack** &rarr; the same preview &rarr; **Generate
+  Word document** (framework items are pre-assigned, so no manual selection). The ad-hoc builder (any role +
+  chosen items) remains as an advanced option. Tables: `business_role_profiles`,
+  `business_role_framework_items`; routes under `/api/admin/business-roles/*` (incl. `/prepare` + `/download`).
   Also built (FRD v0.26): **self-service change password** &mdash; any signed-in local account (admin or
   end user) can change its own password from `change-password.html` (linked in both the public nav-auth
   slot and the admin nav). `POST /api/user/change-password` verifies the current password, enforces the

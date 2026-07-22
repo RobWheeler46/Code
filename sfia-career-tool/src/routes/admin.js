@@ -1169,4 +1169,175 @@ router.post('/framework/interview-pack/download', async (req, res) => {
   }
 });
 
+// ---- Business role profiles (FRD v0.30): core role -> business role (adds SKF items) -> interview pack ----
+
+function coreRoleSummary(coreRoleId) {
+  return db.prepare(`
+    SELECT rp.id, rp.title, rp.grade, rp.role_description, rp.sfia_version_id, v.version_name AS sfia_version
+    FROM role_profiles rp LEFT JOIN sfia_versions v ON v.id = rp.sfia_version_id
+    WHERE rp.id = ?
+  `).get(coreRoleId);
+}
+
+function itemLevelActiveQuestionCount(itemId, level) {
+  return db.prepare(`SELECT COUNT(*) AS n FROM framework_questions WHERE framework_item_id = ? AND level_number = ? AND status = 'Active'`).get(itemId, level).n;
+}
+
+function businessRoleItems(brpId) {
+  return db.prepare(`
+    SELECT bri.id, bri.framework_item_id, bri.level_number, fi.technology_or_capability, fi.family
+    FROM business_role_framework_items bri
+    JOIN framework_items fi ON fi.id = bri.framework_item_id
+    WHERE bri.business_role_profile_id = ?
+    ORDER BY fi.family, fi.technology_or_capability
+  `).all(brpId);
+}
+
+router.get('/business-roles', (req, res) => {
+  res.json(db.prepare(`
+    SELECT b.id, b.business_role_name, b.status, b.updated_at, rp.title AS core_role_title, rp.grade,
+      (SELECT COUNT(*) FROM business_role_framework_items x WHERE x.business_role_profile_id = b.id) AS item_count
+    FROM business_role_profiles b JOIN role_profiles rp ON rp.id = b.core_role_profile_id
+    WHERE b.status != 'archived' ORDER BY b.updated_at DESC
+  `).all());
+});
+
+router.get('/business-roles/core-options', (req, res) => {
+  res.json(db.prepare(`SELECT id, title, grade FROM role_profiles WHERE status = 'published' AND is_core = 1 ORDER BY title`).all());
+});
+
+router.get('/business-roles/published', (req, res) => {
+  res.json(db.prepare(`
+    SELECT b.id, b.business_role_name, rp.title AS core_role_title
+    FROM business_role_profiles b JOIN role_profiles rp ON rp.id = b.core_role_profile_id
+    WHERE b.status = 'published' ORDER BY b.business_role_name
+  `).all());
+});
+
+router.post('/business-roles', requireEdit, (req, res) => {
+  const { coreRoleProfileId, businessRoleName, businessDescriptionOverride } = req.body || {};
+  const core = db.prepare(`SELECT id, title FROM role_profiles WHERE id = ? AND status = 'published' AND is_core = 1`).get(coreRoleProfileId);
+  if (!core) return res.status(400).json({ error: 'Select a published core role profile.' });
+  const name = String(businessRoleName || '').trim() || core.title;
+  const r = db.prepare(`INSERT INTO business_role_profiles (core_role_profile_id, business_role_name, business_description_override, created_by) VALUES (?, ?, ?, ?)`)
+    .run(core.id, name, businessDescriptionOverride || null, req.user.id);
+  logAudit({ ...auditCtx(req), action: 'create', entityType: 'business_role_profile', entityId: r.lastInsertRowid });
+  res.status(201).json({ id: r.lastInsertRowid });
+});
+
+router.get('/business-roles/:id', (req, res) => {
+  const b = db.prepare(`SELECT * FROM business_role_profiles WHERE id = ?`).get(req.params.id);
+  if (!b) return res.status(404).json({ error: 'Business role profile not found.' });
+  const core = coreRoleSummary(b.core_role_profile_id);
+  const sfiaSkills = packSkills(b.core_role_profile_id).map(s => ({ code: s.skill_code, name: s.skill_name, level: s.level_number, levelName: s.level_name }));
+  const items = businessRoleItems(b.id).map(it => ({ ...it, activeQuestions: itemLevelActiveQuestionCount(it.framework_item_id, it.level_number) }));
+  res.json({ ...b, core, sfiaSkills, items });
+});
+
+router.patch('/business-roles/:id', requireEdit, (req, res) => {
+  const b = db.prepare(`SELECT * FROM business_role_profiles WHERE id = ?`).get(req.params.id);
+  if (!b) return res.status(404).json({ error: 'Not found.' });
+  const { businessRoleName, businessDescriptionOverride, questionSelectionPolicy } = req.body || {};
+  db.prepare(`UPDATE business_role_profiles SET business_role_name = ?, business_description_override = ?, question_selection_policy = ?, updated_at = datetime('now') WHERE id = ?`).run(
+    businessRoleName != null && String(businessRoleName).trim() ? String(businessRoleName).trim() : b.business_role_name,
+    businessDescriptionOverride !== undefined ? businessDescriptionOverride : b.business_description_override,
+    questionSelectionPolicy || b.question_selection_policy,
+    b.id
+  );
+  logAudit({ ...auditCtx(req), action: 'edit', entityType: 'business_role_profile', entityId: b.id });
+  res.json(db.prepare(`SELECT * FROM business_role_profiles WHERE id = ?`).get(b.id));
+});
+
+router.post('/business-roles/:id/items', requireEdit, (req, res) => {
+  const b = db.prepare(`SELECT id FROM business_role_profiles WHERE id = ?`).get(req.params.id);
+  if (!b) return res.status(404).json({ error: 'Not found.' });
+  const { frameworkItemId, level } = req.body || {};
+  const item = db.prepare(`SELECT id FROM framework_items WHERE id = ?`).get(frameworkItemId);
+  const lvl = Number(level);
+  if (!item || !(lvl >= 1 && lvl <= 4)) return res.status(400).json({ error: 'Invalid framework item or level.' });
+  try {
+    db.prepare(`INSERT INTO business_role_framework_items (business_role_profile_id, framework_item_id, level_number) VALUES (?, ?, ?)`).run(b.id, frameworkItemId, lvl);
+  } catch (e) { /* duplicate — ignore */ }
+  res.json({ ok: true });
+});
+
+router.delete('/business-roles/:id/items/:mappingId', requireEdit, (req, res) => {
+  db.prepare(`DELETE FROM business_role_framework_items WHERE id = ? AND business_role_profile_id = ?`).run(req.params.mappingId, req.params.id);
+  res.json({ ok: true });
+});
+
+router.post('/business-roles/:id/publish', requirePublish, (req, res) => {
+  const b = db.prepare(`SELECT id FROM business_role_profiles WHERE id = ?`).get(req.params.id);
+  if (!b) return res.status(404).json({ error: 'Not found.' });
+  const items = businessRoleItems(b.id);
+  if (items.length === 0) return res.status(400).json({ error: 'Assign at least one Skills & Knowledge Framework item before publishing.' });
+  const missing = items.filter(it => itemLevelActiveQuestionCount(it.framework_item_id, it.level_number) === 0);
+  if (missing.length) return res.status(400).json({ error: `These items have no active questions: ${missing.map(m => m.technology_or_capability + ' L' + m.level_number).join(', ')}.` });
+  db.prepare(`UPDATE business_role_profiles SET status = 'published', updated_at = datetime('now') WHERE id = ?`).run(b.id);
+  logAudit({ ...auditCtx(req), action: 'publish', entityType: 'business_role_profile', entityId: b.id });
+  res.json({ ok: true });
+});
+
+router.post('/business-roles/:id/unpublish', requirePublish, (req, res) => {
+  db.prepare(`UPDATE business_role_profiles SET status = 'unpublished', updated_at = datetime('now') WHERE id = ?`).run(req.params.id);
+  res.json({ ok: true });
+});
+
+router.post('/business-roles/:id/archive', requirePublish, (req, res) => {
+  db.prepare(`UPDATE business_role_profiles SET status = 'archived', updated_at = datetime('now') WHERE id = ?`).run(req.params.id);
+  res.json({ ok: true });
+});
+
+// Prepare Pack (preview) for a business role: SFIA questions from the inherited core role + questions for
+// the business role's assigned framework items. Same serialized shape as the ad-hoc builder.
+router.post('/business-roles/:id/prepare', (req, res) => {
+  const b = db.prepare(`SELECT * FROM business_role_profiles WHERE id = ?`).get(req.params.id);
+  if (!b) return res.status(404).json({ error: 'Business role profile not found.' });
+  const core = coreRoleSummary(b.core_role_profile_id);
+  const sfiaSkills = packSkills(b.core_role_profile_id);
+  const { selections: sfiaSel } = selectQuestions(sfiaSkills, core.sfia_version_id);
+  const clean = businessRoleItems(b.id).map(it => ({ itemId: it.framework_item_id, level: it.level_number }));
+  const { blocks } = skf.buildBlocks(clean);
+  res.json({
+    businessRole: { id: b.id, name: b.business_role_name, coreRoleTitle: core.title, grade: core.grade, description: b.business_description_override || core.role_description },
+    sfia: skf.serializeSfiaSelections(sfiaSel),
+    framework: skf.serializeFrameworkBlocks(blocks)
+  });
+});
+
+// Generate the Word document from the previewed business-role pack.
+router.post('/business-roles/:id/download', async (req, res) => {
+  try {
+    const b = db.prepare(`SELECT * FROM business_role_profiles WHERE id = ?`).get(req.params.id);
+    if (!b) return res.status(404).json({ error: 'Business role profile not found.' });
+    const core = coreRoleSummary(b.core_role_profile_id);
+    const { pack } = req.body || {};
+    const sfia = Array.isArray(pack && pack.sfia) ? pack.sfia : [];
+    const framework = Array.isArray(pack && pack.framework) ? pack.framework : [];
+    if (sfia.length === 0 && framework.length === 0) return res.status(400).json({ error: 'Nothing to generate — prepare the pack first.' });
+
+    const sfiaIds = sfia.flatMap(s => [s.primary && s.primary.id, s.alternative && s.alternative.id]).filter(Boolean);
+    const fwIds = framework.flatMap(f => [f.primary && f.primary.id, f.alternative && f.alternative.id]).filter(Boolean);
+
+    const packRow = db.prepare(`INSERT INTO framework_pack_log (role_profile_id, selected_items, question_ids, item_count, generated_by) VALUES (?, ?, ?, ?, ?)`)
+      .run(core.id, JSON.stringify({ businessRoleId: b.id }), JSON.stringify({ sfia: sfiaIds, framework: fwIds }), framework.length, req.user.id);
+    const packId = packRow.lastInsertRowid;
+
+    const role = { title: b.business_role_name, grade: core.grade, role_description: b.business_description_override || core.role_description };
+    const generatedByName = `${req.user.first_name} ${req.user.last_name}`.trim();
+    const buffer = await skf.buildSkfPackDocx({ role, sfia, framework, meta: { packId, generatedByName } });
+
+    if (fwIds.length) { const upd = db.prepare(`UPDATE framework_questions SET usage_count = usage_count + 1, last_used_at = datetime('now') WHERE id = ?`); for (const id of fwIds) upd.run(id); }
+    if (sfiaIds.length) { const upd = db.prepare(`UPDATE interview_questions SET usage_count = usage_count + 1, last_used_at = datetime('now') WHERE id = ?`); for (const id of sfiaIds) upd.run(id); }
+    logAudit({ ...auditCtx(req), action: 'generate', entityType: 'business_role_interview_pack', entityId: packId, details: { businessRoleId: b.id } });
+
+    const safeTitle = String(b.business_role_name).replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'business-role';
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename="interview-pack_${safeTitle}_${packId}.docx"`);
+    res.send(buffer);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to generate interview pack: ' + err.message });
+  }
+});
+
 module.exports = router;

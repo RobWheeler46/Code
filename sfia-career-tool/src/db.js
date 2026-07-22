@@ -608,4 +608,36 @@ CREATE TABLE IF NOT EXISTS framework_pack_log (
 CREATE INDEX IF NOT EXISTS idx_framework_pack_log_role ON framework_pack_log(role_profile_id);
 `);
 
+// FRD v0.30: Core role profiles -> Business role profiles -> interview packs. Existing role profiles are
+// treated as core (reusable SFIA base). A business role profile is created from a core role profile and
+// adds selected Skills & Knowledge Framework items+levels; interview packs are generated from it. Additive.
+const roleProfileColumns3 = db.prepare(`PRAGMA table_info(role_profiles)`).all().map(c => c.name);
+if (!roleProfileColumns3.includes('is_core')) {
+  db.exec(`ALTER TABLE role_profiles ADD COLUMN is_core INTEGER NOT NULL DEFAULT 1`);
+}
+db.exec(`
+CREATE TABLE IF NOT EXISTS business_role_profiles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  core_role_profile_id INTEGER NOT NULL REFERENCES role_profiles(id),
+  business_role_name TEXT NOT NULL,
+  business_description_override TEXT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','published','unpublished','archived')),
+  question_selection_policy TEXT NOT NULL DEFAULT 'random',
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_business_role_core ON business_role_profiles(core_role_profile_id, status);
+
+CREATE TABLE IF NOT EXISTS business_role_framework_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  business_role_profile_id INTEGER NOT NULL REFERENCES business_role_profiles(id),
+  framework_item_id TEXT NOT NULL REFERENCES framework_items(id),
+  level_number INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(business_role_profile_id, framework_item_id, level_number)
+);
+CREATE INDEX IF NOT EXISTS idx_business_role_items ON business_role_framework_items(business_role_profile_id);
+`);
+
 module.exports = db;

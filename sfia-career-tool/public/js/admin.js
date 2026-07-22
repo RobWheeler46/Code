@@ -73,6 +73,7 @@ const TABS = {
   audit: renderAuditTab,
   endusers: renderEndUsersTab,
   interview: renderInterviewQuestionsTab,
+  businessroles: renderBusinessRolesTab,
   packbuilder: renderPackBuilderTab,
   orginsights: renderOrgInsightsTab,
   users: renderUsersTab
@@ -1671,6 +1672,164 @@ async function renderInterviewQuestionsTab() {
   content.querySelectorAll('[data-iq-retire]').forEach(b => b.addEventListener('click', async () => { await Api.post(`/api/admin/interview-questions/${b.dataset.iqRetire}/retire`); renderInterviewQuestionsTab(); }));
 }
 
+// Business role profiles (FRD v0.30): created from a core role profile; inherit its SFIA content and add
+// Skills & Knowledge Framework items. Interview packs are generated from the business role profile.
+const BR_STATUS_PILL = { draft: 'draft', published: 'published', unpublished: 'unpublished', archived: 'archived' };
+
+async function renderBusinessRolesTab() {
+  const content = document.getElementById('tab-content');
+  const [roles, coreOptions] = await Promise.all([
+    Api.get('/api/admin/business-roles'),
+    Api.get('/api/admin/business-roles/core-options')
+  ]);
+  content.innerHTML = `
+    <div class="card">
+      <h2>Create a business role profile</h2>
+      <p class="muted" style="margin-top:0;">A business role is based on a published <strong>core role profile</strong> (it inherits the SFIA skills and levels) and adds the Skills &amp; Knowledge Framework items relevant to your organisation. Interview packs are then generated from the business role.</p>
+      <div id="br-form-alert"></div>
+      <div class="grid cols-2">
+        <div class="field"><label>Core role profile</label>
+          <select id="br-core">${coreOptions.length ? coreOptions.map(c => `<option value="${c.id}">${escapeHtml(c.title)}${c.grade ? ' (Grade ' + escapeHtml(c.grade) + ')' : ''}</option>`).join('') : '<option value="">No published roles</option>'}</select>
+        </div>
+        <div class="field"><label>Business role name (optional)</label><input type="text" id="br-name" placeholder="Defaults to the core role name"></div>
+      </div>
+      <button class="btn btn-primary btn-sm" id="br-create" type="button" ${coreOptions.length ? '' : 'disabled'}>Create business role</button>
+    </div>
+    <div class="card">
+      <h2>Business roles (${roles.length})</h2>
+      ${roles.length === 0 ? '<div class="empty-state">No business roles yet.</div>' : `
+      <table>
+        <tr><th>Business role</th><th>Core role</th><th>Framework items</th><th>Status</th><th></th></tr>
+        ${roles.map(r => `
+          <tr>
+            <td><strong>${escapeHtml(r.business_role_name)}</strong></td>
+            <td>${escapeHtml(r.core_role_title)}</td>
+            <td>${r.item_count}</td>
+            <td><span class="badge" data-status="${BR_STATUS_PILL[r.status]}">${escapeHtml(r.status)}</span></td>
+            <td><button class="btn btn-secondary btn-sm" data-br-edit="${r.id}">Edit</button></td>
+          </tr>`).join('')}
+      </table>`}
+    </div>
+  `;
+  document.getElementById('br-create').addEventListener('click', async () => {
+    const alertBox = document.getElementById('br-form-alert');
+    alertBox.innerHTML = '';
+    try {
+      const r = await Api.post('/api/admin/business-roles', {
+        coreRoleProfileId: Number(document.getElementById('br-core').value),
+        businessRoleName: document.getElementById('br-name').value
+      });
+      renderBusinessRoleEditor(r.id);
+    } catch (e) { alertBox.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
+  content.querySelectorAll('[data-br-edit]').forEach(b => b.addEventListener('click', () => renderBusinessRoleEditor(b.dataset.brEdit)));
+}
+
+async function renderBusinessRoleEditor(id) {
+  const content = document.getElementById('tab-content');
+  const b = await Api.get(`/api/admin/business-roles/${id}`);
+  const families = await Api.get('/api/admin/framework/families');
+  const canPublishNow = b.items.length > 0 && b.items.every(i => i.activeQuestions > 0);
+
+  content.innerHTML = `
+    <div class="card">
+      <div class="actions-row" style="margin-top:0; justify-content:space-between;">
+        <button class="btn btn-secondary btn-sm" id="br-back" type="button">&larr; Business roles</button>
+        <span class="badge" data-status="${BR_STATUS_PILL[b.status]}">${escapeHtml(b.status)}</span>
+      </div>
+      <div id="br-alert"></div>
+      <div class="grid cols-2">
+        <div class="field"><label>Business role name</label><input type="text" id="br-edit-name" value="${escapeHtml(b.business_role_name)}"></div>
+      </div>
+      <div class="field"><label>Business description (optional — overrides the inherited core description in packs)</label><textarea id="br-edit-desc" placeholder="Inherited: ${escapeHtml((b.core.role_description || '').slice(0, 120))}">${escapeHtml(b.business_description_override || '')}</textarea></div>
+      <button class="btn btn-secondary btn-sm" id="br-save" type="button">Save details</button>
+    </div>
+
+    <div class="card" style="background:var(--sky); box-shadow:none;">
+      <h3 style="margin-top:0;">Inherited from core role: ${escapeHtml(b.core.title)}${b.core.grade ? ' · Grade ' + escapeHtml(b.core.grade) : ''}</h3>
+      <p class="muted" style="margin:0 0 0.5rem;">SFIA version: ${escapeHtml(b.core.sfia_version || '—')} · these SFIA skills are read-only and always included in the pack:</p>
+      <div>${b.sfiaSkills.length ? b.sfiaSkills.map(s => `<span class="pill">${escapeHtml(s.code)} L${s.level}</span> `).join('') : '<span class="muted">No SFIA skills on the core role.</span>'}</div>
+    </div>
+
+    <div class="grid cols-2" style="align-items:start;">
+      <div class="card">
+        <h3 style="margin-top:0;">Add framework items</h3>
+        <div class="filters-row">
+          <div class="field" style="margin-bottom:0;"><label>Family</label>
+            <select id="br-family"><option value="">All families</option>${families.map(f => `<option value="${escapeHtml(f.family)}">${escapeHtml(f.family)} (${f.itemCount})</option>`).join('')}</select>
+          </div>
+          <div class="field" style="margin-bottom:0;"><label>Search</label><input type="search" id="br-search" placeholder="e.g. Python"></div>
+        </div>
+        <div id="br-items"></div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0;">Assigned items (${b.items.length})</h3>
+        <div id="br-assigned">
+          ${b.items.length === 0 ? '<p class="muted">No framework items yet. Add at least one to publish.</p>' : b.items.map(it => `
+            <div class="pb-chip">
+              <span>${escapeHtml(it.technology_or_capability)} <span class="muted">· ${escapeHtml(it.family)} · L${it.level_number}</span>${it.activeQuestions === 0 ? ' <span class="badge" data-gap="Significant gap">no questions</span>' : ''}</span>
+              <button class="btn btn-secondary btn-sm" data-br-rmitem="${it.id}" type="button" aria-label="Remove">✕</button>
+            </div>`).join('')}
+        </div>
+        <div class="actions-row">
+          ${b.status !== 'published'
+            ? `<button class="btn btn-primary" id="br-publish" type="button" ${canPublishNow ? '' : 'disabled'}>Publish</button>`
+            : `<button class="btn btn-secondary" id="br-unpublish" type="button">Unpublish</button>`}
+        </div>
+        ${b.status !== 'published' && !canPublishNow ? '<p class="muted" style="font-size:0.85rem;">To publish: add at least one framework item, and every item must have active questions.</p>' : ''}
+      </div>
+    </div>
+  `;
+
+  document.getElementById('br-back').addEventListener('click', renderBusinessRolesTab);
+  document.getElementById('br-save').addEventListener('click', async () => {
+    try {
+      await Api.patch(`/api/admin/business-roles/${b.id}`, {
+        businessRoleName: document.getElementById('br-edit-name').value,
+        businessDescriptionOverride: document.getElementById('br-edit-desc').value || null
+      });
+      document.getElementById('br-alert').innerHTML = '<div class="alert alert-success">Saved.</div>';
+    } catch (e) { document.getElementById('br-alert').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
+  const pubBtn = document.getElementById('br-publish');
+  if (pubBtn) pubBtn.addEventListener('click', async () => {
+    try { await Api.post(`/api/admin/business-roles/${b.id}/publish`); renderBusinessRoleEditor(b.id); }
+    catch (e) { document.getElementById('br-alert').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
+  const unpubBtn = document.getElementById('br-unpublish');
+  if (unpubBtn) unpubBtn.addEventListener('click', async () => { await Api.post(`/api/admin/business-roles/${b.id}/unpublish`); renderBusinessRoleEditor(b.id); });
+  content.querySelectorAll('[data-br-rmitem]').forEach(btn => btn.addEventListener('click', async () => { await Api.delete(`/api/admin/business-roles/${b.id}/items/${btn.dataset.brRmitem}`); renderBusinessRoleEditor(b.id); }));
+
+  const loadBrItems = async () => {
+    const family = document.getElementById('br-family').value;
+    const search = document.getElementById('br-search').value.trim();
+    const params = new URLSearchParams();
+    if (family) params.set('family', family);
+    if (search) params.set('search', search);
+    const items = await Api.get('/api/admin/framework/items' + (params.toString() ? '?' + params.toString() : ''));
+    const box = document.getElementById('br-items');
+    box.innerHTML = items.length === 0 ? '<p class="muted">No items match.</p>' : `
+      <table>
+        <tr><th>Technology / capability</th><th>Level</th><th></th></tr>
+        ${items.map(it => `
+          <tr>
+            <td><strong>${escapeHtml(it.technology_or_capability)}</strong><br><span class="muted" style="font-size:0.78rem;">${escapeHtml(it.family)}</span></td>
+            <td><select data-br-level="${escapeHtml(it.id)}">${SKF_LEVELS.map(l => `<option value="${l.n}">${l.label}</option>`).join('')}</select></td>
+            <td><button class="btn btn-secondary btn-sm" data-br-additem="${escapeHtml(it.id)}" type="button">Add</button></td>
+          </tr>`).join('')}
+      </table>`;
+    box.querySelectorAll('[data-br-additem]').forEach(btn => btn.addEventListener('click', async () => {
+      const itemId = btn.dataset.brAdditem;
+      const level = Number(box.querySelector(`[data-br-level="${CSS.escape(itemId)}"]`).value);
+      await Api.post(`/api/admin/business-roles/${b.id}/items`, { frameworkItemId: itemId, level });
+      renderBusinessRoleEditor(b.id);
+    }));
+  };
+  document.getElementById('br-family').addEventListener('change', loadBrItems);
+  document.getElementById('br-search').addEventListener('input', debounceAdmin(loadBrItems, 250));
+  await loadBrItems();
+}
+
 // Skills & Knowledge Framework Interview Pack Builder (FRD v0.28): pick a role + framework items/levels,
 // generate a Word pack (one primary + one different alternative question per item-level).
 const SKF_LEVELS = [{ n: 1, label: 'L1 Basic' }, { n: 2, label: 'L2 Working' }, { n: 3, label: 'L3 Advanced' }, { n: 4, label: 'L4 Expert' }];
@@ -1679,41 +1838,52 @@ let pbRoleId = '';
 
 async function renderPackBuilderTab() {
   const content = document.getElementById('tab-content');
-  const [roles, families] = await Promise.all([
+  const [roles, families, businessRoles] = await Promise.all([
     Api.get('/api/admin/role-profiles'),
-    Api.get('/api/admin/framework/families')
+    Api.get('/api/admin/framework/families'),
+    Api.get('/api/admin/business-roles/published')
   ]);
   const publishedRoles = roles.filter(r => r.status === 'published');
   content.innerHTML = `
     <div class="card">
       <h2>Interview Pack Builder</h2>
-      <p class="muted" style="margin-top:0;">The pack always includes the role&rsquo;s <strong>SFIA skills</strong> &mdash; a strength-based question, an alternative and &ldquo;what good looks like&rdquo; for each. Optionally add <strong>Skills &amp; Knowledge Framework</strong> items below for extra technical depth. Pick a role and generate.</p>
+      <p class="muted" style="margin-top:0;">Generate a Word interview pack. The quickest way is from a <strong>business role</strong> &mdash; its Skills &amp; Knowledge Framework items are already assigned by an admin. You can also build an ad-hoc pack from any role.</p>
       <div id="pb-alert"></div>
-      <div class="field" style="max-width:420px;"><label>Role</label>
+      <div class="field" style="max-width:520px;"><label>Business role</label>
+        <select id="pb-brole"><option value="">Select a published business role…</option>${businessRoles.map(b => `<option value="${b.id}">${escapeHtml(b.business_role_name)} <span>(${escapeHtml(b.core_role_title)})</span></option>`).join('')}</select>
+      </div>
+      <button class="btn btn-primary" id="pb-prepare" type="button" ${businessRoles.length ? '' : 'disabled'}>Prepare pack</button>
+      ${businessRoles.length ? '' : '<p class="muted" style="font-size:0.85rem;">No published business roles yet — create one on the <strong>Business roles</strong> tab, or use the ad-hoc builder below.</p>'}
+    </div>
+
+    <details class="card">
+      <summary style="cursor:pointer; font-weight:700;">Ad-hoc pack (advanced): pick any role and choose framework items</summary>
+      <div class="field" style="max-width:420px; margin-top:1rem;"><label>Role</label>
         <select id="pb-role"><option value="">Select a published role…</option>${publishedRoles.map(r => `<option value="${r.id}" ${String(pbRoleId) === String(r.id) ? 'selected' : ''}>${escapeHtml(r.title)}</option>`).join('')}</select>
       </div>
-    </div>
-    <div class="grid cols-2" style="align-items:start;">
-      <div class="card">
-        <h2>Framework items</h2>
-        <div class="filters-row">
-          <div class="field" style="margin-bottom:0;"><label>Family</label>
-            <select id="pb-family"><option value="">All families (${families.length})</option>${families.map(f => `<option value="${escapeHtml(f.family)}">${escapeHtml(f.family)} (${f.itemCount})</option>`).join('')}</select>
+      <div class="grid cols-2" style="align-items:start;">
+        <div>
+          <h3 style="margin-top:0;">Framework items</h3>
+          <div class="filters-row">
+            <div class="field" style="margin-bottom:0;"><label>Family</label>
+              <select id="pb-family"><option value="">All families (${families.length})</option>${families.map(f => `<option value="${escapeHtml(f.family)}">${escapeHtml(f.family)} (${f.itemCount})</option>`).join('')}</select>
+            </div>
+            <div class="field" style="margin-bottom:0;"><label>Search</label><input type="search" id="pb-search" placeholder="e.g. Python, Kubernetes"></div>
           </div>
-          <div class="field" style="margin-bottom:0;"><label>Search</label><input type="search" id="pb-search" placeholder="e.g. Python, Kubernetes"></div>
+          <div id="pb-items"></div>
         </div>
-        <div id="pb-items"></div>
-      </div>
-      <div class="card">
-        <h2>Selected (<span id="pb-count">0</span>)</h2>
-        <div id="pb-selected"></div>
-        <div class="actions-row">
-          <button class="btn btn-primary" id="pb-preview" type="button">Preview pack</button>
-          <button class="btn btn-secondary btn-sm" id="pb-clear" type="button">Clear</button>
+        <div>
+          <h3 style="margin-top:0;">Selected (<span id="pb-count">0</span>)</h3>
+          <div id="pb-selected"></div>
+          <div class="actions-row">
+            <button class="btn btn-primary" id="pb-preview" type="button">Preview pack</button>
+            <button class="btn btn-secondary btn-sm" id="pb-clear" type="button">Clear</button>
+          </div>
         </div>
       </div>
-    </div>
+    </details>
   `;
+  document.getElementById('pb-prepare').addEventListener('click', previewBusinessPack);
   document.getElementById('pb-role').addEventListener('change', e => { pbRoleId = e.target.value; });
   document.getElementById('pb-family').addEventListener('change', loadPbItems);
   document.getElementById('pb-search').addEventListener('input', debounceAdmin(loadPbItems, 250));
@@ -1768,11 +1938,15 @@ function renderPbSelected() {
 }
 
 let pbPreview = null;
+let pbDownloadCtx = null; // { url, extra, reroll, title, subtitle }
 
+function showPreview(data, ctx) { pbPreview = data; pbDownloadCtx = ctx; renderPackPreview(data, ctx); }
+
+// Ad-hoc pack: role + manually chosen framework items.
 async function previewPack() {
   const alert = document.getElementById('pb-alert');
   alert.innerHTML = '';
-  if (!pbRoleId) { alert.innerHTML = '<div class="alert alert-error">Select a role first.</div>'; return; }
+  if (!pbRoleId) { alert.innerHTML = '<div class="alert alert-error">Select a role in the ad-hoc builder first.</div>'; return; }
   const btn = document.getElementById('pb-preview');
   const orig = btn.textContent;
   btn.disabled = true; btn.textContent = 'Building preview…';
@@ -1781,8 +1955,36 @@ async function previewPack() {
       roleProfileId: Number(pbRoleId),
       selections: pbSelections.map(s => ({ itemId: s.itemId, level: s.level }))
     });
-    pbPreview = data;
-    renderPackPreview(data);
+    showPreview(data, {
+      title: data.role.title + (data.role.grade ? ' · Grade ' + data.role.grade : ''),
+      url: '/api/admin/framework/interview-pack/download',
+      extra: { roleProfileId: Number(pbRoleId) },
+      reroll: previewPack
+    });
+  } catch (e) {
+    alert.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`;
+    btn.textContent = orig; btn.disabled = false;
+  }
+}
+
+// Business role pack (FRD v0.30): framework items are pre-assigned to the business role.
+async function previewBusinessPack() {
+  const alert = document.getElementById('pb-alert');
+  alert.innerHTML = '';
+  const brId = document.getElementById('pb-brole').value;
+  if (!brId) { alert.innerHTML = '<div class="alert alert-error">Select a business role first.</div>'; return; }
+  const btn = document.getElementById('pb-prepare');
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Preparing…';
+  try {
+    const data = await Api.post(`/api/admin/business-roles/${brId}/prepare`, {});
+    showPreview(data, {
+      title: data.businessRole.name + (data.businessRole.grade ? ' · Grade ' + data.businessRole.grade : ''),
+      subtitle: 'Based on core role: ' + data.businessRole.coreRoleTitle,
+      url: `/api/admin/business-roles/${brId}/download`,
+      extra: {},
+      reroll: previewBusinessPack
+    });
   } catch (e) {
     alert.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`;
     btn.textContent = orig; btn.disabled = false;
@@ -1811,42 +2013,43 @@ function previewFwItem(f, i) {
     </div>`;
 }
 
-function renderPackPreview(data) {
+function renderPackPreview(data, ctx) {
   const content = document.getElementById('tab-content');
   content.innerHTML = `
     <div class="card">
       <div class="preview-header">
         <div>
-          <h2 style="margin:0;">Preview — ${escapeHtml(data.role.title)}${data.role.grade ? ' · Grade ' + escapeHtml(data.role.grade) : ''}</h2>
+          <h2 style="margin:0;">Preview — ${escapeHtml(ctx.title)}</h2>
+          ${ctx.subtitle ? `<p class="muted" style="margin:0.2rem 0 0;">${escapeHtml(ctx.subtitle)}</p>` : ''}
           <p class="muted" style="margin:0.2rem 0 0;">${data.sfia.length} SFIA skill${data.sfia.length === 1 ? '' : 's'} · ${data.framework.length} framework item${data.framework.length === 1 ? '' : 's'}. Each shows the chosen question, its alternative and what good looks like.</p>
         </div>
         <div class="actions-row" style="margin:0;">
-          <button class="btn btn-primary" id="pb-download" type="button">Download Word pack</button>
+          <button class="btn btn-primary" id="pb-download" type="button">Generate Word document</button>
           <button class="btn btn-secondary" id="pb-reroll" type="button">Shuffle questions</button>
           <button class="btn btn-secondary" id="pb-back" type="button">Back to builder</button>
         </div>
       </div>
       <div id="pb-download-alert"></div>
     </div>
-    ${data.sfia.length ? `<div class="card"><h3 style="margin-top:0;">SFIA skills for this role</h3>${data.sfia.map((s, i) => previewSfiaItem(s, i + 1)).join('')}</div>` : ''}
+    ${data.sfia.length ? `<div class="card"><h3 style="margin-top:0;">SFIA skills (inherited from the core role)</h3>${data.sfia.map((s, i) => previewSfiaItem(s, i + 1)).join('')}</div>` : ''}
     ${data.framework.length ? `<div class="card"><h3 style="margin-top:0;">Skills &amp; Knowledge Framework</h3>${data.framework.map((f, i) => previewFwItem(f, i + 1)).join('')}</div>` : ''}
   `;
   document.getElementById('pb-download').addEventListener('click', downloadPack);
-  document.getElementById('pb-reroll').addEventListener('click', previewPack);
+  document.getElementById('pb-reroll').addEventListener('click', ctx.reroll);
   document.getElementById('pb-back').addEventListener('click', renderPackBuilderTab);
 }
 
 async function downloadPack() {
-  if (!pbPreview) return;
+  if (!pbPreview || !pbDownloadCtx) return;
   const btn = document.getElementById('pb-download');
   const alert = document.getElementById('pb-download-alert');
   alert.innerHTML = '';
   const orig = btn.textContent;
   btn.disabled = true; btn.textContent = 'Generating…';
   try {
-    const res = await fetch('/api/admin/framework/interview-pack/download', {
+    const res = await fetch(pbDownloadCtx.url, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ roleProfileId: Number(pbRoleId), pack: { sfia: pbPreview.sfia, framework: pbPreview.framework } })
+      body: JSON.stringify({ ...pbDownloadCtx.extra, pack: { sfia: pbPreview.sfia, framework: pbPreview.framework } })
     });
     if (!res.ok) { let m = `Request failed (${res.status})`; try { m = (await res.json()).error || m; } catch (e) { /* non-JSON */ } throw new Error(m); }
     const blob = await res.blob();
