@@ -1093,48 +1093,72 @@ router.get('/framework/items/:id/levels', (req, res) => {
   res.json(skf.itemLevels(req.params.id));
 });
 
-// Generate a Skills & Knowledge interview pack (.docx) for a published role + selected framework items.
-router.post('/framework/interview-pack', async (req, res) => {
+// Normalise + validate the optional framework item selections.
+function cleanFrameworkSelections(selections) {
+  return (Array.isArray(selections) ? selections : [])
+    .map(s => ({ itemId: String(s.itemId || ''), level: Number(s.level) }))
+    .filter(s => s.itemId && s.level >= 1 && s.level <= 4);
+}
+
+// Build the serialized pack (SFIA skills + optional framework items) for a role. The pack is always built
+// around the role's SFIA skills (question + alternative + what-good per skill, from the SFIA question bank).
+function assemblePack(role, clean) {
+  const sfiaSkills = packSkills(role.id);
+  const { selections: sfiaSelections } = selectQuestions(sfiaSkills, role.sfia_version_id);
+  const { blocks } = skf.buildBlocks(clean);
+  return { sfia: skf.serializeSfiaSelections(sfiaSelections), framework: skf.serializeFrameworkBlocks(blocks) };
+}
+
+// Preview: returns the pack content as JSON so the user can review it before downloading. The exact same
+// JSON is sent back to /download, so the downloaded Word document matches the preview.
+router.post('/framework/interview-pack/preview', (req, res) => {
+  const { roleProfileId, selections } = req.body || {};
+  const role = skf.roleForPack(roleProfileId);
+  if (!role) return res.status(404).json({ error: 'Role profile not found.' });
+  const published = db.prepare(`SELECT 1 FROM role_profiles WHERE id = ? AND status = 'published'`).get(role.id);
+  if (!published) return res.status(400).json({ error: 'Interview packs can only be generated from published role profiles.' });
+
+  const { sfia, framework } = assemblePack(role, cleanFrameworkSelections(selections));
+  if (sfia.length === 0 && framework.length === 0) {
+    return res.status(400).json({ error: 'This role has no SFIA skills mapped. Add framework items to build a pack.' });
+  }
+  res.json({ role: { id: role.id, title: role.title, grade: role.grade }, sfia, framework });
+});
+
+// Download: renders the previewed pack (sent back by the client) to a Word document, so download == preview.
+router.post('/framework/interview-pack/download', async (req, res) => {
   try {
-    const { roleProfileId, selections } = req.body || {};
+    const { roleProfileId, pack } = req.body || {};
     const role = skf.roleForPack(roleProfileId);
     if (!role) return res.status(404).json({ error: 'Role profile not found.' });
     const published = db.prepare(`SELECT 1 FROM role_profiles WHERE id = ? AND status = 'published'`).get(role.id);
     if (!published) return res.status(400).json({ error: 'Interview packs can only be generated from published role profiles.' });
 
-    // The pack is always built around the role's SFIA skills (a question + alternative + what-good per
-    // skill, from the SFIA question bank). Framework items are optional extras.
-    const sfiaSkills = packSkills(role.id);
-    const { selections: sfiaSelections, usedQuestionIds: sfiaUsedIds } = selectQuestions(sfiaSkills, role.sfia_version_id);
+    const sfia = Array.isArray(pack && pack.sfia) ? pack.sfia : [];
+    const framework = Array.isArray(pack && pack.framework) ? pack.framework : [];
+    if (sfia.length === 0 && framework.length === 0) return res.status(400).json({ error: 'Nothing to generate — preview the pack first.' });
 
-    // Optional framework item selections.
-    const clean = (Array.isArray(selections) ? selections : [])
-      .map(s => ({ itemId: String(s.itemId || ''), level: Number(s.level) }))
-      .filter(s => s.itemId && s.level >= 1 && s.level <= 4);
-    const { blocks, usedIds } = skf.buildBlocks(clean);
-
-    if (sfiaSelections.length === 0 && blocks.length === 0) {
-      return res.status(400).json({ error: 'This role has no SFIA skills mapped. Add framework items to build a pack.' });
-    }
+    const sfiaIds = sfia.flatMap(s => [s.primary && s.primary.id, s.alternative && s.alternative.id]).filter(Boolean);
+    const fwIds = framework.flatMap(f => [f.primary && f.primary.id, f.alternative && f.alternative.id]).filter(Boolean);
 
     const packRow = db.prepare(`
       INSERT INTO framework_pack_log (role_profile_id, selected_items, question_ids, item_count, generated_by)
       VALUES (?, ?, ?, ?, ?)
-    `).run(role.id, JSON.stringify(clean), JSON.stringify({ sfia: sfiaUsedIds, framework: usedIds }), blocks.length, req.user.id);
+    `).run(role.id, JSON.stringify(framework.map(f => ({ itemId: f.itemId, level: f.level }))), JSON.stringify({ sfia: sfiaIds, framework: fwIds }), framework.length, req.user.id);
     const packId = packRow.lastInsertRowid;
 
     const generatedByName = `${req.user.first_name} ${req.user.last_name}`.trim();
-    const buffer = await skf.buildSkfPackDocx({ role, sfiaSelections, blocks, meta: { packId, generatedByName } });
+    const buffer = await skf.buildSkfPackDocx({ role, sfia, framework, meta: { packId, generatedByName } });
 
-    if (usedIds.length > 0) {
+    if (fwIds.length > 0) {
       const upd = db.prepare(`UPDATE framework_questions SET usage_count = usage_count + 1, last_used_at = datetime('now') WHERE id = ?`);
-      for (const qid of usedIds) upd.run(qid);
+      for (const qid of fwIds) upd.run(qid);
     }
-    if (sfiaUsedIds.length > 0) {
+    if (sfiaIds.length > 0) {
       const updSfia = db.prepare(`UPDATE interview_questions SET usage_count = usage_count + 1, last_used_at = datetime('now') WHERE id = ?`);
-      for (const qid of sfiaUsedIds) updSfia.run(qid);
+      for (const qid of sfiaIds) updSfia.run(qid);
     }
-    logAudit({ ...auditCtx(req), action: 'generate', entityType: 'framework_interview_pack', entityId: packId, details: { roleProfileId: role.id, sfiaSkills: sfiaSelections.length, itemCount: blocks.length } });
+    logAudit({ ...auditCtx(req), action: 'generate', entityType: 'framework_interview_pack', entityId: packId, details: { roleProfileId: role.id, sfiaSkills: sfia.length, itemCount: framework.length } });
 
     const safeTitle = String(role.title).replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'role';
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');

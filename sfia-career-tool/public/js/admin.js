@@ -1708,7 +1708,7 @@ async function renderPackBuilderTab() {
         <h2>Selected (<span id="pb-count">0</span>)</h2>
         <div id="pb-selected"></div>
         <div class="actions-row">
-          <button class="btn btn-primary" id="pb-generate" type="button">Generate Word pack</button>
+          <button class="btn btn-primary" id="pb-preview" type="button">Preview pack</button>
           <button class="btn btn-secondary btn-sm" id="pb-clear" type="button">Clear</button>
         </div>
       </div>
@@ -1717,7 +1717,7 @@ async function renderPackBuilderTab() {
   document.getElementById('pb-role').addEventListener('change', e => { pbRoleId = e.target.value; });
   document.getElementById('pb-family').addEventListener('change', loadPbItems);
   document.getElementById('pb-search').addEventListener('input', debounceAdmin(loadPbItems, 250));
-  document.getElementById('pb-generate').addEventListener('click', generateSkfPack);
+  document.getElementById('pb-preview').addEventListener('click', previewPack);
   document.getElementById('pb-clear').addEventListener('click', () => { pbSelections = []; renderPbSelected(); });
   await loadPbItems();
   renderPbSelected();
@@ -1767,17 +1767,86 @@ function renderPbSelected() {
   box.querySelectorAll('[data-pb-remove]').forEach(btn => btn.addEventListener('click', () => { pbSelections.splice(Number(btn.dataset.pbRemove), 1); renderPbSelected(); }));
 }
 
-async function generateSkfPack() {
+let pbPreview = null;
+
+async function previewPack() {
   const alert = document.getElementById('pb-alert');
   alert.innerHTML = '';
   if (!pbRoleId) { alert.innerHTML = '<div class="alert alert-error">Select a role first.</div>'; return; }
-  const btn = document.getElementById('pb-generate');
+  const btn = document.getElementById('pb-preview');
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Building preview…';
+  try {
+    const data = await Api.post('/api/admin/framework/interview-pack/preview', {
+      roleProfileId: Number(pbRoleId),
+      selections: pbSelections.map(s => ({ itemId: s.itemId, level: s.level }))
+    });
+    pbPreview = data;
+    renderPackPreview(data);
+  } catch (e) {
+    alert.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`;
+    btn.textContent = orig; btn.disabled = false;
+  }
+}
+
+function previewSfiaItem(s, i) {
+  return `
+    <div class="preview-item">
+      <div class="preview-item-head"><strong>${i}. ${escapeHtml(s.skillCode)} – ${escapeHtml(s.skillName)}</strong> <span class="muted">Level ${s.level}${s.levelName && s.levelName !== 'Level ' + s.level ? ' · ' + escapeHtml(s.levelName) : ''}</span>${s.primary && s.primary.generic ? ' <span class="badge" data-status="draft">generic</span>' : ''}</div>
+      ${s.expectation ? `<p class="muted preview-exp">${escapeHtml(s.expectation)}</p>` : ''}
+      <p><span class="preview-label">Q:</span> ${s.primary ? escapeHtml(s.primary.text) : '<em>No question available.</em>'}</p>
+      ${s.primary && s.primary.whatGood ? `<p><span class="preview-label">What good looks like:</span> ${escapeHtml(s.primary.whatGood)}</p>` : ''}
+      ${s.alternative ? `<p><span class="preview-label">Alternative:</span> ${escapeHtml(s.alternative.text)}</p>` : ''}
+    </div>`;
+}
+
+function previewFwItem(f, i) {
+  return `
+    <div class="preview-item">
+      <div class="preview-item-head"><strong>${i}. ${escapeHtml(f.tech)}</strong> <span class="muted">${escapeHtml(f.family)} · Level ${f.level}${f.levelName && f.levelName !== 'Level ' + f.level ? ' · ' + escapeHtml(f.levelName) : ''}</span></div>
+      ${f.expectation ? `<p class="muted preview-exp">${escapeHtml(f.expectation)}</p>` : ''}
+      <p><span class="preview-label">Q:</span> ${f.primary ? escapeHtml(f.primary.question) : '<em>No question available.</em>'}</p>
+      ${f.primary && f.primary.whatGood ? `<p><span class="preview-label">What good looks like:</span> ${escapeHtml(f.primary.whatGood)}</p>` : ''}
+      ${f.alternative ? `<p><span class="preview-label">Alternative:</span> ${escapeHtml(f.alternative.question)}</p>` : ''}
+    </div>`;
+}
+
+function renderPackPreview(data) {
+  const content = document.getElementById('tab-content');
+  content.innerHTML = `
+    <div class="card">
+      <div class="preview-header">
+        <div>
+          <h2 style="margin:0;">Preview — ${escapeHtml(data.role.title)}${data.role.grade ? ' · Grade ' + escapeHtml(data.role.grade) : ''}</h2>
+          <p class="muted" style="margin:0.2rem 0 0;">${data.sfia.length} SFIA skill${data.sfia.length === 1 ? '' : 's'} · ${data.framework.length} framework item${data.framework.length === 1 ? '' : 's'}. Each shows the chosen question, its alternative and what good looks like.</p>
+        </div>
+        <div class="actions-row" style="margin:0;">
+          <button class="btn btn-primary" id="pb-download" type="button">Download Word pack</button>
+          <button class="btn btn-secondary" id="pb-reroll" type="button">Shuffle questions</button>
+          <button class="btn btn-secondary" id="pb-back" type="button">Back to builder</button>
+        </div>
+      </div>
+      <div id="pb-download-alert"></div>
+    </div>
+    ${data.sfia.length ? `<div class="card"><h3 style="margin-top:0;">SFIA skills for this role</h3>${data.sfia.map((s, i) => previewSfiaItem(s, i + 1)).join('')}</div>` : ''}
+    ${data.framework.length ? `<div class="card"><h3 style="margin-top:0;">Skills &amp; Knowledge Framework</h3>${data.framework.map((f, i) => previewFwItem(f, i + 1)).join('')}</div>` : ''}
+  `;
+  document.getElementById('pb-download').addEventListener('click', downloadPack);
+  document.getElementById('pb-reroll').addEventListener('click', previewPack);
+  document.getElementById('pb-back').addEventListener('click', renderPackBuilderTab);
+}
+
+async function downloadPack() {
+  if (!pbPreview) return;
+  const btn = document.getElementById('pb-download');
+  const alert = document.getElementById('pb-download-alert');
+  alert.innerHTML = '';
   const orig = btn.textContent;
   btn.disabled = true; btn.textContent = 'Generating…';
   try {
-    const res = await fetch('/api/admin/framework/interview-pack', {
+    const res = await fetch('/api/admin/framework/interview-pack/download', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ roleProfileId: Number(pbRoleId), selections: pbSelections.map(s => ({ itemId: s.itemId, level: s.level })) })
+      body: JSON.stringify({ roleProfileId: Number(pbRoleId), pack: { sfia: pbPreview.sfia, framework: pbPreview.framework } })
     });
     if (!res.ok) { let m = `Request failed (${res.status})`; try { m = (await res.json()).error || m; } catch (e) { /* non-JSON */ } throw new Error(m); }
     const blob = await res.blob();

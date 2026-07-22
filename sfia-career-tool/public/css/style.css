@@ -705,3 +705,11 @@ textarea { min-height: 5rem; resize: vertical; }
 /* v0.28 Interview Pack Builder */
 .pb-chip { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.4rem 0.6rem; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 0.4rem; font-size: 0.9rem; }
 #pb-items table td { vertical-align: top; }
+
+/* v0.28 Interview pack preview */
+.preview-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
+.preview-item { border-left: 3px solid var(--border); padding: 0.3rem 0 0.3rem 0.8rem; margin-bottom: 0.9rem; }
+.preview-item-head { margin-bottom: 0.3rem; }
+.preview-item p { margin: 0.25rem 0; font-size: 0.92rem; }
+.preview-exp { font-size: 0.85rem; }
+.preview-label { font-weight: 700; color: var(--teal-dark); }
