@@ -1,0 +1,19 @@
+{
+  "name": "osm-connect-test",
+  "version": "1.0.0",
+  "description": "OSM Connect Test Harness - diagnostic tool for validating an Online Scout Manager OAuth integration",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node test/e2e.js",
+    "mock-osm": "node test/mock-osm.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-session": "^1.18.0"
+  }
+}

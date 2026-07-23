@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Application health — OSM Connect Test Harness</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <main id="main">
+    <h2>Application health</h2>
+    <p>These checks cover this test application only. They do not contact OSM, so a failure here means
+      the problem is local rather than at OSM.</p>
+    <div class="card" id="health-area"><p role="status">Loading…</p></div>
+    <div class="card">
+      <h3>OSM availability</h3>
+      <p>OSM publishes its own service status covering web servers, database, infrastructure and
+        external providers. Check it before assuming a connection failure is caused by this application.</p>
+      <div class="actions">
+        <a class="button secondary" href="https://status.onlinescoutmanager.co.uk/" target="_blank" rel="noreferrer noopener">Open the OSM service status page</a>
+      </div>
+    </div>
+  </main>
+  <script type="module" src="/js/health.js"></script>
+</body>
+</html>

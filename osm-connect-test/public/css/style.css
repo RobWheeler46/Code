@@ -1,0 +1,196 @@
+/* OSM Connect Test Harness.
+   Accessibility targets: WCAG 2.2 AA. Status is never conveyed by colour alone -
+   every status carries a text label and a text symbol. */
+
+:root {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --ink: #16232e;
+  --ink-soft: #4a5b68;
+  --line: #ccd6dd;
+  --brand: #00693c;          /* Scouting green */
+  --brand-strong: #004f2d;
+  --focus: #7413dc;          /* Scouting purple, high contrast on white */
+  --pass: #175c30;
+  --pass-bg: #e4f2e9;
+  --warn: #6b4400;
+  --warn-bg: #fdf1dc;
+  --fail: #8b1a1a;
+  --fail-bg: #fbe6e6;
+  --info: #0b4f6c;
+  --info-bg: #e3f0f6;
+  --muted-bg: #eef1f4;
+  --radius: 8px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--ink);
+  background: var(--bg);
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--focus);
+  color: #fff;
+  padding: 0.75rem 1rem;
+  z-index: 100;
+}
+.skip-link:focus { left: 0; }
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+header.masthead {
+  background: var(--brand-strong);
+  color: #fff;
+  padding: 1rem 1.25rem 0;
+}
+.masthead-inner { max-width: 1100px; margin: 0 auto; }
+.masthead h1 { font-size: 1.35rem; margin: 0 0 0.25rem; }
+.masthead p { margin: 0 0 0.75rem; color: #d7ece0; font-size: 0.9rem; }
+
+nav.primary { max-width: 1100px; margin: 0 auto; }
+nav.primary ul {
+  list-style: none; display: flex; flex-wrap: wrap; gap: 0.25rem; margin: 0; padding: 0;
+}
+nav.primary a {
+  display: block; padding: 0.5rem 0.75rem; color: #eaf6f0; text-decoration: none;
+  border-radius: var(--radius) var(--radius) 0 0; font-size: 0.92rem;
+}
+nav.primary a:hover { background: rgba(255,255,255,0.14); text-decoration: underline; }
+nav.primary a[aria-current="page"] { background: var(--bg); color: var(--brand-strong); font-weight: 600; }
+
+main { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
+
+h2 { font-size: 1.4rem; margin: 2rem 0 0.5rem; }
+h2:first-child { margin-top: 0; }
+h3 { font-size: 1.1rem; margin: 1.5rem 0 0.4rem; }
+h4 { font-size: 0.98rem; margin: 1rem 0 0.3rem; }
+
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 1.15rem 1.25rem; margin-bottom: 1.25rem;
+}
+.card > :first-child { margin-top: 0; }
+.card > :last-child { margin-bottom: 0; }
+
+.readonly-banner {
+  background: var(--info-bg); border-left: 5px solid var(--info); padding: 0.75rem 1rem;
+  border-radius: var(--radius); margin-bottom: 1.25rem; font-size: 0.95rem;
+}
+
+.grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+
+dl.facts { display: grid; grid-template-columns: minmax(140px, auto) 1fr; gap: 0.35rem 1rem; margin: 0; }
+dl.facts dt { font-weight: 600; color: var(--ink-soft); }
+dl.facts dd { margin: 0; }
+
+/* Status pills. The symbol is decorative; the word carries the meaning. */
+.status {
+  display: inline-flex; align-items: baseline; gap: 0.4rem; padding: 0.15rem 0.6rem;
+  border-radius: 999px; font-size: 0.85rem; font-weight: 600; border: 1px solid transparent;
+  white-space: nowrap;
+}
+.status .symbol { font-family: monospace; }
+.status-passed, .status-success { background: var(--pass-bg); color: var(--pass); border-color: var(--pass); }
+.status-warning, .status-passedwithwarning, .status-passedwithwarnings { background: var(--warn-bg); color: var(--warn); border-color: var(--warn); }
+.status-failed, .status-error, .status-critical { background: var(--fail-bg); color: var(--fail); border-color: var(--fail); }
+.status-waiting, .status-skipped, .status-cancelled, .status-information { background: var(--muted-bg); color: var(--ink-soft); border-color: var(--line); }
+.status-running { background: var(--info-bg); color: var(--info); border-color: var(--info); }
+
+button, .button {
+  font: inherit; font-weight: 600; cursor: pointer; border-radius: var(--radius);
+  border: 1px solid var(--brand-strong); background: var(--brand); color: #fff;
+  padding: 0.55rem 1rem; text-decoration: none; display: inline-block;
+}
+button:hover, .button:hover { background: var(--brand-strong); }
+button.secondary, .button.secondary { background: #fff; color: var(--brand-strong); }
+button.secondary:hover, .button.secondary:hover { background: #eaf3ee; }
+button.danger, .button.danger { background: #fff; color: var(--fail); border-color: var(--fail); }
+button.danger:hover { background: var(--fail-bg); }
+button[disabled] { opacity: 0.55; cursor: not-allowed; }
+
+.actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1rem; }
+
+label { display: block; font-weight: 600; margin-bottom: 0.25rem; }
+input[type="text"], input[type="url"], input[type="number"], input[type="password"], select, textarea {
+  font: inherit; width: 100%; padding: 0.5rem 0.6rem; border: 1px solid var(--line);
+  border-radius: var(--radius); background: #fff; color: var(--ink);
+}
+.field { margin-bottom: 1rem; }
+.hint { font-size: 0.85rem; color: var(--ink-soft); margin: 0.25rem 0 0; }
+
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+caption { text-align: left; font-weight: 600; padding-bottom: 0.5rem; }
+th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { background: var(--muted-bg); }
+.table-scroll { overflow-x: auto; }
+
+details { border: 1px solid var(--line); border-radius: var(--radius); padding: 0.5rem 0.75rem; margin-top: 0.6rem; background: #fbfcfd; }
+details > summary { cursor: pointer; font-weight: 600; }
+details[open] > summary { margin-bottom: 0.5rem; }
+
+pre {
+  background: #10222f; color: #e6f0f5; padding: 0.85rem; border-radius: var(--radius);
+  overflow-x: auto; font-size: 0.84rem; line-height: 1.45;
+}
+code { font-size: 0.9em; }
+
+ul.stages { list-style: none; margin: 0; padding: 0; }
+ul.stages li {
+  display: grid; grid-template-columns: 1fr auto; gap: 0.5rem 1rem; align-items: baseline;
+  padding: 0.6rem 0.2rem; border-bottom: 1px solid var(--line);
+}
+ul.stages li .stage-name { font-weight: 600; }
+ul.stages li .stage-summary { grid-column: 1 / -1; font-size: 0.9rem; color: var(--ink-soft); margin: 0; }
+ul.stages li .stage-detail { grid-column: 1 / -1; }
+
+.message { border-left: 5px solid var(--line); background: var(--surface); border-radius: var(--radius); padding: 0.9rem 1rem; margin: 1rem 0; }
+.message.message-success { border-left-color: var(--pass); background: var(--pass-bg); }
+.message.message-warning { border-left-color: var(--warn); background: var(--warn-bg); }
+.message.message-error, .message.message-critical { border-left-color: var(--fail); background: var(--fail-bg); }
+.message.message-information { border-left-color: var(--info); background: var(--info-bg); }
+.message h3 { margin-top: 0; }
+.message dl.facts { margin-top: 0.6rem; font-size: 0.88rem; }
+.message .meta { font-size: 0.82rem; color: var(--ink-soft); margin-top: 0.6rem; }
+
+.tabs { display: flex; flex-wrap: wrap; gap: 0.25rem; border-bottom: 2px solid var(--line); margin: 1rem 0 0; padding: 0; list-style: none; }
+.tabs button {
+  background: none; border: 1px solid transparent; border-bottom: none; color: var(--ink-soft);
+  border-radius: var(--radius) var(--radius) 0 0; padding: 0.45rem 0.85rem; font-size: 0.92rem;
+}
+.tabs button[aria-selected="true"] { background: var(--surface); border-color: var(--line); color: var(--ink); font-weight: 700; }
+.tabpanel { background: var(--surface); border: 1px solid var(--line); border-top: none; padding: 1rem; border-radius: 0 0 var(--radius) var(--radius); }
+
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+.progress-track { height: 10px; background: var(--muted-bg); border-radius: 999px; overflow: hidden; border: 1px solid var(--line); }
+.progress-fill { height: 100%; background: var(--brand); transition: width 0.3s ease; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}
+
+footer.site {
+  border-top: 1px solid var(--line); margin-top: 2rem; padding: 1.25rem;
+  font-size: 0.85rem; color: var(--ink-soft); text-align: center;
+}
+
+.risk { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 0.1rem 0.45rem; border-radius: 4px; border: 1px solid; }
+.risk-none { background: var(--pass-bg); color: var(--pass); border-color: var(--pass); }
+.risk-low { background: var(--info-bg); color: var(--info); border-color: var(--info); }
+.risk-medium { background: var(--warn-bg); color: var(--warn); border-color: var(--warn); }
+.risk-high { background: var(--fail-bg); color: var(--fail); border-color: var(--fail); }

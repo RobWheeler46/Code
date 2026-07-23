@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Connection dashboard — OSM Connect Test Harness</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <main id="main">
+    <h2>Connection dashboard</h2>
+    <div class="readonly-banner">This application is read only. Nothing on this page changes information in OSM.</div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>OSM connection</h3>
+        <div id="connection-area"><p role="status">Loading…</p></div>
+      </div>
+      <div class="card">
+        <h3>Access</h3>
+        <div id="access-area"><p role="status">Loading…</p></div>
+      </div>
+      <div class="card">
+        <h3>Rate limit</h3>
+        <div id="rate-area"><p role="status">Loading…</p></div>
+      </div>
+    </div>
+
+    <div id="breaker-area"></div>
+    <div id="messages-area"></div>
+
+    <div class="card">
+      <h3>Actions</h3>
+      <div class="actions" id="action-area"></div>
+    </div>
+  </main>
+  <script type="module" src="/js/dashboard.js"></script>
+</body>
+</html>

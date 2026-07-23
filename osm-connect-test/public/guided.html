@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Guided test — OSM Connect Test Harness</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <main id="main">
+    <h2>Guided OSM connection test</h2>
+    <div class="readonly-banner">
+      Every stage below is a read only check. A stage that depends on a failed stage is marked
+      <strong>Skipped</strong>, not Failed. You can cancel at any point — requests that have not been
+      sent will not be sent.
+    </div>
+
+    <div class="card">
+      <h3>Before you start</h3>
+      <div id="pretest-area"><p role="status">Loading…</p></div>
+      <div class="actions">
+        <button type="button" id="start-btn">Run guided test</button>
+        <button type="button" id="cancel-btn" class="secondary" disabled>Cancel remaining tests</button>
+      </div>
+    </div>
+
+    <div id="overall-area" aria-live="polite"></div>
+
+    <div class="card">
+      <h3>Stages</h3>
+      <p id="progress-text" role="status">The test has not started.</p>
+      <div class="progress-track" id="progress-track" role="img" aria-label="Test progress 0 per cent">
+        <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+      </div>
+      <ul class="stages" id="stage-list"></ul>
+    </div>
+  </main>
+  <script type="module" src="/js/guided.js"></script>
+</body>
+</html>

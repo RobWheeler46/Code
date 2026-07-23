@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy and data handling — OSM Connect Test Harness</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <main id="main">
+    <h2>Privacy and data handling</h2>
+
+    <div class="card">
+      <h3>Why the OSM connection is required</h3>
+      <p>This application exists to prove that a third party application can authenticate with Online
+        Scout Manager and read information correctly. It cannot test that without a real OSM sign in.</p>
+    </div>
+
+    <div class="card">
+      <h3>What information may be read</h3>
+      <ul>
+        <li>Your OSM user identifier, and whether OSM returned a name and email address for you.</li>
+        <li>The groups and sections your OSM account can reach, and their types.</li>
+        <li>The permission categories and values OSM returns for each section.</li>
+        <li>The terms available to the selected section.</li>
+        <li>Where an administrator has explicitly enabled a higher-risk test, the <em>structure</em> of a
+          programme, attendance, badge or member response — never the content, which is sanitised.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3>What is stored</h3>
+      <ul>
+        <li>A hashed reference to your OSM user identifier. The raw identifier is not stored.</li>
+        <li>Your OSM access and refresh tokens, encrypted with AES-256-GCM and readable only by the server.</li>
+        <li>Masked group and section identifiers, section names, section types and permission summaries.</li>
+        <li>Test results: stage names, statuses, timings, message codes and correlation identifiers.</li>
+        <li>Sanitised request records: method, destination path, query parameter <em>names</em>, HTTP status,
+          content type, response size, parse result and a redacted response preview.</li>
+        <li>Audit records of connections, tests, exports and configuration changes.</li>
+      </ul>
+      <h4>What is never stored</h4>
+      <p>Passwords, security answers, the client secret, authorisation codes, OAuth state values, cookies,
+        full personal names, dates of birth, addresses, contact details, medical information, payment
+        details, free-text member notes, and full unredacted request or response bodies.</p>
+    </div>
+
+    <div class="card">
+      <h3>How long it is stored</h3>
+      <p id="retention-text">Diagnostic data is removed after the configured retention period. Audit
+        records are retained for security purposes.</p>
+    </div>
+
+    <div class="card">
+      <h3>Who can view diagnostics</h3>
+      <ul>
+        <li><strong>Testers</strong> see only their own test history and sanitised diagnostics.</li>
+        <li><strong>Developers</strong> see expanded, still sanitised, request and schema diagnostics.</li>
+        <li><strong>Administrators</strong> see application-wide outcomes and audit records, but cannot
+          view any user's access token or the client secret.</li>
+      </ul>
+      <p>Personal OSM data is not used for analytics and is not sent to any third party
+        error-monitoring service.</p>
+    </div>
+
+    <div class="card">
+      <h3>How to disconnect</h3>
+      <p>Use <a href="/disconnect.html">Disconnect</a> at any time. That removes the tokens held by this
+        application and ends your session.</p>
+    </div>
+
+    <div class="card">
+      <h3>How to request deletion</h3>
+      <p>You can delete your test history, stored section references and OSM tokens now. Audit records
+        are retained as required for security.</p>
+      <div class="actions">
+        <button type="button" id="delete-btn" class="danger">Delete my test history and connection</button>
+      </div>
+      <div id="delete-result" aria-live="polite"></div>
+    </div>
+  </main>
+  <script type="module" src="/js/privacy.js"></script>
+</body>
+</html>

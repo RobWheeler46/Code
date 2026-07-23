@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Disconnect — OSM Connect Test Harness</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <main id="main">
+    <h2>Disconnect from OSM</h2>
+    <div class="card">
+      <h3>What disconnecting does</h3>
+      <ul>
+        <li>Removes the encrypted access and refresh tokens held by this application.</li>
+        <li>Ends your application session.</li>
+        <li>Records the disconnection in the audit log.</li>
+      </ul>
+      <h3>What it does not do</h3>
+      <p>Disconnecting here removes only the tokens held by <em>this</em> application. It may not remove
+        any authorisation recorded within OSM itself. If you need to withdraw the application's access at
+        the OSM end as well, review it in OSM.</p>
+      <p>No information in OSM is changed by disconnecting.</p>
+      <div class="actions">
+        <button type="button" id="confirm-btn" class="danger">Disconnect and remove stored tokens</button>
+        <a class="button secondary" href="/dashboard.html">Cancel and go back</a>
+      </div>
+      <div id="result-area" aria-live="polite"></div>
+    </div>
+  </main>
+  <script type="module" src="/js/disconnect.js"></script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Home — OSM Connect Test Harness</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <main id="main">
+    <h2>OSM connection test</h2>
+    <div class="readonly-banner">
+      <strong>This is a diagnostic test tool.</strong> It checks whether this application can connect to
+      Online Scout Manager and read information. <strong>It will not create, change or delete any
+      information in OSM.</strong> Your OSM password is entered on the OSM website and is never supplied
+      to this application.
+    </div>
+
+    <div class="card">
+      <h3>Connection status</h3>
+      <div id="status-area"><p role="status">Checking…</p></div>
+      <div class="actions" id="action-area"></div>
+    </div>
+
+    <div id="warning-area"></div>
+
+    <div class="card">
+      <h3>What will be tested?</h3>
+      <ul>
+        <li>Secure authentication through the OSM sign-in page.</li>
+        <li>That an access token can be obtained, stored securely and refreshed.</li>
+        <li>The groups and sections your OSM account can reach.</li>
+        <li>The permissions OSM returns for each section, and whether they can be interpreted.</li>
+        <li>One low-risk read only API request.</li>
+        <li>The response format, rate limit information and any deprecation or blocked-client warnings.</li>
+      </ul>
+      <p>Every stage reports <strong>Passed</strong>, <strong>Passed with warning</strong>,
+        <strong>Failed</strong>, <strong>Skipped</strong> or <strong>Cancelled</strong>, with a plain
+        English explanation, a permanent message code and a correlation identifier.</p>
+    </div>
+
+    <div class="card">
+      <h3>What this tool will not do</h3>
+      <ul>
+        <li>It never asks for your OSM password and has no forgotten-password function — password resets are handled in OSM.</li>
+        <li>It cannot run a write operation. Release 1 has no write endpoint at all.</li>
+        <li>It does not retain member records, and diagnostics are sanitised before they are stored or exported.</li>
+      </ul>
+    </div>
+  </main>
+  <script type="module" src="/js/home.js"></script>
+</body>
+</html>

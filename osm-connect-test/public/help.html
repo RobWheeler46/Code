@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Help and message catalogue — OSM Connect Test Harness</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <main id="main">
+    <h2>Help and message catalogue</h2>
+    <p>Every outcome in this application has a permanent message code. Quote the code and the
+      correlation identifier when you ask for support.</p>
+
+    <div class="card">
+      <h3>How to read a message</h3>
+      <dl class="facts">
+        <dt>Status</dt><dd>Success, Information, Warning, Error or Critical.</dd>
+        <dt>What happened</dt><dd>A plain English explanation of the outcome.</dd>
+        <dt>What this means</dt><dd>The likely effect on the current test.</dd>
+        <dt>What has not happened</dt><dd>Confirmation that no OSM information was changed.</dd>
+        <dt>What you can do</dt><dd>Specific next actions.</dd>
+        <dt>Retrying</dt><dd>Whether retrying is safe now, safe after a delay, safe only after configuration changes, not recommended, or disabled.</dd>
+        <dt>Message code</dt><dd>A permanent reference such as OSM-AUTH-004.</dd>
+        <dt>Correlation identifier</dt><dd>A unique reference for the request, such as OSM-20260723-8F4K2.</dd>
+      </dl>
+    </div>
+
+    <div class="card">
+      <h3>Search the catalogue</h3>
+      <div class="field">
+        <label for="filter">Filter by code or words in the message</label>
+        <input type="text" id="filter" autocomplete="off" placeholder="e.g. 429, blocked, refresh">
+      </div>
+      <p id="filter-count" role="status"></p>
+    </div>
+
+    <div id="catalogue-area"><p role="status">Loading…</p></div>
+  </main>
+  <script type="module" src="/js/help.js"></script>
+</body>
+</html>
