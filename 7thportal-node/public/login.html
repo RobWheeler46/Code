@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in — 7thPortal</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="centered">
+    <div class="card auth-card pad-lg">
+      <div class="brand-big">
+        <span class="logo">7</span>
+        <div>
+          <div style="font-weight:800;font-size:1.2rem">7thPortal</div>
+          <div class="muted small">7th Swindon Scout Group</div>
+        </div>
+      </div>
+
+      <div id="msg"></div>
+
+      <a id="osmBtn" class="btn" href="/auth/osm/start" style="width:100%;margin-top:14px">
+        Sign in with OSM
+      </a>
+      <p id="osmHint" class="hint" style="margin-top:8px;display:none">
+        OSM sign-in is not configured yet. Add the OSM client credentials to enable it.
+      </p>
+
+      <div class="divider">or sign in with your portal account</div>
+
+      <form id="loginForm">
+        <label for="email">Email</label>
+        <input id="email" type="email" autocomplete="username" required>
+        <label for="password">Password</label>
+        <input id="password" type="password" autocomplete="current-password" required>
+        <button class="btn" type="submit" style="width:100%;margin-top:16px">Sign in</button>
+      </form>
+
+      <p id="demo" class="hint" style="margin-top:16px;display:none"></p>
+    </div>
+  </div>
+  <script src="/js/app.js"></script>
+  <script src="/js/login.js"></script>
+</body>
+</html>
