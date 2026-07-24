@@ -301,6 +301,49 @@ CREATE TABLE IF NOT EXISTS expense_payment_items (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Leader-only document library (wireframe screens 48-51): a document is a
+-- record of metadata; document_versions holds the actual files, so
+-- publishing a new version doesn't lose the old one (version history,
+-- screen 51). Not safeguarding/finance-sensitive like the gallery or
+-- expenses modules, but ships off by default anyway for consistency with
+-- how every other optional module was introduced here - an admin opts in
+-- once real policies/templates are ready to load.
+CREATE TABLE IF NOT EXISTS documents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'guidance' CHECK(category IN ('policy','process','template','guidance','other')),
+  owner_user_id INTEGER REFERENCES users(id),
+  review_date TEXT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','published')),
+  current_version_id INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS document_versions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  document_id INTEGER NOT NULL REFERENCES documents(id),
+  version_number INTEGER NOT NULL,
+  storage_key TEXT NOT NULL UNIQUE,
+  ext TEXT NOT NULL,
+  original_filename TEXT,
+  notes TEXT,
+  uploaded_by_user_id INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Tied to a specific version, not just the document, so publishing a new
+-- version naturally surfaces everyone who acknowledged the old one as
+-- "outstanding" again (screen 51's "tracking acknowledgements").
+CREATE TABLE IF NOT EXISTS document_acknowledgements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  document_id INTEGER NOT NULL REFERENCES documents(id),
+  version_id INTEGER NOT NULL REFERENCES document_versions(id),
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  acknowledged_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(version_id, user_id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(portal_role, account_status);
 CREATE INDEX IF NOT EXISTS idx_parent_links_parent ON parent_child_links(parent_user_id);
 CREATE INDEX IF NOT EXISTS idx_notices_status ON notices(status, audience, start_date);
@@ -314,6 +357,10 @@ CREATE INDEX IF NOT EXISTS idx_expense_claims_claimant ON expense_claims(claiman
 CREATE INDEX IF NOT EXISTS idx_expense_claim_items_claim ON expense_claim_items(claim_id);
 CREATE INDEX IF NOT EXISTS idx_expense_claim_items_account ON expense_claim_items(account_id, status);
 CREATE INDEX IF NOT EXISTS idx_expense_claim_item_receipts_receipt ON expense_claim_item_receipts(receipt_id);
+CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status, category);
+CREATE INDEX IF NOT EXISTS idx_document_versions_document ON document_versions(document_id);
+CREATE INDEX IF NOT EXISTS idx_document_acknowledgements_document ON document_acknowledgements(document_id, version_id);
+CREATE INDEX IF NOT EXISTS idx_document_acknowledgements_user ON document_acknowledgements(user_id);
 SQL
 );
 

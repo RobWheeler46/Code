@@ -348,6 +348,15 @@ async function renderSettings() {
         <span id="finance-settings-saved"></span>
       </form>
     </div>
+    <div class="card">
+      <h2>Leader document library</h2>
+      <p class="muted">Store, version and track acknowledgement of leader-only policies, process documents, templates and guidance. Ships off by default until real content is ready to load.</p>
+      <form id="doclib-settings-form">
+        <div class="field"><label style="font-weight:400;"><input type="checkbox" id="d-enabled" ${settings.documentLibraryEnabled ? 'checked' : ''}> Enable the document library</label></div>
+        <button class="btn btn-primary" type="submit">Save</button>
+        <span id="doclib-settings-saved"></span>
+      </form>
+    </div>
   `;
   document.getElementById('gallery-settings-form').addEventListener('submit', async e => {
     e.preventDefault();
@@ -367,6 +376,11 @@ async function renderSettings() {
       financeRetentionDays: Number(document.getElementById('f-retention').value),
     });
     document.getElementById('finance-settings-saved').textContent = 'Saved.';
+  });
+  document.getElementById('doclib-settings-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    await Api.put('/api/admin/settings', { documentLibraryEnabled: document.getElementById('d-enabled').checked });
+    document.getElementById('doclib-settings-saved').textContent = 'Saved.';
   });
   document.getElementById('settings-form').addEventListener('submit', async e => {
     e.preventDefault();

@@ -86,8 +86,18 @@ Built from the `7thPortal_Final_Pack.zip` Expenses/Mileage/Treasurer/Trustee sco
 - **Deliberately simplified vs. the technical appendices**, to stay proportionate for a single-developer/volunteer-run project on SQLite: integer autoincrement IDs (not UUID), no malware/virus scanning on uploads (no infra for it, and not in this README's hosting checklist below), no idempotency keys/ETag concurrency control (SQLite serialises writes; traffic scale here doesn't need it), and no true split-amount partial payment of a single item (a payment batch can include several items in one action, but each item is paid in full).
 - Demo Mode supports `/auth/demo/login?as=treasurer|chair|trustee` in addition to the existing `parent|leader|admin`, for exploring those views without real accounts.
 
+## Leader document library
+
+Built from wireframe screens 48-51 (store, find, version, acknowledge and audit leader-only policies, process documents, templates and guidance). Ships **off by default** via Admin → Settings → "Leader document library" (`document_library_enabled`), same pattern as every other optional module here, even though this one isn't safeguarding/finance-sensitive - kept for consistency rather than a real risk-based need.
+
+- **A document is metadata; `document_versions` holds the actual files** - publishing a new version never loses the old one, so version history (screen 51) is just "every version ever uploaded for this document," ordered newest first.
+- **Acknowledgement is tied to a specific version, not the document** - publishing a new version naturally makes everyone who acknowledged the old one show up as "not yet acknowledged" again, which is exactly the "outstanding acknowledgements" tracking screen 51 asks for, without needing separate reset logic.
+- **Who can manage a document**: its assigned owner, or any admin - mirrors the gallery's per-album-creator-or-admin pattern. Any leader-role user can create a new document (becoming its owner); only the owner or an admin can upload new versions, publish, edit metadata or see the acknowledgement-status table.
+- **File types**: PDF, Word, Excel, PowerPoint or images, trusted by the uploaded filename's extension rather than magic-byte sniffing - office formats (docx/xlsx/pptx) are themselves zip files and aren't reliably distinguishable that way. No malware scanning, consistent with the same accepted gap already documented for receipt uploads in the finance module.
+- Files are stored the same private, authenticated-proxy-only way as gallery photos and receipts (`data/document-uploads/`, never a public URL) - fully leader-only, parents get a 403/404 from every endpoint.
+
 ## Known follow-ups
 
 Same open items as the Node version's README (OSM endpoint field-name confidence beyond the proven OAuth+badges calls, formal GDPR status, photo consent data source, session-timeout-requires-restart, no automated tests) - none of that changed by moving to PHP.
 
-Finance module specifically: named approver/deputy per account and who owns finance data day-to-day are still open per `DECISIONS-finance-module.md` (items 2/3/6) - the accounts ship with no approver set until an admin assigns one via Admin → Finance. Trustee dashboard claimant-name visibility (item 10), mileage rate review cadence (item 9) and accessibility/mobile testing approach (item 11) are also still open. The "Leader document library" feature proposed alongside the multi-item claims wireframes was explicitly skipped - unrelated to expenses and not part of any prior decision.
+Finance module specifically: named approver/deputy per account and who owns finance data day-to-day are still open per `DECISIONS-finance-module.md` (items 2/3/6) - the accounts ship with no approver set until an admin assigns one via Admin → Finance. Trustee dashboard claimant-name visibility (item 10), mileage rate review cadence (item 9) and accessibility/mobile testing approach (item 11) are also still open.

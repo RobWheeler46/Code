@@ -64,6 +64,7 @@ $router->get('/api/admin/settings', function ($params) {
         'financeThresholdTier1' => (float) ($map['finance_threshold_tier1'] ?? 50),
         'financeThresholdTier2' => (float) ($map['finance_threshold_tier2'] ?? 250),
         'financeRetentionDays' => (int) ($map['finance_retention_days'] ?? 730),
+        'documentLibraryEnabled' => ($map['document_library_enabled'] ?? null) === 'true',
     ]);
 });
 
@@ -86,6 +87,7 @@ $router->put('/api/admin/settings', function ($params) {
     if (!empty($body['financeThresholdTier1'])) $upsert('finance_threshold_tier1', (string) $body['financeThresholdTier1']);
     if (!empty($body['financeThresholdTier2'])) $upsert('finance_threshold_tier2', (string) $body['financeThresholdTier2']);
     if (!empty($body['financeRetentionDays'])) $upsert('finance_retention_days', (string) $body['financeRetentionDays']);
+    if (array_key_exists('documentLibraryEnabled', $body)) $upsert('document_library_enabled', $body['documentLibraryEnabled'] ? 'true' : 'false');
 
     logAudit(['userId' => $user['id'], 'action' => array_key_exists('galleryEnabled', $body) ? 'admin_toggle_gallery' : (array_key_exists('financeEnabled', $body) ? 'admin_toggle_finance' : 'admin_update_settings'), 'ipAddress' => clientIp(), 'details' => $body]);
     jsonResponse(['ok' => true]);

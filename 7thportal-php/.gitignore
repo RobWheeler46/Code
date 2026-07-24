@@ -4,4 +4,6 @@ data/gallery-uploads/*
 !data/gallery-uploads/.gitkeep
 data/receipt-uploads/*
 !data/receipt-uploads/.gitkeep
+data/document-uploads/*
+!data/document-uploads/.gitkeep
 data/login-debug.log
