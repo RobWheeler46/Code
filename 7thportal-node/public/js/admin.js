@@ -16,6 +16,7 @@
   async function render(tab) {
     panel.innerHTML = '<div class="empty">Loading…</div>';
     try {
+      if (tab === 'overview') return renderOverview();
       if (tab === 'users') return renderUsers();
       if (tab === 'children') return renderChildren();
       if (tab === 'notices') return renderNotices();
@@ -24,6 +25,58 @@
     } catch (err) {
       panel.innerHTML = flash(err.message);
     }
+  }
+
+  // --- overview (FRD 6.1: operational/support view, not member data) ---
+  async function renderOverview() {
+    const o = await api('/api/admin/overview');
+    const osm = o.osm;
+    const ex = o.exceptions;
+    const exceptionRows = [
+      { label: 'Parents with no linked child', n: ex.parentsWithoutChildren.length, list: ex.parentsWithoutChildren.map((p) => `${esc(p.display_name)} (${esc(p.email)})`) },
+      { label: 'Suspended accounts', n: ex.suspendedUsers, list: [] },
+      { label: 'Documents with no file version', n: ex.documentsWithoutVersions, list: [] },
+      { label: 'OSM sign-in failures (logged)', n: osm.failedLoginCount, list: [] }
+    ];
+    panel.innerHTML = `
+      <div class="grid cols-3" style="margin-bottom:18px">
+        <div class="card"><div class="muted small">People</div><div style="font-size:1.5rem;font-weight:700">${o.counts.users}</div>
+          <div class="small muted">${o.counts.parents} parents · ${o.counts.leaders} leaders · ${o.counts.admins} admins</div></div>
+        <div class="card"><div class="muted small">Children linked</div><div style="font-size:1.5rem;font-weight:700">${o.counts.children}</div></div>
+        <div class="card"><div class="muted small">Notices</div><div style="font-size:1.5rem;font-weight:700">${o.counts.noticesPublished}</div>
+          <div class="small muted">published of ${o.counts.noticesTotal}</div></div>
+      </div>
+      <div class="grid cols-2">
+        <section class="card">
+          <h3>OSM integration health</h3>
+          <table>
+            <tr><th>Sign-in</th><td>${osm.configured ? '<span class="pill ok">configured</span>' : '<span class="pill warn">not configured</span>'}</td></tr>
+            <tr><th>Last successful OSM sign-in</th><td>${osm.lastSuccessfulLogin ? fmtDateTime(osm.lastSuccessfulLogin.at) + ' · ' + esc(osm.lastSuccessfulLogin.actor || '') : '<span class="muted">none yet</span>'}</td></tr>
+            <tr><th>Scopes</th><td class="small">${esc(osm.scopes)}</td></tr>
+            <tr><th>Callback URL</th><td class="small">${esc(osm.callbackUrl)}</td></tr>
+          </table>
+          ${osm.recentFailures.length ? `<h4 style="margin:14px 0 6px">Recent sign-in failures</h4>
+            ${osm.recentFailures.map((f) => `<div class="small muted">${fmtDateTime(f.at)} · ${esc(f.event)} · ${esc(f.detail || '')}</div>`).join('')}` : ''}
+        </section>
+        <section class="card">
+          <h3>Support exceptions</h3>
+          <table>
+            ${exceptionRows.map((r) => `<tr><th>${r.label}</th><td>${r.n > 0 ? `<span class="pill warn">${r.n}</span>` : '<span class="pill ok">0</span>'}</td></tr>`).join('')}
+          </table>
+          ${ex.parentsWithoutChildren.length ? `<h4 style="margin:14px 0 6px">Parents needing a child link</h4>
+            ${ex.parentsWithoutChildren.map((p) => `<div class="small">${esc(p.display_name)} <span class="muted">${esc(p.email)}</span></div>`).join('')}` : ''}
+        </section>
+      </div>
+      <section class="card" style="margin-top:18px">
+        <h3>OSM account mapping</h3>
+        <p class="hint">Users who sign in through OSM. Only a masked OSM reference is shown — raw OSM ids and tokens are never exposed (FR-OSM-ADM-009). This view is written to the audit log.</p>
+        ${o.osmMappings.length ? `<table>
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>OSM ref (masked)</th><th>Last sign-in</th></tr></thead>
+          <tbody>${o.osmMappings.map((m) => `<tr><td>${esc(m.display_name)}</td><td class="small">${esc(m.email)}</td>
+            <td><span class="pill grey">${esc(m.role)}</span></td><td class="small">${esc(m.osm_user_ref || '—')}</td>
+            <td class="small muted">${m.last_login_at ? fmtDateTime(m.last_login_at) : '—'}</td></tr>`).join('')}</tbody>
+        </table>` : '<div class="empty">No OSM sign-ins yet. Leaders who sign in with OSM will appear here.</div>'}
+      </section>`;
   }
 
   // --- users ---
@@ -46,7 +99,7 @@
       </div>
       <div class="card">
         <table>
-          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Sign-in</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Sign-in</th><th>OSM ref</th><th>Status</th><th></th></tr></thead>
           <tbody>${users.map((u) => `
             <tr>
               <td>${esc(u.display_name)}</td>
@@ -57,6 +110,7 @@
                 </select>
               </td>
               <td><span class="pill grey">${u.auth_source}</span></td>
+              <td class="small muted">${u.osm_user_ref ? esc(u.osm_user_ref) : '—'}</td>
               <td>${u.status === 'active' ? '<span class="pill ok">active</span>' : '<span class="pill warn">suspended</span>'}</td>
               <td>${u.id === me.id ? '<span class="small muted">you</span>' : `<button class="btn ghost sm" data-toggle="${u.id}" data-status="${u.status}">${u.status === 'active' ? 'Suspend' : 'Restore'}</button>`}</td>
             </tr>`).join('')}</tbody>
@@ -225,5 +279,5 @@
       </div>`;
   }
 
-  render('users');
+  render('overview');
 })();

@@ -106,6 +106,68 @@ router.delete('/notices/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// --- operational / support dashboard (FRD 6.1 Admin Access to OSM Data) --------
+// A least-privilege admin view: integration health, support exceptions and OSM
+// account mapping, NOT unrestricted member data. Viewing it (it surfaces the
+// user-to-OSM mapping) is itself audited per FR-OSM-ADM-010 / FR-OSM-ADM-012.
+router.get('/overview', (req, res) => {
+  const one = (sql, ...p) => db.prepare(sql).get(...p);
+  const many = (sql, ...p) => db.prepare(sql).all(...p);
+
+  const roleCounts = many('SELECT role, count(*) AS n FROM users GROUP BY role');
+  const byRole = Object.fromEntries(roleCounts.map((r) => [r.role, r.n]));
+
+  // Integration health: last successful OSM sign-in and recent auth failures.
+  const lastOsmLogin = one("SELECT at, actor FROM audit_events WHERE event = 'login.osm.success' ORDER BY id DESC LIMIT 1");
+  const failedLogins = many(
+    "SELECT at, actor, event, detail FROM audit_events WHERE event IN ('login.failed','login.osm.failed') ORDER BY id DESC LIMIT 10"
+  );
+  const failedLoginCount = one("SELECT count(*) AS n FROM audit_events WHERE event IN ('login.failed','login.osm.failed')").n;
+
+  // Support exceptions: things an admin should action.
+  const parentsWithoutChildren = many(
+    "SELECT id, display_name, email FROM users WHERE role = 'parent' AND status = 'active' AND id NOT IN (SELECT DISTINCT parent_user_id FROM children)"
+  );
+  const suspendedUsers = one("SELECT count(*) AS n FROM users WHERE status = 'suspended'").n;
+  const documentsWithoutVersions = one(
+    'SELECT count(*) AS n FROM documents d WHERE NOT EXISTS (SELECT 1 FROM document_versions v WHERE v.document_id = d.id)'
+  ).n;
+
+  // OSM account mapping (masked ref only; raw OSM ids/tokens are never exposed).
+  const osmMappings = many(
+    "SELECT display_name, email, osm_user_ref, role, last_login_at FROM users WHERE auth_source = 'osm' ORDER BY last_login_at DESC"
+  );
+
+  audit.fromReq(req, { event: 'admin.osm.support.viewed', detail: 'operational dashboard + OSM account mapping' });
+
+  res.json({
+    osm: {
+      configured: config.osmConfigured(),
+      callbackUrl: config.osm.callbackUrl,
+      scopes: config.osm.scopes,
+      lastSuccessfulLogin: lastOsmLogin || null,
+      failedLoginCount,
+      recentFailures: failedLogins
+    },
+    counts: {
+      users: (byRole.parent || 0) + (byRole.leader || 0) + (byRole.admin || 0),
+      parents: byRole.parent || 0,
+      leaders: byRole.leader || 0,
+      admins: byRole.admin || 0,
+      children: one('SELECT count(*) AS n FROM children').n,
+      noticesPublished: one('SELECT count(*) AS n FROM notices WHERE published = 1').n,
+      noticesTotal: one('SELECT count(*) AS n FROM notices').n,
+      documents: one('SELECT count(*) AS n FROM documents').n
+    },
+    exceptions: {
+      parentsWithoutChildren,
+      suspendedUsers,
+      documentsWithoutVersions
+    },
+    osmMappings
+  });
+});
+
 // --- audit & settings ---------------------------------------------------------
 
 router.get('/audit', (req, res) => res.json({ events: audit.list(req.query.limit || 200) }));

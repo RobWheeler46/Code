@@ -78,7 +78,7 @@ function toSession(user) {
 }
 
 function listAll() {
-  return db.prepare('SELECT id, email, display_name, role, auth_source, status, created_at, last_login_at FROM users ORDER BY id').all();
+  return db.prepare('SELECT id, email, display_name, role, auth_source, osm_user_ref, status, created_at, last_login_at FROM users ORDER BY id').all();
 }
 
 function setRole(id, role) {
