@@ -132,6 +132,34 @@ CREATE TABLE IF NOT EXISTS audit_events (
   ip TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_events(at);
+
+-- Local section capacity planning values (FRD 29.3). Capacity is a 7thPortal
+-- planning figure only and is never written back to OSM. amber/red are the
+-- utilisation warning thresholds (percent); joining_count is an optional local
+-- planning figure until OSM waiting-list data can be synced.
+CREATE TABLE IF NOT EXISTS section_capacity (
+  section TEXT PRIMARY KEY,
+  capacity INTEGER,
+  amber_pct INTEGER NOT NULL DEFAULT 85,
+  red_pct INTEGER NOT NULL DEFAULT 95,
+  joining_count INTEGER,
+  owner TEXT,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_by INTEGER REFERENCES users(id)
+);
+
+-- Periodic aggregate snapshots for movement trends (FRD 29.4 / FR-OSM-CAP-006).
+-- One row per section per day; the dashboard writes today's snapshot on load so
+-- a Rising/Falling/Stable trend accumulates over time.
+CREATE TABLE IF NOT EXISTS section_snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  section TEXT NOT NULL,
+  active_count INTEGER NOT NULL DEFAULT 0,
+  joining_count INTEGER,
+  snapshot_date TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(section, snapshot_date)
+);
 `);
 
 module.exports = db;

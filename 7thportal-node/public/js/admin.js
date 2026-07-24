@@ -17,6 +17,7 @@
     panel.innerHTML = '<div class="empty">Loading…</div>';
     try {
       if (tab === 'overview') return renderOverview();
+      if (tab === 'sections') return renderSections();
       if (tab === 'users') return renderUsers();
       if (tab === 'children') return renderChildren();
       if (tab === 'notices') return renderNotices();
@@ -77,6 +78,110 @@
             <td class="small muted">${m.last_login_at ? fmtDateTime(m.last_login_at) : '—'}</td></tr>`).join('')}</tbody>
         </table>` : '<div class="empty">No OSM sign-ins yet. Leaders who sign in with OSM will appear here.</div>'}
       </section>`;
+  }
+
+  // --- sections: capacity tracker & movement trends (FRD 29) ---
+  function statusPill(s) {
+    const map = {
+      good: '<span class="pill ok">Good</span>', watch: '<span class="pill warn">Watch</span>',
+      full: '<span class="pill" style="background:#fbecdc;color:#b26a00">Full</span>',
+      over: '<span class="pill" style="background:#fdecec;color:#c62828">Over capacity</span>',
+      unset: '<span class="pill grey">No capacity set</span>'
+    };
+    return map[s] || map.unset;
+  }
+  function trendPill(t) {
+    const map = { rising: '↑ Rising', falling: '↓ Falling', stable: '→ Stable', new: '—' };
+    return `<span class="pill grey">${map[t] || '—'}</span>`;
+  }
+
+  async function renderSections() {
+    const [dash, cfg] = await Promise.all([api('/api/admin/sections'), api('/api/admin/sections/settings')]);
+    const t = dash.totals;
+    const cfgBy = Object.fromEntries(cfg.configured.map((c) => [c.section, c]));
+
+    panel.innerHTML = `
+      <div class="grid cols-3" style="margin-bottom:18px">
+        <div class="card"><div class="muted small">Total active children</div><div style="font-size:1.5rem;font-weight:700">${t.totalActive}</div></div>
+        <div class="card"><div class="muted small">Available spaces</div><div style="font-size:1.5rem;font-weight:700">${t.availableSpaces}</div></div>
+        <div class="card"><div class="muted small">Near / over capacity</div><div style="font-size:1.5rem;font-weight:700">${t.nearCapacity} ${t.nearCapacity === 1 ? 'section' : 'sections'}</div></div>
+      </div>
+
+      <section class="card" style="margin-bottom:18px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <h3 style="margin:0">Section capacity tracker</h3>
+          <a class="btn secondary sm" href="/api/admin/sections/export" style="margin-left:auto">Export summary (CSV)</a>
+        </div>
+        <p class="hint">Counts only — no named child records. Active is from portal records (OSM member sync pending). Drill-down into named children is audited.</p>
+        ${dash.sections.length ? `<table>
+          <thead><tr><th>Section</th><th>Active</th><th>Joining</th><th>Capacity</th><th>Use</th><th>Trend</th><th>Status</th><th></th></tr></thead>
+          <tbody>${dash.sections.map((s) => `
+            <tr>
+              <td><strong>${esc(s.section)}</strong></td>
+              <td>${s.active}</td>
+              <td>${s.joining ?? '—'}</td>
+              <td>${s.capacity ?? '—'}</td>
+              <td>${s.utilisation != null ? s.utilisation + '%' : '—'}</td>
+              <td>${trendPill(s.trend)}</td>
+              <td>${statusPill(s.status)}</td>
+              <td><button class="btn ghost sm" data-drill="${esc(s.section)}">View children</button></td>
+            </tr>`).join('')}</tbody>
+        </table>` : '<div class="empty">No sections yet. Link children to sections (Children tab) or set a capacity below.</div>'}
+      </section>
+
+      <section class="card">
+        <h3>Capacity settings</h3>
+        <p class="hint">Capacity is a local 7thPortal planning value and is never written back to OSM. Amber/red are utilisation warning thresholds (%).</p>
+        <div id="secMsg"></div>
+        <table>
+          <thead><tr><th>Section</th><th>Capacity</th><th>Amber %</th><th>Red %</th><th>Joining</th><th>Owner</th><th></th></tr></thead>
+          <tbody>${cfg.sections.map((name) => {
+            const c = cfgBy[name] || {};
+            return `<tr data-row="${esc(name)}">
+              <td><strong>${esc(name)}</strong></td>
+              <td><input class="cap" style="width:80px" type="number" min="0" value="${c.capacity ?? ''}"></td>
+              <td><input class="amber" style="width:70px" type="number" min="0" max="100" value="${c.amber_pct ?? 85}"></td>
+              <td><input class="red" style="width:70px" type="number" min="0" max="100" value="${c.red_pct ?? 95}"></td>
+              <td><input class="join" style="width:70px" type="number" min="0" value="${c.joining_count ?? ''}"></td>
+              <td><input class="owner" style="min-width:120px" value="${esc(c.owner || '')}"></td>
+              <td><button class="btn sm" data-save="${esc(name)}">Save</button></td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>
+      </section>`;
+
+    panel.querySelectorAll('button[data-drill]').forEach((b) => b.addEventListener('click', () => openDrill(b.dataset.drill)));
+    panel.querySelectorAll('button[data-save]').forEach((b) => b.addEventListener('click', async () => {
+      const row = panel.querySelector(`tr[data-row="${CSS.escape(b.dataset.save)}"]`);
+      try {
+        await api('/api/admin/sections/settings', { method: 'POST', body: JSON.stringify({
+          section: b.dataset.save,
+          capacity: row.querySelector('.cap').value,
+          amberPct: row.querySelector('.amber').value,
+          redPct: row.querySelector('.red').value,
+          joiningCount: row.querySelector('.join').value,
+          owner: row.querySelector('.owner').value
+        }) });
+        renderSections();
+      } catch (err) { document.getElementById('secMsg').innerHTML = flash(err.message); }
+    }));
+  }
+
+  async function openDrill(section) {
+    const back = openModal(`<h2>${esc(section)} — named children</h2>
+      <p class="hint">This view reveals named child records and has been written to the audit log.</p>
+      <div id="drillBody" class="empty">Loading…</div>
+      <div class="modal-actions"><button class="btn ghost" id="drillClose">Close</button></div>`);
+    back.querySelector('#drillClose').addEventListener('click', () => back.remove());
+    try {
+      const { children } = await api(`/api/admin/sections/${encodeURIComponent(section)}/children`);
+      back.querySelector('#drillBody').outerHTML = children.length ? `<table>
+        <thead><tr><th>Child</th><th>Parent</th></tr></thead>
+        <tbody>${children.map((c) => `<tr><td>${esc(c.name)}</td><td class="small">${esc(c.parent_name)} <span class="muted">${esc(c.parent_email)}</span></td></tr>`).join('')}</tbody>
+      </table>` : '<div class="empty">No children linked to this section.</div>';
+    } catch (err) {
+      back.querySelector('#drillBody').innerHTML = flash(err.message);
+    }
   }
 
   // --- users ---

@@ -168,6 +168,114 @@ router.get('/overview', (req, res) => {
   });
 });
 
+// --- section capacity tracker & movement trends (FRD 29) ----------------------
+// Aggregate, counts-only by default. "Active" is sourced from the app's local
+// children-by-section records (OSM member sync is not built yet), so it is
+// labelled as portal data. Capacity/thresholds/status are purely local.
+
+function capacityStatus(active, cap, amber, red) {
+  if (!cap || cap <= 0) return { util: null, status: 'unset' };
+  const util = Math.round((active / cap) * 100);
+  let status = 'good';
+  if (active > cap) status = 'over';
+  else if (util >= red) status = 'full';
+  else if (util >= amber) status = 'watch';
+  return { util, status };
+}
+
+// Build the per-section summary and write today's snapshot so trends accumulate.
+function buildSections() {
+  const today = new Date().toISOString().slice(0, 10);
+  // Sections come from either a configured capacity row or any child's section.
+  const names = new Set();
+  db.prepare("SELECT DISTINCT section FROM children WHERE section IS NOT NULL AND section != ''").all().forEach((r) => names.add(r.section));
+  db.prepare('SELECT section FROM section_capacity').all().forEach((r) => names.add(r.section));
+
+  const insertSnap = db.prepare('INSERT OR IGNORE INTO section_snapshots (section, active_count, joining_count, snapshot_date) VALUES (?, ?, ?, ?)');
+  const activeStmt = db.prepare("SELECT count(*) AS n FROM children WHERE section = ?");
+  const cfgStmt = db.prepare('SELECT * FROM section_capacity WHERE section = ?');
+  const prevSnap = db.prepare('SELECT active_count FROM section_snapshots WHERE section = ? AND snapshot_date < ? ORDER BY snapshot_date DESC LIMIT 1');
+
+  const sections = [...names].sort().map((section) => {
+    const active = activeStmt.get(section).n;
+    const cfg = cfgStmt.get(section) || {};
+    const amber = cfg.amber_pct ?? 85;
+    const red = cfg.red_pct ?? 95;
+    const { util, status } = capacityStatus(active, cfg.capacity, amber, red);
+    insertSnap.run(section, active, cfg.joining_count ?? null, today);
+    const prev = prevSnap.get(section, today);
+    let trend = 'new';
+    if (prev) trend = active > prev.active_count ? 'rising' : active < prev.active_count ? 'falling' : 'stable';
+    return {
+      section, active, joining: cfg.joining_count ?? null, capacity: cfg.capacity ?? null,
+      utilisation: util, status, trend, amber, red, owner: cfg.owner || null
+    };
+  });
+
+  const totalActive = sections.reduce((s, x) => s + x.active, 0);
+  const availableSpaces = sections.reduce((s, x) => s + (x.capacity ? Math.max(x.capacity - x.active, 0) : 0), 0);
+  const joiningTotal = sections.reduce((s, x) => s + (x.joining || 0), 0);
+  const nearCapacity = sections.filter((x) => ['watch', 'full', 'over'].includes(x.status)).length;
+  return { sections, totals: { totalActive, availableSpaces, joiningTotal, nearCapacity } };
+}
+
+// Dashboard data (aggregate, counts only).
+router.get('/sections', (req, res) => {
+  res.json({ ...buildSections(), osmSynced: false });
+});
+
+// Capacity settings rows for the settings editor.
+router.get('/sections/settings', (req, res) => {
+  const configured = db.prepare('SELECT * FROM section_capacity ORDER BY section').all();
+  const known = new Set(configured.map((c) => c.section));
+  db.prepare("SELECT DISTINCT section FROM children WHERE section IS NOT NULL AND section != ''").all().forEach((r) => known.add(r.section));
+  res.json({ sections: [...known].sort(), configured });
+});
+
+// Create/update the local capacity + thresholds for a section.
+router.post('/sections/settings', (req, res) => {
+  const { section, capacity, amberPct, redPct, joiningCount, owner } = req.body || {};
+  if (!section) return res.status(400).json({ error: 'A section is required.' });
+  const amber = Number.isFinite(+amberPct) ? Math.max(0, Math.min(100, +amberPct)) : 85;
+  const red = Number.isFinite(+redPct) ? Math.max(0, Math.min(100, +redPct)) : 95;
+  db.prepare(`
+    INSERT INTO section_capacity (section, capacity, amber_pct, red_pct, joining_count, owner, updated_by, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(section) DO UPDATE SET
+      capacity = excluded.capacity, amber_pct = excluded.amber_pct, red_pct = excluded.red_pct,
+      joining_count = excluded.joining_count, owner = excluded.owner,
+      updated_by = excluded.updated_by, updated_at = excluded.updated_at
+  `).run(String(section).slice(0, 60), capacity === '' || capacity == null ? null : Math.max(0, +capacity),
+    amber, red, joiningCount === '' || joiningCount == null ? null : Math.max(0, +joiningCount),
+    owner ? String(owner).slice(0, 120) : null, req.session.user.id);
+  audit.fromReq(req, { event: 'admin.section.capacity.set', detail: `${section} cap=${capacity ?? '—'} amber=${amber} red=${red}` });
+  res.json({ ok: true });
+});
+
+// Audited named drill-down (FR-OSM-CAP-010/011): revealing named child records
+// requires this explicit, logged action.
+router.get('/sections/:section/children', (req, res) => {
+  const section = req.params.section;
+  const kids = db.prepare(`
+    SELECT c.id, c.name, c.osm_link, u.display_name AS parent_name, u.email AS parent_email
+    FROM children c JOIN users u ON u.id = c.parent_user_id WHERE c.section = ? ORDER BY c.name
+  `).all(section);
+  audit.fromReq(req, { event: 'admin.section.drilldown', detail: `${section} (${kids.length} named child records viewed)` });
+  res.json({ section, children: kids });
+});
+
+// Aggregate CSV export (FR-OSM-CAP-009).
+router.get('/sections/export', (req, res) => {
+  const { sections } = buildSections();
+  const rows = [['Section', 'Active', 'Joining', 'Capacity', 'Utilisation %', 'Status', 'Trend', 'Owner']];
+  sections.forEach((s) => rows.push([s.section, s.active, s.joining ?? '', s.capacity ?? '', s.utilisation ?? '', s.status, s.trend, s.owner ?? '']));
+  const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+  audit.fromReq(req, { event: 'admin.section.export', detail: 'aggregate capacity summary CSV' });
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="section-capacity-summary.csv"');
+  res.send(csv);
+});
+
 // --- audit & settings ---------------------------------------------------------
 
 router.get('/audit', (req, res) => res.json({ events: audit.list(req.query.limit || 200) }));
