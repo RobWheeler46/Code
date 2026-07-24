@@ -54,6 +54,7 @@ Administration screen. Database values win over environment variables.
 | Approved hostnames | `OSM_ALLOWED_HOSTS` | The server refuses to call anything else |
 | Session signing key | `SESSION_SECRET` | Long random string |
 | Token encryption key | `TOKEN_ENCRYPTION_KEY` | 32 bytes as hex or base64. If unset, a key file is generated in `data/` and a warning is logged |
+| Setup key | `SETUP_KEY` | Unlocks the browser first-run setup screen. See [First-run setup](#first-run-setup) |
 | Administrators | `ADMIN_EMAILS`, `ADMIN_OSM_USER_IDS` | Comma separated. Matched against the OSM identity at connection time |
 | Developers | `DEVELOPER_EMAILS` | Expanded diagnostics, no extra OSM access |
 | High-risk tests | `ALLOW_PERSONAL_DATA_TESTS` | Must be `true` before a test that may return young people's information can even be enabled |
@@ -63,6 +64,25 @@ Administration screen. Database values win over environment variables.
 > them to change — that is precisely what this tool exists to detect.
 
 ---
+
+## First-run setup
+
+The Administration screen requires an OSM sign-in, which requires the OSM configuration to already
+exist — a deadlock on a fresh deployment. The **first-run setup screen** breaks it.
+
+1. Set a `SETUP_KEY` (16+ random characters) in the environment and restart.
+2. Open `/setup.html`, enter the key, and fill in the client identifier, client secret, callback and
+   endpoint addresses.
+3. A readiness check (which never displays the secret) confirms when everything is in place, then
+   links straight to **Connect to OSM**.
+
+The setup screen writes through exactly the same guarded path as the admin screen: the secret is
+stored encrypted and write-only, and host/URL fields are validated. Access is gated by the setup
+key (timing-safe comparison, with a lockout after repeated failures) and each save is audited.
+
+If `SETUP_KEY` is not set, the whole `/setup` route reports itself unavailable and returns `404`.
+**Remove `SETUP_KEY` once configuration is complete** to close the screen; from then on, change
+settings from the Administration screen after an administrator has signed in.
 
 ## Tester guide
 

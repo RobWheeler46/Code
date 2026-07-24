@@ -14,6 +14,7 @@ const config = require('./lib/config');
 const oauthRoutes = require('./routes/oauth');
 const apiRoutes = require('./routes/api');
 const adminRoutes = require('./routes/admin');
+const setupRoutes = require('./routes/setup');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -48,6 +49,7 @@ app.use(csrf);
 app.use('/oauth', oauthRoutes);
 app.use('/api', apiRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/setup', setupRoutes);
 
 app.use(express.static(path.join(__dirname, '..', 'public'), {
   extensions: ['html'],

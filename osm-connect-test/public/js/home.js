@@ -28,7 +28,10 @@ if (!state.configurationComplete) {
     el('h3', { text: 'The application is not ready to connect' }),
     el('p', { text: 'The following items have not been configured. No information has been sent to OSM.' }),
     list,
-    el('p', { text: 'Ask an application administrator to review the OSM connection configuration.' })
+    el('p', { text: 'Enter these settings on the first-run setup screen, or ask an application administrator to review the OSM connection configuration.' }),
+    el('div', { class: 'actions' }, [
+      el('a', { class: 'button', href: '/setup.html', text: 'Open first-run setup' })
+    ])
   ]));
 }
 

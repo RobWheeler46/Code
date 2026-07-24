@@ -103,6 +103,53 @@ function isComplete() {
   return missingRequired().length === 0;
 }
 
+function safeHost(url) {
+  try { return new URL(url).hostname; } catch { return null; }
+}
+
+/**
+ * Apply a set of configuration updates with the same guards wherever they come from
+ * (administrator screen or first-run setup). A blank value leaves the setting
+ * unchanged. The callback address is validated and rolled back if it fails, and any
+ * host/URL field is checked so a user cannot point the server at an arbitrary host
+ * (FR-SEC-010/011). Returns which keys were applied and which were rejected.
+ */
+function applyUpdates(updates, updatedBy) {
+  const applied = [];
+  const rejected = [];
+  if (!updates || typeof updates !== 'object') return { applied, rejected: ['No updates were supplied.'] };
+
+  for (const [key, value] of Object.entries(updates)) {
+    if (!FIELDS[key]) { rejected.push(`${key}: unknown setting`); continue; }
+    if (value === '' || value === null || value === undefined) continue; // blank means "leave unchanged"
+
+    if (key === 'callbackUrl') {
+      const previous = get('callbackUrl');
+      set(key, value, updatedBy);
+      const check = callbackUrlIsValid();
+      if (!check.valid) {
+        set(key, previous ?? '', updatedBy);
+        rejected.push(`callbackUrl: ${check.reason}`);
+        continue;
+      }
+      applied.push(key);
+      continue;
+    }
+    if (key === 'allowedHosts' || key === 'apiBase' || key === 'authorizeUrl' || key === 'tokenUrl') {
+      const hosts = key === 'allowedHosts'
+        ? String(value).split(',').map((h) => h.trim()).filter(Boolean)
+        : [safeHost(value)];
+      if (hosts.some((h) => !h || /[^a-z0-9.\-:]/i.test(h))) {
+        rejected.push(`${key}: value is not a valid hostname or URL`);
+        continue;
+      }
+    }
+    set(key, value, updatedBy);
+    applied.push(key);
+  }
+  return { applied, rejected };
+}
+
 /**
  * Configuration for display. Secrets are reported as configured/not configured only,
  * with the date and user of the last change (FR-CONFIG-003).
@@ -136,6 +183,26 @@ function forDisplay() {
   return out;
 }
 
+/** FR-CONFIG-006: a readiness check that never exposes the secret. */
+function configTest() {
+  const checks = [];
+  const add = (name, ok, detail) => checks.push({ name, ok, detail });
+
+  add('Client identifier configured', !!get('osmClientId'), get('osmClientId') ? 'present' : 'missing');
+  add('Client secret configured', !!get('osmClientSecret'), get('osmClientSecret') ? 'present (value not shown)' : 'missing');
+  const cb = callbackUrlIsValid();
+  add('Callback address valid', cb.valid, cb.valid ? get('callbackUrl') : cb.reason);
+  for (const [key, label] of [['authorizeUrl', 'Authorisation endpoint'], ['tokenUrl', 'Token endpoint'], ['apiBase', 'API base address']]) {
+    const host = safeHost(get(key));
+    const allowed = host && allowedHosts().includes(host.toLowerCase());
+    add(`${label} on approved host`, !!allowed, host ? `${host}${allowed ? '' : ' is not on the approved list'}` : 'not a valid URL');
+  }
+  add('Encryption key set explicitly', !!process.env.TOKEN_ENCRYPTION_KEY,
+    process.env.TOKEN_ENCRYPTION_KEY ? 'TOKEN_ENCRYPTION_KEY is set' : 'using a generated key file in data/');
+
+  return { checks, allPassed: checks.every((c) => c.ok), secretExposed: false };
+}
+
 /** Values that must never appear in any log, message or export. */
 function secretValues() {
   return [rawGet('osmClientSecret'), process.env.SESSION_SECRET, process.env.TOKEN_ENCRYPTION_KEY].filter(Boolean);
@@ -153,6 +220,7 @@ function personalDataTestsAllowed() {
 }
 
 module.exports = {
-  FIELDS, get, set, allowedHosts, callbackUrlIsValid, missingRequired, isComplete,
-  forDisplay, secretValues, adminIdentifiers, personalDataTestsAllowed
+  FIELDS, get, set, applyUpdates, configTest, safeHost, allowedHosts, callbackUrlIsValid,
+  missingRequired, isComplete, forDisplay, secretValues, adminIdentifiers,
+  personalDataTestsAllowed
 };

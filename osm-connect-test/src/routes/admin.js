@@ -33,37 +33,7 @@ router.post('/config', requireRecentAuth(30), (req, res) => {
   const updates = req.body?.updates;
   if (!updates || typeof updates !== 'object') return res.status(400).json({ error: 'No updates were supplied.' });
 
-  const applied = [];
-  const rejected = [];
-  for (const [key, value] of Object.entries(updates)) {
-    if (!config.FIELDS[key]) { rejected.push(`${key}: unknown setting`); continue; }
-    if (value === '' || value === null || value === undefined) continue; // blank means "leave unchanged"
-
-    if (key === 'callbackUrl') {
-      const previous = config.get('callbackUrl');
-      config.set(key, value, req.user.osm_user_masked);
-      const check = config.callbackUrlIsValid();
-      if (!check.valid) {
-        config.set(key, previous ?? '', req.user.osm_user_masked);
-        rejected.push(`callbackUrl: ${check.reason}`);
-        continue;
-      }
-      applied.push(key);
-      continue;
-    }
-    if (key === 'allowedHosts' || key === 'apiBase' || key === 'authorizeUrl' || key === 'tokenUrl') {
-      // FR-SEC-010/011: a user must not be able to point the server at any host.
-      const hosts = key === 'allowedHosts'
-        ? String(value).split(',').map((h) => h.trim()).filter(Boolean)
-        : [safeHost(value)];
-      if (hosts.some((h) => !h || /[^a-z0-9.\-:]/i.test(h))) {
-        rejected.push(`${key}: value is not a valid hostname or URL`);
-        continue;
-      }
-    }
-    config.set(key, value, req.user.osm_user_masked);
-    applied.push(key);
-  }
+  const { applied, rejected } = config.applyUpdates(updates, req.user.osm_user_masked);
 
   audit.record({
     userId: req.user.id, event: 'config.changed', outcome: applied.length ? 'updated' : 'no-change',
@@ -76,22 +46,7 @@ router.post('/config', requireRecentAuth(30), (req, res) => {
 
 /** FR-CONFIG-006: a configuration test that does not expose the secret. */
 router.get('/config/test', (req, res) => {
-  const checks = [];
-  const add = (name, ok, detail) => checks.push({ name, ok, detail });
-
-  add('Client identifier configured', !!config.get('osmClientId'), config.get('osmClientId') ? 'present' : 'missing');
-  add('Client secret configured', !!config.get('osmClientSecret'), config.get('osmClientSecret') ? 'present (value not shown)' : 'missing');
-  const cb = config.callbackUrlIsValid();
-  add('Callback address valid', cb.valid, cb.valid ? config.get('callbackUrl') : cb.reason);
-  for (const [key, label] of [['authorizeUrl', 'Authorisation endpoint'], ['tokenUrl', 'Token endpoint'], ['apiBase', 'API base address']]) {
-    const host = safeHost(config.get(key));
-    const allowed = host && config.allowedHosts().includes(host.toLowerCase());
-    add(`${label} on approved host`, !!allowed, host ? `${host}${allowed ? '' : ' is not on the approved list'}` : 'not a valid URL');
-  }
-  add('Encryption key set explicitly', !!process.env.TOKEN_ENCRYPTION_KEY,
-    process.env.TOKEN_ENCRYPTION_KEY ? 'TOKEN_ENCRYPTION_KEY is set' : 'using a generated key file in data/');
-
-  res.json({ checks, allPassed: checks.every((c) => c.ok), secretExposed: false });
+  res.json(config.configTest());
 });
 
 router.get('/endpoints', (req, res) => {
@@ -219,9 +174,5 @@ router.post('/retention/run', requireRecentAuth(30), (req, res) => {
   audit.record({ userId: req.user.id, event: 'data.deleted', outcome: 'retention', detail: `Removed ${sessions.length} test session(s) older than ${days} days.` });
   res.json({ ok: true, removed: sessions.length, retentionDays: days });
 });
-
-function safeHost(url) {
-  try { return new URL(url).hostname; } catch { return null; }
-}
 
 module.exports = router;
