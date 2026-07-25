@@ -57,6 +57,14 @@ touch("$outDir/data/gallery-uploads/.gitkeep");
 if (file_exists("$root/data/.htaccess")) copy("$root/data/.htaccess", "$outDir/data/.htaccess");
 
 echo "\n7thPortal (PHP) deploy build ready in ./dist\n\n";
+// Stamp a build id into dist/webroot/build.txt - the home page fetches it and
+// shows "Build <id>" in the footer, so you can confirm which build is live after
+// a deploy. Timestamp plus the short git commit hash when git is available.
+$gitHash = trim((string) @shell_exec('git -C ' . escapeshellarg($root) . ' rev-parse --short HEAD 2>/dev/null'));
+$buildId = date('Y-m-d H:i') . ($gitHash !== '' ? " ($gitHash)" : '');
+file_put_contents("$outDir/webroot/build.txt", $buildId);
+
+echo "Build id: $buildId  <- shown on the home page footer; check it matches after deploying\n\n";
 echo "Included: " . implode(', ', $include) . " (plus an empty data/ placeholder)\n\n";
 echo "Not included (by design):\n";
 echo "  - .env                             -> create fresh on the server with real secrets; never upload your local one\n";

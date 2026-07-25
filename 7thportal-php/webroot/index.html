@@ -50,10 +50,21 @@
     </div>
   </div>
 
-  <div class="footer-note">7thPortal is not affiliated with Online Scout Manager. It reads information from OSM on your behalf and links back to OSM for actions.</div>
+  <div class="footer-note">7thPortal is not affiliated with Online Scout Manager. It reads information from OSM on your behalf and links back to OSM for actions.
+    <span class="build-tag" id="build-tag"></span>
+  </div>
 
   <script src="js/api.js"></script>
   <script src="js/nav.js"></script>
   <script>renderPublicNav();</script>
+  <script>
+    // Build stamp - build.txt is written by scripts/build-deploy.php at package
+    // time (shows "dev" when running from source). Cache-busted so a redeploy is
+    // always reflected, letting you confirm which build is live.
+    fetch('/build.txt?_=' + Date.now()).then(function (r) { return r.ok ? r.text() : ''; }).then(function (t) {
+      var el = document.getElementById('build-tag');
+      if (el && t.trim()) el.textContent = 'Build ' + t.trim();
+    }).catch(function () {});
+  </script>
 </body>
 </html>
