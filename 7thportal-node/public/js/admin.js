@@ -116,8 +116,8 @@
           </div>
         </div>
         <p class="hint">Counts only — no named child records. ${dash.osm.synced
-          ? 'Active counts are live from OSM where a section matches; others fall back to portal records.'
-          : (dash.osm.configured ? 'Active is from portal records until you sync from OSM.' : 'Active is from portal records (OSM not configured).')}
+          ? 'The section list is synced from OSM; active counts come from portal records (OSM does not expose member counts to the OAuth API).'
+          : (dash.osm.configured ? 'Sync from OSM to import the real section list; active counts stay from portal records.' : 'Active is from portal records (OSM not configured).')}
           Drill-down into named children is audited.</p>
         <div id="syncMsg"></div>
         ${dash.sections.length ? `<table>
@@ -133,7 +133,9 @@
               <td>${statusPill(s.status)}</td>
               <td class="small">${s.source === 'osm'
                 ? `<span class="pill ok">OSM</span> <span class="muted">${s.lastSync ? fmtDateTime(s.lastSync) : ''}</span>`
-                : `<span class="pill grey">Portal</span>${s.syncError ? ' <span class="pill" style="background:#fdecec;color:#c62828" title="' + esc(s.syncError) + '">sync error</span>' : ''}`}</td>
+                : s.source === 'osm-list'
+                  ? `<span class="pill ok">OSM list</span> <span class="muted">count local · ${s.lastSync ? fmtDateTime(s.lastSync) : ''}</span>`
+                  : `<span class="pill grey">Portal</span>${s.syncError ? ' <span class="pill" style="background:#fdecec;color:#c62828" title="' + esc(s.syncError) + '">sync error</span>' : ''}`}</td>
               <td><button class="btn ghost sm" data-drill="${esc(s.section)}">View children</button></td>
             </tr>`).join('')}</tbody>
         </table>` : '<div class="empty">No sections yet. Link children to sections (Children tab), set a capacity below, or sync from OSM.</div>'}
@@ -166,7 +168,7 @@
       syncBtn.disabled = true; syncBtn.textContent = 'Syncing…';
       try {
         const r = await api('/api/admin/sections/sync', { method: 'POST' });
-        msg.innerHTML = `<div class="msg ok">Synced ${r.synced} of ${r.total} sections from OSM.</div>`;
+        msg.innerHTML = `<div class="msg ok">Imported ${r.synced} sections from OSM (section list; active counts stay from portal records).</div>`;
         setTimeout(renderSections, 900);
       } catch (err) {
         msg.innerHTML = `<div class="msg error">${esc(err.message)}</div>`;

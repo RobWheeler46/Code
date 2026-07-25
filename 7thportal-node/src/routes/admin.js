@@ -210,6 +210,9 @@ function buildSections() {
     let active; let source; let lastSync = null; let syncError = null;
     if (osmRow && osmRow.sync_status === 'ok' && osmRow.active_count != null) {
       active = osmRow.active_count; source = 'osm'; lastSync = osmRow.last_synced_at;
+    } else if (osmRow && osmRow.sync_status === 'ok') {
+      // Section came from OSM's list, but the count isn't available via OSM.
+      active = activeStmt.get(section).n; source = 'osm-list'; lastSync = osmRow.last_synced_at;
     } else {
       active = activeStmt.get(section).n; source = 'local';
       if (osmRow) { lastSync = osmRow.last_synced_at; if (osmRow.sync_status === 'error') syncError = osmRow.sync_error; }

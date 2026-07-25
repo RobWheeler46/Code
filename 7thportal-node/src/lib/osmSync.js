@@ -47,20 +47,15 @@ async function syncForConnection(conn, actorUserId = null) {
   const sections = osm.extractSectionsFromResource(resource.data);
   if (!sections.length) return { ok: false, error: 'No sections were found in the OSM response for this account.' };
 
-  const results = [];
-  let synced = 0;
+  // Register the section LIST from OSM only. Member COUNTS are deliberately NOT
+  // fetched: OSM's member endpoint is an internal /ext/ route that rejects OAuth
+  // GETs (405) and, after a few rapid calls, trips OSM's anti-abuse block (which
+  // took sign-in down). So "active" stays sourced from local records; this sync
+  // makes exactly one safe /oauth/resource call.
   for (const s of sections) {
-    const c = await osm.getSectionMemberCount(accessToken, s.id);
-    if (c.ok) {
-      upsertSection.run(s.id, s.name, s.type, c.count, actorUserId, 'ok', null);
-      synced += 1;
-      results.push({ section: s.name, count: c.count });
-    } else {
-      upsertSection.run(s.id, s.name, s.type, null, actorUserId, 'error', String(c.error || 'fetch failed').slice(0, 200));
-      results.push({ section: s.name, error: c.error });
-    }
+    upsertSection.run(s.id, s.name, s.type, null, actorUserId, 'ok', null);
   }
-  return { ok: true, synced, total: sections.length, sections: results };
+  return { ok: true, synced: sections.length, total: sections.length, sections: sections.map((s) => ({ section: s.name })) };
 }
 
 // Sync using the most recent connected OSM account (for an admin-triggered run).
