@@ -5,36 +5,46 @@ const config = require('./config');
 
 const TIMEOUT_MS = 15000;
 
-async function postForm(url, params) {
+async function postForm(url, params, extraHeaders = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json', ...extraHeaders },
       body: new URLSearchParams(params),
       signal: controller.signal
     });
     const text = await res.text();
     let data = null;
-    try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text }; }
-    return { ok: res.ok, status: res.status, data };
+    try { data = text ? JSON.parse(text) : null; } catch { data = null; }
+    return { ok: res.ok, status: res.status, data, raw: text };
   } finally {
     clearTimeout(timer);
   }
 }
 
+// OSM's token endpoint authenticates the client with HTTP Basic auth (matching the
+// proven 7thportal-php implementation), not client credentials in the body.
+function basicAuthHeader() {
+  return 'Basic ' + Buffer.from(`${config.osm.clientId}:${config.osm.clientSecret}`).toString('base64');
+}
+
 async function exchangeCode(code) {
-  const { data, ok } = await postForm(config.osm.tokenUrl, {
+  const { data, ok, status, raw } = await postForm(config.osm.tokenUrl, {
     grant_type: 'authorization_code',
     code,
-    redirect_uri: config.osm.callbackUrl,
-    client_id: config.osm.clientId,
-    client_secret: config.osm.clientSecret
-  });
-  if (!ok || !data) return { ok: false };
+    redirect_uri: config.osm.callbackUrl
+  }, { Authorization: basicAuthHeader() });
+  if (!ok || !data) {
+    console.error(`[osm.exchangeCode] token endpoint HTTP ${status}: ${String(raw || '').slice(0, 300)}`);
+    return { ok: false, status };
+  }
   const accessToken = data.access_token || data.accessToken;
-  if (!accessToken) return { ok: false };
+  if (!accessToken) {
+    console.error(`[osm.exchangeCode] no access_token in response: ${String(raw || '').slice(0, 300)}`);
+    return { ok: false, status };
+  }
   const expiresIn = Number(data.expires_in ?? data.expiresIn);
   return {
     ok: true,
@@ -74,14 +84,15 @@ async function fetchProfile(accessToken) {
 // Exchange a refresh token for a fresh access token (used by the section sync when
 // a stored OSM token has expired).
 async function refreshToken(refresh) {
-  const { data, ok } = await postForm(config.osm.tokenUrl, {
+  const { data, ok, status, raw } = await postForm(config.osm.tokenUrl, {
     grant_type: 'refresh_token',
-    refresh_token: refresh,
-    client_id: config.osm.clientId,
-    client_secret: config.osm.clientSecret
-  });
+    refresh_token: refresh
+  }, { Authorization: basicAuthHeader() });
   const accessToken = data?.access_token || data?.accessToken;
-  if (!ok || !accessToken) return { ok: false };
+  if (!ok || !accessToken) {
+    console.error(`[osm.refreshToken] HTTP ${status}: ${String(raw || '').slice(0, 300)}`);
+    return { ok: false };
+  }
   const expiresIn = Number(data.expires_in ?? data.expiresIn);
   return {
     ok: true,
