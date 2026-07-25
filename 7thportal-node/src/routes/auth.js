@@ -69,6 +69,8 @@ router.get('/osm/callback', async (req, res) => {
     req.session.user = users.toSession(user);
     req.session.lastSeen = Date.now();
     audit.record({ userId: user.id, actor: user.email, event: 'login.osm.success', ip: req.ip });
+    // Best-effort: refresh this leader's OSM section counts in the background.
+    require('../lib/osmSync').syncForUser(user.id);
     res.redirect(check.returnTo || '/dashboard');
   } catch (err) {
     console.error('[oauth] callback error', err);

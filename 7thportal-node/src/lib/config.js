@@ -21,6 +21,7 @@ const config = {
     clientId: str('OSM_CLIENT_ID'),
     clientSecret: str('OSM_CLIENT_SECRET'),
     callbackUrl: str('OSM_CALLBACK_URL', 'http://localhost:8050/auth/osm/callback'),
+    apiBase: str('OSM_API_BASE', 'https://www.onlinescoutmanager.co.uk'),
     authorizeUrl: str('OSM_AUTHORIZE_URL', 'https://www.onlinescoutmanager.co.uk/oauth/authorize'),
     tokenUrl: str('OSM_TOKEN_URL', 'https://www.onlinescoutmanager.co.uk/oauth/token'),
     resourceUrl: str('OSM_RESOURCE_URL', 'https://www.onlinescoutmanager.co.uk/oauth/resource'),

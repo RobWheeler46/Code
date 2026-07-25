@@ -108,13 +108,20 @@
       </div>
 
       <section class="card" style="margin-bottom:18px">
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <h3 style="margin:0">Section capacity tracker</h3>
-          <a class="btn secondary sm" href="/api/admin/sections/export" style="margin-left:auto">Export summary (CSV)</a>
+          <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+            ${dash.osm.configured ? '<button class="btn sm" id="syncBtn">Sync from OSM</button>' : ''}
+            <a class="btn secondary sm" href="/api/admin/sections/export">Export summary (CSV)</a>
+          </div>
         </div>
-        <p class="hint">Counts only — no named child records. Active is from portal records (OSM member sync pending). Drill-down into named children is audited.</p>
+        <p class="hint">Counts only — no named child records. ${dash.osm.synced
+          ? 'Active counts are live from OSM where a section matches; others fall back to portal records.'
+          : (dash.osm.configured ? 'Active is from portal records until you sync from OSM.' : 'Active is from portal records (OSM not configured).')}
+          Drill-down into named children is audited.</p>
+        <div id="syncMsg"></div>
         ${dash.sections.length ? `<table>
-          <thead><tr><th>Section</th><th>Active</th><th>Joining</th><th>Capacity</th><th>Use</th><th>Trend</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Section</th><th>Active</th><th>Joining</th><th>Capacity</th><th>Use</th><th>Trend</th><th>Status</th><th>Source · last sync</th><th></th></tr></thead>
           <tbody>${dash.sections.map((s) => `
             <tr>
               <td><strong>${esc(s.section)}</strong></td>
@@ -124,9 +131,12 @@
               <td>${s.utilisation != null ? s.utilisation + '%' : '—'}</td>
               <td>${trendPill(s.trend)}</td>
               <td>${statusPill(s.status)}</td>
+              <td class="small">${s.source === 'osm'
+                ? `<span class="pill ok">OSM</span> <span class="muted">${s.lastSync ? fmtDateTime(s.lastSync) : ''}</span>`
+                : `<span class="pill grey">Portal</span>${s.syncError ? ' <span class="pill" style="background:#fdecec;color:#c62828" title="' + esc(s.syncError) + '">sync error</span>' : ''}`}</td>
               <td><button class="btn ghost sm" data-drill="${esc(s.section)}">View children</button></td>
             </tr>`).join('')}</tbody>
-        </table>` : '<div class="empty">No sections yet. Link children to sections (Children tab) or set a capacity below.</div>'}
+        </table>` : '<div class="empty">No sections yet. Link children to sections (Children tab), set a capacity below, or sync from OSM.</div>'}
       </section>
 
       <section class="card">
@@ -149,6 +159,20 @@
           }).join('')}</tbody>
         </table>
       </section>`;
+
+    const syncBtn = document.getElementById('syncBtn');
+    if (syncBtn) syncBtn.addEventListener('click', async () => {
+      const msg = document.getElementById('syncMsg');
+      syncBtn.disabled = true; syncBtn.textContent = 'Syncing…';
+      try {
+        const r = await api('/api/admin/sections/sync', { method: 'POST' });
+        msg.innerHTML = `<div class="msg ok">Synced ${r.synced} of ${r.total} sections from OSM.</div>`;
+        setTimeout(renderSections, 900);
+      } catch (err) {
+        msg.innerHTML = `<div class="msg error">${esc(err.message)}</div>`;
+        syncBtn.disabled = false; syncBtn.textContent = 'Sync from OSM';
+      }
+    });
 
     panel.querySelectorAll('button[data-drill]').forEach((b) => b.addEventListener('click', () => openDrill(b.dataset.drill)));
     panel.querySelectorAll('button[data-save]').forEach((b) => b.addEventListener('click', async () => {

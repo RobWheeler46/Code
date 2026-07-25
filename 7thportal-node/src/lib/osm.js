@@ -71,4 +71,84 @@ async function fetchProfile(accessToken) {
   }
 }
 
-module.exports = { exchangeCode, fetchProfile };
+// Exchange a refresh token for a fresh access token (used by the section sync when
+// a stored OSM token has expired).
+async function refreshToken(refresh) {
+  const { data, ok } = await postForm(config.osm.tokenUrl, {
+    grant_type: 'refresh_token',
+    refresh_token: refresh,
+    client_id: config.osm.clientId,
+    client_secret: config.osm.clientSecret
+  });
+  const accessToken = data?.access_token || data?.accessToken;
+  if (!ok || !accessToken) return { ok: false };
+  const expiresIn = Number(data.expires_in ?? data.expiresIn);
+  return {
+    ok: true,
+    accessToken,
+    refreshToken: data.refresh_token || data.refreshToken || null,
+    expiresAt: Number.isFinite(expiresIn) ? new Date(Date.now() + expiresIn * 1000).toISOString() : null
+  };
+}
+
+// Authenticated GET against an OSM data endpoint.
+async function osmGet(accessToken, pathname, params = {}) {
+  const url = new URL(config.osm.apiBase + pathname);
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+      signal: controller.signal
+    });
+    if (!res.ok) return { ok: false, status: res.status };
+    const text = await res.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch { return { ok: false, status: res.status, parseError: true }; }
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: err.name === 'AbortError' ? 'OSM request timed out' : err.message };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// The startup payload is OSM's authoritative source for which sections the
+// signed-in leader can see (data.globals.roles). Field paths vary across
+// community write-ups, so read defensively.
+async function getStartup(accessToken) {
+  const r = await osmGet(accessToken, '/ext/generic/startup/', { action: 'getDataPayload' });
+  if (!r.ok) return { ok: false, error: r.error || `startup ${r.status}` };
+  return { ok: true, globals: r.data?.data?.globals || r.data?.globals || {} };
+}
+
+// Turn the startup roles into a deduplicated list of { id, name, type }.
+function extractSections(globals) {
+  const roles = globals?.roles || [];
+  const seen = new Map();
+  roles.forEach((r) => {
+    const id = r.sectionid ?? r.section_id ?? r.sectionId;
+    if (id == null || seen.has(String(id))) return;
+    seen.set(String(id), {
+      id: String(id),
+      name: r.sectionname ?? r.section_name ?? r.name ?? `Section ${id}`,
+      type: r.section ?? r.section_type ?? null
+    });
+  });
+  return [...seen.values()];
+}
+
+// Active member count for a section (aggregate only - the named list is read to
+// count length, then discarded; only the count is returned).
+async function getSectionMemberCount(accessToken, sectionId) {
+  const r = await osmGet(accessToken, '/ext/members/contact/', {
+    action: 'getListOfMembers', sort: 'dob', section_id: sectionId, term_id: -1
+  });
+  if (!r.ok) return { ok: false, error: r.error || `members ${r.status}` };
+  const d = r.data;
+  const items = Array.isArray(d) ? d : (Array.isArray(d?.items) ? d.items : []);
+  return { ok: true, count: items.length };
+}
+
+module.exports = { exchangeCode, fetchProfile, refreshToken, getStartup, extractSections, getSectionMemberCount };

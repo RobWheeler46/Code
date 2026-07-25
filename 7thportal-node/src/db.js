@@ -148,6 +148,21 @@ CREATE TABLE IF NOT EXISTS section_capacity (
   updated_by INTEGER REFERENCES users(id)
 );
 
+-- Counts synced from OSM per section (FRD 29 / FR-OSM-CAP-001). Aggregate only -
+-- named member records are never stored here, only the active member count. Keyed
+-- by the OSM section id; section_name is used to line up with the local capacity
+-- tracker's section grouping.
+CREATE TABLE IF NOT EXISTS osm_sections (
+  osm_section_id TEXT PRIMARY KEY,
+  section_name TEXT NOT NULL,
+  section_type TEXT,
+  active_count INTEGER,
+  last_synced_at TEXT,
+  synced_by INTEGER REFERENCES users(id),
+  sync_status TEXT NOT NULL DEFAULT 'ok' CHECK(sync_status IN ('ok','error')),
+  sync_error TEXT
+);
+
 -- Periodic aggregate snapshots for movement trends (FRD 29.4 / FR-OSM-CAP-006).
 -- One row per section per day; the dashboard writes today's snapshot on load so
 -- a Rising/Falling/Stable trend accumulates over time.

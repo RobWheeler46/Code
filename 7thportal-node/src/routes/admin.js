@@ -4,6 +4,7 @@ const db = require('../db');
 const config = require('../lib/config');
 const users = require('../lib/users');
 const audit = require('../lib/audit');
+const osmSync = require('../lib/osmSync');
 const { requireRole } = require('../lib/middleware');
 
 const router = express.Router();
@@ -184,12 +185,19 @@ function capacityStatus(active, cap, amber, red) {
 }
 
 // Build the per-section summary and write today's snapshot so trends accumulate.
+// "Active" prefers the OSM-synced count for a matching section name and falls back
+// to the app's own children-by-section count when OSM has not been synced.
 function buildSections() {
   const today = new Date().toISOString().slice(0, 10);
-  // Sections come from either a configured capacity row or any child's section.
+  // OSM-synced counts, keyed by lower-cased section name for matching.
+  const osmRows = db.prepare('SELECT * FROM osm_sections').all();
+  const osmByName = new Map(osmRows.map((r) => [r.section_name.toLowerCase(), r]));
+
+  // Sections come from a configured capacity row, any child's section, or OSM.
   const names = new Set();
   db.prepare("SELECT DISTINCT section FROM children WHERE section IS NOT NULL AND section != ''").all().forEach((r) => names.add(r.section));
   db.prepare('SELECT section FROM section_capacity').all().forEach((r) => names.add(r.section));
+  osmRows.forEach((r) => names.add(r.section_name));
 
   const insertSnap = db.prepare('INSERT OR IGNORE INTO section_snapshots (section, active_count, joining_count, snapshot_date) VALUES (?, ?, ?, ?)');
   const activeStmt = db.prepare("SELECT count(*) AS n FROM children WHERE section = ?");
@@ -197,8 +205,15 @@ function buildSections() {
   const prevSnap = db.prepare('SELECT active_count FROM section_snapshots WHERE section = ? AND snapshot_date < ? ORDER BY snapshot_date DESC LIMIT 1');
 
   const sections = [...names].sort().map((section) => {
-    const active = activeStmt.get(section).n;
     const cfg = cfgStmt.get(section) || {};
+    const osmRow = osmByName.get(section.toLowerCase());
+    let active; let source; let lastSync = null; let syncError = null;
+    if (osmRow && osmRow.sync_status === 'ok' && osmRow.active_count != null) {
+      active = osmRow.active_count; source = 'osm'; lastSync = osmRow.last_synced_at;
+    } else {
+      active = activeStmt.get(section).n; source = 'local';
+      if (osmRow) { lastSync = osmRow.last_synced_at; if (osmRow.sync_status === 'error') syncError = osmRow.sync_error; }
+    }
     const amber = cfg.amber_pct ?? 85;
     const red = cfg.red_pct ?? 95;
     const { util, status } = capacityStatus(active, cfg.capacity, amber, red);
@@ -208,7 +223,8 @@ function buildSections() {
     if (prev) trend = active > prev.active_count ? 'rising' : active < prev.active_count ? 'falling' : 'stable';
     return {
       section, active, joining: cfg.joining_count ?? null, capacity: cfg.capacity ?? null,
-      utilisation: util, status, trend, amber, red, owner: cfg.owner || null
+      utilisation: util, status, trend, amber, red, owner: cfg.owner || null,
+      source, lastSync, syncError
     };
   });
 
@@ -221,7 +237,22 @@ function buildSections() {
 
 // Dashboard data (aggregate, counts only).
 router.get('/sections', (req, res) => {
-  res.json({ ...buildSections(), osmSynced: false });
+  const osmRows = db.prepare("SELECT count(*) AS n, max(last_synced_at) AS last FROM osm_sections WHERE sync_status = 'ok'").get();
+  res.json({ ...buildSections(), osm: { configured: config.osmConfigured(), synced: osmRows.n > 0, lastSyncedAt: osmRows.last || null } });
+});
+
+// Pull live section-member counts from OSM using a stored leader/admin connection
+// (FR-OSM-CAP-001). Counts only; named records are never stored.
+router.post('/sections/sync', async (req, res) => {
+  try {
+    const result = await osmSync.syncLatest(req.session.user.id);
+    audit.fromReq(req, { event: 'admin.section.osm_sync', detail: result.ok ? `${result.synced}/${result.total} sections synced` : `failed: ${result.error}` });
+    if (!result.ok) return res.status(result.noConnection ? 409 : 502).json({ error: result.error });
+    res.json(result);
+  } catch (err) {
+    console.error('[sections/sync]', err);
+    res.status(500).json({ error: 'OSM sync failed unexpectedly.' });
+  }
 });
 
 // Capacity settings rows for the settings editor.
