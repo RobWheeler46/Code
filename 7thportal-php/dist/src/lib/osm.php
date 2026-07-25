@@ -179,10 +179,48 @@ function osmPluckItemsList($resp): array
     return [];
 }
 
+// Resolve the current OSM term id for a section. OSM rejects term_id=-1 with a
+// 405 "Invalid parameter", so a real term is required. Terms come from the
+// startup payload (section_id -> list of terms with start/end dates); the current
+// term is the one spanning today, else the most recent. Cached per request so a
+// multi-section sync only fetches the startup payload once.
+function osmCurrentTermIdForSection(string $accessToken, string $sectionId): ?string
+{
+    static $termsBySection = null;
+    if ($termsBySection === null) {
+        try {
+            $startup = osmGetStartupData($accessToken);
+            $termsBySection = $startup['data']['globals']['terms'] ?? [];
+        } catch (Throwable $e) {
+            $termsBySection = [];
+        }
+        if (!is_array($termsBySection)) $termsBySection = [];
+    }
+    $terms = $termsBySection[$sectionId] ?? [];
+    if (!is_array($terms) || !$terms) return null;
+    $today = date('Y-m-d');
+    $current = null;
+    foreach ($terms as $t) {
+        if (!is_array($t)) continue;
+        $start = $t['startdate'] ?? null;
+        $end = $t['enddate'] ?? null;
+        if ($start && $end && $start <= $today && $today <= $end) { $current = $t; break; }
+    }
+    if ($current === null) {
+        $sorted = array_values(array_filter($terms, 'is_array'));
+        usort($sorted, fn($a, $b) => strcmp((string) ($b['startdate'] ?? ''), (string) ($a['startdate'] ?? '')));
+        $current = $sorted[0] ?? null;
+    }
+    $id = $current['termid'] ?? $current['term_id'] ?? $current['id'] ?? null;
+    return $id !== null && $id !== '' ? (string) $id : null;
+}
+
 function osmGetSectionMembers(string $accessToken, string $sectionId, $termId = null): array
 {
     try {
-        $resp = osmGet($accessToken, '/ext/members/contact/', ['action' => 'getListOfMembers', 'sort' => 'dob', 'section_id' => $sectionId, 'term_id' => $termId ?: -1]);
+        $termId = $termId ?: osmCurrentTermIdForSection($accessToken, $sectionId);
+        if (!$termId) return ['available' => false, 'members' => [], 'error' => 'No current OSM term found for this section.'];
+        $resp = osmGet($accessToken, '/ext/members/contact/', ['action' => 'getListOfMembers', 'sort' => 'dob', 'section_id' => $sectionId, 'term_id' => $termId]);
         $items = array_is_list($resp) ? $resp : array_values($resp['items'] ?? $resp ?? []);
         $members = array_map(fn($m) => [
             'id' => (string) ($m['scoutid'] ?? $m['member_id'] ?? $m['id'] ?? ''),
@@ -200,7 +238,9 @@ function osmGetSectionMembers(string $accessToken, string $sectionId, $termId = 
 function osmGetSectionProgramme(string $accessToken, string $sectionId, $termId = null): array
 {
     try {
-        $resp = osmGet($accessToken, '/ext/programme/', ['action' => 'getProgrammeSummary', 'section_id' => $sectionId, 'term_id' => $termId ?: -1]);
+        $termId = $termId ?: osmCurrentTermIdForSection($accessToken, $sectionId);
+        if (!$termId) return ['available' => true, 'items' => []];
+        $resp = osmGet($accessToken, '/ext/programme/', ['action' => 'getProgrammeSummary', 'section_id' => $sectionId, 'term_id' => $termId]);
         $items = osmPluckItemsList($resp);
         $mapped = array_map(fn($p) => [
             'date' => $p['meetingdate'] ?? $p['date'] ?? null,
