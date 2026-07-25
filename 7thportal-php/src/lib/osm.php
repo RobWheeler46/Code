@@ -91,20 +91,31 @@ function osmTokenRequest(array $formParams): array
 function osmExchangeCodeForToken(string $code): array
 {
     $data = osmTokenRequest(['grant_type' => 'authorization_code', 'code' => $code, 'redirect_uri' => env('OSM_REDIRECT_URI')]);
+    if (empty($data['access_token'])) {
+        // OSM returns HTTP 200 with no token (and often no error field) when it
+        // rate-limits repeated sign-ins for a user who already has an active
+        // token. Surface a clear reason instead of a null-token crash downstream.
+        loginLog('Token endpoint returned no access_token', ['responseKeys' => array_keys($data), 'error' => $data['error'] ?? null, 'errorDescription' => $data['error_description'] ?? null]);
+        throw new Exception('OSM did not return an access token - it is usually rate-limiting repeated sign-ins. Wait a few minutes, then sign in once.');
+    }
     return [
         'accessToken' => $data['access_token'],
-        'refreshToken' => $data['refresh_token'],
-        'expiresAt' => nowMs() + (($data['expires_in'] - 30) * 1000),
+        'refreshToken' => $data['refresh_token'] ?? null,
+        'expiresAt' => nowMs() + ((($data['expires_in'] ?? 3600) - 30) * 1000),
     ];
 }
 
 function osmRefreshAccessToken(string $refreshToken): array
 {
     $data = osmTokenRequest(['grant_type' => 'refresh_token', 'refresh_token' => $refreshToken]);
+    if (empty($data['access_token'])) {
+        loginLog('Refresh endpoint returned no access_token', ['responseKeys' => array_keys($data), 'error' => $data['error'] ?? null]);
+        throw new Exception('OSM did not return a refreshed access token.');
+    }
     return [
         'accessToken' => $data['access_token'],
         'refreshToken' => $data['refresh_token'] ?? $refreshToken,
-        'expiresAt' => nowMs() + (($data['expires_in'] - 30) * 1000),
+        'expiresAt' => nowMs() + ((($data['expires_in'] ?? 3600) - 30) * 1000),
     ];
 }
 

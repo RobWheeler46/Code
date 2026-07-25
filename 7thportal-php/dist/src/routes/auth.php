@@ -130,7 +130,13 @@ $router->get('/auth/osm/callback', function ($params) {
         loginLog("OSM callback FAILED at step \"$step\"", ['error' => $e->getMessage(), 'file' => $e->getFile(), 'line' => $e->getLine()]);
         error_log('[login] OSM callback FAILED at step "' . $step . '": ' . $e->getMessage() . "\n" . $e->getTraceAsString());
         logAudit(['action' => 'login_failed', 'ipAddress' => clientIp(), 'details' => ['method' => 'osm', 'step' => $step, 'error' => $e->getMessage()]]);
-        header('Location: /login.html?error=' . rawurlencode('We could not sign you in with OSM. Please try again or contact a Portal Administrator.'));
+        // A no-token exchange failure is almost always OSM rate-limiting repeated
+        // sign-ins - tell the user to wait rather than retry immediately (which
+        // only extends it). Everything else stays a generic message (NFR-007).
+        $userMessage = $step === 'exchange_code'
+            ? 'OSM is temporarily rate-limiting sign-ins from this app. Please wait a few minutes, then sign in once (repeated attempts extend the wait).'
+            : 'We could not sign you in with OSM. Please try again or contact a Portal Administrator.';
+        header('Location: /login.html?error=' . rawurlencode($userMessage));
         exit;
     }
 });
