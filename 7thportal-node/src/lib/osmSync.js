@@ -37,10 +37,15 @@ async function syncForConnection(conn, actorUserId = null) {
   const accessToken = await freshToken(conn);
   if (!accessToken) return { ok: false, error: 'No usable OSM token — the leader needs to sign in with OSM again.' };
 
-  const startup = await osm.getStartup(accessToken);
-  if (!startup.ok) return { ok: false, error: `Could not read OSM startup data (${startup.error}).` };
-  const sections = osm.extractSections(startup.globals);
-  if (!sections.length) return { ok: false, error: 'No OSM sections are available for this account.' };
+  const resource = await osm.getResource(accessToken);
+  if (!resource.ok) {
+    const why = resource.parseable === false
+      ? `OSM returned ${resource.contentType || 'a non-JSON page'} (usually a rate-limit/block page — wait a few minutes and retry)`
+      : (resource.error || `HTTP ${resource.status}`);
+    return { ok: false, error: `Could not read section data from OSM: ${why}.` };
+  }
+  const sections = osm.extractSectionsFromResource(resource.data);
+  if (!sections.length) return { ok: false, error: 'No sections were found in the OSM response for this account.' };
 
   const results = [];
   let synced = 0;
@@ -75,18 +80,30 @@ async function syncForUser(userId) {
   }
 }
 
-// Probe the OSM endpoints the sync relies on, to see the real response shapes
-// when a sync is not returning counts. Returns structure, not personal data.
+// Dump the /oauth/resource structure (a single request, to avoid re-tripping the
+// block) with long strings truncated, so the section shape can be mapped.
+function truncateJson(obj, max = 3000) {
+  try {
+    const s = JSON.stringify(obj, (k, v) => (typeof v === 'string' && v.length > 60 ? v.slice(0, 60) + '…' : v));
+    return s.length > max ? s.slice(0, max) + '…(truncated)' : s;
+  } catch { return null; }
+}
+
 async function diagnose() {
   const conn = latestConn.get();
   if (!conn) return { ok: false, error: 'No OSM connection yet — sign in with OSM first.' };
   const accessToken = await freshToken(conn);
   if (!accessToken) return { ok: false, error: 'No usable OSM token — sign in with OSM again.' };
-  const resource = await osm.probeUrl(accessToken, config.osm.resourceUrl);
-  const startup = await osm.probeUrl(accessToken, `${config.osm.apiBase}/ext/generic/startup/?action=getDataPayload`);
-  const startupData = await osm.getStartup(accessToken);
-  const sections = startupData.ok ? osm.extractSections(startupData.globals) : [];
-  return { ok: true, resource, startup, sectionsFound: sections.map((s) => ({ id: s.id, name: s.name, type: s.type })) };
+  const r = await osm.getResource(accessToken);
+  const sections = r.parseable ? osm.extractSectionsFromResource(r.data) : [];
+  return {
+    ok: true,
+    resource: {
+      status: r.status, contentType: r.contentType, parseable: r.parseable,
+      snippet: r.snippet, structure: r.parseable ? truncateJson(r.data) : null
+    },
+    sectionsFound: sections
+  };
 }
 
 module.exports = { syncForConnection, syncLatest, syncForUser, diagnose };

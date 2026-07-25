@@ -4,6 +4,12 @@
 const config = require('./config');
 
 const TIMEOUT_MS = 15000;
+// OSM's edge blocks requests without a browser-like User-Agent; set one on every call.
+const USER_AGENT = 'Mozilla/5.0 (compatible; 7thPortal/1.0; +https://7thswindon.org.uk)';
+
+function bearerHeaders(accessToken) {
+  return { Authorization: `Bearer ${accessToken}`, Accept: 'application/json', 'User-Agent': USER_AGENT };
+}
 
 async function postForm(url, params, extraHeaders = {}) {
   const controller = new AbortController();
@@ -11,7 +17,7 @@ async function postForm(url, params, extraHeaders = {}) {
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json', ...extraHeaders },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json', 'User-Agent': USER_AGENT, ...extraHeaders },
       body: new URLSearchParams(params),
       signal: controller.signal
     });
@@ -63,7 +69,7 @@ async function fetchProfile(accessToken) {
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     const res = await fetch(config.osm.resourceUrl, {
-      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+      headers: bearerHeaders(accessToken),
       signal: controller.signal
     });
     if (!res.ok) return { ok: false, status: res.status };
@@ -110,7 +116,7 @@ async function osmGet(accessToken, pathname, params = {}) {
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+      headers: bearerHeaders(accessToken),
       signal: controller.signal
     });
     const contentType = res.headers.get('content-type') || '';
@@ -132,7 +138,7 @@ async function probeUrl(accessToken, url) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' }, signal: controller.signal });
+    const res = await fetch(url, { headers: bearerHeaders(accessToken), signal: controller.signal });
     const contentType = res.headers.get('content-type') || '';
     const text = await res.text();
     let parseable = true; let data = null;
@@ -180,6 +186,51 @@ function extractSections(globals) {
   return [...seen.values()];
 }
 
+// Read the OAuth-native resource endpoint (the same one login uses). This is the
+// supported way to learn who the user is and which sections they can see, without
+// hitting the internal /ext/ webapp routes that OSM blocks for OAuth tokens.
+async function getResource(accessToken) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(config.osm.resourceUrl, { headers: bearerHeaders(accessToken), signal: controller.signal });
+    const contentType = res.headers.get('content-type') || '';
+    const text = await res.text();
+    let data = null; let parseable = true;
+    try { data = text ? JSON.parse(text) : null; } catch { parseable = false; }
+    return { ok: res.ok && parseable, status: res.status, contentType, parseable, data, snippet: parseable ? null : text.slice(0, 400) };
+  } catch (err) {
+    return { ok: false, error: err.name === 'AbortError' ? 'OSM request timed out' : err.message };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Find a section list inside the resource payload. OSM's exact shape is not a
+// published spec, so search the likely containers for arrays of section objects.
+function extractSectionsFromResource(data) {
+  const roots = [data, data?.data, data?.data?.globals, data?.user].filter((x) => x && typeof x === 'object');
+  const candidates = [];
+  for (const r of roots) {
+    for (const key of ['sections', 'roles', 'groups_and_sections']) {
+      if (Array.isArray(r[key])) candidates.push(...r[key]);
+    }
+    if (Array.isArray(r.groups)) for (const g of r.groups) if (g && Array.isArray(g.sections)) candidates.push(...g.sections);
+  }
+  const seen = new Map();
+  for (const c of candidates) {
+    if (!c || typeof c !== 'object') continue;
+    const id = c.sectionid ?? c.section_id ?? c.sectionId ?? c.id;
+    if (id == null || seen.has(String(id))) continue;
+    seen.set(String(id), {
+      id: String(id),
+      name: c.sectionname ?? c.section_name ?? c.name ?? `Section ${id}`,
+      type: c.section ?? c.section_type ?? c.type ?? null
+    });
+  }
+  return [...seen.values()];
+}
+
 // Active member count for a section (aggregate only - the named list is read to
 // count length, then discarded; only the count is returned).
 async function getSectionMemberCount(accessToken, sectionId) {
@@ -192,4 +243,4 @@ async function getSectionMemberCount(accessToken, sectionId) {
   return { ok: true, count: items.length };
 }
 
-module.exports = { exchangeCode, fetchProfile, refreshToken, getStartup, extractSections, getSectionMemberCount, probeUrl };
+module.exports = { exchangeCode, fetchProfile, refreshToken, getStartup, extractSections, getResource, extractSectionsFromResource, getSectionMemberCount, probeUrl };
