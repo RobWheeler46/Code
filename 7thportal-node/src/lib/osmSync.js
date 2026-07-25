@@ -75,4 +75,18 @@ async function syncForUser(userId) {
   }
 }
 
-module.exports = { syncForConnection, syncLatest, syncForUser };
+// Probe the OSM endpoints the sync relies on, to see the real response shapes
+// when a sync is not returning counts. Returns structure, not personal data.
+async function diagnose() {
+  const conn = latestConn.get();
+  if (!conn) return { ok: false, error: 'No OSM connection yet — sign in with OSM first.' };
+  const accessToken = await freshToken(conn);
+  if (!accessToken) return { ok: false, error: 'No usable OSM token — sign in with OSM again.' };
+  const resource = await osm.probeUrl(accessToken, config.osm.resourceUrl);
+  const startup = await osm.probeUrl(accessToken, `${config.osm.apiBase}/ext/generic/startup/?action=getDataPayload`);
+  const startupData = await osm.getStartup(accessToken);
+  const sections = startupData.ok ? osm.extractSections(startupData.globals) : [];
+  return { ok: true, resource, startup, sectionsFound: sections.map((s) => ({ id: s.id, name: s.name, type: s.type })) };
+}
+
+module.exports = { syncForConnection, syncLatest, syncForUser, diagnose };

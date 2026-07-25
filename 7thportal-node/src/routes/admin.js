@@ -295,6 +295,19 @@ router.get('/sections/:section/children', (req, res) => {
   res.json({ section, children: kids });
 });
 
+// Diagnostic: show the shape of the OSM responses the sync relies on, so a
+// non-JSON / unexpected payload can be identified and mapped correctly.
+router.get('/sections/osm-diagnostic', async (req, res) => {
+  try {
+    const result = await osmSync.diagnose();
+    audit.fromReq(req, { event: 'admin.section.osm_diagnostic', detail: result.ok ? 'ran' : result.error });
+    res.status(result.ok ? 200 : 409).json(result);
+  } catch (err) {
+    console.error('[osm-diagnostic]', err);
+    res.status(500).json({ error: 'Diagnostic failed unexpectedly.' });
+  }
+});
+
 // Aggregate CSV export (FR-OSM-CAP-009).
 router.get('/sections/export', (req, res) => {
   const { sections } = buildSections();

@@ -102,13 +102,40 @@ async function osmGet(accessToken, pathname, params = {}) {
       headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
       signal: controller.signal
     });
-    if (!res.ok) return { ok: false, status: res.status };
+    const contentType = res.headers.get('content-type') || '';
+    if (!res.ok) return { ok: false, status: res.status, contentType };
     const text = await res.text();
     let data = null;
-    try { data = text ? JSON.parse(text) : null; } catch { return { ok: false, status: res.status, parseError: true }; }
-    return { ok: true, data };
+    try { data = text ? JSON.parse(text) : null; } catch { return { ok: false, status: res.status, parseError: true, contentType, snippet: text.slice(0, 400) }; }
+    return { ok: true, data, contentType };
   } catch (err) {
     return { ok: false, error: err.name === 'AbortError' ? 'OSM request timed out' : err.message };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Diagnostic probe of a full OSM URL: returns the shape of the response without
+// dumping personal data (keys + a short snippet only when the body is not JSON).
+async function probeUrl(accessToken, url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' }, signal: controller.signal });
+    const contentType = res.headers.get('content-type') || '';
+    const text = await res.text();
+    let parseable = true; let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch { parseable = false; }
+    return {
+      status: res.status, contentType, parseable, bytes: text.length,
+      topKeys: parseable && data && typeof data === 'object' && !Array.isArray(data) ? Object.keys(data).slice(0, 25) : null,
+      isArray: Array.isArray(data),
+      dataKeys: parseable && data?.data && typeof data.data === 'object' ? Object.keys(data.data).slice(0, 25) : null,
+      globalsKeys: parseable && data?.data?.globals ? Object.keys(data.data.globals).slice(0, 40) : null,
+      snippet: parseable ? null : text.slice(0, 400)
+    };
+  } catch (e) {
+    return { error: e.name === 'AbortError' ? 'timeout' : e.message };
   } finally {
     clearTimeout(timer);
   }
@@ -119,7 +146,10 @@ async function osmGet(accessToken, pathname, params = {}) {
 // community write-ups, so read defensively.
 async function getStartup(accessToken) {
   const r = await osmGet(accessToken, '/ext/generic/startup/', { action: 'getDataPayload' });
-  if (!r.ok) return { ok: false, error: r.error || `startup ${r.status}` };
+  if (!r.ok) {
+    const why = r.parseError ? `returned ${r.contentType || 'a non-JSON body'}, not JSON` : (r.error || `HTTP ${r.status}`);
+    return { ok: false, error: why, snippet: r.snippet };
+  }
   return { ok: true, globals: r.data?.data?.globals || r.data?.globals || {} };
 }
 
@@ -151,4 +181,4 @@ async function getSectionMemberCount(accessToken, sectionId) {
   return { ok: true, count: items.length };
 }
 
-module.exports = { exchangeCode, fetchProfile, refreshToken, getStartup, extractSections, getSectionMemberCount };
+module.exports = { exchangeCode, fetchProfile, refreshToken, getStartup, extractSections, getSectionMemberCount, probeUrl };
