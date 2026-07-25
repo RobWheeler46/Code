@@ -57,7 +57,12 @@ router.get('/osm/callback', async (req, res) => {
 
   try {
     const token = await osm.exchangeCode(String(code));
-    if (!token.ok) { audit.fromReq(req, { event: 'login.osm.failed', detail: 'token exchange' }); return fail('Could not complete OSM sign-in (token exchange failed).'); }
+    if (!token.ok) {
+      audit.fromReq(req, { event: 'login.osm.failed', detail: token.blocked ? 'token exchange (OSM block)' : 'token exchange' });
+      return fail(token.blocked
+        ? 'OSM has temporarily blocked sign-in requests from this server. Please wait a while and try again, or use your portal account.'
+        : 'Could not complete OSM sign-in (token exchange failed).');
+    }
 
     const profile = await osm.fetchProfile(token.accessToken);
     if (!profile.ok) { audit.fromReq(req, { event: 'login.osm.failed', detail: 'profile' }); return fail('Signed in to OSM, but your profile could not be read.'); }

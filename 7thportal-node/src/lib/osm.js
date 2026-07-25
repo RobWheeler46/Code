@@ -42,14 +42,15 @@ async function exchangeCode(code) {
     code,
     redirect_uri: config.osm.callbackUrl
   }, { Authorization: basicAuthHeader() });
+  const blocked = /OSM\)?: ?Blocked|has been blocked/i.test(String(raw || ''));
   if (!ok || !data) {
-    console.error(`[osm.exchangeCode] token endpoint HTTP ${status}: ${String(raw || '').slice(0, 300)}`);
-    return { ok: false, status };
+    console.error(`[osm.exchangeCode] token endpoint HTTP ${status}${blocked ? ' (OSM block page)' : ''}: ${String(raw || '').slice(0, 300)}`);
+    return { ok: false, status, blocked };
   }
   const accessToken = data.access_token || data.accessToken;
   if (!accessToken) {
     console.error(`[osm.exchangeCode] no access_token in response: ${String(raw || '').slice(0, 300)}`);
-    return { ok: false, status };
+    return { ok: false, status, blocked };
   }
   const expiresIn = Number(data.expires_in ?? data.expiresIn);
   return {
