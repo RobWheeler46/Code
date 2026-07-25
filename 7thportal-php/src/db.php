@@ -344,6 +344,45 @@ CREATE TABLE IF NOT EXISTS document_acknowledgements (
   UNIQUE(version_id, user_id)
 );
 
+-- Admin OSM Capacity Tracker & Movement Trends (FRD 29 / 6.1). osm_sections
+-- caches the latest aggregate active count per OSM section (counts only - named
+-- member records are never stored); section_capacity holds the local planning
+-- capacity + amber/red warning thresholds; section_snapshots retains a periodic
+-- aggregate so a rising/falling/stable trend can be shown over time.
+CREATE TABLE IF NOT EXISTS osm_sections (
+  osm_section_id TEXT PRIMARY KEY,
+  section_name TEXT NOT NULL,
+  section_type TEXT,
+  active_count INTEGER,
+  joining_count INTEGER,
+  last_synced_at TEXT,
+  synced_by INTEGER REFERENCES users(id),
+  sync_status TEXT NOT NULL DEFAULT 'ok' CHECK(sync_status IN ('ok','error')),
+  sync_error TEXT
+);
+
+CREATE TABLE IF NOT EXISTS section_capacity (
+  osm_section_id TEXT PRIMARY KEY,
+  section_name TEXT,
+  capacity INTEGER,
+  amber_pct INTEGER NOT NULL DEFAULT 85,
+  red_pct INTEGER NOT NULL DEFAULT 95,
+  joining_count INTEGER,
+  owner TEXT,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_by INTEGER REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS section_snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  osm_section_id TEXT NOT NULL,
+  active_count INTEGER,
+  joining_count INTEGER,
+  snapshot_date TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(osm_section_id, snapshot_date)
+);
+
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(portal_role, account_status);
 CREATE INDEX IF NOT EXISTS idx_parent_links_parent ON parent_child_links(parent_user_id);
 CREATE INDEX IF NOT EXISTS idx_notices_status ON notices(status, audience, start_date);

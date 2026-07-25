@@ -86,6 +86,15 @@ Built from the `7thPortal_Final_Pack.zip` Expenses/Mileage/Treasurer/Trustee sco
 - **Deliberately simplified vs. the technical appendices**, to stay proportionate for a single-developer/volunteer-run project on SQLite: integer autoincrement IDs (not UUID), no malware/virus scanning on uploads (no infra for it, and not in this README's hosting checklist below), no idempotency keys/ETag concurrency control (SQLite serialises writes; traffic scale here doesn't need it), and no true split-amount partial payment of a single item (a payment batch can include several items in one action, but each item is paid in full).
 - Demo Mode supports `/auth/demo/login?as=treasurer|chair|trustee` in addition to the existing `parent|leader|admin`, for exploring those views without real accounts.
 
+## Admin: Sections & capacity (OSM capacity tracker)
+
+Admin → **Sections & capacity** implements the OSM Section Membership Summary and Capacity Tracker (FRD 6.1 / section 29). It shows an **aggregate active-member count per OSM section** with locally-configured capacity, utilisation %, a Good/Watch/Full/Over-capacity status and a rising/falling/stable trend - **counts only, no named child records by default**.
+
+- **"Sync from OSM" pulls the real counts.** It reads the leader's youth sections and counts each section's members via the same OSM read path as the rest of the app (`osmDataSectionMembers`), caching the aggregate count in `osm_sections`. Only the count is stored - named records are never persisted. This is exactly the piece that needs OSM's `/ext/members/contact/` endpoint, which OSM serves from a normal (cPanel) IP but **blocks from datacentre hosts** - the reason this runs here and not on a cloud platform.
+- **Capacity is local planning data.** Per-section capacity and amber/red thresholds (default 85%/95%) live in `section_capacity` and are never written back to OSM. Utilisation and status are computed from the cached count vs. that capacity.
+- **Trends** come from a daily aggregate snapshot (`section_snapshots`) written on each sync, so rising/falling/stable accumulates over time.
+- **Named drill-down is audited.** "View children" reveals a section's named members (FR-OSM-CAP-010/011) and writes an `admin_section_member_drilldown` audit event; capacity edits, syncs and CSV exports are audited too.
+
 ## Leader document library
 
 Built from wireframe screens 48-51 (store, find, version, acknowledge and audit leader-only policies, process documents, templates and guidance). Ships **off by default** via Admin → Settings → "Leader document library" (`document_library_enabled`), same pattern as every other optional module here, even though this one isn't safeguarding/finance-sensitive - kept for consistency rather than a real risk-based need.

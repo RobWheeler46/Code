@@ -215,3 +215,21 @@ textarea { min-height: 5rem; resize: vertical; }
 
 .footer-note { text-align: center; padding: 1.5rem; color: var(--muted); font-size: 0.82rem; }
 .footer-note a { color: var(--muted); }
+
+/* Sections & capacity (FRD 29) */
+.cap-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+.cap-big { font-size: 1.6rem; font-weight: 700; margin-top: 0.15rem; }
+.cap-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.cap-head h2 { margin: 0; }
+.cap-actions { display: inline-flex; gap: 0.5rem; flex-wrap: wrap; }
+.data-table th, .data-table td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.data-table th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.data-table input { padding: 0.3rem 0.4rem; border: 1px solid var(--border); border-radius: 5px; font: inherit; }
+.badge[data-status="good"] { background: var(--green); }
+.badge[data-status="watch"] { background: var(--amber); }
+.badge[data-status="full"] { background: #c2560a; }
+.badge[data-status="over"] { background: var(--red); }
+.badge[data-status="unset"] { background: #8a8393; }
+.modal-backdrop { position: fixed; inset: 0; background: rgba(23,36,42,0.55); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 1rem; }
+.modal-box { background: var(--card); border-radius: 8px; padding: 1.5rem; width: 100%; max-width: 520px; max-height: 88vh; overflow: auto; box-shadow: 0 12px 40px rgba(0,0,0,0.25); }
+.modal-box h2 { margin-top: 0; }
