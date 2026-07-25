@@ -64,7 +64,7 @@ echo "  - data/*.db*, data/gallery-uploads -> runtime state; do not overwrite ex
 echo "On the server (see README \"Deployment layout\" for why this split matters):\n";
 echo "  1. Upload the whole dist/ folder to one place in your hosting account OUTSIDE public_html - e.g. a\n";
 echo "     sibling folder like ~/7thportal-php (src/, data/, webroot/ and .env.example all stay together).\n";
-echo "  2. In cPanel, set the digital.7thswindon.org.uk subdomain's Document Root to that folder's webroot/\n";
+echo "  2. In cPanel, set the portal.7thswindon.org.uk subdomain's Document Root to that folder's webroot/\n";
 echo "     subfolder specifically - NOT the dist/ folder itself. This is what keeps src/ and data/ off the\n";
 echo "     public internet; if your host won't let you set a custom document root, see the README's fallback note.\n";
 echo "  3. First deploy only: copy .env.example to .env next to src/ (NOT inside webroot/), then fill in real values.\n";

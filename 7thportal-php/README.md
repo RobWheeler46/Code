@@ -1,8 +1,8 @@
 # 7thPortal (PHP)
 
-A PHP port of `../7thportal` (the original Node/Express version), built because the target hosting (`digital.7thswindon.org.uk`, cPanel shared hosting) only supports PHP, not a persistent Node.js process. Same functionality, same FRD (`7thPortal_FRD_with_Photo_Gallery.docx`), same design decisions - this is a language port, not a feature redesign. See `../7thportal/README.md` for the full FRD-level rationale (OSM integration model, role model, MVP scope, photo gallery scope decisions); this README only covers what's different because it's PHP.
+A PHP port of `../7thportal` (the original Node/Express version), built because the target hosting (`portal.7thswindon.org.uk`, cPanel shared hosting) only supports PHP, not a persistent Node.js process. Same functionality, same FRD (`7thPortal_FRD_with_Photo_Gallery.docx`), same design decisions - this is a language port, not a feature redesign. See `../7thportal/README.md` for the full FRD-level rationale (OSM integration model, role model, MVP scope, photo gallery scope decisions); this README only covers what's different because it's PHP.
 
-**Deploying for the first time? Follow `DEPLOY.md` step by step** - it's a plain checklist for uploading to `digital.7thswindon.org.uk` via cPanel. Everything below is background/reference, not a to-do list.
+**Deploying for the first time? Follow `DEPLOY.md` step by step** - it's a plain checklist for uploading to `portal.7thswindon.org.uk` via cPanel. Everything below is background/reference, not a to-do list.
 
 ## Stack
 

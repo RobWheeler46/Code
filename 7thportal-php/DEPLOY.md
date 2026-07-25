@@ -1,11 +1,11 @@
-# Deploying 7thPortal to digital.7thswindon.org.uk
+# Deploying 7thPortal to portal.7thswindon.org.uk
 
 A literal checklist. For *why* things are laid out this way, see `README.md`.
 
 ## Before you start
 
 - [ ] You have cPanel (or equivalent) access to the hosting behind `7thswindon.org.uk`.
-- [ ] You've registered an OSM app at OSM → My Account → My Apps, with redirect URI `https://digital.7thswindon.org.uk/auth/osm/callback`, and have its **Client ID** and **Client Secret** to hand.
+- [ ] You've registered an OSM app at OSM → My Account → My Apps, with redirect URI `https://portal.7thswindon.org.uk/auth/osm/callback`, and have its **Client ID** and **Client Secret** to hand.
 - [ ] You know your hosting account's home directory path (cPanel shows this, usually something like `/home/yourusername`).
 
 ## Step 1 — Build the package
@@ -46,7 +46,7 @@ so you end up with:
 
 ## Step 3 — Point the subdomain at webroot/, not at the folder itself
 
-In cPanel → **Domains** (or **Subdomains**), edit `digital.7thswindon.org.uk` (or create it if it doesn't exist yet) and set its **Document Root** to:
+In cPanel → **Domains** (or **Subdomains**), edit `portal.7thswindon.org.uk` (or create it if it doesn't exist yet) and set its **Document Root** to:
 
 ```
 /home/yourusername/7thportal-php/webroot
@@ -66,7 +66,7 @@ Still in File Manager, inside `/home/yourusername/7thportal-php/` (next to `src/
 ```
 OSM_CLIENT_ID=<your real Client ID from OSM>
 OSM_CLIENT_SECRET=<your real Client Secret from OSM>
-OSM_REDIRECT_URI=https://digital.7thswindon.org.uk/auth/osm/callback
+OSM_REDIRECT_URI=https://portal.7thswindon.org.uk/auth/osm/callback
 
 SESSION_SECRET=<any long random string - mash the keyboard>
 
@@ -81,7 +81,7 @@ Leave `SMTP_*` blank for now (parent invite links will show as a copyable URL to
 
 ## Step 5 — Confirm PHP has what it needs
 
-In cPanel, look for **"MultiPHP Manager"** or **"Select PHP Version"** for the `digital.7thswindon.org.uk` domain and check:
+In cPanel, look for **"MultiPHP Manager"** or **"Select PHP Version"** for the `portal.7thswindon.org.uk` domain and check:
 
 - [ ] PHP version is 8.1 or newer
 - [ ] These extensions are enabled: `pdo_sqlite`, `gd`, `curl`, `mbstring` (there's usually a checklist of extensions in the same screen)
@@ -91,7 +91,7 @@ If `pdo_sqlite` or `gd` aren't listed as available at all, tell me - that would 
 
 ## Step 6 — Test it
 
-Visit `https://digital.7thswindon.org.uk/` in a browser. You should see the 7thPortal homepage with a **"Log in with OSM"** button and no Demo Mode buttons (since you set `ALLOW_DEMO_MODE=false`).
+Visit `https://portal.7thswindon.org.uk/` in a browser. You should see the 7thPortal homepage with a **"Log in with OSM"** button and no Demo Mode buttons (since you set `ALLOW_DEMO_MODE=false`).
 
 Click **Log in with OSM** and sign in with your own OSM account - since this is the very first login, you'll automatically become the Portal Administrator.
 
@@ -104,7 +104,7 @@ If instead you get a blank page, a PHP error, or a 500 error:
 Once the app has run at least once (so `data/7thportal.db` exists), try visiting:
 
 ```
-https://digital.7thswindon.org.uk/../data/7thportal.db
+https://portal.7thswindon.org.uk/../data/7thportal.db
 ```
 
 (or ask me and I'll give you the exact adjusted URL based on where things ended up). This **must** fail (404 or 403). If it somehow loads the database file, stop and tell me immediately - that means the document root wasn't set correctly in Step 3.
