@@ -11,3 +11,6 @@ data/login-debug.log
 # Runtime logs (contain OSM auth codes / PII - never commit)
 error_log
 data/login-debug.log
+
+# Extracted deploy folder (duplicate of dist/ - build artifact)
+7thportal-php-deploy/

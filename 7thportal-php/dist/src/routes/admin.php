@@ -162,6 +162,19 @@ $router->post('/api/admin/sections/sync', function ($params) {
     jsonResponse(['ok' => true, 'synced' => $synced, 'total' => count($resolved['sections']), 'sections' => $results]);
 });
 
+// One-shot diagnostic: try the likely member-list call shapes and report which
+// OSM accepts (the current GET returns 405). Visit while signed in as admin.
+$router->get('/api/admin/osm/member-probe', function ($params) {
+    $admin = requireAuth();
+    requireAdmin($admin);
+    $resolved = capacityResolveSections();
+    if (!$resolved['available'] || !$resolved['sections']) jsonResponse(['error' => $resolved['reason'] ?? 'No OSM sections/token available.'], 502);
+    $section = $resolved['sections'][0];
+    $probe = osmProbeMembers($resolved['token'], (string) $section['sectionId']);
+    logAudit(['userId' => $admin['id'], 'action' => 'admin_osm_member_probe', 'ipAddress' => clientIp()]);
+    jsonResponse(['section' => $section, 'probe' => $probe]);
+});
+
 $router->get('/api/admin/sections/capacity', function ($params) {
     requireAdmin(requireAuth());
     $summary = capacityBuildSummary();
