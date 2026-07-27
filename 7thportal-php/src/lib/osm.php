@@ -235,63 +235,6 @@ function osmGetSectionMembers(string $accessToken, string $sectionId, $termId = 
     }
 }
 
-// Raw OSM data request (GET or POST) that never throws - returns status, whether
-// a member/item list came back, and the count or error. Used by the member probe
-// to discover the call shape OSM actually accepts (the documented GET returns 405).
-function osmRawData(string $method, string $accessToken, string $pathname, array $query = [], array $body = []): array
-{
-    $url = OSM_BASE . $pathname . ($query ? ('?' . http_build_query($query)) : '');
-    $ch = curl_init($url);
-    $opts = [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => ["Authorization: Bearer $accessToken", 'Content-Type: application/x-www-form-urlencoded'],
-        CURLOPT_TIMEOUT => 20,
-    ];
-    if ($method === 'POST') { $opts[CURLOPT_POST] = true; $opts[CURLOPT_POSTFIELDS] = http_build_query($body); }
-    curl_setopt_array($ch, $opts);
-    $raw = curl_exec($ch);
-    $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    $data = json_decode((string) $raw, true);
-    $items = null;
-    if (is_array($data)) {
-        if (isset($data['items']) && is_array($data['items'])) $items = $data['items'];
-        elseif (isset($data['data']) && is_array($data['data']) && $data['data']) $items = $data['data'];
-        elseif (array_is_list($data)) $items = $data;
-    }
-    $err = null;
-    if (is_array($data) && isset($data['error'])) {
-        $err = is_array($data['error']) ? ($data['error']['message'] ?? json_encode($data['error'])) : (string) $data['error'];
-    }
-    return [
-        'status' => $status,
-        'ok' => $status >= 200 && $status < 300 && is_array($items),
-        'count' => is_array($items) ? count($items) : null,
-        'error' => $err,
-        'bodySnippet' => is_array($data) ? null : substr((string) $raw, 0, 160),
-    ];
-}
-
-// Try the likely member-list call shapes against one section and report which
-// OSM accepts, so the working variant can be wired in without further guessing.
-function osmProbeMembers(string $accessToken, string $sectionId): array
-{
-    $t = osmCurrentTermIdForSection($accessToken, $sectionId);
-    $variants = [
-        ['label' => 'GET section_id/term_id (current)', 'method' => 'GET', 'path' => '/ext/members/contact/', 'query' => ['action' => 'getListOfMembers', 'sort' => 'dob', 'section_id' => $sectionId, 'term_id' => $t], 'body' => []],
-        ['label' => 'GET sectionid/termid', 'method' => 'GET', 'path' => '/ext/members/contact/', 'query' => ['action' => 'getListOfMembers', 'sort' => 'dob', 'sectionid' => $sectionId, 'termid' => $t], 'body' => []],
-        ['label' => 'POST grid getMembers', 'method' => 'POST', 'path' => '/ext/members/contact/grid/', 'query' => ['action' => 'getMembers'], 'body' => ['section_id' => $sectionId, 'term_id' => $t]],
-        ['label' => 'POST getListOfMembers', 'method' => 'POST', 'path' => '/ext/members/contact/', 'query' => ['action' => 'getListOfMembers'], 'body' => ['section_id' => $sectionId, 'term_id' => $t, 'sort' => 'dob']],
-    ];
-    $results = [];
-    foreach ($variants as $v) {
-        $r = osmRawData($v['method'], $accessToken, $v['path'], $v['query'], $v['body']);
-        $results[] = ['label' => $v['label'], 'method' => $v['method'], 'path' => $v['path']] + $r;
-        if ($r['ok']) break; // stop at the first shape that returns members
-    }
-    return ['sectionId' => $sectionId, 'termId' => $t, 'variants' => $results];
-}
-
 function osmGetSectionProgramme(string $accessToken, string $sectionId, $termId = null): array
 {
     try {

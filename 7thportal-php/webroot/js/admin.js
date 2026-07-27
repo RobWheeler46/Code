@@ -79,6 +79,8 @@ async function renderHealth() {
 const CAP_STATUS_LABEL = { good: 'Good', watch: 'Watch', full: 'Full', over: 'Over capacity', unset: 'No capacity set' };
 const CAP_TREND_LABEL = { rising: '↑ Rising', falling: '↓ Falling', stable: '→ Stable', new: '—' };
 
+const CAP_SOURCE_LABEL = { manual: 'Manual', portal: 'Portal', none: '&mdash;' };
+
 async function renderCapacity() {
   const box = document.getElementById('tab-content');
   box.innerHTML = '<p class="muted">Loading&hellip;</p>';
@@ -100,38 +102,37 @@ async function renderCapacity() {
       <div class="cap-head">
         <h2>Section capacity tracker</h2>
         <span class="cap-actions">
-          ${dash.osm.configured ? '<button class="btn" id="cap-sync">Sync from OSM</button>' : ''}
           <a class="btn btn-secondary" href="/api/admin/sections/capacity/export">Export CSV</a>
         </span>
       </div>
-      <p class="muted">Counts only &mdash; no named child records. ${dash.osm.synced ? 'Active counts are the latest aggregate from OSM.' : 'Not synced yet &mdash; use &ldquo;Sync from OSM&rdquo;.'} Named drill-down is audited.</p>
-      <div id="cap-msg"></div>
+      <p class="muted">Counts only, held locally. &ldquo;Active&rdquo; is the number you enter below, or the portal&rsquo;s own linked-children count &mdash; OSM is used for sign-in only. Named drill-down is audited.</p>
       ${dash.sections.length ? `<table class="data-table">
-        <thead><tr><th>Section</th><th>Active</th><th>Joining</th><th>Capacity</th><th>Use</th><th>Trend</th><th>Status</th><th>Last sync</th><th></th></tr></thead>
+        <thead><tr><th>Section</th><th>Active</th><th>Source</th><th>Joining</th><th>Capacity</th><th>Use</th><th>Trend</th><th>Status</th><th></th></tr></thead>
         <tbody>${dash.sections.map(s => `
           <tr>
             <td><strong>${escapeHtml(s.sectionName)}</strong></td>
             <td>${s.active === null ? '&mdash;' : s.active}</td>
+            <td class="muted">${CAP_SOURCE_LABEL[s.source] || '&mdash;'}</td>
             <td>${s.joining === null || s.joining === undefined ? '&mdash;' : s.joining}</td>
             <td>${s.capacity === null || s.capacity === undefined ? '&mdash;' : s.capacity}</td>
             <td>${s.utilisation === null || s.utilisation === undefined ? '&mdash;' : s.utilisation + '%'}</td>
             <td>${CAP_TREND_LABEL[s.trend] || '&mdash;'}</td>
             <td><span class="badge" data-status="${s.status}">${CAP_STATUS_LABEL[s.status] || s.status}</span></td>
-            <td class="muted">${s.syncStatus === 'error' ? `<span class="badge" data-status="suspended" title="${escapeHtml(s.syncError || '')}">error</span>` : (s.lastSync ? formatDateTime(s.lastSync) : '&mdash;')}</td>
             <td><button class="btn btn-secondary btn-sm" data-drill="${escapeHtml(s.sectionId)}" data-name="${escapeHtml(s.sectionName)}">View children</button></td>
           </tr>`).join('')}</tbody>
-      </table>` : '<p class="muted">No sections yet. Use &ldquo;Sync from OSM&rdquo; to pull the section list and counts.</p>'}
+      </table>` : '<p class="muted">No sections yet. Your OSM sections appear here after you sign in; you can also add capacity for a section below.</p>'}
     </div>
     <div class="card">
       <h2>Capacity settings</h2>
-      <p class="muted">Capacity is a local planning value (never written back to OSM). Amber/red are utilisation warning thresholds (%).</p>
+      <p class="muted">All local planning values, never written back to OSM. &ldquo;Active&rdquo; overrides the portal&rsquo;s linked-children count; amber/red are utilisation warning thresholds (%).</p>
       <div id="cap-set-msg"></div>
       ${known.length ? `<table class="data-table">
-        <thead><tr><th>Section</th><th>Capacity</th><th>Amber %</th><th>Red %</th><th>Joining</th><th>Owner</th><th></th></tr></thead>
+        <thead><tr><th>Section</th><th>Active</th><th>Capacity</th><th>Amber %</th><th>Red %</th><th>Joining</th><th>Owner</th><th></th></tr></thead>
         <tbody>${known.map(k => {
-          const c = cfgBy[k.osm_section_id] || {};
-          return `<tr data-row="${escapeHtml(k.osm_section_id)}" data-name="${escapeHtml(k.section_name)}">
-            <td><strong>${escapeHtml(k.section_name)}</strong></td>
+          const c = cfgBy[k.sectionId] || {};
+          return `<tr data-row="${escapeHtml(k.sectionId)}" data-name="${escapeHtml(k.sectionName)}">
+            <td><strong>${escapeHtml(k.sectionName)}</strong></td>
+            <td><input class="cap-active" type="number" min="0" value="${c.active_count ?? ''}" style="width:70px" placeholder="auto"></td>
             <td><input class="cap-capacity" type="number" min="0" value="${c.capacity ?? ''}" style="width:80px"></td>
             <td><input class="cap-amber" type="number" min="0" max="100" value="${c.amber_pct ?? 85}" style="width:70px"></td>
             <td><input class="cap-red" type="number" min="0" max="100" value="${c.red_pct ?? 95}" style="width:70px"></td>
@@ -140,29 +141,16 @@ async function renderCapacity() {
             <td><button class="btn btn-sm cap-save">Save</button></td>
           </tr>`;
         }).join('')}</tbody>
-      </table>` : '<p class="muted">Sync from OSM first to list sections here.</p>'}
+      </table>` : '<p class="muted">Sign in with an OSM leader account to list your sections here.</p>'}
     </div>
   `;
-
-  const syncBtn = document.getElementById('cap-sync');
-  if (syncBtn) syncBtn.addEventListener('click', async () => {
-    const msg = document.getElementById('cap-msg');
-    syncBtn.disabled = true; syncBtn.textContent = 'Syncing…';
-    try {
-      const r = await Api.post('/api/admin/sections/sync');
-      msg.innerHTML = `<div class="alert alert-success">Synced ${r.synced} of ${r.total} sections from OSM.</div>`;
-      setTimeout(renderCapacity, 700);
-    } catch (e) {
-      msg.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`;
-      syncBtn.disabled = false; syncBtn.textContent = 'Sync from OSM';
-    }
-  });
 
   box.querySelectorAll('.cap-save').forEach(btn => btn.addEventListener('click', async () => {
     const row = btn.closest('tr');
     try {
       await Api.put('/api/admin/sections/capacity/settings', {
         sectionId: row.dataset.row, sectionName: row.dataset.name,
+        activeCount: row.querySelector('.cap-active').value,
         capacity: row.querySelector('.cap-capacity').value,
         amberPct: row.querySelector('.cap-amber').value,
         redPct: row.querySelector('.cap-red').value,
@@ -180,21 +168,20 @@ async function capacityDrill(sectionId, sectionName) {
   const existing = document.getElementById('cap-modal'); if (existing) existing.remove();
   const modal = document.createElement('div');
   modal.id = 'cap-modal'; modal.className = 'modal-backdrop';
-  modal.innerHTML = `<div class="modal-box"><h2>${escapeHtml(sectionName)} &mdash; members</h2>
-    <p class="muted">This view reveals named member records and has been written to the audit log.</p>
+  modal.innerHTML = `<div class="modal-box"><h2>${escapeHtml(sectionName)} &mdash; children</h2>
+    <p class="muted">The portal&rsquo;s own linked children for this section. This view is written to the audit log.</p>
     <div id="cap-drill-body"><p class="muted">Loading&hellip;</p></div>
     <div class="cap-actions" style="margin-top:12px"><button class="btn btn-secondary" id="cap-drill-close">Close</button></div></div>`;
   document.body.appendChild(modal);
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
   document.getElementById('cap-drill-close').addEventListener('click', () => modal.remove());
   try {
-    const r = await Api.get(`/api/admin/osm/sections/${encodeURIComponent(sectionId)}/members`);
+    const r = await Api.get(`/api/admin/sections/${encodeURIComponent(sectionId)}/children`);
     const body = document.getElementById('cap-drill-body');
-    if (r.available === false) { body.innerHTML = `<div class="alert alert-warning">${escapeHtml(r.reason || 'Unavailable')}</div>`; return; }
-    const members = r.members || [];
-    body.innerHTML = members.length ? `<table class="data-table"><thead><tr><th>Name</th><th>Patrol</th></tr></thead>
-      <tbody>${members.map(m => `<tr><td>${escapeHtml(((m.firstName || m.firstname || '') + ' ' + (m.lastName || m.lastname || '')).trim())}</td><td class="muted">${escapeHtml(m.patrol || m.patrolname || '')}</td></tr>`).join('')}</tbody></table>`
-      : '<p class="muted">No members in this section.</p>';
+    const children = r.children || [];
+    body.innerHTML = children.length ? `<table class="data-table"><thead><tr><th>Child</th><th>Parent</th></tr></thead>
+      <tbody>${children.map(c => `<tr><td>${escapeHtml(c.name)}</td><td class="muted">${escapeHtml(c.parentName || '')}${c.parentEmail ? ' &middot; ' + escapeHtml(c.parentEmail) : ''}</td></tr>`).join('')}</tbody></table>`
+      : '<p class="muted">No children are linked to this section in the portal yet.</p>';
   } catch (e) {
     document.getElementById('cap-drill-body').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`;
   }

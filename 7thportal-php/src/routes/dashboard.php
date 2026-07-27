@@ -18,36 +18,17 @@ $router->get('/api/parent/dashboard', function ($params) {
         jsonResponse(['noLinkedChildren' => true, 'children' => [], 'notices' => []]);
     }
 
-    $result = osmDataReadTokenFor($user);
-    if ($result['unavailable']) {
-        logAudit(['userId' => $user['id'], 'action' => 'osm_unavailable', 'entityType' => 'dashboard']);
-        jsonResponse([
-            'osmUnavailable' => true, 'reason' => $result['reason'],
-            'children' => array_map(fn($l) => ['linkId' => (int) $l['id'], 'name' => $l['child_display_name'], 'sectionName' => $l['osm_section_name']], $links),
-            'notices' => [],
-        ]);
-    }
-    $token = $result['token'];
-
-    $bySection = [];
-    foreach ($links as $link) {
-        if (!isset($bySection[$link['osm_section_id']])) {
-            $bySection[$link['osm_section_id']] = osmDataSectionMembers($token, $link['osm_section_id']);
-        }
-    }
-
-    $children = array_map(function ($link) use ($bySection) {
-        $sectionData = $bySection[$link['osm_section_id']];
-        $member = null;
-        if ($sectionData['available']) {
-            foreach ($sectionData['members'] as $m) { if ($m['id'] === $link['osm_member_id']) { $member = $m; break; } }
-        }
-        $name = $link['child_display_name'] ?: ($member ? $member['firstName'] . ' ' . $member['lastName'] : 'Unknown');
-        $status = $member
-            ? $link['osm_section_name'] . ($member['dob'] ? ' • Age ' . ageFromDob($member['dob']) : '')
-            : 'Details unavailable from OSM right now';
-        return ['linkId' => (int) $link['id'], 'name' => $name, 'sectionId' => $link['osm_section_id'], 'sectionName' => $link['osm_section_name'], 'status' => $status];
-    }, $links);
+    // Child records are shown from the data captured when the child was linked -
+    // no live OSM member fetch. OSM aggressively rate-limits/blocks /ext/ reads
+    // from a server, so the portal keeps OSM to sign-in only and links out to OSM
+    // for live detail.
+    $children = array_map(fn($link) => [
+        'linkId' => (int) $link['id'],
+        'name' => $link['child_display_name'] ?: 'Your child',
+        'sectionId' => $link['osm_section_id'],
+        'sectionName' => $link['osm_section_name'],
+        'status' => $link['osm_section_name'] ?: '',
+    ], $links);
 
     $sectionIds = array_values(array_unique(array_column($links, 'osm_section_id')));
     jsonResponse(['children' => $children, 'notices' => array_map('serializeNotice', listNoticesForUser($user, $sectionIds))]);
@@ -63,26 +44,12 @@ $router->get('/api/leader/dashboard', function ($params) {
         $roles = array_values(array_filter($roles, fn($r) => in_array($r['sectionid'], $visible, true)));
     }
 
-    if (count($roles) === 0) {
-        jsonResponse(['sections' => [], 'notices' => array_map('serializeNotice', listNoticesForUser($user, []))]);
-    }
-
-    $result = osmDataReadTokenFor($user);
-    if ($result['unavailable']) {
-        logAudit(['userId' => $user['id'], 'action' => 'osm_unavailable', 'entityType' => 'leader_dashboard']);
-        jsonResponse([
-            'osmUnavailable' => true, 'reason' => $result['reason'],
-            'sections' => array_map(fn($r) => ['sectionId' => $r['sectionid'], 'sectionName' => $r['sectionname']], $roles),
-            'notices' => [],
-        ]);
-    }
-    $token = $result['token'];
-
-    $sections = array_map(function ($role) use ($token) {
+    // Section list comes from the leader's OSM roles captured at login - we make
+    // NO live /ext/ data calls here. OSM aggressively rate-limits/blocks those from
+    // a server, and a per-section members+programme+events burst on every dashboard
+    // load was the main trigger, so section detail is opened in OSM directly.
+    $sections = array_map(function ($role) {
         $sectionId = $role['sectionid'];
-        $members = osmDataSectionMembers($token, $sectionId);
-        $programme = osmDataSectionProgramme($token, $sectionId);
-        $events = osmDataSectionEvents($token, $sectionId);
         $meta = osmDataSectionMeta($sectionId);
         return [
             'sectionId' => $sectionId,
@@ -91,10 +58,6 @@ $router->get('/api/leader/dashboard', function ($params) {
             'meetingDay' => $meta['meetingDay'] ?? null,
             'meetingTime' => $meta['meetingTime'] ?? null,
             'location' => $meta['location'] ?? null,
-            'memberCount' => $members['available'] ? count($members['members']) : null,
-            'membersAvailable' => $members['available'],
-            'nextProgrammeItem' => ($programme['available'] && !empty($programme['items'])) ? $programme['items'][0] : null,
-            'nextEvent' => ($events['available'] && !empty($events['items'])) ? $events['items'][0] : null,
         ];
     }, $roles);
 

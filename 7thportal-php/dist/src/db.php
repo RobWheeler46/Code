@@ -368,6 +368,7 @@ CREATE TABLE IF NOT EXISTS section_capacity (
   amber_pct INTEGER NOT NULL DEFAULT 85,
   red_pct INTEGER NOT NULL DEFAULT 95,
   joining_count INTEGER,
+  active_count INTEGER,
   owner TEXT,
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_by INTEGER REFERENCES users(id)
@@ -402,6 +403,14 @@ CREATE INDEX IF NOT EXISTS idx_document_acknowledgements_document ON document_ac
 CREATE INDEX IF NOT EXISTS idx_document_acknowledgements_user ON document_acknowledgements(user_id);
 SQL
 );
+
+// Migration: section_capacity gained active_count (an admin-entered active-member
+// count for the capacity tracker, since OSM blocks live /ext/ member reads from a
+// server). Add the column if an older section_capacity table predates it.
+$secCapSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='section_capacity'")['sql'] ?? '';
+if ($secCapSql && !str_contains($secCapSql, 'active_count')) {
+    db()->exec('ALTER TABLE section_capacity ADD COLUMN active_count INTEGER');
+}
 
 // Migration: the finance module was rebuilt from a single-item-per-claim
 // model to the header+items model above (7thPortal_Expenses_Data_Model.docx).
