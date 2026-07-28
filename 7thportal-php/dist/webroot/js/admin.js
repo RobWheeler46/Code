@@ -488,6 +488,15 @@ async function renderSettings() {
         <span id="incident-settings-saved"></span>
       </form>
     </div>
+    <div class="card">
+      <h2>Event &amp; camp hub</h2>
+      <p class="muted">A local information page per event or camp - parent-facing details plus leader-only documents (risk assessments etc.), linked to OSM for sign-up and payment. Leader-only items are never shown to parents. Ships off by default.</p>
+      <form id="eventhub-settings-form">
+        <div class="field"><label style="font-weight:400;"><input type="checkbox" id="ev-enabled" ${settings.eventHubEnabled ? 'checked' : ''}> Enable the event &amp; camp hub</label></div>
+        <button class="btn btn-primary" type="submit">Save</button>
+        <span id="eventhub-settings-saved"></span>
+      </form>
+    </div>
   `;
   document.getElementById('gallery-settings-form').addEventListener('submit', async e => {
     e.preventDefault();
@@ -522,6 +531,11 @@ async function renderSettings() {
     e.preventDefault();
     await Api.put('/api/admin/settings', { incidentLoggingEnabled: document.getElementById('i-enabled').checked });
     document.getElementById('incident-settings-saved').textContent = 'Saved.';
+  });
+  document.getElementById('eventhub-settings-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    await Api.put('/api/admin/settings', { eventHubEnabled: document.getElementById('ev-enabled').checked });
+    document.getElementById('eventhub-settings-saved').textContent = 'Saved.';
   });
   document.getElementById('settings-form').addEventListener('submit', async e => {
     e.preventDefault();

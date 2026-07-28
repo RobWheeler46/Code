@@ -32,6 +32,7 @@ function sidebarLinksForRole(me, cfg) {
   if (me.role === 'parent') {
     const links = [{ href: 'parent-dashboard.html', label: 'Dashboard' }];
     links.push({ href: 'action-centre.html', label: 'Action Centre' });
+    if (cfg && cfg.eventHubEnabled) links.push({ href: 'events.html', label: 'Events & camps' });
     if (cfg && cfg.galleryEnabled) links.push({ href: 'gallery.html', label: 'Photo gallery' });
     links.push({ href: 'notices.html', label: 'Notices' });
     links.push({ href: 'notifications.html', label: 'Notifications' });
@@ -40,6 +41,7 @@ function sidebarLinksForRole(me, cfg) {
   }
   const links = [{ href: 'leader-dashboard.html', label: 'Dashboard' }];
   links.push({ href: 'action-centre.html', label: 'Action Centre' });
+  if (cfg && cfg.eventHubEnabled) links.push({ href: 'events.html', label: 'Events & camps' });
   if (cfg && cfg.galleryEnabled) links.push({ href: 'leader-gallery.html', label: 'Photo gallery' });
   if (cfg && cfg.financeEnabled) links.push({ href: 'expenses.html', label: 'Expenses & mileage' });
   if (cfg && cfg.documentLibraryEnabled) links.push({ href: 'documents.html', label: 'Document library' });

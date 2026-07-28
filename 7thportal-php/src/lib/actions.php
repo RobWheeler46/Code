@@ -65,6 +65,8 @@ function buildActionCentre(array $user): array
         if (function_exists('equipmentActionItems')) $items = array_merge($items, equipmentActionItems());
         // Overdue incident follow-up actions (FR-INC "Incident action due").
         if (function_exists('incidentActionItems')) $items = array_merge($items, incidentActionItems($user));
+        // Draft event/camp hubs needing setup (FR-EVT-HUB-007).
+        if (function_exists('eventHubActionItems')) $items = array_merge($items, eventHubActionItems($user));
     }
 
     if ($isAdmin) {

@@ -1,0 +1,87 @@
+<?php
+// Event and Camp Hub (FRD FR-EVT-HUB). Optional module, off by default.
+
+const EVENT_TYPES = ['event' => 'Event', 'camp' => 'Camp', 'sleepover' => 'Sleepover', 'trip' => 'Trip', 'activity' => 'Activity'];
+const EVENT_HUB_STATUSES = ['draft' => 'Draft', 'published' => 'Published', 'archived' => 'Archived'];
+const EVENT_ITEM_STATUSES = ['draft' => 'Draft', 'published' => 'Published', 'linked' => 'Linked', 'awaiting' => 'Awaiting'];
+const EVENT_ITEM_VISIBILITIES = ['parents' => 'Parents', 'leaders' => 'Leaders only'];
+
+function eventHubEnabled(): bool
+{
+    $row = dbGet("SELECT value FROM settings WHERE key = 'event_hub_enabled'");
+    return ($row['value'] ?? null) === 'true';
+}
+
+function requireEventHubEnabled(): void
+{
+    if (!eventHubEnabled()) jsonResponse(['error' => 'The event and camp hub is not enabled.'], 404);
+}
+
+// Operational leaders may create and manage hubs (FR-EVT-HUB-001).
+function eventHubCanManage(array $user): bool
+{
+    return in_array($user['portal_role'], ['section_leader', 'assistant_leader', 'group_leadership', 'admin'], true);
+}
+
+// A parent may see a published hub only where it is group-wide or their child is
+// in the hub's section (FR-EVT-HUB-002 / FR-EVT-HUB-008).
+function eventHubVisibleToParent(array $user, array $hub): bool
+{
+    if ($hub['status'] !== 'published') return false;
+    if (empty($hub['osm_section_id'])) return true;
+    return (bool) dbGet('SELECT 1 FROM parent_child_links WHERE parent_user_id = ? AND osm_section_id = ? LIMIT 1', [$user['id'], $hub['osm_section_id']]);
+}
+
+// Setup readiness (FR-EVT-HUB-007): six tasks, returned as complete/total + RAG.
+function eventHubReadiness(array $hub): array
+{
+    $items = dbAll('SELECT * FROM event_hub_items WHERE hub_id = ?', [$hub['id']]);
+    $tasks = [
+        'Dates set' => !empty($hub['start_date']),
+        'Location set' => !empty($hub['location']),
+        'Key information' => !empty($hub['key_information']),
+        'Kit list / what to bring' => !empty($hub['what_to_bring']),
+        'Published parent content' => (bool) array_filter($items, fn($i) => $i['visibility'] === 'parents' && $i['item_status'] === 'published'),
+        'OSM event linked' => !empty($hub['osm_event_url']),
+    ];
+    $complete = count(array_filter($tasks));
+    $total = count($tasks);
+    $rag = $complete >= $total ? 'green' : ($complete >= 3 ? 'amber' : 'red');
+    return ['complete' => $complete, 'total' => $total, 'rag' => $rag, 'tasks' => $tasks];
+}
+
+function serializeHub(array $h, bool $full = false): array
+{
+    $base = [
+        'id' => (int) $h['id'], 'title' => $h['title'], 'eventType' => $h['event_type'], 'eventTypeLabel' => EVENT_TYPES[$h['event_type']] ?? $h['event_type'],
+        'sectionName' => $h['section_name'], 'startDate' => $h['start_date'], 'endDate' => $h['end_date'], 'location' => $h['location'],
+        'status' => $h['status'], 'statusLabel' => EVENT_HUB_STATUSES[$h['status']] ?? $h['status'],
+    ];
+    if (!$full) return $base;
+    return array_merge($base, [
+        'osmSectionId' => $h['osm_section_id'], 'keyInformation' => $h['key_information'], 'whatToBring' => $h['what_to_bring'],
+        'programmeHighlights' => $h['programme_highlights'], 'osmEventUrl' => $h['osm_event_url'],
+        'createdAt' => $h['created_at'], 'updatedAt' => $h['updated_at'],
+    ]);
+}
+
+function serializeHubItem(array $i): array
+{
+    return [
+        'id' => (int) $i['id'], 'label' => $i['label'], 'itemStatus' => $i['item_status'], 'itemStatusLabel' => EVENT_ITEM_STATUSES[$i['item_status']] ?? $i['item_status'],
+        'visibility' => $i['visibility'], 'visibilityLabel' => EVENT_ITEM_VISIBILITIES[$i['visibility']] ?? $i['visibility'],
+        'owner' => $i['owner_name'], 'linkUrl' => $i['link_url'], 'notes' => $i['notes'],
+    ];
+}
+
+// Draft hubs a leader should finish setting up surface in the Action Centre
+// (FR-EVT-HUB-007 / journey "Action Centre shows a new camp hub").
+function eventHubActionItems(array $user): array
+{
+    if (!eventHubEnabled() || !eventHubCanManage($user)) return [];
+    $items = [];
+    foreach (dbAll("SELECT id, title FROM event_hubs WHERE status = 'draft' ORDER BY start_date") as $h) {
+        $items[] = actionItem('evt-' . $h['id'], 'Medium', 'Event', 'Finish setting up: ' . $h['title'], 'Event lead', 'Open', 'events.html');
+    }
+    return $items;
+}

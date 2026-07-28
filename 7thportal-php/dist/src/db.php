@@ -414,6 +414,44 @@ CREATE TABLE IF NOT EXISTS notification_prefs (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Event and Camp Hub (FRD FR-EVT-HUB). A local information page per event/camp;
+-- OSM stays the system of record for sign-up, payment and attendance (link-out
+-- only). Leader-only items (risk assessments etc.) are never shown to parents.
+-- Optional module, off by default.
+CREATE TABLE IF NOT EXISTS event_hubs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  event_type TEXT NOT NULL DEFAULT 'event' CHECK(event_type IN ('event','camp','sleepover','trip','activity')),
+  osm_section_id TEXT,
+  section_name TEXT,
+  start_date TEXT,
+  end_date TEXT,
+  location TEXT,
+  key_information TEXT,
+  what_to_bring TEXT,
+  programme_highlights TEXT,
+  osm_event_url TEXT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','published','archived')),
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_event_hubs_status ON event_hubs(status, start_date);
+
+CREATE TABLE IF NOT EXISTS event_hub_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  hub_id INTEGER NOT NULL REFERENCES event_hubs(id) ON DELETE CASCADE,
+  label TEXT NOT NULL,
+  item_status TEXT NOT NULL DEFAULT 'draft' CHECK(item_status IN ('draft','published','linked','awaiting')),
+  visibility TEXT NOT NULL DEFAULT 'parents' CHECK(visibility IN ('parents','leaders')),
+  owner_name TEXT,
+  link_url TEXT,
+  notes TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_event_hub_items_hub ON event_hub_items(hub_id);
+
 -- Incident and near-miss logging (FRD FR-INC). Safeguarding-sensitive: this does
 -- NOT replace formal Scouts safeguarding/accident reporting - the module signposts
 -- to those and restricts access. Ships off by default. Restricted records

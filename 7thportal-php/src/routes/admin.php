@@ -218,6 +218,7 @@ $router->get('/api/admin/settings', function ($params) {
         'documentLibraryEnabled' => ($map['document_library_enabled'] ?? null) === 'true',
         'equipmentRegisterEnabled' => ($map['equipment_register_enabled'] ?? null) === 'true',
         'incidentLoggingEnabled' => ($map['incident_logging_enabled'] ?? null) === 'true',
+        'eventHubEnabled' => ($map['event_hub_enabled'] ?? null) === 'true',
     ]);
 });
 
@@ -243,6 +244,7 @@ $router->put('/api/admin/settings', function ($params) {
     if (array_key_exists('documentLibraryEnabled', $body)) $upsert('document_library_enabled', $body['documentLibraryEnabled'] ? 'true' : 'false');
     if (array_key_exists('equipmentRegisterEnabled', $body)) $upsert('equipment_register_enabled', $body['equipmentRegisterEnabled'] ? 'true' : 'false');
     if (array_key_exists('incidentLoggingEnabled', $body)) $upsert('incident_logging_enabled', $body['incidentLoggingEnabled'] ? 'true' : 'false');
+    if (array_key_exists('eventHubEnabled', $body)) $upsert('event_hub_enabled', $body['eventHubEnabled'] ? 'true' : 'false');
 
     logAudit(['userId' => $user['id'], 'action' => array_key_exists('galleryEnabled', $body) ? 'admin_toggle_gallery' : (array_key_exists('financeEnabled', $body) ? 'admin_toggle_finance' : 'admin_update_settings'), 'ipAddress' => clientIp(), 'details' => $body]);
     jsonResponse(['ok' => true]);
