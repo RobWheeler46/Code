@@ -384,6 +384,36 @@ CREATE TABLE IF NOT EXISTS section_snapshots (
   UNIQUE(osm_section_id, snapshot_date)
 );
 
+-- Action Centre (FRD FR-ACT): actions are computed live from the other modules,
+-- so only per-user dismissals of dismissible items are stored.
+CREATE TABLE IF NOT EXISTS dismissed_actions (
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  action_key TEXT NOT NULL,
+  dismissed_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, action_key)
+);
+
+-- In-portal notifications (FRD FR-NOT).
+CREATE TABLE IF NOT EXISTS notifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT,
+  link TEXT,
+  read_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read_at, id);
+
+-- Per-user notification preferences: muted types (JSON list) + weekly digest opt-in.
+CREATE TABLE IF NOT EXISTS notification_prefs (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id),
+  muted_types TEXT,
+  weekly_digest INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(portal_role, account_status);
 CREATE INDEX IF NOT EXISTS idx_parent_links_parent ON parent_child_links(parent_user_id);
 CREATE INDEX IF NOT EXISTS idx_notices_status ON notices(status, audience, start_date);

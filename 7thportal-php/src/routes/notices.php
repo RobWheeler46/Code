@@ -88,6 +88,13 @@ $router->patch('/api/admin/notices/:id', function ($params) {
             $status, $notice['id'],
         ]
     );
+    // Notify the audience when a notice first becomes published (FR-NOT-001).
+    if ($status === 'published' && $notice['status'] !== 'published') {
+        $title = 'New notice: ' . ($body['title'] ?? $notice['title']);
+        if (in_array($aud, ['all', 'parents'], true)) notifyParents('notice', $title, null, 'notices.html');
+        if (in_array($aud, ['all', 'leaders'], true)) notifyRoles(LEADER_ROLES, 'notice', $title, null, 'notices.html');
+        if ($aud === 'section') notifyParents('notice', $title, null, 'notices.html', $notice['osm_section_id']);
+    }
     logAudit(['userId' => $user['id'], 'action' => $status === 'published' ? 'admin_publish_notice' : 'admin_update_notice', 'entityType' => 'notice', 'entityId' => (string) $notice['id'], 'ipAddress' => clientIp()]);
     jsonResponse(serializeNotice(dbGet('SELECT * FROM notices WHERE id = ?', [$notice['id']])));
 });

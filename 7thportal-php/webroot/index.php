@@ -47,6 +47,8 @@ require_once __DIR__ . '/../src/lib/mailer.php';
 require_once __DIR__ . '/../src/lib/gallery.php';
 require_once __DIR__ . '/../src/lib/finance.php';
 require_once __DIR__ . '/../src/lib/documents.php';
+require_once __DIR__ . '/../src/lib/notifications.php';
+require_once __DIR__ . '/../src/lib/actions.php';
 
 // Idempotent maintenance, mirrors the one-off boot tasks in the Node
 // version's server.js. Cheap enough to run every request at this app's scale.
@@ -100,6 +102,8 @@ require_once __DIR__ . '/../src/routes/admin.php';
 require_once __DIR__ . '/../src/routes/gallery.php';
 require_once __DIR__ . '/../src/routes/finance.php';
 require_once __DIR__ . '/../src/routes/documents.php';
+require_once __DIR__ . '/../src/routes/actions.php';
+require_once __DIR__ . '/../src/routes/notifications.php';
 
 // NFR-007: never expose technical error details to end users - the response
 // body stays generic, but the server-side log (error_log + data/login-debug.log

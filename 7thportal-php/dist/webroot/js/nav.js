@@ -31,18 +31,22 @@ async function renderDemoBanner(cfg) {
 function sidebarLinksForRole(me, cfg) {
   if (me.role === 'parent') {
     const links = [{ href: 'parent-dashboard.html', label: 'Dashboard' }];
+    links.push({ href: 'action-centre.html', label: 'Action Centre' });
     if (cfg && cfg.galleryEnabled) links.push({ href: 'gallery.html', label: 'Photo gallery' });
     links.push({ href: 'notices.html', label: 'Notices' });
+    links.push({ href: 'notifications.html', label: 'Notifications' });
     links.push({ href: 'privacy.html', label: 'Privacy notice' });
     return links;
   }
   const links = [{ href: 'leader-dashboard.html', label: 'Dashboard' }];
+  links.push({ href: 'action-centre.html', label: 'Action Centre' });
   if (cfg && cfg.galleryEnabled) links.push({ href: 'leader-gallery.html', label: 'Photo gallery' });
   if (cfg && cfg.financeEnabled) links.push({ href: 'expenses.html', label: 'Expenses & mileage' });
   if (cfg && cfg.documentLibraryEnabled) links.push({ href: 'documents.html', label: 'Document library' });
   if (cfg && cfg.financeEnabled && ['treasurer', 'admin'].includes(me.role)) links.push({ href: 'treasurer.html', label: 'Treasurer' });
   if (cfg && cfg.financeEnabled && ['trustee_viewer', 'chair', 'treasurer', 'admin'].includes(me.role)) links.push({ href: 'trustee-dashboard.html', label: 'Trustee dashboard' });
   links.push({ href: 'notices.html', label: 'Notices' });
+  links.push({ href: 'notifications.html', label: 'Notifications' });
   if (me.role === 'admin') links.push({ href: 'admin.html', label: 'Admin' });
   links.push({ href: 'privacy.html', label: 'Privacy notice' });
   return links;

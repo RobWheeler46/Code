@@ -35,6 +35,15 @@ function smtpCommand($fp, string $cmd, string $expectedPrefix): string
 // Returns false (without throwing) if SMTP isn't configured.
 function sendInviteEmail(string $toEmail, string $firstName, string $setupUrl): bool
 {
+    $subject = '7thPortal - set up your parent/carer account';
+    $body = "Hi $firstName,\n\nA 7th Swindon Scout Group leader has set up a 7thPortal account for you so you can view your child's information.\n\nSet your password here: $setupUrl\n\nThis link expires in 7 days.\n";
+    return sendEmail($toEmail, $subject, $body);
+}
+
+// Generic plain-text SMTP send. Returns false (without throwing) when SMTP is not
+// configured, so callers can degrade gracefully; throws only on a live send error.
+function sendEmail(string $toEmail, string $subject, string $body): bool
+{
     $host = env('SMTP_HOST');
     $user = env('SMTP_USER');
     if (!$host || !$user) return false;
@@ -42,8 +51,6 @@ function sendInviteEmail(string $toEmail, string $firstName, string $setupUrl): 
     $port = (int) (env('SMTP_PORT') ?: 587);
     $pass = env('SMTP_PASS') ?: '';
     $from = env('INVITE_EMAIL_FROM') ?: $user;
-    $subject = '7thPortal - set up your parent/carer account';
-    $body = "Hi $firstName,\n\nA 7th Swindon Scout Group leader has set up a 7thPortal account for you so you can view your child's information.\n\nSet your password here: $setupUrl\n\nThis link expires in 7 days.\n";
 
     $transportPrefix = $port === 465 ? 'ssl://' : 'tcp://';
     $fp = @stream_socket_client("$transportPrefix$host:$port", $errno, $errstr, 15);
