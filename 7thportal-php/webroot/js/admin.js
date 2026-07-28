@@ -479,6 +479,15 @@ async function renderSettings() {
         <span id="equipment-settings-saved"></span>
       </form>
     </div>
+    <div class="card">
+      <h2>Incident &amp; near-miss logging</h2>
+      <p class="muted">Record local operational incidents, near misses and follow-up actions. <strong>This does not replace formal Scouts safeguarding or accident reporting</strong> - the module signposts to those and restricts sensitive records to admins, GLV, the reporter and the assigned owner, with full audit. Ships off by default.</p>
+      <form id="incident-settings-form">
+        <div class="field"><label style="font-weight:400;"><input type="checkbox" id="i-enabled" ${settings.incidentLoggingEnabled ? 'checked' : ''}> Enable incident &amp; near-miss logging</label></div>
+        <button class="btn btn-primary" type="submit">Save</button>
+        <span id="incident-settings-saved"></span>
+      </form>
+    </div>
   `;
   document.getElementById('gallery-settings-form').addEventListener('submit', async e => {
     e.preventDefault();
@@ -508,6 +517,11 @@ async function renderSettings() {
     e.preventDefault();
     await Api.put('/api/admin/settings', { equipmentRegisterEnabled: document.getElementById('e-enabled').checked });
     document.getElementById('equipment-settings-saved').textContent = 'Saved.';
+  });
+  document.getElementById('incident-settings-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    await Api.put('/api/admin/settings', { incidentLoggingEnabled: document.getElementById('i-enabled').checked });
+    document.getElementById('incident-settings-saved').textContent = 'Saved.';
   });
   document.getElementById('settings-form').addEventListener('submit', async e => {
     e.preventDefault();

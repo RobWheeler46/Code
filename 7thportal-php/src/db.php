@@ -414,6 +414,34 @@ CREATE TABLE IF NOT EXISTS notification_prefs (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Incident and near-miss logging (FRD FR-INC). Safeguarding-sensitive: this does
+-- NOT replace formal Scouts safeguarding/accident reporting - the module signposts
+-- to those and restricts access. Ships off by default. Restricted records
+-- (accident follow-up, behaviour concern, safeguarding signpost) are visible only
+-- to admins, GLV, the reporter and the assigned owner; all access is audited.
+CREATE TABLE IF NOT EXISTS incidents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  record_type TEXT NOT NULL CHECK(record_type IN ('near_miss','accident_followup','behaviour_concern','building_issue','safeguarding_signpost')),
+  sensitivity TEXT NOT NULL DEFAULT 'standard' CHECK(sensitivity IN ('standard','restricted')),
+  summary TEXT NOT NULL,
+  osm_section_id TEXT,
+  section_name TEXT,
+  event_name TEXT,
+  occurred_at TEXT,
+  location TEXT,
+  what_happened TEXT,
+  immediate_action TEXT,
+  follow_up_actions TEXT,
+  assigned_to INTEGER REFERENCES users(id),
+  due_date TEXT,
+  status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','in_progress','closed')),
+  closed_note TEXT,
+  reported_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status, record_type);
+
 -- Equipment and asset register (FRD FR-EQP). Ships off by default via Admin ->
 -- Settings, like the other optional modules.
 CREATE TABLE IF NOT EXISTS equipment_assets (
