@@ -414,6 +414,33 @@ CREATE TABLE IF NOT EXISTS notification_prefs (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Equipment and asset register (FRD FR-EQP). Ships off by default via Admin ->
+-- Settings, like the other optional modules.
+CREATE TABLE IF NOT EXISTS equipment_assets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'general' CHECK(category IN ('camping','activity','safety','general')),
+  quantity INTEGER NOT NULL DEFAULT 1,
+  condition TEXT NOT NULL DEFAULT 'good' CHECK(condition IN ('new','good','fair','poor','unserviceable')),
+  status TEXT NOT NULL DEFAULT 'available' CHECK(status IN ('available','allocated','loaned','under_repair','retired','missing')),
+  owner_name TEXT,
+  osm_section_id TEXT,
+  section_name TEXT,
+  location TEXT,
+  linked_event TEXT,
+  purchase_date TEXT,
+  value REAL,
+  notes TEXT,
+  next_inspection_date TEXT,
+  replacement_due_date TEXT,
+  loan_due_date TEXT,
+  last_checked_date TEXT,
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_equipment_status ON equipment_assets(status, category);
+
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(portal_role, account_status);
 CREATE INDEX IF NOT EXISTS idx_parent_links_parent ON parent_child_links(parent_user_id);
 CREATE INDEX IF NOT EXISTS idx_notices_status ON notices(status, audience, start_date);

@@ -470,6 +470,15 @@ async function renderSettings() {
         <span id="doclib-settings-saved"></span>
       </form>
     </div>
+    <div class="card">
+      <h2>Equipment &amp; asset register</h2>
+      <p class="muted">Track kit, condition, location, owners and inspection/replacement due dates. Overdue checks surface in the Action Centre. Ships off by default.</p>
+      <form id="equipment-settings-form">
+        <div class="field"><label style="font-weight:400;"><input type="checkbox" id="e-enabled" ${settings.equipmentRegisterEnabled ? 'checked' : ''}> Enable the equipment register</label></div>
+        <button class="btn btn-primary" type="submit">Save</button>
+        <span id="equipment-settings-saved"></span>
+      </form>
+    </div>
   `;
   document.getElementById('gallery-settings-form').addEventListener('submit', async e => {
     e.preventDefault();
@@ -494,6 +503,11 @@ async function renderSettings() {
     e.preventDefault();
     await Api.put('/api/admin/settings', { documentLibraryEnabled: document.getElementById('d-enabled').checked });
     document.getElementById('doclib-settings-saved').textContent = 'Saved.';
+  });
+  document.getElementById('equipment-settings-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    await Api.put('/api/admin/settings', { equipmentRegisterEnabled: document.getElementById('e-enabled').checked });
+    document.getElementById('equipment-settings-saved').textContent = 'Saved.';
   });
   document.getElementById('settings-form').addEventListener('submit', async e => {
     e.preventDefault();

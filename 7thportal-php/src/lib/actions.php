@@ -60,6 +60,11 @@ function buildActionCentre(array $user): array
         }
     }
 
+    if ($isLeader) {
+        // Equipment checks/returns/replacement (FR-EQP-006).
+        if (function_exists('equipmentActionItems')) $items = array_merge($items, equipmentActionItems());
+    }
+
     if ($isAdmin) {
         // Section capacity warnings.
         if (function_exists('capacityBuildSummary')) {
