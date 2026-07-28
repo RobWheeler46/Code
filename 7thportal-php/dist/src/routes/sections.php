@@ -21,49 +21,15 @@ $router->get('/api/sections/:sectionId/members', function ($params) {
     if (!sectionsCanViewMembers($user, $params['sectionId'])) {
         jsonResponse(['error' => 'You do not have permission to view this section.'], 403);
     }
-    $result = osmDataReadTokenFor($user);
-    if ($result['unavailable']) jsonResponse(['osmUnavailable' => true, 'reason' => $result['reason'], 'members' => []]);
-
-    $membersData = osmDataSectionMembers($result['token'], $params['sectionId']);
-    $stripSensitive = $user['portal_role'] === 'group_leadership';
-    logAudit(['userId' => $user['id'], 'action' => 'view_member_list', 'entityType' => 'section', 'entityId' => $params['sectionId'], 'ipAddress' => clientIp()]);
+    // OSM blocks live /ext/ member reads from a server, so the portal keeps OSM to
+    // sign-in only: show the children linked in the portal for this section and
+    // hand off to OSM for the live roster (FRD "OSM remains system of record").
+    $links = dbAll('SELECT child_display_name, osm_member_id, osm_section_name FROM parent_child_links WHERE osm_section_id = ? ORDER BY child_display_name', [$params['sectionId']]);
+    logAudit(['userId' => $user['id'], 'action' => 'view_section_children', 'entityType' => 'section', 'entityId' => $params['sectionId'], 'ipAddress' => clientIp()]);
     jsonResponse([
-        'available' => $membersData['available'],
-        'members' => $membersData['available'] ? array_map(fn($m) => [
-            'id' => $m['id'], 'firstName' => $m['firstName'], 'lastName' => $m['lastName'], 'patrol' => $m['patrol'],
-            'dob' => $stripSensitive ? null : $m['dob'],
-        ], $membersData['members']) : [],
-    ]);
-});
-
-$router->get('/api/sections/:sectionId/members/:memberId', function ($params) {
-    $user = requireAuth();
-    requireLeader($user);
-    if (!sectionsCanViewMembers($user, $params['sectionId'])) {
-        jsonResponse(['error' => 'You do not have permission to view this member.'], 403);
-    }
-    $result = osmDataReadTokenFor($user);
-    if ($result['unavailable']) jsonResponse(['osmUnavailable' => true, 'reason' => $result['reason']]);
-    $token = $result['token'];
-
-    $roles = json_decode($user['osm_roles_json'] ?? '[]', true) ?: [];
-    $role = null;
-    foreach ($roles as $r) { if (($r['sectionid'] ?? null) === $params['sectionId']) { $role = $r; break; } }
-
-    $membersData = osmDataSectionMembers($token, $params['sectionId']);
-    $badges = osmDataMemberBadges($token, $role['section'] ?? null, $params['sectionId'], $params['memberId']);
-    $member = null;
-    if ($membersData['available']) {
-        foreach ($membersData['members'] as $m) { if ($m['id'] === $params['memberId']) { $member = $m; break; } }
-    }
-    if (!$member) jsonResponse(['error' => 'Member not found.'], 404);
-
-    logAudit(['userId' => $user['id'], 'action' => 'view_member_summary', 'entityType' => 'member', 'entityId' => $params['memberId'], 'ipAddress' => clientIp()]);
-    $stripSensitive = $user['portal_role'] === 'group_leadership';
-    jsonResponse([
-        'firstName' => $member['firstName'], 'lastName' => $member['lastName'], 'patrol' => $member['patrol'],
-        'dob' => $stripSensitive ? null : $member['dob'],
-        'badges' => $badges['available'] ? $badges['badges'] : [],
-        'badgesAvailable' => $badges['available'],
+        'source' => 'portal',
+        'sectionName' => $links[0]['osm_section_name'] ?? null,
+        'osmUrl' => 'https://www.onlinescoutmanager.co.uk/',
+        'members' => array_map(fn($l) => ['id' => $l['osm_member_id'], 'name' => $l['child_display_name']], $links),
     ]);
 });

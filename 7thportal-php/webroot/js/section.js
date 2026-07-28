@@ -7,19 +7,19 @@
 
   try {
     const data = await Api.get(`/api/sections/${encodeURIComponent(sectionId)}/members`);
-    if (data.osmUnavailable) { content.innerHTML = osmUnavailableAlert(data.reason); return; }
-    if (!data.available) { content.innerHTML = '<div class="alert alert-warning">Member data is not available right now.</div>'; return; }
-    if (data.members.length === 0) { content.innerHTML = '<p class="muted">No members found for this section.</p>'; return; }
-
-    content.innerHTML = `<div class="card"><table>
-      <thead><tr><th>Name</th><th>Patrol/Six</th><th></th></tr></thead>
-      <tbody>${data.members.map(m => `
-        <tr>
-          <td>${escapeHtml(m.firstName)} ${escapeHtml(m.lastName)}</td>
-          <td>${escapeHtml(m.patrol || '')}</td>
-          <td><a class="btn btn-secondary btn-sm" href="member.html?section=${encodeURIComponent(sectionId)}&id=${encodeURIComponent(m.id)}">View summary</a></td>
-        </tr>`).join('')}</tbody>
-    </table></div>`;
+    const osmUrl = data.osmUrl || 'https://www.onlinescoutmanager.co.uk/';
+    content.innerHTML = `
+      <div class="card">
+        <p class="muted">The live section roster, attendance and badges are held in OSM. 7thPortal shows the children linked to this section here, and links to OSM for the rest.</p>
+        <a class="btn btn-secondary" href="${escapeHtml(osmUrl)}" target="_blank" rel="noopener">Open this section in OSM &rarr;</a>
+      </div>
+      <div class="card">
+        <h2>Linked children (${data.members.length})</h2>
+        ${data.members.length ? `<table class="data-table">
+          <thead><tr><th>Child</th></tr></thead>
+          <tbody>${data.members.map(m => `<tr><td>${escapeHtml(m.name || 'Child')}</td></tr>`).join('')}</tbody>
+        </table>` : '<p class="muted">No children are linked to this section in the portal yet. An admin can link them under Admin &rarr; Parent accounts.</p>'}
+      </div>`;
   } catch (err) {
     content.innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
   }
