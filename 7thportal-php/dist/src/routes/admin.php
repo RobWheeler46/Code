@@ -26,6 +26,25 @@ $router->get('/api/admin/integration-health', function ($params) {
     ]);
 });
 
+// Deliberate one-off diagnostic: now that the app no longer floods OSM's /ext/
+// endpoints, does OSM serve a single member count? Uses the admin's own live OSM
+// token and a REAL term id, tries a few call shapes, stops at the first that works.
+$router->get('/api/admin/osm/member-probe', function ($params) {
+    $admin = requireAuth();
+    requireAdmin($admin);
+    $me = dbGet('SELECT * FROM users WHERE id = ?', [$admin['id']]);
+    try { $token = ensureFreshToken($me); } catch (Throwable $e) { jsonResponse(['error' => 'No usable OSM token - sign in with OSM (not local/demo), then run this.'], 400); }
+    if ($token === 'demo') jsonResponse(['error' => 'Demo mode - the probe needs a live OSM sign-in.'], 400);
+    $roles = array_values(array_filter(json_decode($me['osm_roles_json'] ?? '[]', true) ?: [], fn($r) => in_array($r['section'] ?? null, OSM_YOUTH_SECTION_TYPES, true)));
+    if (!$roles) jsonResponse(['error' => 'No OSM youth sections found for your account.'], 400);
+    $sectionId = (string) $roles[0]['sectionid'];
+    $term = osmCurrentTermFromData($me['osm_terms_json'] ?? '[]', $sectionId);
+    $tid = $term && ($term['termId'] ?? '') !== '' ? $term['termId'] : null;
+    $variants = osmProbeMembersOnce($token, $sectionId, $tid);
+    logAudit(['userId' => $admin['id'], 'action' => 'admin_osm_member_probe', 'ipAddress' => clientIp()]);
+    jsonResponse(['section' => ['id' => $sectionId, 'name' => $roles[0]['sectionname']], 'termId' => $tid, 'termName' => $term['name'] ?? null, 'variants' => $variants]);
+});
+
 $router->get('/api/admin/osm/sections', function ($params) {
     requireAdmin(requireAuth());
     $service = getServiceAccount() ?? requireAuth();

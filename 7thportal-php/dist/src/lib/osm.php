@@ -215,6 +215,30 @@ function osmCurrentTermIdForSection(string $accessToken, string $sectionId): ?st
     return $id !== null && $id !== '' ? (string) $id : null;
 }
 
+// Pick the current term for a section from the terms captured at login (OSM's
+// startup payload keys terms by section id). Returns ['name','startDate',
+// 'endDate','termId'] for the term spanning today, else the most recent, else null.
+function osmCurrentTermFromData($termsData, string $sectionId): ?array
+{
+    if (is_string($termsData)) $termsData = json_decode($termsData, true) ?: [];
+    if (!is_array($termsData)) return null;
+    $terms = $termsData[$sectionId] ?? [];
+    if (!is_array($terms) || !$terms) return null;
+    $today = date('Y-m-d');
+    $current = null;
+    foreach ($terms as $t) {
+        if (!is_array($t)) continue;
+        if (!empty($t['startdate']) && !empty($t['enddate']) && $t['startdate'] <= $today && $today <= $t['enddate']) { $current = $t; break; }
+    }
+    if ($current === null) {
+        $sorted = array_values(array_filter($terms, 'is_array'));
+        usort($sorted, fn($a, $b) => strcmp((string) ($b['startdate'] ?? ''), (string) ($a['startdate'] ?? '')));
+        $current = $sorted[0] ?? null;
+    }
+    if ($current === null) return null;
+    return ['termId' => (string) ($current['termid'] ?? $current['term_id'] ?? ''), 'name' => $current['name'] ?? null, 'startDate' => $current['startdate'] ?? null, 'endDate' => $current['enddate'] ?? null];
+}
+
 function osmGetSectionMembers(string $accessToken, string $sectionId, $termId = null): array
 {
     try {
@@ -233,6 +257,59 @@ function osmGetSectionMembers(string $accessToken, string $sectionId, $termId = 
     } catch (Throwable $e) {
         return ['available' => false, 'members' => [], 'error' => $e->getMessage()];
     }
+}
+
+// Raw OSM request (GET or POST) that never throws - returns status, whether a
+// member/item list came back, the count or error, and a body snippet when the
+// response is not JSON. Used only by the deliberate admin member probe.
+function osmRawData(string $method, string $accessToken, string $pathname, array $query = [], array $body = []): array
+{
+    $url = OSM_BASE . $pathname . ($query ? ('?' . http_build_query($query)) : '');
+    $ch = curl_init($url);
+    $opts = [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => ["Authorization: Bearer $accessToken", 'Content-Type: application/x-www-form-urlencoded'],
+        CURLOPT_TIMEOUT => 20,
+    ];
+    if ($method === 'POST') { $opts[CURLOPT_POST] = true; $opts[CURLOPT_POSTFIELDS] = http_build_query($body); }
+    curl_setopt_array($ch, $opts);
+    $raw = curl_exec($ch);
+    $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    $data = json_decode((string) $raw, true);
+    $items = null;
+    if (is_array($data)) {
+        if (isset($data['items']) && is_array($data['items'])) $items = $data['items'];
+        elseif (isset($data['data']) && is_array($data['data']) && $data['data']) $items = $data['data'];
+        elseif (array_is_list($data)) $items = $data;
+    }
+    $err = null;
+    if (is_array($data) && isset($data['error'])) $err = is_array($data['error']) ? ($data['error']['message'] ?? json_encode($data['error'])) : (string) $data['error'];
+    return [
+        'status' => $status,
+        'ok' => $status >= 200 && $status < 300 && is_array($items),
+        'count' => is_array($items) ? count($items) : null,
+        'error' => $err,
+        'bodySnippet' => is_array($data) ? null : substr((string) $raw, 0, 140),
+    ];
+}
+
+// Try the likely member-list call shapes for one section using a REAL term id,
+// stopping at the first that returns members. Deliberate, one-off admin probe.
+function osmProbeMembersOnce(string $accessToken, string $sectionId, ?string $termId): array
+{
+    $variants = [
+        ['label' => 'GET section_id/term_id', 'method' => 'GET', 'path' => '/ext/members/contact/', 'query' => ['action' => 'getListOfMembers', 'sort' => 'dob', 'section_id' => $sectionId, 'term_id' => $termId], 'body' => []],
+        ['label' => 'POST grid getMembers', 'method' => 'POST', 'path' => '/ext/members/contact/grid/', 'query' => ['action' => 'getMembers'], 'body' => ['section_id' => $sectionId, 'term_id' => $termId]],
+        ['label' => 'GET sectionid/termid', 'method' => 'GET', 'path' => '/ext/members/contact/', 'query' => ['action' => 'getListOfMembers', 'sort' => 'dob', 'sectionid' => $sectionId, 'termid' => $termId], 'body' => []],
+    ];
+    $results = [];
+    foreach ($variants as $v) {
+        $r = osmRawData($v['method'], $accessToken, $v['path'], $v['query'], $v['body']);
+        $results[] = ['label' => $v['label'], 'method' => $v['method'], 'path' => $v['path']] + $r;
+        if ($r['ok']) break;
+    }
+    return $results;
 }
 
 function osmGetSectionProgramme(string $accessToken, string $sectionId, $termId = null): array

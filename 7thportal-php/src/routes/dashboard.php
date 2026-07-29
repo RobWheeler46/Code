@@ -48,9 +48,11 @@ $router->get('/api/leader/dashboard', function ($params) {
     // NO live /ext/ data calls here. OSM aggressively rate-limits/blocks those from
     // a server, and a per-section members+programme+events burst on every dashboard
     // load was the main trigger, so section detail is opened in OSM directly.
-    $sections = array_map(function ($role) {
+    $termsData = json_decode($user['osm_terms_json'] ?? '[]', true) ?: [];
+    $sections = array_map(function ($role) use ($termsData) {
         $sectionId = $role['sectionid'];
         $meta = osmDataSectionMeta($sectionId);
+        $term = osmCurrentTermFromData($termsData, (string) $sectionId);
         return [
             'sectionId' => $sectionId,
             'sectionName' => $role['sectionname'],
@@ -58,6 +60,8 @@ $router->get('/api/leader/dashboard', function ($params) {
             'meetingDay' => $meta['meetingDay'] ?? null,
             'meetingTime' => $meta['meetingTime'] ?? null,
             'location' => $meta['location'] ?? null,
+            // Current-term context from OSM, captured at login (no live OSM call).
+            'currentTerm' => $term ? ['name' => $term['name'], 'startDate' => $term['startDate'], 'endDate' => $term['endDate']] : null,
         ];
     }, $roles);
 

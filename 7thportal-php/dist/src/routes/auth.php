@@ -84,9 +84,9 @@ $router->get('/auth/osm/callback', function ($params) {
 
         if ($user) {
             dbRun(
-                "UPDATE users SET first_name = ?, last_name = ?, osm_roles_json = ?, osm_access_token = ?, osm_refresh_token = ?,
+                "UPDATE users SET first_name = ?, last_name = ?, osm_roles_json = ?, osm_terms_json = ?, osm_access_token = ?, osm_refresh_token = ?,
                  osm_token_expires_at = ?, last_login_at = datetime('now'), updated_at = datetime('now') WHERE id = ?",
-                [$identity['firstName'], $identity['lastName'], json_encode($identity['roles']), $token['accessToken'],
+                [$identity['firstName'], $identity['lastName'], json_encode($identity['roles']), json_encode($identity['terms'] ?? []), $token['accessToken'],
                  $token['refreshToken'], (string) $token['expiresAt'], $user['id']]
             );
             $user = dbGet('SELECT * FROM users WHERE id = ?', [$user['id']]);
@@ -94,11 +94,11 @@ $router->get('/auth/osm/callback', function ($params) {
         } else {
             $defaultRole = $isFirstOsmUser ? 'admin' : (count($identity['roles']) > 0 ? 'section_leader' : 'group_leadership');
             $result = dbRun(
-                "INSERT INTO users (auth_type, osm_user_id, email, first_name, last_name, portal_role, osm_roles_json,
+                "INSERT INTO users (auth_type, osm_user_id, email, first_name, last_name, portal_role, osm_roles_json, osm_terms_json,
                  osm_access_token, osm_refresh_token, osm_token_expires_at, is_osm_service_account, last_login_at)
-                 VALUES ('osm', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
+                 VALUES ('osm', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
                 [$identity['osmUserId'], $identity['email'], $identity['firstName'], $identity['lastName'], $defaultRole,
-                 json_encode($identity['roles']), $token['accessToken'], $token['refreshToken'], (string) $token['expiresAt'], $isFirstOsmUser ? 1 : 0]
+                 json_encode($identity['roles']), json_encode($identity['terms'] ?? []), $token['accessToken'], $token['refreshToken'], (string) $token['expiresAt'], $isFirstOsmUser ? 1 : 0]
             );
             $user = dbGet('SELECT * FROM users WHERE id = ?', [$result['lastInsertId']]);
             loginLog('Step 4/4 OK: created new user', ['userId' => $user['id'], 'role' => $user['portal_role'], 'isFirstOsmUser' => $isFirstOsmUser]);
@@ -171,10 +171,10 @@ $router->get('/auth/demo/login', function ($params) {
             $startup = osmDemoStartupForRole($as);
             $g = $startup['data']['globals'];
             $result = dbRun(
-                "INSERT INTO users (auth_type, osm_user_id, first_name, last_name, portal_role, osm_roles_json,
+                "INSERT INTO users (auth_type, osm_user_id, first_name, last_name, portal_role, osm_roles_json, osm_terms_json,
                  osm_access_token, osm_refresh_token, osm_token_expires_at, last_login_at)
-                 VALUES ('osm', ?, ?, ?, ?, ?, 'demo', 'demo', ?, datetime('now'))",
-                [$osmUserId, $g['firstname'], $g['lastname'], $portalRole, json_encode($g['roles']), (string) (nowMs() + 3600000)]
+                 VALUES ('osm', ?, ?, ?, ?, ?, ?, 'demo', 'demo', ?, datetime('now'))",
+                [$osmUserId, $g['firstname'], $g['lastname'], $portalRole, json_encode($g['roles']), json_encode($g['terms'] ?? []), (string) (nowMs() + 3600000)]
             );
             $user = dbGet('SELECT * FROM users WHERE id = ?', [$result['lastInsertId']]);
         }

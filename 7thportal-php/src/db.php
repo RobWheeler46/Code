@@ -527,6 +527,14 @@ CREATE INDEX IF NOT EXISTS idx_document_acknowledgements_user ON document_acknow
 SQL
 );
 
+// Migration: users gained osm_terms_json - the OSM terms (with dates) for the
+// leader's sections, captured from the login startup payload (no extra OSM call)
+// so the portal can show current-term context. Add the column if missing.
+$usersTermsSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'")['sql'] ?? '';
+if ($usersTermsSql && !str_contains($usersTermsSql, 'osm_terms_json')) {
+    db()->exec('ALTER TABLE users ADD COLUMN osm_terms_json TEXT');
+}
+
 // Migration: section_capacity gained active_count (an admin-entered active-member
 // count for the capacity tracker, since OSM blocks live /ext/ member reads from a
 // server). Add the column if an older section_capacity table predates it.

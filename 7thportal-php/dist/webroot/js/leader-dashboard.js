@@ -34,6 +34,7 @@ function renderSections(sections, clickable) {
     const inner = `
       <h2>${escapeHtml(s.sectionName)}</h2>
       ${s.meetingDay ? `<p class="muted">${escapeHtml(s.meetingDay)} ${escapeHtml(s.meetingTime || '')} &middot; ${escapeHtml(s.location || '')}</p>` : ''}
+      ${s.currentTerm && s.currentTerm.name ? `<p class="muted">Current term: ${escapeHtml(s.currentTerm.name)}${s.currentTerm.startDate ? ` (${formatDate(s.currentTerm.startDate)}${s.currentTerm.endDate ? ' - ' + formatDate(s.currentTerm.endDate) : ''})` : ''}</p>` : ''}
       ${s.memberCount !== undefined && s.memberCount !== null ? `<p>${s.memberCount} member${s.memberCount === 1 ? '' : 's'}</p>` : ''}
       ${s.nextProgrammeItem ? `<p class="muted">Next meeting: ${formatDate(s.nextProgrammeItem.date)} - ${escapeHtml(s.nextProgrammeItem.title)}</p>` : ''}
       ${s.nextEvent ? `<p class="muted">Next event: ${formatDate(s.nextEvent.date)} - ${escapeHtml(s.nextEvent.name)}</p>` : ''}
