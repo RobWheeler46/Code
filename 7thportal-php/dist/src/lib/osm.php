@@ -294,6 +294,20 @@ function osmRawData(string $method, string $accessToken, string $pathname, array
     ];
 }
 
+// Aggregate member count for a section. OSM serves the member list via POST to
+// the grid endpoint with a real term id (verified by the member probe; the old
+// GET returns 405). Counts only - the list is measured, never stored.
+function osmGridMemberCount(string $accessToken, string $sectionId, ?string $termId): array
+{
+    if (!$termId) return ['ok' => false, 'error' => 'No current OSM term for this section.'];
+    $r = osmRawData('POST', $accessToken, '/ext/members/contact/grid/', ['action' => 'getMembers'], ['section_id' => $sectionId, 'term_id' => $termId]);
+    if (!$r['ok']) {
+        $blocked = $r['bodySnippet'] && stripos($r['bodySnippet'], 'blocked') !== false;
+        return ['ok' => false, 'blocked' => $blocked, 'error' => $blocked ? 'OSM temporarily blocked the request' : ($r['error'] ?? ('HTTP ' . $r['status']))];
+    }
+    return ['ok' => true, 'count' => (int) $r['count']];
+}
+
 // Try the likely member-list call shapes for one section using a REAL term id,
 // stopping at the first that returns members. Deliberate, one-off admin probe.
 function osmProbeMembersOnce(string $accessToken, string $sectionId, ?string $termId): array

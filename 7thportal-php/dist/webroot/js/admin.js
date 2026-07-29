@@ -79,7 +79,7 @@ async function renderHealth() {
 const CAP_STATUS_LABEL = { good: 'Good', watch: 'Watch', full: 'Full', over: 'Over capacity', unset: 'No capacity set' };
 const CAP_TREND_LABEL = { rising: '↑ Rising', falling: '↓ Falling', stable: '→ Stable', new: '—' };
 
-const CAP_SOURCE_LABEL = { manual: 'Manual', portal: 'Portal', none: '&mdash;' };
+const CAP_SOURCE_LABEL = { manual: 'Manual', osm: 'OSM', portal: 'Portal', none: '&mdash;' };
 
 async function renderCapacity() {
   const box = document.getElementById('tab-content');
@@ -102,10 +102,12 @@ async function renderCapacity() {
       <div class="cap-head">
         <h2>Section capacity tracker</h2>
         <span class="cap-actions">
+          ${dash.osm && dash.osm.canSync ? '<button class="btn" id="cap-sync">Sync from OSM</button>' : ''}
           <a class="btn btn-secondary" href="/api/admin/sections/capacity/export">Export CSV</a>
         </span>
       </div>
-      <p class="muted">Counts only, held locally. &ldquo;Active&rdquo; is the number you enter below, or the portal&rsquo;s own linked-children count &mdash; OSM is used for sign-in only. Named drill-down is audited.</p>
+      <p class="muted">Counts only. &ldquo;Active&rdquo; is the number you enter below, or a live OSM member count from &ldquo;Sync from OSM&rdquo;, else the portal&rsquo;s own linked-children count.${dash.osm && dash.osm.lastSyncedAt ? ' Last OSM sync: ' + escapeHtml(formatDateTime(dash.osm.lastSyncedAt)) + '.' : ''} Named drill-down is audited.</p>
+      <div id="cap-sync-msg"></div>
       ${dash.sections.length ? `<table class="data-table">
         <thead><tr><th>Section</th><th>Active</th><th>Source</th><th>Joining</th><th>Capacity</th><th>Use</th><th>Trend</th><th>Status</th><th></th></tr></thead>
         <tbody>${dash.sections.map(s => `
@@ -160,6 +162,21 @@ async function renderCapacity() {
       renderCapacity();
     } catch (e) { document.getElementById('cap-set-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
   }));
+
+  const syncBtn = document.getElementById('cap-sync');
+  if (syncBtn) syncBtn.addEventListener('click', async () => {
+    const msg = document.getElementById('cap-sync-msg');
+    syncBtn.disabled = true; syncBtn.textContent = 'Syncing…';
+    try {
+      const r = await Api.post('/api/admin/sections/sync');
+      const fails = (r.sections || []).filter(s => s.error);
+      msg.innerHTML = `<div class="alert ${fails.length ? 'alert-warning' : 'alert-success'}">Synced ${r.synced} of ${r.total} sections from OSM.${fails.length ? ' Some sections did not return data: ' + escapeHtml(fails.map(f => f.section).join(', ')) + '.' : ''}</div>`;
+      setTimeout(renderCapacity, 1200);
+    } catch (e) {
+      msg.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`;
+      syncBtn.disabled = false; syncBtn.textContent = 'Sync from OSM';
+    }
+  });
 
   box.querySelectorAll('[data-drill]').forEach(btn => btn.addEventListener('click', () => capacityDrill(btn.dataset.drill, btn.dataset.name)));
 }

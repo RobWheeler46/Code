@@ -108,13 +108,17 @@ function capacitySectionList(): array
     return array_values($sections);
 }
 
-// Build the aggregate per-section summary. "Active" is the admin-entered value if
-// set, else the portal's own linked-children count for that section. No OSM call.
+// Build the aggregate per-section summary. "Active" priority: an admin-entered
+// value, else the last OSM-synced count for the section, else the portal's own
+// linked-children count. No live OSM call here - the OSM count comes from a
+// deliberate admin sync (see /api/admin/sections/sync).
 function capacityBuildSummary(): array
 {
     $today = gmdate('Y-m-d');
     $cfgAll = [];
     foreach (dbAll('SELECT * FROM section_capacity') as $c) $cfgAll[$c['osm_section_id']] = $c;
+    $osmAll = [];
+    foreach (dbAll("SELECT osm_section_id, active_count, last_synced_at FROM osm_sections WHERE sync_status = 'ok' AND active_count IS NOT NULL") as $o) $osmAll[$o['osm_section_id']] = $o;
 
     $sections = [];
     $totalActive = 0; $availableSpaces = 0; $joiningTotal = 0; $nearCapacity = 0;
@@ -122,9 +126,11 @@ function capacityBuildSummary(): array
         $sid = $s['sectionId'];
         $cfg = $cfgAll[$sid] ?? [];
         $manual = isset($cfg['active_count']) && $cfg['active_count'] !== null ? (int) $cfg['active_count'] : null;
+        $osm = isset($osmAll[$sid]) ? (int) $osmAll[$sid]['active_count'] : null;
         $local = (int) dbGet('SELECT count(*) AS n FROM parent_child_links WHERE osm_section_id = ?', [$sid])['n'];
-        $active = $manual !== null ? $manual : ($local > 0 ? $local : null);
-        $source = $manual !== null ? 'manual' : ($active !== null ? 'portal' : 'none');
+        $active = $manual !== null ? $manual : ($osm !== null ? $osm : ($local > 0 ? $local : null));
+        $source = $manual !== null ? 'manual' : ($osm !== null ? 'osm' : ($active !== null ? 'portal' : 'none'));
+        $lastSync = $osmAll[$sid]['last_synced_at'] ?? null;
         $cap = isset($cfg['capacity']) && $cfg['capacity'] !== null ? (int) $cfg['capacity'] : null;
         $amber = (int) ($cfg['amber_pct'] ?? 85);
         $red = (int) ($cfg['red_pct'] ?? 95);
@@ -139,7 +145,7 @@ function capacityBuildSummary(): array
         }
         $sections[] = [
             'sectionId' => $sid, 'sectionName' => $s['sectionName'], 'sectionType' => $s['sectionType'],
-            'active' => $active, 'source' => $source, 'joining' => $joining, 'capacity' => $cap,
+            'active' => $active, 'source' => $source, 'lastSync' => $lastSync, 'joining' => $joining, 'capacity' => $cap,
             'utilisation' => $util, 'status' => $status, 'trend' => $trend, 'amber' => $amber, 'red' => $red,
             'owner' => $cfg['owner'] ?? null,
         ];
@@ -155,8 +161,52 @@ function capacityBuildSummary(): array
 }
 
 $router->get('/api/admin/sections/capacity', function ($params) {
-    requireAdmin(requireAuth());
-    jsonResponse(capacityBuildSummary());
+    $me = requireAuth();
+    requireAdmin($me);
+    $last = dbGet("SELECT max(last_synced_at) AS last FROM osm_sections WHERE sync_status = 'ok'")['last'] ?? null;
+    // Sync is offered only to an admin who signed in through OSM (has a live token).
+    $canSync = !empty($me['osm_access_token']) && $me['osm_access_token'] !== 'demo';
+    jsonResponse(array_merge(capacityBuildSummary(), ['osm' => ['canSync' => $canSync, 'lastSyncedAt' => $last]]));
+});
+
+// Deliberate, admin-triggered, one-shot OSM member-count sync (FR-OSM-CAP-001).
+// Uses the admin's own live OSM token + real terms, one POST per section, stops
+// immediately if OSM blocks, and is throttled - the dashboards never call OSM.
+$router->post('/api/admin/sections/sync', function ($params) {
+    $admin = requireAuth();
+    requireAdmin($admin);
+    $me = dbGet('SELECT * FROM users WHERE id = ?', [$admin['id']]);
+    $last = dbGet("SELECT max(last_synced_at) AS last FROM osm_sections")['last'] ?? null;
+    if ($last && (time() - strtotime($last . ' UTC')) < 60) jsonResponse(['error' => 'Just synced - wait a minute before syncing OSM again.'], 429);
+    try { $token = ensureFreshToken($me); } catch (Throwable $e) { jsonResponse(['error' => 'No usable OSM token - sign in with OSM, then sync.'], 400); }
+    if ($token === 'demo') jsonResponse(['error' => 'Demo mode - a live OSM sync needs a real OSM sign-in.'], 400);
+    $roles = array_values(array_filter(json_decode($me['osm_roles_json'] ?? '[]', true) ?: [], fn($r) => in_array($r['section'] ?? null, OSM_YOUTH_SECTION_TYPES, true)));
+    $terms = json_decode($me['osm_terms_json'] ?? '[]', true) ?: [];
+    $today = gmdate('Y-m-d'); $synced = 0; $results = [];
+    foreach ($roles as $r) {
+        $sid = (string) $r['sectionid'];
+        $term = osmCurrentTermFromData($terms, $sid);
+        $tid = $term && ($term['termId'] ?? '') !== '' ? $term['termId'] : null;
+        $res = osmGridMemberCount($token, $sid, $tid);
+        if (!empty($res['ok'])) {
+            dbRun("INSERT INTO osm_sections (osm_section_id, section_name, section_type, active_count, last_synced_at, synced_by, sync_status, sync_error)
+                   VALUES (?, ?, ?, ?, datetime('now'), ?, 'ok', NULL)
+                   ON CONFLICT(osm_section_id) DO UPDATE SET section_name = excluded.section_name, section_type = excluded.section_type,
+                     active_count = excluded.active_count, last_synced_at = excluded.last_synced_at, synced_by = excluded.synced_by, sync_status = 'ok', sync_error = NULL",
+                [$sid, $r['sectionname'] ?? '', $r['section'] ?? null, $res['count'], $admin['id']]);
+            dbRun('INSERT OR IGNORE INTO section_snapshots (osm_section_id, active_count, snapshot_date) VALUES (?, ?, ?)', [$sid, $res['count'], $today]);
+            $synced++; $results[] = ['section' => $r['sectionname'] ?? $sid, 'count' => $res['count']];
+        } else {
+            dbRun("INSERT INTO osm_sections (osm_section_id, section_name, section_type, active_count, last_synced_at, synced_by, sync_status, sync_error)
+                   VALUES (?, ?, ?, NULL, datetime('now'), ?, 'error', ?)
+                   ON CONFLICT(osm_section_id) DO UPDATE SET last_synced_at = excluded.last_synced_at, synced_by = excluded.synced_by, sync_status = 'error', sync_error = excluded.sync_error",
+                [$sid, $r['sectionname'] ?? '', $r['section'] ?? null, $admin['id'], substr($res['error'] ?? 'failed', 0, 200)]);
+            $results[] = ['section' => $r['sectionname'] ?? $sid, 'error' => $res['error'] ?? 'failed'];
+            if (!empty($res['blocked'])) break; // stop the moment OSM blocks - never hammer
+        }
+    }
+    logAudit(['userId' => $admin['id'], 'action' => 'admin_osm_section_sync', 'ipAddress' => clientIp(), 'details' => ['synced' => $synced, 'total' => count($roles)]]);
+    jsonResponse(['ok' => true, 'synced' => $synced, 'total' => count($roles), 'sections' => $results]);
 });
 
 $router->get('/api/admin/sections/capacity/settings', function ($params) {
