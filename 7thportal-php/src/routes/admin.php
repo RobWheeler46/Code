@@ -290,6 +290,7 @@ $router->get('/api/admin/settings', function ($params) {
         'incidentLoggingEnabled' => ($map['incident_logging_enabled'] ?? null) === 'true',
         'eventHubEnabled' => ($map['event_hub_enabled'] ?? null) === 'true',
         'calendarEnabled' => ($map['calendar_enabled'] ?? null) === 'true',
+        'attendanceEnabled' => ($map['attendance_enabled'] ?? null) === 'true',
     ]);
 });
 
@@ -318,6 +319,7 @@ $router->put('/api/admin/settings', function ($params) {
     if (array_key_exists('incidentLoggingEnabled', $body)) $upsert('incident_logging_enabled', $body['incidentLoggingEnabled'] ? 'true' : 'false');
     if (array_key_exists('eventHubEnabled', $body)) $upsert('event_hub_enabled', $body['eventHubEnabled'] ? 'true' : 'false');
     if (array_key_exists('calendarEnabled', $body)) $upsert('calendar_enabled', $body['calendarEnabled'] ? 'true' : 'false');
+    if (array_key_exists('attendanceEnabled', $body)) $upsert('attendance_enabled', $body['attendanceEnabled'] ? 'true' : 'false');
 
     logAudit(['userId' => $user['id'], 'action' => array_key_exists('galleryEnabled', $body) ? 'admin_toggle_gallery' : (array_key_exists('financeEnabled', $body) ? 'admin_toggle_finance' : 'admin_update_settings'), 'ipAddress' => clientIp(), 'details' => $body]);
     jsonResponse(['ok' => true]);

@@ -336,6 +336,27 @@ function osmGridMembers(string $accessToken, string $sectionId, ?string $termId)
     return ['ok' => true, 'members' => $members, 'count' => count($members), 'columns' => $columns];
 }
 
+// Resolve a user's live section roster: demo fixture for demo sign-in, else the
+// live OSM grid using the user's own token + the section's current term. Shared by
+// the /roster endpoint and attendance pre-population. Fetch-only - never stores.
+// Returns ['ok'=>bool, 'source'=>'demo'|'osm', 'members'=>[...], 'columns'=>[...]]
+// or ['ok'=>false, 'blocked'=>bool, 'error'=>string].
+function osmSectionRoster(array $user, string $sectionId): array
+{
+    $me = dbGet('SELECT * FROM users WHERE id = ?', [$user['id']]);
+    try { $token = ensureFreshToken($me); }
+    catch (Throwable $e) { return ['ok' => false, 'error' => 'Live member names need an OSM sign-in. Sign in with OSM, then try again.']; }
+    if ($token === 'demo') {
+        return ['ok' => true, 'source' => 'demo', 'members' => osmDemoRosterForSection($sectionId), 'columns' => []];
+    }
+    $terms = json_decode($me['osm_terms_json'] ?? '[]', true) ?: [];
+    $term = osmCurrentTermFromData($terms, $sectionId);
+    $tid = $term && ($term['termId'] ?? '') !== '' ? $term['termId'] : null;
+    $res = osmGridMembers($token, $sectionId, $tid);
+    if (empty($res['ok'])) return ['ok' => false, 'blocked' => !empty($res['blocked']), 'error' => $res['error'] ?? 'Could not fetch members from OSM.'];
+    return ['ok' => true, 'source' => 'osm', 'members' => $res['members'], 'columns' => $res['columns'] ?? []];
+}
+
 // Aggregate member count for a section. OSM serves the member list via POST to
 // the grid endpoint with a real term id (verified by the member probe; the old
 // GET returns 405). Counts only - the list is measured, never stored.

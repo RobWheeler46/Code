@@ -594,6 +594,47 @@ CREATE TABLE IF NOT EXISTS calendar_entries (
 );
 CREATE INDEX IF NOT EXISTS idx_calendar_entries_range ON calendar_entries(start_at, end_at);
 
+-- Section attendance registers (FRD FR-SEC-ATT / FR-SEC-REG). A register is a local
+-- historical record of who attended a session, pre-populated from the live OSM
+-- roster and then owned locally. Unlike the roster (fetch-not-stored), attendance
+-- IS stored - the member name/grouping are snapshotted per row so the record
+-- survives later OSM membership changes (FR-SEC-REG-005). This is the deliberate,
+-- FRD-authorised exception to "counts only, never store names". Emergency contact
+-- details are NOT part of this and are never stored here. Ships off by default.
+CREATE TABLE IF NOT EXISTS attendance_registers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  osm_section_id TEXT NOT NULL,
+  section_name TEXT,
+  title TEXT NOT NULL,
+  session_date TEXT NOT NULL,
+  source_type TEXT NOT NULL DEFAULT 'ad_hoc' CHECK(source_type IN ('ad_hoc','calendar','event')),
+  source_ref_id INTEGER,
+  source_label TEXT,
+  notes TEXT,
+  status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','submitted')),
+  created_by INTEGER REFERENCES users(id),
+  submitted_by INTEGER REFERENCES users(id),
+  submitted_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_attendance_registers_section ON attendance_registers(osm_section_id, session_date);
+
+CREATE TABLE IF NOT EXISTS attendance_marks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  register_id INTEGER NOT NULL REFERENCES attendance_registers(id) ON DELETE CASCADE,
+  osm_member_id TEXT,
+  member_name TEXT NOT NULL,
+  grouping TEXT,
+  status TEXT NOT NULL DEFAULT 'unknown' CHECK(status IN ('present','absent','late','left_early','excused','unknown','guest')),
+  note TEXT,
+  sort_name TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(register_id, osm_member_id)
+);
+CREATE INDEX IF NOT EXISTS idx_attendance_marks_register ON attendance_marks(register_id);
+
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(portal_role, account_status);
 CREATE INDEX IF NOT EXISTS idx_parent_links_parent ON parent_child_links(parent_user_id);
 CREATE INDEX IF NOT EXISTS idx_notices_status ON notices(status, audience, start_date);

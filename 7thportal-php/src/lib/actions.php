@@ -71,6 +71,8 @@ function buildActionCentre(array $user): array
         if (function_exists('qmActionItems')) $items = array_merge($items, qmActionItems($user));
         // Upcoming calendar placeholders to firm up (FR-CAL-013).
         if (function_exists('calendarActionItems')) $items = array_merge($items, calendarActionItems($user));
+        // Open attendance registers to complete (FR-SEC-ATT).
+        if (function_exists('attendanceActionItems')) $items = array_merge($items, attendanceActionItems($user));
     }
 
     if ($isAdmin) {

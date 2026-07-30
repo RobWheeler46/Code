@@ -532,6 +532,15 @@ async function renderSettings() {
         <span id="calendar-settings-saved"></span>
       </form>
     </div>
+    <div class="card">
+      <h2>Section attendance</h2>
+      <p class="muted">Lets section leaders take attendance registers for their own section, pre-filled from the live OSM roster and grouped by Six/Patrol, with parent-safe printable registers. <strong>Unlike the rest of the OSM integration, attendance records are stored</strong> (name + present/absent per session) so they survive OSM membership changes. Emergency contact details are not part of this. Ships off by default.</p>
+      <form id="attendance-settings-form">
+        <div class="field"><label style="font-weight:400;"><input type="checkbox" id="att-enabled" ${settings.attendanceEnabled ? 'checked' : ''}> Enable section attendance</label></div>
+        <button class="btn btn-primary" type="submit">Save</button>
+        <span id="attendance-settings-saved"></span>
+      </form>
+    </div>
   `;
   document.getElementById('gallery-settings-form').addEventListener('submit', async e => {
     e.preventDefault();
@@ -581,6 +590,11 @@ async function renderSettings() {
     e.preventDefault();
     await Api.put('/api/admin/settings', { calendarEnabled: document.getElementById('cal-enabled').checked });
     document.getElementById('calendar-settings-saved').textContent = 'Saved.';
+  });
+  document.getElementById('attendance-settings-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    await Api.put('/api/admin/settings', { attendanceEnabled: document.getElementById('att-enabled').checked });
+    document.getElementById('attendance-settings-saved').textContent = 'Saved.';
   });
   document.getElementById('settings-form').addEventListener('submit', async e => {
     e.preventDefault();
