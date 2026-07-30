@@ -507,6 +507,63 @@ CREATE TABLE IF NOT EXISTS equipment_assets (
 );
 CREATE INDEX IF NOT EXISTS idx_equipment_status ON equipment_assets(status, category);
 
+-- Quartermaster Booking (FRD FR-QM / backlog LATER-005). Builds on the equipment
+-- register: leaders raise booking requests for stores items and Quartermasters
+-- (Group Leadership Team + admins) approve/substitute at item-line level, then run
+-- the collection -> return -> condition-check workflow. Not self-service: nothing is
+-- reserved until a QM approves. Ships off by default. Parents are never granted
+-- access (FR-QM-024). Overdue/due-back are derived at read time from return_at, so
+-- they are not stored states.
+CREATE TABLE IF NOT EXISTS qm_bookings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  reference TEXT,
+  requester_user_id INTEGER NOT NULL REFERENCES users(id),
+  purpose TEXT,
+  osm_section_id TEXT,
+  section_name TEXT,
+  event_hub_id INTEGER REFERENCES event_hubs(id) ON DELETE SET NULL,
+  event_name TEXT,
+  collect_at TEXT,
+  return_at TEXT,
+  collection_details TEXT,
+  return_details TEXT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','submitted','approved','partially_approved','ready_for_collection','collected','returned','closed','cancelled')),
+  cancel_reason TEXT,
+  submitted_at TEXT,
+  decided_by INTEGER REFERENCES users(id),
+  decided_at TEXT,
+  collected_at TEXT,
+  collected_by_name TEXT,
+  returned_at TEXT,
+  return_condition_note TEXT,
+  closed_by INTEGER REFERENCES users(id),
+  closed_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_qm_bookings_status ON qm_bookings(status, return_at);
+CREATE INDEX IF NOT EXISTS idx_qm_bookings_requester ON qm_bookings(requester_user_id, status);
+
+CREATE TABLE IF NOT EXISTS qm_booking_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  booking_id INTEGER NOT NULL REFERENCES qm_bookings(id) ON DELETE CASCADE,
+  equipment_asset_id INTEGER REFERENCES equipment_assets(id) ON DELETE SET NULL,
+  item_name TEXT NOT NULL,
+  requested_qty INTEGER NOT NULL DEFAULT 1,
+  approved_qty INTEGER,
+  substitute_asset_id INTEGER REFERENCES equipment_assets(id) ON DELETE SET NULL,
+  substitute_name TEXT,
+  line_status TEXT NOT NULL DEFAULT 'requested' CHECK(line_status IN ('requested','approved','rejected','substituted','more_info')),
+  qm_notes TEXT,
+  issue_condition TEXT,
+  return_condition TEXT,
+  damage_notes TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_qm_booking_items_booking ON qm_booking_items(booking_id);
+CREATE INDEX IF NOT EXISTS idx_qm_booking_items_asset ON qm_booking_items(equipment_asset_id);
+
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(portal_role, account_status);
 CREATE INDEX IF NOT EXISTS idx_parent_links_parent ON parent_child_links(parent_user_id);
 CREATE INDEX IF NOT EXISTS idx_notices_status ON notices(status, audience, start_date);

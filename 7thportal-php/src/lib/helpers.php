@@ -25,6 +25,12 @@ function isChairRole(string $role): bool { return in_array($role, ['chair', 'adm
 // Who may view the read-only Trustee Board finance dashboard.
 function isTrusteeDashboardRole(string $role): bool { return in_array($role, ['trustee_viewer', 'chair', 'treasurer', 'admin'], true); }
 
+// Quartermaster Booking (FRD FR-QM). Like finance's approver model, QM authority
+// is layered onto the existing roles rather than adding a new OSM role: the Group
+// Leadership Team and admins act as Quartermasters (approve/substitute/handover/
+// return), while any leader may raise a request. Trustee viewers get counts only.
+function isQuartermasterRole(string $role): bool { return in_array($role, ['group_leadership', 'admin'], true); }
+
 // "Now" in milliseconds, matching the millisecond-epoch strings stored in
 // osm_token_expires_at (kept the same unit as the Node version for parity).
 function nowMs(): int { return (int) round(microtime(true) * 1000); }

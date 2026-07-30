@@ -5,7 +5,7 @@
 // per-browser, which is what that Map was standing in for anyway.
 
 $router->get('/api/config', function ($params) {
-    jsonResponse(['osmConfigured' => osmIsConfigured(), 'demoModeAllowed' => osmDemoModeAllowed(), 'galleryEnabled' => galleryEnabled(), 'financeEnabled' => financeEnabled(), 'documentLibraryEnabled' => documentLibraryEnabled(), 'equipmentRegisterEnabled' => equipmentRegisterEnabled(), 'incidentLoggingEnabled' => incidentLoggingEnabled(), 'eventHubEnabled' => eventHubEnabled()]);
+    jsonResponse(['osmConfigured' => osmIsConfigured(), 'demoModeAllowed' => osmDemoModeAllowed(), 'galleryEnabled' => galleryEnabled(), 'financeEnabled' => financeEnabled(), 'documentLibraryEnabled' => documentLibraryEnabled(), 'equipmentRegisterEnabled' => equipmentRegisterEnabled(), 'qmBookingEnabled' => qmBookingEnabled(), 'incidentLoggingEnabled' => incidentLoggingEnabled(), 'eventHubEnabled' => eventHubEnabled()]);
 });
 
 $router->get('/auth/osm/login', function ($params) {

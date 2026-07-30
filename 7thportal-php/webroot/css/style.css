@@ -234,5 +234,11 @@ textarea { min-height: 5rem; resize: vertical; }
 .modal-box { background: var(--card); border-radius: 8px; padding: 1.5rem; width: 100%; max-width: 520px; max-height: 88vh; overflow: auto; box-shadow: 0 12px 40px rgba(0,0,0,0.25); }
 .modal-box h2 { margin-top: 0; }
 
+/* Key/value detail table (Quartermaster booking, etc.) */
+.kv-table { width: 100%; border-collapse: collapse; }
+.kv-table td { padding: 0.35rem 0.6rem 0.35rem 0; vertical-align: top; border-bottom: 1px solid var(--border); }
+.kv-table td:first-child { width: 34%; white-space: nowrap; }
+.kv-table tr:last-child td { border-bottom: none; }
+
 /* Deploy build stamp (home page footer) */
 .build-tag { display: inline-block; margin-left: 0.4rem; padding: 0.05rem 0.4rem; border-radius: 4px; background: var(--border); color: var(--muted); font-size: 0.72rem; font-variant-numeric: tabular-nums; }

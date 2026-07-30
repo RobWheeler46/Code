@@ -497,6 +497,15 @@ async function renderSettings() {
       </form>
     </div>
     <div class="card">
+      <h2>Quartermaster booking</h2>
+      <p class="muted">Leaders request equipment from the stores; Quartermasters (Group Leadership Team &amp; admins) approve at item level and run the collection/return workflow. Builds on the equipment register - nothing is reserved until a QM approves. Ships off by default.</p>
+      <form id="qm-settings-form">
+        <div class="field"><label style="font-weight:400;"><input type="checkbox" id="qm-enabled" ${settings.qmBookingEnabled ? 'checked' : ''}> Enable Quartermaster booking</label></div>
+        <button class="btn btn-primary" type="submit">Save</button>
+        <span id="qm-settings-saved"></span>
+      </form>
+    </div>
+    <div class="card">
       <h2>Incident &amp; near-miss logging</h2>
       <p class="muted">Record local operational incidents, near misses and follow-up actions. <strong>This does not replace formal Scouts safeguarding or accident reporting</strong> - the module signposts to those and restricts sensitive records to admins, GLV, the reporter and the assigned owner, with full audit. Ships off by default.</p>
       <form id="incident-settings-form">
@@ -543,6 +552,11 @@ async function renderSettings() {
     e.preventDefault();
     await Api.put('/api/admin/settings', { equipmentRegisterEnabled: document.getElementById('e-enabled').checked });
     document.getElementById('equipment-settings-saved').textContent = 'Saved.';
+  });
+  document.getElementById('qm-settings-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    await Api.put('/api/admin/settings', { qmBookingEnabled: document.getElementById('qm-enabled').checked });
+    document.getElementById('qm-settings-saved').textContent = 'Saved.';
   });
   document.getElementById('incident-settings-form').addEventListener('submit', async e => {
     e.preventDefault();

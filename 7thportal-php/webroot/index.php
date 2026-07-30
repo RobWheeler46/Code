@@ -49,6 +49,7 @@ require_once __DIR__ . '/../src/lib/finance.php';
 require_once __DIR__ . '/../src/lib/documents.php';
 require_once __DIR__ . '/../src/lib/notifications.php';
 require_once __DIR__ . '/../src/lib/equipment.php';
+require_once __DIR__ . '/../src/lib/quartermaster.php';
 require_once __DIR__ . '/../src/lib/incidents.php';
 require_once __DIR__ . '/../src/lib/events.php';
 require_once __DIR__ . '/../src/lib/actions.php';
@@ -108,6 +109,7 @@ require_once __DIR__ . '/../src/routes/documents.php';
 require_once __DIR__ . '/../src/routes/actions.php';
 require_once __DIR__ . '/../src/routes/notifications.php';
 require_once __DIR__ . '/../src/routes/equipment.php';
+require_once __DIR__ . '/../src/routes/quartermaster.php';
 require_once __DIR__ . '/../src/routes/incidents.php';
 require_once __DIR__ . '/../src/routes/events.php';
 
