@@ -27,6 +27,8 @@ function gridStartFor(y, m) {
   return addDays(first, -dow);
 }
 
+const MAX_LANES = 3;
+
 async function render() {
   const box = document.getElementById('content');
   const gridStart = gridStartFor(view.y, view.m);
@@ -41,46 +43,50 @@ async function render() {
   head.innerHTML = CAN_MANAGE ? `<button class="btn" id="cal-new">New entry</button>` : '';
   if (CAN_MANAGE) document.getElementById('cal-new').addEventListener('click', () => openEntryForm(null, dkey(new Date(view.y, view.m, 1))));
 
-  // Map each item onto every day it spans within the grid.
-  const byDay = {};
-  for (const it of data.items) {
-    const s = parseDay(it.start) || gridStart;
-    const e = parseDay(it.end) || s;
-    for (let d = new Date(Math.max(s, gridStart)); d <= e && d <= gridEnd; d = addDays(d, 1)) {
-      (byDay[dkey(d)] ||= []).push(it);
-    }
-  }
-
+  // Assign each event a horizontal lane so multi-day bars line up across the row.
+  const layout = layoutEvents(data.items, gridStart, gridEnd);
   const todayKey = dkey(new Date());
+
   let cells = '';
   for (let i = 0; i < 42; i++) {
     const d = addDays(gridStart, i);
     const key = dkey(d);
     const inMonth = d.getMonth() === view.m;
-    const dayItems = byDay[key] || [];
-    const shown = dayItems.slice(0, 3);
-    const chips = shown.map(it => {
-      const attrs = `data-src="${it.source}" data-status="${escapeHtml(it.status || '')}"${it.overdue ? ' data-overdue="1"' : ''}${it.provisional ? ' data-provisional="1"' : ''}`;
-      return `<button class="cal-chip" ${attrs} data-key="${key}" data-src2="${it.source}" data-id="${it.id}" title="${escapeHtml(it.title)}">${escapeHtml(it.title)}</button>`;
-    }).join('');
-    const more = dayItems.length > 3 ? `<div class="cal-more" data-key="${key}">+${dayItems.length - 3} more</div>` : '';
+    const isMonday = i % 7 === 0;
+    const perLane = layout.cell[key] || {};
+    let lanes = '';
+    for (let lane = 0; lane < MAX_LANES; lane++) {
+      const ev = perLane[lane];
+      if (!ev) { lanes += `<div class="cal-seg-empty"></div>`; continue; }
+      const it = ev.it;
+      const isStart = dkey(ev.s) === key;
+      const isEnd = dkey(ev.e) === key;
+      const showTitle = isStart || isMonday;
+      const cls = `cal-seg${isStart ? ' is-start' : ''}${isEnd ? ' is-end' : ''}`;
+      const flag = (it.overdue || it.provisional) ? ' data-flag="1"' : '';
+      const label = showTitle ? `${it.allDay ? '' : '<span class="cal-seg-dot"></span>'}${escapeHtml(it.title)}` : '';
+      lanes += `<div class="${cls}" data-src="${it.source}" data-status="${escapeHtml(it.status || '')}"${flag} data-id="${it.id}" data-src2="${it.source}" title="${escapeHtml(it.title)}">${label}</div>`;
+    }
+    const hidden = (layout.perDayCount[key] || 0) - Object.keys(perLane).filter(l => +l < MAX_LANES).length;
+    const more = hidden > 0 ? `<div class="cal-more" data-day="${key}">+${hidden} more</div>` : '';
     cells += `<div class="cal-cell${inMonth ? '' : ' other-month'}${key === todayKey ? ' today' : ''}${CAN_MANAGE ? ' clickable-day' : ''}" data-day="${key}">
-      <span class="cal-daynum">${d.getDate()}</span>${chips}${more}</div>`;
+      <div class="cal-cell-head"><span class="cal-daynum">${d.getDate()}</span></div>
+      <div class="cal-lanes">${lanes}</div>${more}</div>`;
   }
 
   box.innerHTML = `
     <div class="card">
       <div class="cal-toolbar">
-        <button class="btn btn-secondary btn-sm" id="cal-prev">&larr;</button>
+        <button class="cal-nav-btn" id="cal-prev" aria-label="Previous month">&lsaquo;</button>
+        <button class="cal-nav-btn" id="cal-next" aria-label="Next month">&rsaquo;</button>
         <button class="btn btn-secondary btn-sm" id="cal-today">Today</button>
-        <button class="btn btn-secondary btn-sm" id="cal-next">&rarr;</button>
         <span class="cal-title">${MONTHS[view.m]} ${view.y}</span>
       </div>
       <div class="cal-legend">
         <span><span class="cal-dot" style="background:var(--purple)"></span> Planning entry</span>
         ${META.eventHubEnabled ? '<span><span class="cal-dot" style="background:var(--green)"></span> Event / camp</span>' : ''}
-        ${META.qmBookingEnabled && !isParent() ? '<span><span class="cal-dot" style="background:var(--yellow)"></span> QM booking</span>' : ''}
-        <span><span class="cal-dot" style="outline:2px solid #c62828;outline-offset:-2px;background:transparent"></span> Overdue / provisional</span>
+        ${META.qmBookingEnabled && !isParent() ? '<span><span class="cal-dot" style="background:#d99a00"></span> QM booking</span>' : ''}
+        <span><span class="cal-dot" style="box-shadow:inset 0 0 0 2px #c62828;background:transparent"></span> Overdue / provisional</span>
       </div>
       <div class="cal-scroll">
         <div class="cal-grid">
@@ -91,12 +97,62 @@ async function render() {
     </div>
     ${renderAgenda(data.items)}`;
 
-  document.getElementById('cal-prev').addEventListener('click', () => { shiftMonth(-1); });
-  document.getElementById('cal-next').addEventListener('click', () => { shiftMonth(1); });
+  document.getElementById('cal-prev').addEventListener('click', () => shiftMonth(-1));
+  document.getElementById('cal-next').addEventListener('click', () => shiftMonth(1));
   document.getElementById('cal-today').addEventListener('click', () => { const n = new Date(); view.y = n.getFullYear(); view.m = n.getMonth(); render(); });
-  document.querySelectorAll('.cal-chip').forEach(c => c.addEventListener('click', ev => { ev.stopPropagation(); openItemDetail(findItem(c.dataset.src2, c.dataset.id)); }));
+  document.querySelectorAll('.cal-seg').forEach(s => s.addEventListener('click', ev => { ev.stopPropagation(); openItemDetail(findItem(s.dataset.src2, s.dataset.id)); }));
+  document.querySelectorAll('.cal-more').forEach(m => m.addEventListener('click', ev => { ev.stopPropagation(); openDayList(m.dataset.day); }));
   if (CAN_MANAGE) document.querySelectorAll('.cal-cell.clickable-day').forEach(cell => cell.addEventListener('click', () => openEntryForm(null, cell.dataset.day)));
   document.querySelectorAll('.agenda-row').forEach(r => r.addEventListener('click', () => openItemDetail(findItem(r.dataset.src, r.dataset.id))));
+}
+
+// Greedy lane assignment: sort multi-day/earlier/longer first, then give each event
+// the lowest lane free on every day it spans, so its bar is a continuous row.
+function layoutEvents(items, gridStart, gridEnd) {
+  const evs = items.map((it, idx) => {
+    let s = parseDay(it.start) || new Date(gridStart);
+    let e = parseDay(it.end) || new Date(s);
+    if (s < gridStart) s = new Date(gridStart);
+    if (e > gridEnd) e = new Date(gridEnd);
+    return { key: `${it.source}:${it.id}:${idx}`, it, s, e, span: daysBetween(s, e) + 1 };
+  }).filter(x => x.e >= gridStart && x.s <= gridEnd);
+  evs.sort((a, b) => (b.span > 1) - (a.span > 1) || a.s - b.s || b.span - a.span);
+
+  const laneDays = {};   // lane -> Set(dayKey)
+  const cell = {};       // dayKey -> { lane -> ev }
+  const perDayCount = {};
+  for (const ev of evs) {
+    let lane = 0;
+    for (; ; lane++) {
+      laneDays[lane] ||= new Set();
+      let free = true;
+      for (let d = new Date(ev.s); d <= ev.e; d = addDays(d, 1)) { if (laneDays[lane].has(dkey(d))) { free = false; break; } }
+      if (free) break;
+    }
+    for (let d = new Date(ev.s); d <= ev.e; d = addDays(d, 1)) {
+      const k = dkey(d);
+      laneDays[lane].add(k);
+      (cell[k] ||= {})[lane] = ev;
+      perDayCount[k] = (perDayCount[k] || 0) + 1;
+    }
+  }
+  return { cell, perDayCount };
+}
+function daysBetween(a, b) { return Math.round((b - a) / 86400000); }
+
+// "+N more" opens a simple list of everything on that day.
+function openDayList(key) {
+  const items = (window.__items || []).filter(it => {
+    const s = parseDay(it.start), e = parseDay(it.end) || s; const d = parseDay(key);
+    return s && d >= s && d <= e;
+  });
+  const rows = items.map(it => `<button class="cal-daylist-row" data-src="${it.source}" data-id="${it.id}" style="display:flex;gap:.5rem;align-items:center;width:100%;text-align:left;border:none;background:none;padding:.4rem .2rem;border-bottom:1px solid var(--border);cursor:pointer">
+      <span class="cal-dot" style="background:${srcColor(it)}"></span>
+      <span style="flex:1">${escapeHtml(it.title)}</span>
+      <span class="muted" style="font-size:.75rem">${escapeHtml(it.typeLabel || '')}</span>
+    </button>`).join('');
+  openModal(formatDate(key), rows || '<p class="muted">Nothing on this day.</p>');
+  document.querySelectorAll('.cal-daylist-row').forEach(r => r.addEventListener('click', () => { closeModal(); openItemDetail(findItem(r.dataset.src, r.dataset.id)); }));
 }
 
 function isParent() { return ME && ME.role === 'parent'; }
