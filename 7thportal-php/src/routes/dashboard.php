@@ -49,10 +49,17 @@ $router->get('/api/leader/dashboard', function ($params) {
     // a server, and a per-section members+programme+events burst on every dashboard
     // load was the main trigger, so section detail is opened in OSM directly.
     $termsData = json_decode($user['osm_terms_json'] ?? '[]', true) ?: [];
-    $sections = array_map(function ($role) use ($termsData) {
-        $sectionId = $role['sectionid'];
+    // Cached OSM member counts (from the admin's deliberate sync) - read from the
+    // DB only, so the dashboard itself never calls OSM.
+    $osmCounts = [];
+    foreach (dbAll("SELECT osm_section_id, active_count, last_synced_at FROM osm_sections WHERE sync_status = 'ok' AND active_count IS NOT NULL") as $o) {
+        $osmCounts[$o['osm_section_id']] = $o;
+    }
+    $sections = array_map(function ($role) use ($termsData, $osmCounts) {
+        $sectionId = (string) $role['sectionid'];
         $meta = osmDataSectionMeta($sectionId);
-        $term = osmCurrentTermFromData($termsData, (string) $sectionId);
+        $term = osmCurrentTermFromData($termsData, $sectionId);
+        $count = $osmCounts[$sectionId] ?? null;
         return [
             'sectionId' => $sectionId,
             'sectionName' => $role['sectionname'],
@@ -62,6 +69,9 @@ $router->get('/api/leader/dashboard', function ($params) {
             'location' => $meta['location'] ?? null,
             // Current-term context from OSM, captured at login (no live OSM call).
             'currentTerm' => $term ? ['name' => $term['name'], 'startDate' => $term['startDate'], 'endDate' => $term['endDate']] : null,
+            // Cached OSM member count + when it was last synced (no live OSM call).
+            'memberCount' => $count ? (int) $count['active_count'] : null,
+            'memberCountSyncedAt' => $count['last_synced_at'] ?? null,
         ];
     }, $roles);
 
