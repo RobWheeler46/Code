@@ -289,9 +289,51 @@ function osmRawData(string $method, string $accessToken, string $pathname, array
         'status' => $status,
         'ok' => $status >= 200 && $status < 300 && is_array($items),
         'count' => is_array($items) ? count($items) : null,
+        'items' => is_array($items) ? $items : null,
         'error' => $err,
         'bodySnippet' => is_array($data) ? null : substr((string) $raw, 0, 140),
     ];
+}
+
+// Live member roster (names) for one section. Uses the SAME proven grid call as
+// the count, but keeps the member rows instead of just measuring them. Deliberately
+// fetch-only: nothing here is stored - the caller returns it straight to an
+// authorised leader and it is never written to the portal DB (named child data
+// stays in OSM, the source of truth). Best-effort name extraction across the
+// field-name variants OSM uses; the first row's column names are returned as
+// `columns` so the mapping can be confirmed against a real response.
+function osmGridMembers(string $accessToken, string $sectionId, ?string $termId): array
+{
+    if (!$termId) return ['ok' => false, 'error' => 'No current OSM term for this section.'];
+    $r = osmRawData('POST', $accessToken, '/ext/members/contact/grid/', ['action' => 'getMembers'], ['section_id' => $sectionId, 'term_id' => $termId]);
+    if (!$r['ok']) {
+        $blocked = $r['bodySnippet'] && stripos($r['bodySnippet'], 'blocked') !== false;
+        return ['ok' => false, 'blocked' => $blocked, 'error' => $blocked ? 'OSM temporarily blocked the request' : ($r['error'] ?? ('HTTP ' . $r['status']))];
+    }
+    $pick = function (array $row, array $keys) {
+        foreach ($keys as $k) {
+            if (isset($row[$k]) && trim((string) $row[$k]) !== '') return trim((string) $row[$k]);
+        }
+        return null;
+    };
+    $members = [];
+    foreach ($r['items'] as $row) {
+        if (!is_array($row)) continue;
+        $first = $pick($row, ['firstname', 'first_name', 'firstName']);
+        $last = $pick($row, ['lastname', 'last_name', 'lastName']);
+        $name = trim(($first ?? '') . ' ' . ($last ?? '')) ?: $pick($row, ['name', 'full_name', 'fullname']);
+        $members[] = [
+            'id' => $pick($row, ['scoutid', 'member_id', 'memberid', 'id']),
+            'name' => $name ?: 'Member',
+            'firstName' => $first,
+            'lastName' => $last,
+            'patrol' => $pick($row, ['patrol', 'patrolname', 'patrol_name']),
+        ];
+    }
+    usort($members, fn($a, $b) => strcmp(($a['lastName'] ?? '') . $a['name'], ($b['lastName'] ?? '') . $b['name']));
+    // Column names only (not values) - safe to surface for mapping confirmation.
+    $columns = (isset($r['items'][0]) && is_array($r['items'][0])) ? array_keys($r['items'][0]) : [];
+    return ['ok' => true, 'members' => $members, 'count' => count($members), 'columns' => $columns];
 }
 
 // Aggregate member count for a section. OSM serves the member list via POST to
@@ -408,6 +450,19 @@ const OSM_DEMO_MEMBERS = [
         ['id' => 'm203', 'firstName' => 'Freddie', 'lastName' => 'Brown', 'dob' => '2013-11-20', 'patrol' => 'Kestrel Patrol'],
     ],
 ];
+// Demo roster in the same shape osmGridMembers() returns, so the live-roster
+// feature is fully clickable in demo mode without a real OSM token.
+function osmDemoRosterForSection(string $sectionId): array
+{
+    return array_map(fn($m) => [
+        'id' => $m['id'],
+        'name' => trim($m['firstName'] . ' ' . $m['lastName']),
+        'firstName' => $m['firstName'],
+        'lastName' => $m['lastName'],
+        'patrol' => $m['patrol'] ?? null,
+    ], OSM_DEMO_MEMBERS[$sectionId] ?? []);
+}
+
 const OSM_DEMO_PROGRAMME = [
     's101' => [
         ['date' => '2026-07-14', 'title' => 'Pioneering skills', 'notes' => 'Bring old bedsheets for shelter building.'],

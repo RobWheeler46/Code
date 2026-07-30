@@ -33,3 +33,48 @@ $router->get('/api/sections/:sectionId/members', function ($params) {
         'members' => array_map(fn($l) => ['id' => $l['osm_member_id'], 'name' => $l['child_display_name']], $links),
     ]);
 });
+
+// Live section roster (member names) fetched fresh from OSM on demand. Deliberately
+// fetch-only: nothing is stored - named child data stays in OSM (the source of
+// truth). Only a leader of THIS section (or an admin) may call it; trustees and
+// parents cannot (sectionsCanViewMembers). Every access is audited (who viewed
+// which section, and how many members - never the names). Same throttled, blocked-
+// aware OSM handling as the count sync.
+$router->get('/api/sections/:sectionId/roster', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    $sid = (string) $params['sectionId'];
+    if (!sectionsCanViewMembers($user, $sid)) {
+        jsonResponse(['error' => 'You do not have permission to view this section.'], 403);
+    }
+    $me = dbGet('SELECT * FROM users WHERE id = ?', [$user['id']]);
+
+    try { $token = ensureFreshToken($me); }
+    catch (Throwable $e) { jsonResponse(['error' => 'Live member names need an OSM sign-in. Sign in with OSM, then try again.'], 400); }
+
+    // Demo mode: serve the deterministic demo roster so the flow is usable offline.
+    if ($token === 'demo') {
+        $members = osmDemoRosterForSection($sid);
+        logAudit(['userId' => $user['id'], 'action' => 'view_section_roster', 'entityType' => 'section', 'entityId' => $sid, 'ipAddress' => clientIp(), 'details' => ['source' => 'demo', 'count' => count($members)]]);
+        jsonResponse(['source' => 'demo', 'sectionId' => $sid, 'members' => $members, 'count' => count($members), 'fetchedAt' => gmdate('c')]);
+    }
+
+    // Live fetch using the leader's own token + the section's current term.
+    $terms = json_decode($me['osm_terms_json'] ?? '[]', true) ?: [];
+    $term = osmCurrentTermFromData($terms, $sid);
+    $tid = $term && ($term['termId'] ?? '') !== '' ? $term['termId'] : null;
+    $res = osmGridMembers($token, $sid, $tid);
+    if (empty($res['ok'])) {
+        $msg = !empty($res['blocked'])
+            ? 'OSM temporarily blocked the request. Wait a minute and try again - it rate-limits repeated reads.'
+            : ($res['error'] ?? 'Could not fetch members from OSM.');
+        jsonResponse(['error' => $msg, 'blocked' => !empty($res['blocked'])], 502);
+    }
+    // Audit the ACCESS, not the content - names are never logged or stored.
+    logAudit(['userId' => $user['id'], 'action' => 'view_section_roster', 'entityType' => 'section', 'entityId' => $sid, 'ipAddress' => clientIp(), 'details' => ['source' => 'osm', 'count' => $res['count']]]);
+    $out = ['source' => 'osm', 'sectionId' => $sid, 'members' => $res['members'], 'count' => $res['count'], 'fetchedAt' => gmdate('c')];
+    // Admin-only: first row's column names, so the name-field mapping can be
+    // confirmed against a real OSM response (no member values, just field names).
+    if ($user['portal_role'] === 'admin') $out['columns'] = $res['columns'];
+    jsonResponse($out);
+});
