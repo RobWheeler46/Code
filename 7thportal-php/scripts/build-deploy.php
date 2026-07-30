@@ -65,6 +65,26 @@ $buildId = date('Y-m-d H:i') . ($gitHash !== '' ? " ($gitHash)" : '');
 file_put_contents("$outDir/webroot/build.txt", $buildId);
 
 echo "Build id: $buildId  <- shown on the home page footer; check it matches after deploying\n\n";
+
+// Cache-busting: append ?v=<version> to every local css/js reference in the
+// deployed HTML. Without this, browsers keep serving the previously-cached
+// style.css/*.js after a redeploy and changes appear not to have shipped. The
+// version changes every build, so each deploy forces a fresh fetch. Only the
+// dist copies are rewritten - the source HTML stays clean.
+$assetVer = date('YmdHi') . ($gitHash !== '' ? "-$gitHash" : '');
+$rewritten = 0;
+foreach (glob("$outDir/webroot/*.html") as $hf) {
+    $html = file_get_contents($hf);
+    $new = preg_replace_callback(
+        '~\b(href|src)="((?:css|js)/[^"?]+\.(?:css|js))"~i',
+        fn($m) => $m[1] . '="' . $m[2] . '?v=' . $assetVer . '"',
+        $html
+    );
+    if ($new !== $html) { file_put_contents($hf, $new); $rewritten++; }
+}
+echo "Cache-busting: stamped ?v=$assetVer onto css/js links in $rewritten HTML file(s).\n";
+echo "  -> after deploying, a normal refresh picks up the new assets. If the PAGE\n";
+echo "     itself looks stale, hard-refresh once (Ctrl+F5 / Cmd+Shift+R).\n\n";
 echo "Included: " . implode(', ', $include) . " (plus an empty data/ placeholder)\n\n";
 echo "Not included (by design):\n";
 echo "  - .env                             -> create fresh on the server with real secrets; never upload your local one\n";
