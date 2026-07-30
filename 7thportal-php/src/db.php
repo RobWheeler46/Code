@@ -564,6 +564,36 @@ CREATE TABLE IF NOT EXISTS qm_booking_items (
 CREATE INDEX IF NOT EXISTS idx_qm_booking_items_booking ON qm_booking_items(booking_id);
 CREATE INDEX IF NOT EXISTS idx_qm_booking_items_asset ON qm_booking_items(equipment_asset_id);
 
+-- Internal calendar (FRD FR-CAL / backlog LATER-007). A local planning layer that
+-- links modules together - it does NOT replace OSM as the source of truth for OSM
+-- programme/event data. The calendar view aggregates these local entries with
+-- Event & Camp Hub records and QM booking resource blocks (read live from those
+-- tables, not copied). Entries are leader-only until deliberately published to
+-- parents with a parent-safe title/description. Ships off by default.
+CREATE TABLE IF NOT EXISTS calendar_entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  entry_type TEXT NOT NULL DEFAULT 'placeholder' CHECK(entry_type IN ('placeholder','activity','deadline','note')),
+  scope TEXT NOT NULL DEFAULT 'group' CHECK(scope IN ('group','section')),
+  osm_section_id TEXT,
+  section_name TEXT,
+  start_at TEXT NOT NULL,
+  end_at TEXT,
+  all_day INTEGER NOT NULL DEFAULT 1,
+  location TEXT,
+  owner_name TEXT,
+  notes TEXT,
+  parent_safe_title TEXT,
+  parent_safe_description TEXT,
+  visibility TEXT NOT NULL DEFAULT 'leaders' CHECK(visibility IN ('leaders','parents')),
+  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','published','cancelled')),
+  converted_event_hub_id INTEGER REFERENCES event_hubs(id) ON DELETE SET NULL,
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_calendar_entries_range ON calendar_entries(start_at, end_at);
+
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(portal_role, account_status);
 CREATE INDEX IF NOT EXISTS idx_parent_links_parent ON parent_child_links(parent_user_id);
 CREATE INDEX IF NOT EXISTS idx_notices_status ON notices(status, audience, start_date);

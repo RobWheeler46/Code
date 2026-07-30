@@ -523,6 +523,15 @@ async function renderSettings() {
         <span id="eventhub-settings-saved"></span>
       </form>
     </div>
+    <div class="card">
+      <h2>Internal calendar</h2>
+      <p class="muted">A single planning calendar for leaders and QMs that overlays Event &amp; Camp Hub dates and Quartermaster booking resource blocks with local planning placeholders. Entries stay leader-only until published parent-safe. OSM stays the source of truth for OSM programme data. Ships off by default.</p>
+      <form id="calendar-settings-form">
+        <div class="field"><label style="font-weight:400;"><input type="checkbox" id="cal-enabled" ${settings.calendarEnabled ? 'checked' : ''}> Enable the internal calendar</label></div>
+        <button class="btn btn-primary" type="submit">Save</button>
+        <span id="calendar-settings-saved"></span>
+      </form>
+    </div>
   `;
   document.getElementById('gallery-settings-form').addEventListener('submit', async e => {
     e.preventDefault();
@@ -567,6 +576,11 @@ async function renderSettings() {
     e.preventDefault();
     await Api.put('/api/admin/settings', { eventHubEnabled: document.getElementById('ev-enabled').checked });
     document.getElementById('eventhub-settings-saved').textContent = 'Saved.';
+  });
+  document.getElementById('calendar-settings-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    await Api.put('/api/admin/settings', { calendarEnabled: document.getElementById('cal-enabled').checked });
+    document.getElementById('calendar-settings-saved').textContent = 'Saved.';
   });
   document.getElementById('settings-form').addEventListener('submit', async e => {
     e.preventDefault();

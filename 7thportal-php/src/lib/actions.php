@@ -69,6 +69,8 @@ function buildActionCentre(array $user): array
         if (function_exists('eventHubActionItems')) $items = array_merge($items, eventHubActionItems($user));
         // QM bookings to review + overdue returns (FR-QM-015/016).
         if (function_exists('qmActionItems')) $items = array_merge($items, qmActionItems($user));
+        // Upcoming calendar placeholders to firm up (FR-CAL-013).
+        if (function_exists('calendarActionItems')) $items = array_merge($items, calendarActionItems($user));
     }
 
     if ($isAdmin) {

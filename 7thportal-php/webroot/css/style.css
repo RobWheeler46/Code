@@ -240,5 +240,28 @@ textarea { min-height: 5rem; resize: vertical; }
 .kv-table td:first-child { width: 34%; white-space: nowrap; }
 .kv-table tr:last-child td { border-bottom: none; }
 
-/* Deploy build stamp (home page footer) */
+/* Internal calendar (month grid) */
+.cal-toolbar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
+.cal-toolbar .cal-title { font-size: 1.15rem; font-weight: 600; min-width: 11rem; }
+.cal-legend { display: flex; gap: 0.9rem; flex-wrap: wrap; margin: 0.2rem 0 0.9rem; font-size: 0.78rem; color: var(--muted); }
+.cal-legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.cal-dot { width: 0.7rem; height: 0.7rem; border-radius: 3px; display: inline-block; }
+.cal-scroll { overflow-x: auto; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; min-width: 640px; }
+.cal-dow { background: var(--card); padding: 0.4rem 0.5rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); text-align: left; }
+.cal-cell { background: var(--card); min-height: 92px; padding: 0.3rem 0.35rem; vertical-align: top; }
+.cal-cell.other-month { background: color-mix(in srgb, var(--card) 92%, var(--muted)); }
+.cal-cell.today .cal-daynum { background: var(--purple); color: #fff; border-radius: 50%; width: 1.5rem; height: 1.5rem; display: inline-flex; align-items: center; justify-content: center; }
+.cal-daynum { font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.cal-cell.clickable-day { cursor: pointer; }
+.cal-chip { display: block; width: 100%; text-align: left; border: none; border-radius: 5px; padding: 0.12rem 0.35rem; margin-top: 0.2rem; font-size: 0.73rem; line-height: 1.25; color: #fff; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-chip[data-src="entry"] { background: var(--purple); }
+.cal-chip[data-src="event"] { background: var(--green); }
+.cal-chip[data-src="qm"] { background: var(--yellow); color: #3a2c00; }
+.cal-chip[data-overdue="1"], .cal-chip[data-provisional="1"] { outline: 2px solid #c62828; outline-offset: -2px; }
+.cal-chip[data-status="draft"] { opacity: 0.72; }
+.cal-more { font-size: 0.7rem; color: var(--muted); margin-top: 0.2rem; }
+@media (max-width: 640px) { .cal-cell { min-height: 70px; } }
+
+/* Key/value detail table (Quartermaster booking, etc.) */
 .build-tag { display: inline-block; margin-left: 0.4rem; padding: 0.05rem 0.4rem; border-radius: 4px; background: var(--border); color: var(--muted); font-size: 0.72rem; font-variant-numeric: tabular-nums; }
