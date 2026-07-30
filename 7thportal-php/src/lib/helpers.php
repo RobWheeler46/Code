@@ -14,6 +14,19 @@ const LEADER_ROLES = ['section_leader', 'assistant_leader', 'group_leadership', 
 
 function roleLabel(string $role): string { return ROLE_LABELS[$role] ?? $role; }
 function isLeaderRole(string $role): bool { return in_array($role, LEADER_ROLES, true); }
+
+// Dual-role support (FRD "Dual-role User Behaviour"): a person may be both a parent
+// and a section leader. Capabilities are DERIVED, not a stored role - "leader" from
+// the portal_role, "parent" from having linked children - so a leader who also has
+// a child in the group can switch into a Parent View that shows ONLY their own
+// children, with the two views' permissions never merged.
+function userHasLeaderAccess(array $user): bool { return isLeaderRole($user['portal_role']); }
+function userHasParentAccess(array $user): bool
+{
+    // A parent account with no children yet still needs the no-linked-child journey.
+    if (($user['portal_role'] ?? '') === 'parent') return true;
+    return (bool) dbGet('SELECT 1 FROM parent_child_links WHERE parent_user_id = ? LIMIT 1', [(int) $user['id']]);
+}
 function isAdminRole(string $role): bool { return $role === 'admin'; }
 function canSeeSensitiveChildData(string $role): bool { return in_array($role, ['section_leader', 'admin'], true); }
 

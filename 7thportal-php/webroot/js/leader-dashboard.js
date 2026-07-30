@@ -1,7 +1,8 @@
 (async () => {
-  const me = await requireUserNav();
+  const me = await requireUserNav('leader');
   if (!me) return;
-  if (me.role === 'parent') {
+  // No leader capability -> this is a parent-only account; send them to their view.
+  if (!(me.capabilities && me.capabilities.leader)) {
     location.href = 'parent-dashboard.html';
     return;
   }

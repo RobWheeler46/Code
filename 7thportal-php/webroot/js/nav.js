@@ -29,7 +29,9 @@ async function renderDemoBanner(cfg) {
 // the wireframe pack's Messages/Help/Reports/Approvals nav items are left out
 // deliberately (see project README/memory: layout redesign only this pass).
 function sidebarLinksForRole(me, cfg) {
-  if (me.role === 'parent') {
+  // Dual-role users see the nav for their ACTIVE view, not their stored role.
+  const view = me.activeView || (me.role === 'parent' ? 'parent' : 'leader');
+  if (view === 'parent') {
     const links = [{ href: 'parent-dashboard.html', label: 'Dashboard' }];
     links.push({ href: 'action-centre.html', label: 'Action Centre' });
     if (cfg && cfg.eventHubEnabled) links.push({ href: 'events.html', label: 'Events & camps' });
@@ -67,12 +69,33 @@ function renderSidebar(me, cfg) {
   const links = sidebarLinksForRole(me, cfg)
     .map(l => `<a href="${l.href}"${currentPage === l.href ? ' class="active"' : ''}>${escapeHtml(l.label)}</a>`)
     .join('');
-  target.innerHTML = `<div class="sidebar-role">${escapeHtml(me.roleLabel)}</div><nav>${links}</nav>`;
+  const roleLine = me.dualRole
+    ? `${me.activeView === 'parent' ? 'Parent view' : 'Leader view'}`
+    : me.roleLabel;
+  target.innerHTML = `<div class="sidebar-role">${escapeHtml(roleLine)}</div><nav>${links}</nav>`;
+}
+
+// A dual-role user's Parent/Leader toggle. Switching stores the view server-side
+// (audited) then lands on that view's dashboard.
+function viewSwitcherHtml(me) {
+  if (!me.dualRole) return '';
+  const btn = (view, label) => `<button class="view-switch${me.activeView === view ? ' active' : ''}" data-view="${view}">${label}</button>`;
+  return `<div class="view-switcher" title="You are both a parent and a leader">${btn('parent', 'Parent')}${btn('leader', 'Leader')}</div>`;
+}
+function wireViewSwitcher() {
+  document.querySelectorAll('.view-switch').forEach(b => b.addEventListener('click', async () => {
+    if (b.classList.contains('active')) return;
+    const view = b.dataset.view;
+    try { await Api.post('/api/context', { view }); } catch (e) { alert(e.message); return; }
+    location.href = view === 'parent' ? 'parent-dashboard.html' : 'leader-dashboard.html';
+  }));
 }
 
 // Loads the current user, redirects to login if not authenticated, and
 // renders the top nav + role-specific left sidebar. Returns the user object.
-async function requireUserNav() {
+// pageView ('parent'|'leader') lets a page (the two dashboards) declare which view
+// it belongs to, so a dual-role user's context follows the page they open.
+async function requireUserNav(pageView) {
   let me;
   let cfg = null;
   try {
@@ -81,18 +104,25 @@ async function requireUserNav() {
     location.href = 'login.html';
     return null;
   }
+  // Keep the active view in step with the page a dual-role user landed on.
+  if (pageView && me.capabilities && me.capabilities[pageView] && me.activeView !== pageView) {
+    try { await Api.post('/api/context', { view: pageView }); me.activeView = pageView; } catch (e) { /* non-fatal */ }
+  }
   try { cfg = await Api.get('/api/config'); } catch (e) { /* best effort */ }
   renderDemoBanner(cfg);
+  const activeView = me.activeView || (me.role === 'parent' ? 'parent' : 'leader');
+  const pillLabel = me.dualRole ? (activeView === 'parent' ? 'Parent view' : 'Leader view') : me.roleLabel;
   const target = document.getElementById('app-nav');
   if (target) {
     target.innerHTML = `
       <div class="brand-block">
-        <a class="brand" href="${me.role === 'parent' ? 'parent-dashboard.html' : 'leader-dashboard.html'}">7thPortal</a>
+        <a class="brand" href="${activeView === 'parent' ? 'parent-dashboard.html' : 'leader-dashboard.html'}">7thPortal</a>
         <span class="tagline">Skills for Life | 7th Swindon</span>
       </div>
       <div class="nav-right">
+        ${viewSwitcherHtml(me)}
         <span class="user-info">${escapeHtml(me.firstName)} ${escapeHtml(me.lastName)}</span>
-        <span class="role-pill">${escapeHtml(me.roleLabel)}</span>
+        <span class="role-pill">${escapeHtml(pillLabel)}</span>
         <a href="#" id="logout-link" class="logout-link">Log out</a>
       </div>
     `;
@@ -101,6 +131,7 @@ async function requireUserNav() {
       await Api.post('/api/auth/logout');
       location.href = 'login.html';
     });
+    wireViewSwitcher();
   }
   renderSidebar(me, cfg);
   return me;

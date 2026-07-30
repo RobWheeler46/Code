@@ -145,7 +145,7 @@ $router->get('/auth/osm/callback', function ($params) {
 // the app with fake data before OSM credentials are configured.
 $router->get('/auth/demo/login', function ($params) {
     if (!osmDemoModeAllowed()) { http_response_code(403); echo 'Demo mode is disabled on this server.'; exit; }
-    $as = in_array(queryParam('as'), ['parent', 'leader', 'admin', 'treasurer', 'chair', 'trustee'], true) ? queryParam('as') : 'parent';
+    $as = in_array(queryParam('as'), ['parent', 'leader', 'leaderparent', 'admin', 'treasurer', 'chair', 'trustee'], true) ? queryParam('as') : 'parent';
 
     if ($as === 'parent') {
         $user = dbGet("SELECT * FROM users WHERE email = 'demo.parent@example.com'");
@@ -181,9 +181,15 @@ $router->get('/auth/demo/login', function ($params) {
         if ($as === 'leader') {
             try { gallerySeedDemoAlbumIfMissing((int) $user['id']); } catch (Throwable $e) { /* best effort, matches Node's .catch(() => {}) */ }
         }
+        // Dual-role demo persona: a section leader (leads Cubs) who is ALSO a parent
+        // of a child in another section (Scouts) - exercises Parent View <-> Leader View.
+        if ($as === 'leaderparent') {
+            dbRun("INSERT OR IGNORE INTO parent_child_links (parent_user_id, osm_member_id, osm_section_id, osm_section_name, osm_section_type, child_display_name) VALUES (?, 'm203', 's102', 'Scouts', 'scouts', 'Freddie Brown')", [$user['id']]);
+        }
     }
 
     dbRun("UPDATE users SET last_login_at = datetime('now') WHERE id = ?", [$user['id']]);
+    unset($_SESSION['view']); // fresh login starts in the default view for the role
     $_SESSION['userId'] = $user['id'];
     logAudit(['userId' => $user['id'], 'action' => 'login', 'ipAddress' => clientIp(), 'details' => ['method' => 'demo', 'as' => $as]]);
     header('Location: ' . (isLeaderRole($user['portal_role']) ? '/leader-dashboard.html' : '/parent-dashboard.html'));
@@ -263,8 +269,27 @@ $router->post('/api/auth/logout', function ($params) {
 
 $router->get('/api/me', function ($params) {
     $user = requireAuth();
+    $caps = ['parent' => userHasParentAccess($user), 'leader' => userHasLeaderAccess($user)];
     jsonResponse(array_merge(publicUser($user), [
         'osmConnected' => !empty($user['osm_access_token']),
         'isServiceAccount' => (bool) $user['is_osm_service_account'],
+        'capabilities' => $caps,
+        'dualRole' => $caps['parent'] && $caps['leader'],
+        'activeView' => userActiveView($user),
     ]));
+});
+
+// Switch the active view (Parent View <-> Leader View) for a dual-role user. Only a
+// view the user actually has is accepted; the choice is audited so leader-context
+// and parent-context access stay distinguishable (FRD dual-role audit requirement).
+$router->post('/api/context', function ($params) {
+    $user = requireAuth();
+    $view = requestBody()['view'] ?? '';
+    $caps = ['parent' => userHasParentAccess($user), 'leader' => userHasLeaderAccess($user)];
+    if (!in_array($view, ['parent', 'leader'], true) || empty($caps[$view])) {
+        jsonResponse(['error' => 'You do not have access to that view.'], 400);
+    }
+    $_SESSION['view'] = $view;
+    logAudit(['userId' => $user['id'], 'action' => 'switch_view', 'ipAddress' => clientIp(), 'details' => ['view' => $view]]);
+    jsonResponse(['ok' => true, 'activeView' => $view]);
 });
