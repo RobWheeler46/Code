@@ -39,6 +39,7 @@ function renderChildCards(children, clickable) {
         <div>
           <strong>${escapeHtml(c.name)}</strong><br>
           <span class="muted">${escapeHtml(c.status || c.sectionName || '')}</span>
+          ${c.sectionMemberCount !== undefined && c.sectionMemberCount !== null ? `<br><span class="muted">${c.sectionMemberCount} in section${c.sectionMemberCountSyncedAt ? ` &middot; OSM ${formatDate(c.sectionMemberCountSyncedAt)}` : ''}</span>` : ''}
         </div>
       </div>`;
     return clickable
