@@ -1,13 +1,15 @@
 // Internal calendar UI (FRD FR-CAL). Month grid aggregating local entries, Event &
 // Camp Hub records and QM booking resource blocks. No native dialogs - inline modals.
 let ME = null, CAN_MANAGE = false, META = {};
-const view = { y: 0, m: 0 }; // m is 0-indexed month
+const view = { y: 0, m: 0, mode: 'month', filter: 'all' }; // m is 0-indexed month
 
 (async () => {
   ME = await requireUserNav();
   if (!ME) return;
   const now = new Date();
   view.y = now.getFullYear(); view.m = now.getMonth();
+  // Phones default to the agenda (the month grid is cramped); desktop to the grid.
+  view.mode = window.innerWidth < 700 ? 'agenda' : 'month';
   // Deep link to a specific entry opens its detail after the month renders.
   await render();
   const entryId = new URLSearchParams(location.search).get('entry');
@@ -43,10 +45,51 @@ async function render() {
   head.innerHTML = CAN_MANAGE ? `<button class="btn" id="cal-new">New entry</button>` : '';
   if (CAN_MANAGE) document.getElementById('cal-new').addEventListener('click', () => openEntryForm(null, dkey(new Date(view.y, view.m, 1))));
 
-  // Assign each event a horizontal lane so multi-day bars line up across the row.
-  const layout = layoutEvents(data.items, gridStart, gridEnd);
-  const todayKey = dkey(new Date());
+  const toolbar = `
+    <div class="cal-toolbar">
+      <button class="cal-nav-btn" id="cal-prev" aria-label="Previous month">&lsaquo;</button>
+      <button class="cal-nav-btn" id="cal-next" aria-label="Next month">&rsaquo;</button>
+      <button class="btn btn-secondary btn-sm" id="cal-today">Today</button>
+      <span class="cal-title">${MONTHS[view.m]} ${view.y}</span>
+      <span class="cal-viewtoggle">
+        <button class="cal-vt${view.mode === 'month' ? ' active' : ''}" data-mode="month">Month</button>
+        <button class="cal-vt${view.mode === 'agenda' ? ' active' : ''}" data-mode="agenda">Agenda</button>
+      </span>
+    </div>`;
+  const legend = `
+    <div class="cal-legend">
+      <span><span class="cal-dot" style="background:var(--purple)"></span> Planning entry</span>
+      ${META.eventHubEnabled ? '<span><span class="cal-dot" style="background:var(--green)"></span> Event / camp</span>' : ''}
+      ${META.qmBookingEnabled && !isParent() ? '<span><span class="cal-dot" style="background:#d99a00"></span> QM booking</span>' : ''}
+      <span><span class="cal-dot" style="box-shadow:inset 0 0 0 2px #c62828;background:transparent"></span> Overdue / provisional</span>
+    </div>`;
 
+  const body = view.mode === 'agenda' ? buildAgenda(data.items) : buildMonthGrid(data.items, gridStart, gridEnd);
+
+  box.innerHTML = `
+    <div class="card">${toolbar}${legend}${body}</div>
+    ${view.mode === 'month' ? renderAgenda(data.items) : ''}`;
+
+  document.getElementById('cal-prev').addEventListener('click', () => shiftMonth(-1));
+  document.getElementById('cal-next').addEventListener('click', () => shiftMonth(1));
+  document.getElementById('cal-today').addEventListener('click', () => { const n = new Date(); view.y = n.getFullYear(); view.m = n.getMonth(); render(); });
+  document.querySelectorAll('.cal-vt').forEach(b => b.addEventListener('click', () => { view.mode = b.dataset.mode; render(); }));
+
+  if (view.mode === 'agenda') {
+    document.querySelectorAll('.cal-filter').forEach(b => b.addEventListener('click', () => { view.filter = b.dataset.filter; render(); }));
+    document.querySelectorAll('.cal-agenda-row').forEach(r => r.addEventListener('click', () => openItemDetail(findItem(r.dataset.src, r.dataset.id))));
+  } else {
+    document.querySelectorAll('.cal-seg').forEach(s => s.addEventListener('click', ev => { ev.stopPropagation(); openItemDetail(findItem(s.dataset.src2, s.dataset.id)); }));
+    document.querySelectorAll('.cal-more').forEach(m => m.addEventListener('click', ev => { ev.stopPropagation(); openDayList(m.dataset.day); }));
+    if (CAN_MANAGE) document.querySelectorAll('.cal-cell.clickable-day').forEach(cell => cell.addEventListener('click', () => openEntryForm(null, cell.dataset.day)));
+    document.querySelectorAll('.agenda-row').forEach(r => r.addEventListener('click', () => openItemDetail(findItem(r.dataset.src, r.dataset.id))));
+  }
+}
+
+// The month grid body (unchanged layout, extracted so render() can pick month vs agenda).
+function buildMonthGrid(items, gridStart, gridEnd) {
+  const layout = layoutEvents(items, gridStart, gridEnd);
+  const todayKey = dkey(new Date());
   let cells = '';
   for (let i = 0; i < 42; i++) {
     const d = addDays(gridStart, i);
@@ -73,37 +116,45 @@ async function render() {
       <div class="cal-cell-head"><span class="cal-daynum">${d.getDate()}</span></div>
       <div class="cal-lanes">${lanes}</div>${more}</div>`;
   }
+  return `<div class="cal-scroll"><div class="cal-grid">${DOW.map(d => `<div class="cal-dow">${d}</div>`).join('')}${cells}</div></div>`;
+}
 
-  box.innerHTML = `
-    <div class="card">
-      <div class="cal-toolbar">
-        <button class="cal-nav-btn" id="cal-prev" aria-label="Previous month">&lsaquo;</button>
-        <button class="cal-nav-btn" id="cal-next" aria-label="Next month">&rsaquo;</button>
-        <button class="btn btn-secondary btn-sm" id="cal-today">Today</button>
-        <span class="cal-title">${MONTHS[view.m]} ${view.y}</span>
-      </div>
-      <div class="cal-legend">
-        <span><span class="cal-dot" style="background:var(--purple)"></span> Planning entry</span>
-        ${META.eventHubEnabled ? '<span><span class="cal-dot" style="background:var(--green)"></span> Event / camp</span>' : ''}
-        ${META.qmBookingEnabled && !isParent() ? '<span><span class="cal-dot" style="background:#d99a00"></span> QM booking</span>' : ''}
-        <span><span class="cal-dot" style="box-shadow:inset 0 0 0 2px #c62828;background:transparent"></span> Overdue / provisional</span>
-      </div>
-      <div class="cal-scroll">
-        <div class="cal-grid">
-          ${DOW.map(d => `<div class="cal-dow">${d}</div>`).join('')}
-          ${cells}
-        </div>
-      </div>
-    </div>
-    ${renderAgenda(data.items)}`;
+// The agenda body: this month's items grouped by day, filterable by source.
+function buildAgenda(items) {
+  const monthStart = new Date(view.y, view.m, 1);
+  const monthEnd = new Date(view.y, view.m + 1, 0);
+  const chips = ['all', 'entry', META.eventHubEnabled ? 'event' : null, (META.qmBookingEnabled && !isParent()) ? 'qm' : null].filter(Boolean);
+  const chipLabel = { all: 'All', entry: 'Planning', event: 'Events', qm: 'Bookings' };
+  const filtersHtml = `<div class="cal-filters">${chips.map(f => `<button class="cal-filter${view.filter === f ? ' active' : ''}" data-filter="${f}">${chipLabel[f]}</button>`).join('')}</div>`;
 
-  document.getElementById('cal-prev').addEventListener('click', () => shiftMonth(-1));
-  document.getElementById('cal-next').addEventListener('click', () => shiftMonth(1));
-  document.getElementById('cal-today').addEventListener('click', () => { const n = new Date(); view.y = n.getFullYear(); view.m = n.getMonth(); render(); });
-  document.querySelectorAll('.cal-seg').forEach(s => s.addEventListener('click', ev => { ev.stopPropagation(); openItemDetail(findItem(s.dataset.src2, s.dataset.id)); }));
-  document.querySelectorAll('.cal-more').forEach(m => m.addEventListener('click', ev => { ev.stopPropagation(); openDayList(m.dataset.day); }));
-  if (CAN_MANAGE) document.querySelectorAll('.cal-cell.clickable-day').forEach(cell => cell.addEventListener('click', () => openEntryForm(null, cell.dataset.day)));
-  document.querySelectorAll('.agenda-row').forEach(r => r.addEventListener('click', () => openItemDetail(findItem(r.dataset.src, r.dataset.id))));
+  const shown = items.filter(it => {
+    if (view.filter !== 'all' && it.source !== view.filter) return false;
+    const s = parseDay(it.start) || monthStart, e = parseDay(it.end) || s;
+    return e >= monthStart && s <= monthEnd; // intersects the visible month
+  });
+  const byDay = {};
+  for (const it of shown) {
+    let s = parseDay(it.start) || monthStart;
+    if (s < monthStart) s = new Date(monthStart); // a run that began earlier lists on the 1st
+    (byDay[dkey(s)] ||= []).push(it);
+  }
+  const dayKeys = Object.keys(byDay).sort();
+  if (!dayKeys.length) return filtersHtml + '<p class="muted" style="margin-top:1rem">Nothing scheduled this month.</p>';
+
+  const todayKey = dkey(new Date());
+  const list = dayKeys.map(k => {
+    const label = parseDay(k).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+    const rows = byDay[k].sort((a, b) => String(a.start).localeCompare(String(b.start))).map(it => `
+      <button class="cal-agenda-row" data-src="${it.source}" data-id="${it.id}">
+        <span class="cal-agenda-bar" style="background:${srcColor(it)}"></span>
+        <span class="cal-agenda-main">
+          <span class="cal-agenda-title">${escapeHtml(it.title)}${it.overdue ? ' <span class="badge" data-status="deleted">Overdue</span>' : (it.provisional ? ' <span class="badge" data-status="suspended">Provisional</span>' : '')}</span>
+          <span class="cal-agenda-meta muted">${escapeHtml(fmtRange(it))}${it.typeLabel ? ' &middot; ' + escapeHtml(it.typeLabel) : ''}${it.sectionName ? ' &middot; ' + escapeHtml(it.sectionName) : ''}</span>
+        </span>
+      </button>`).join('');
+    return `<div class="cal-agenda-day${k === todayKey ? ' today' : ''}"><div class="cal-agenda-date">${label}${k === todayKey ? ' &middot; Today' : ''}</div>${rows}</div>`;
+  }).join('');
+  return filtersHtml + `<div class="cal-agenda">${list}</div>`;
 }
 
 // Greedy lane assignment: sort multi-day/earlier/longer first, then give each event

@@ -347,5 +347,22 @@ textarea { min-height: 5rem; resize: vertical; }
 .cal-more:hover { text-decoration: underline; }
 @media (max-width: 640px) { .cal-cell { min-height: 84px; } .cal-seg, .cal-seg-empty { height: 1rem; } }
 
+/* Calendar Month/Agenda toggle + agenda list */
+.cal-viewtoggle { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; margin-left: auto; }
+.cal-vt { border: none; background: transparent; color: var(--muted); font: inherit; font-size: 0.8rem; padding: 0.25rem 0.85rem; cursor: pointer; }
+.cal-vt.active { background: var(--purple); color: #fff; }
+.cal-filters { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0.2rem 0 0.8rem; }
+.cal-filter { border: 1px solid var(--border); background: var(--card); color: var(--text); border-radius: 999px; padding: 0.3rem 0.85rem; font: inherit; font-size: 0.8rem; cursor: pointer; }
+.cal-filter.active { background: var(--purple); color: #fff; border-color: var(--purple); }
+.cal-agenda-day { margin-bottom: 1rem; }
+.cal-agenda-date { font-weight: 700; font-size: 0.85rem; color: var(--muted); padding: 0.3rem 0; border-bottom: 1px solid var(--border); margin-bottom: 0.3rem; }
+.cal-agenda-day.today .cal-agenda-date { color: var(--purple); }
+.cal-agenda-row { display: flex; gap: 0.6rem; align-items: stretch; width: 100%; text-align: left; background: none; border: none; border-radius: var(--radius); padding: 0.55rem 0.35rem; cursor: pointer; }
+.cal-agenda-row:hover { background: var(--bg); }
+.cal-agenda-bar { flex: 0 0 4px; border-radius: 3px; }
+.cal-agenda-main { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.cal-agenda-title { font-weight: 600; font-size: 0.95rem; }
+.cal-agenda-meta { font-size: 0.8rem; }
+
 /* Key/value detail table (Quartermaster booking, etc.) */
 .build-tag { display: inline-block; margin-left: 0.4rem; padding: 0.05rem 0.4rem; border-radius: 4px; background: var(--border); color: var(--muted); font-size: 0.72rem; font-variant-numeric: tabular-nums; }
