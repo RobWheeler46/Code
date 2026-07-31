@@ -63,13 +63,23 @@ $router->get('/api/admin/osm/sections', function ($params) {
 $router->get('/api/admin/osm/sections/:sectionId/members', function ($params) {
     $admin = requireAuth();
     requireAdmin($admin);
+    // Use the proven roster path (demo fixture, or the live POST-grid call that OSM
+    // actually serves) via the service account - the old osmDataSectionMembers hit a
+    // blocked/demo-blind read, so the member picker came back empty.
     $service = getServiceAccount() ?? $admin;
-    $result = osmDataReadTokenFor(array_merge($service, ['portal_role' => 'section_leader']));
-    if ($result['unavailable']) jsonResponse(['available' => false, 'reason' => $result['reason'], 'members' => []]);
-    $members = osmDataSectionMembers($result['token'], $params['sectionId']);
+    $roster = osmSectionRoster($service, $params['sectionId']);
+    if (empty($roster['ok'])) {
+        jsonResponse(['available' => false, 'reason' => $roster['error'] ?? 'OSM members are unavailable right now.', 'blocked' => !empty($roster['blocked']), 'members' => []]);
+    }
+    $members = array_map(fn($m) => [
+        'id' => $m['id'],
+        'firstName' => $m['firstName'] ?? $m['name'],
+        'lastName' => $m['lastName'] ?? '',
+        'name' => $m['name'],
+    ], $roster['members']);
     // Named child/member drill-down is audited (FRD 6.1 / FR-OSM-CAP-011).
-    logAudit(['userId' => $admin['id'], 'action' => 'admin_section_member_drilldown', 'entityType' => 'osm_section', 'entityId' => $params['sectionId'], 'ipAddress' => clientIp(), 'details' => ['count' => count($members['members'] ?? [])]]);
-    jsonResponse($members);
+    logAudit(['userId' => $admin['id'], 'action' => 'admin_section_member_drilldown', 'entityType' => 'osm_section', 'entityId' => $params['sectionId'], 'ipAddress' => clientIp(), 'details' => ['count' => count($members), 'source' => $roster['source']]]);
+    jsonResponse(['available' => true, 'members' => $members, 'source' => $roster['source']]);
 });
 
 // ── Section capacity tracker & movement trends (FRD 29) ────────────────────
