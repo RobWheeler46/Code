@@ -145,6 +145,46 @@ function osmGet(string $accessToken, string $pathname, array $params = []): arra
     return is_array($data) ? $data : [];
 }
 
+// ── OSM login diagnostic helpers ───────────────────────────────────────────────
+// Purpose: capture exactly what OSM returns for a login (especially a PARENT) so we
+// can see whether their child links come through, WITHOUT persisting anything or
+// logging the person in. Read-only; the results live only in the session.
+
+// Recursively strip token/secret-like values so the captured payload can be shown.
+function osmDiagnosticRedact($node)
+{
+    if (is_array($node)) {
+        $out = [];
+        foreach ($node as $k => $v) {
+            if (is_string($k) && preg_match('/token|secret|password|access|refresh|authorization|bearer/i', $k)) {
+                $out[$k] = '[redacted]';
+            } else {
+                $out[$k] = osmDiagnosticRedact($v);
+            }
+        }
+        return $out;
+    }
+    return $node;
+}
+
+// Walk the payload and flag every key that looks like it could hold child/parent
+// data, with its path and a short value preview - so children are easy to spot.
+function osmDiagnosticScan($node, string $path = '', array &$hits = []): array
+{
+    if (count($hits) >= 80) return $hits;
+    if (is_array($node)) {
+        foreach ($node as $k => $v) {
+            $childPath = $path === '' ? (string) $k : ($path . '.' . $k);
+            if (is_string($k) && preg_match('/child|parent|guardian|youth|member|linked|scout|contact|kid|family|dependent/i', $k)) {
+                $preview = is_scalar($v) ? (string) $v : json_encode($v);
+                $hits[] = ['path' => $childPath, 'key' => (string) $k, 'type' => gettype($v), 'count' => is_array($v) ? count($v) : null, 'preview' => mb_substr((string) $preview, 0, 90)];
+            }
+            osmDiagnosticScan($v, $childPath, $hits);
+        }
+    }
+    return $hits;
+}
+
 function osmGetStartupData(string $accessToken): array
 {
     $data = osmGet($accessToken, '/ext/generic/startup/', ['action' => 'getDataPayload']);
