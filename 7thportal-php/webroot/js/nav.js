@@ -54,7 +54,7 @@ function sidebarLinksForRole(me, cfg) {
   if (cfg && cfg.equipmentRegisterEnabled) links.push({ href: 'equipment.html', label: 'Equipment' });
   if (cfg && cfg.qmBookingEnabled) links.push({ href: 'quartermaster.html', label: 'QM bookings' });
   if (cfg && cfg.financeEnabled && ['treasurer', 'admin'].includes(me.role)) links.push({ href: 'treasurer.html', label: 'Treasurer' });
-  if (cfg && cfg.financeEnabled && ['trustee_viewer', 'chair', 'treasurer', 'admin'].includes(me.role)) links.push({ href: 'trustee-dashboard.html', label: 'Trustee dashboard' });
+  if (['trustee_viewer', 'chair', 'treasurer', 'admin'].includes(me.role)) links.push({ href: 'governance.html', label: 'Trustee dashboard' });
   links.push({ href: 'notices.html', label: 'Notices' });
   links.push({ href: 'notifications.html', label: 'Notifications' });
   if (me.role === 'admin') links.push({ href: 'admin.html', label: 'Admin' });

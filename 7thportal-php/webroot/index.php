@@ -107,6 +107,7 @@ require_once __DIR__ . '/../src/routes/notices.php';
 require_once __DIR__ . '/../src/routes/admin.php';
 require_once __DIR__ . '/../src/routes/gallery.php';
 require_once __DIR__ . '/../src/routes/finance.php';
+require_once __DIR__ . '/../src/routes/governance.php';
 require_once __DIR__ . '/../src/routes/documents.php';
 require_once __DIR__ . '/../src/routes/actions.php';
 require_once __DIR__ . '/../src/routes/notifications.php';
