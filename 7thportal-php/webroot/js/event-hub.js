@@ -54,7 +54,8 @@ function renderParent(box) {
     <div class="card">
       <h2>Documents &amp; links</h2>
       ${(HUB.items || []).length ? `<table class="data-table"><thead><tr><th>Item</th><th>Status</th><th>Action</th><th>Visible to</th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="muted">No parent documents yet.</p>'}
-    </div>`;
+    </div>
+    ${locationsParent()}`;
   const ep = document.getElementById('exit-preview');
   if (ep) ep.addEventListener('click', e => { e.preventDefault(); PARENT_PREVIEW = false; loadHub(); });
 }
@@ -75,6 +76,7 @@ function renderLeader(box) {
       <div class="card"><div class="muted">Hub readiness</div><div style="margin-top:.3rem"><span class="badge" data-status="${RAG[r.rag]}">${r.rag === 'green' ? 'Ready' : (r.rag === 'amber' ? 'Amber' : 'Not ready')}</span></div><div class="muted" style="font-size:.82rem;margin-top:.3rem">${r.complete} of ${r.total} setup tasks complete</div></div>
       <div class="card"><div class="muted">Status</div><div style="margin-top:.3rem"><span class="badge" data-status="${HUB.status === 'published' ? 'published' : 'draft'}">${escapeHtml(HUB.statusLabel)}</span></div><div style="margin-top:.4rem">${HUB.status === 'published' ? '<button class="btn btn-secondary btn-sm" id="ev-unpublish">Unpublish</button>' : `<button class="btn btn-sm" id="ev-publish" ${r.complete < 3 ? 'disabled title="Complete more setup first"' : ''}>Publish</button>`}</div></div>
       <div class="card"><div class="muted">OSM link</div><div style="margin-top:.3rem"><span class="badge" data-status="${linked ? 'active' : 'suspended'}">${linked ? 'Linked' : 'Not linked'}</span></div><div style="margin-top:.4rem"><button class="btn btn-secondary btn-sm" id="ev-preview">Parent preview</button></div></div>
+      ${overviewCard()}
     </div>
     <div class="card">
       <div class="cap-head"><h1 style="margin:0">${escapeHtml(HUB.title)}</h1><span class="cap-actions"><button class="btn btn-secondary" id="ev-edit">Edit details</button>${HUB.canManage ? '<button class="btn btn-secondary ev-delete" id="ev-delete">Delete</button>' : ''}</span></div>
@@ -85,10 +87,13 @@ function renderLeader(box) {
       <div class="cap-head"><h2 style="margin:0">Hub items</h2><span class="cap-actions"><button class="btn" id="ev-add-item">Add item</button></span></div>
       <p class="muted">Parent packs, kit lists, risk assessments, linked albums and expense accounts. Leader-only items are never shown to parents.</p>
       ${(HUB.items || []).length ? `<table class="data-table"><thead><tr><th>Hub item</th><th>Status</th><th>Visibility</th><th>Owner</th><th></th></tr></thead><tbody>${itemRows}</tbody></table>` : '<p class="muted">No items yet.</p>'}
-    </div>`;
+    </div>
+    ${locationsLeader()}`;
 
   document.getElementById('ev-edit').addEventListener('click', openHubEdit);
   document.getElementById('ev-add-item').addEventListener('click', () => openItemForm(null));
+  const locAdd = document.getElementById('loc-add'); if (locAdd) locAdd.addEventListener('click', () => openLocationForm(null));
+  box.querySelectorAll('.loc-edit').forEach(b => b.addEventListener('click', () => openLocationForm((HUB.locations || []).find(l => l.id == b.dataset.id))));
   document.getElementById('ev-preview').addEventListener('click', () => { PARENT_PREVIEW = true; loadHub(); });
   const pub = document.getElementById('ev-publish'); if (pub) pub.addEventListener('click', () => setHubStatus('published'));
   const unpub = document.getElementById('ev-unpublish'); if (unpub) unpub.addEventListener('click', () => setHubStatus('draft'));
@@ -102,6 +107,91 @@ async function setHubStatus(status) {
 async function deleteHub() {
   if (!confirm('Delete this event hub and all its items?')) return;
   try { await Api.delete(`/api/events/${window.HUB_ID}`); location.href = 'events.html'; } catch (e) { alert(e.message); }
+}
+
+// Camp overview stat card (FR-CAMP-OP-003).
+function overviewCard() {
+  const o = HUB.overview; if (!o) return '';
+  const bits = [`${o.emergencyLocations} emergency`];
+  if (o.days) bits.push(`${o.days} day${o.days === 1 ? '' : 's'}`);
+  if (o.openActions) bits.push(`${o.openActions} open action${o.openActions === 1 ? '' : 's'}`);
+  return `<div class="card"><div class="muted">Camp planning</div>
+    <div style="font-size:1.3rem;font-weight:800;margin-top:.2rem">${o.locations} location${o.locations === 1 ? '' : 's'}</div>
+    <div class="muted" style="font-size:.82rem;margin-top:.3rem">${bits.join(' &middot; ')}</div></div>`;
+}
+
+function locContact(l) {
+  return `${l.phone ? `<a href="tel:${escapeHtml(l.phone)}">${escapeHtml(l.phone)}</a>` : ''}${l.address ? `${l.phone ? '<br>' : ''}<span class="muted">${escapeHtml(l.address)}</span>` : ''}${l.openingTimes ? `<br><span class="muted">${escapeHtml(l.openingTimes)}</span>` : ''}${l.mapUrl ? ` <a href="${escapeHtml(l.mapUrl)}" target="_blank" rel="noopener">map</a>` : ''}`;
+}
+
+// Leader location & emergency directory (FR-CAMP-OP-004..008). Emergency locations
+// are pulled out prominently at the top; the full list follows.
+function locationsLeader() {
+  const locs = HUB.locations || [];
+  const emergency = locs.filter(l => l.isEmergency);
+  const emergencyHtml = emergency.length ? `
+    <div class="card" style="border-left:4px solid #c62828">
+      <h2 style="margin:0 0 .5rem;color:#c62828">Emergency directory</h2>
+      ${emergency.map(l => `<div style="padding:.45rem 0;border-bottom:1px solid var(--border)">
+        <strong>${escapeHtml(l.typeLabel)}: ${escapeHtml(l.name)}</strong>${l.phone ? ` &middot; <a href="tel:${escapeHtml(l.phone)}"><strong>${escapeHtml(l.phone)}</strong></a>` : ''}
+        ${l.address ? `<br><span class="muted">${escapeHtml(l.address)}</span>` : ''}${l.mapUrl ? ` <a href="${escapeHtml(l.mapUrl)}" target="_blank" rel="noopener">map</a>` : ''}
+      </div>`).join('')}
+    </div>` : '';
+  const rows = locs.map(l => `<tr>
+    <td data-label="Location" class="rcard-title"><strong>${escapeHtml(l.name)}</strong> <span class="muted">${escapeHtml(l.typeLabel)}</span></td>
+    <td data-label="Contact">${locContact(l) || '<span class="muted">&mdash;</span>'}</td>
+    <td data-label="Visible to"><span class="badge" data-status="${l.visibility === 'parents' ? 'active' : (l.visibility === 'emergency' ? 'deleted' : 'archived')}">${escapeHtml(l.visibilityLabel)}</span></td>
+    <td class="rcard-actions"><button class="btn btn-secondary btn-sm loc-edit" data-id="${l.id}">Edit</button></td>
+  </tr>`).join('');
+  return emergencyHtml + `
+    <div class="card">
+      <div class="cap-head"><h2 style="margin:0">Locations &amp; emergency directory</h2><span class="cap-actions"><button class="btn" id="loc-add">Add location</button></span></div>
+      <p class="muted">Campsite, hospitals, drop-off/collection, suppliers. Emergency locations (hospital, minor injuries, dentist, vet, or anything marked Emergency) show at the top. Parents only see parent-visible locations.</p>
+      ${locs.length ? `<table class="data-table rcards"><thead><tr><th>Location</th><th>Contact</th><th>Visible to</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="muted">No locations added yet.</p>'}
+    </div>`;
+}
+
+// Parent-facing key locations (already filtered to parent-visible by the API).
+function locationsParent() {
+  const locs = HUB.locations || [];
+  if (!locs.length) return '';
+  return `<div class="card"><h2>Key locations</h2>
+    ${locs.map(l => `<div style="padding:.45rem 0;border-bottom:1px solid var(--border)">
+      <strong>${escapeHtml(l.name)}</strong> <span class="muted">(${escapeHtml(l.typeLabel)})</span>
+      ${l.address ? `<br><span class="muted">${escapeHtml(l.address)}</span>` : ''}${l.mapUrl ? ` <a href="${escapeHtml(l.mapUrl)}" target="_blank" rel="noopener">map</a>` : ''}
+    </div>`).join('')}</div>`;
+}
+
+function openLocationForm(loc) {
+  const isEdit = !!loc; const a = loc || { type: 'campsite', visibility: 'leaders' };
+  const m = modal(`<h2>${isEdit ? 'Edit location' : 'Add location'}</h2><div id="lo-msg"></div>
+    ${field('Name', `<input id="lo-name" value="${escapeHtml(a.name || '')}" placeholder="e.g. Youlbury Scout Camp">`)}
+    <div class="cap-actions">${field('Type', `<select id="lo-type">${selOpts(HUB_META.locationTypes || (HUB.locationMeta && HUB.locationMeta.types) || {}, a.type)}</select>`)}${field('Visible to', `<select id="lo-vis">${selOpts((HUB.locationMeta && HUB.locationMeta.visibilities) || {}, a.visibility)}</select>`)}</div>
+    ${field('Address', `<textarea id="lo-address" rows="2">${escapeHtml(a.address || '')}</textarea>`)}
+    <div class="cap-actions">${field('Phone', `<input id="lo-phone" value="${escapeHtml(a.phone || '')}">`)}${field('Opening times', `<input id="lo-open" value="${escapeHtml(a.openingTimes || '')}">`)}</div>
+    ${field('Map link', `<input id="lo-map" value="${escapeHtml(a.mapUrl || '')}" placeholder="https://maps.google.com/...">`)}
+    ${field('Notes', `<textarea id="lo-notes" rows="2">${escapeHtml(a.notes || '')}</textarea>`)}
+    <div class="modal-actions" style="display:flex;gap:.5rem;margin-top:1rem">
+      <button class="btn" id="lo-save">${isEdit ? 'Save' : 'Add'}</button>
+      <button class="btn btn-secondary" id="lo-cancel">Cancel</button>
+      ${isEdit ? '<button class="btn btn-secondary" id="lo-delete" style="margin-left:auto">Delete</button>' : ''}
+    </div>`);
+  m.querySelector('#lo-cancel').addEventListener('click', () => m.remove());
+  m.querySelector('#lo-save').addEventListener('click', async () => {
+    const g = id => document.getElementById(id).value;
+    const payload = { type: g('lo-type'), name: g('lo-name').trim(), address: g('lo-address').trim(), phone: g('lo-phone').trim(), openingTimes: g('lo-open').trim(), mapUrl: g('lo-map').trim(), notes: g('lo-notes').trim(), visibility: g('lo-vis') };
+    if (!payload.name) { document.getElementById('lo-msg').innerHTML = '<div class="alert alert-error">A name is required.</div>'; return; }
+    try {
+      if (isEdit) await Api.patch(`/api/events/${window.HUB_ID}/locations/${loc.id}`, payload);
+      else await Api.post(`/api/events/${window.HUB_ID}/locations`, payload);
+      m.remove(); loadHub();
+    } catch (e) { document.getElementById('lo-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
+  const del = document.getElementById('lo-delete');
+  if (del) del.addEventListener('click', async () => {
+    try { await Api.delete(`/api/events/${window.HUB_ID}/locations/${loc.id}`); m.remove(); loadHub(); }
+    catch (e) { document.getElementById('lo-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
 }
 
 function modal(html) {

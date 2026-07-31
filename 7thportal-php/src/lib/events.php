@@ -6,6 +6,17 @@ const EVENT_HUB_STATUSES = ['draft' => 'Draft', 'published' => 'Published', 'arc
 const EVENT_ITEM_STATUSES = ['draft' => 'Draft', 'published' => 'Published', 'linked' => 'Linked', 'awaiting' => 'Awaiting'];
 const EVENT_ITEM_VISIBILITIES = ['parents' => 'Parents', 'leaders' => 'Leaders only'];
 
+// Camp Planning Toolkit - location & emergency directory (FR-CAMP-OP-004..008).
+const EVENT_LOCATION_TYPES = [
+    'campsite' => 'Campsite', 'hospital' => 'Hospital (A&E)', 'minor_injuries' => 'Minor injuries unit',
+    'dentist' => 'Dentist', 'optician' => 'Optician', 'vet' => 'Vet', 'fuel' => 'Fuel', 'gas' => 'Gas',
+    'supermarket' => 'Supermarket', 'supplier' => 'Supplier', 'activity_venue' => 'Activity venue',
+    'drop_off' => 'Drop-off point', 'collection' => 'Collection point', 'other' => 'Other',
+];
+const EVENT_LOCATION_VISIBILITIES = ['parents' => 'Parent-visible', 'leaders' => 'Leader-only', 'emergency' => 'Emergency'];
+// Types that count as emergency locations for the prominent directory / offline pack.
+const EVENT_EMERGENCY_TYPES = ['hospital', 'minor_injuries', 'dentist', 'vet'];
+
 function eventHubEnabled(): bool
 {
     $row = dbGet("SELECT value FROM settings WHERE key = 'event_hub_enabled'");
@@ -71,6 +82,42 @@ function serializeHubItem(array $i): array
         'id' => (int) $i['id'], 'label' => $i['label'], 'itemStatus' => $i['item_status'], 'itemStatusLabel' => EVENT_ITEM_STATUSES[$i['item_status']] ?? $i['item_status'],
         'visibility' => $i['visibility'], 'visibilityLabel' => EVENT_ITEM_VISIBILITIES[$i['visibility']] ?? $i['visibility'],
         'owner' => $i['owner_name'], 'linkUrl' => $i['link_url'], 'notes' => $i['notes'],
+    ];
+}
+
+function serializeLocation(array $l): array
+{
+    return [
+        'id' => (int) $l['id'], 'type' => $l['location_type'], 'typeLabel' => EVENT_LOCATION_TYPES[$l['location_type']] ?? $l['location_type'],
+        'name' => $l['name'], 'address' => $l['address'], 'phone' => $l['phone'], 'openingTimes' => $l['opening_times'],
+        'notes' => $l['notes'], 'mapUrl' => $l['map_url'],
+        'visibility' => $l['visibility'], 'visibilityLabel' => EVENT_LOCATION_VISIBILITIES[$l['visibility']] ?? $l['visibility'],
+        'isEmergency' => $l['visibility'] === 'emergency' || in_array($l['location_type'], EVENT_EMERGENCY_TYPES, true),
+    ];
+}
+
+// Camp overview summary for the leader dashboard (FR-CAMP-OP-003). Honest about the
+// data we hold in this slice - no attendee/leader counts (that's the deferred
+// programme/allocation module); dates, status, readiness, item + location tallies.
+function eventCampOverview(array $hub): array
+{
+    $items = dbAll('SELECT visibility, item_status FROM event_hub_items WHERE hub_id = ?', [$hub['id']]);
+    $locs = dbAll('SELECT location_type, visibility FROM event_locations WHERE hub_id = ?', [$hub['id']]);
+    $days = null;
+    if (!empty($hub['start_date'])) {
+        $end = $hub['end_date'] ?: $hub['start_date'];
+        $days = (int) floor((strtotime($end) - strtotime($hub['start_date'])) / 86400) + 1;
+    }
+    $emergency = count(array_filter($locs, fn($l) => $l['visibility'] === 'emergency' || in_array($l['location_type'], EVENT_EMERGENCY_TYPES, true)));
+    $readiness = eventHubReadiness($hub);
+    return [
+        'days' => $days,
+        'parentItems' => count(array_filter($items, fn($i) => $i['visibility'] === 'parents')),
+        'leaderItems' => count(array_filter($items, fn($i) => $i['visibility'] === 'leaders')),
+        'locations' => count($locs),
+        'emergencyLocations' => $emergency,
+        'openActions' => $readiness['total'] - $readiness['complete'],
+        'readiness' => $readiness,
     ];
 }
 

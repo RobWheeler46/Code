@@ -452,6 +452,27 @@ CREATE TABLE IF NOT EXISTS event_hub_items (
 );
 CREATE INDEX IF NOT EXISTS idx_event_hub_items_hub ON event_hub_items(hub_id);
 
+-- Camp Planning Toolkit: location & emergency directory (FRD FR-CAMP-OP-004..008).
+-- Structured locations per event/camp with a visibility tier: parent-visible (e.g.
+-- drop-off/collection), leader-only, or emergency (leader-only + shown prominently
+-- in the emergency directory / offline pack). Parents only ever see 'parents' rows.
+CREATE TABLE IF NOT EXISTS event_locations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  hub_id INTEGER NOT NULL REFERENCES event_hubs(id) ON DELETE CASCADE,
+  location_type TEXT NOT NULL DEFAULT 'other' CHECK(location_type IN ('campsite','hospital','minor_injuries','dentist','optician','vet','fuel','gas','supermarket','supplier','activity_venue','drop_off','collection','other')),
+  name TEXT NOT NULL,
+  address TEXT,
+  phone TEXT,
+  opening_times TEXT,
+  notes TEXT,
+  map_url TEXT,
+  visibility TEXT NOT NULL DEFAULT 'leaders' CHECK(visibility IN ('parents','leaders','emergency')),
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_event_locations_hub ON event_locations(hub_id);
+
 -- Incident and near-miss logging (FRD FR-INC). Safeguarding-sensitive: this does
 -- NOT replace formal Scouts safeguarding/accident reporting - the module signposts
 -- to those and restricts access. Ships off by default. Restricted records
