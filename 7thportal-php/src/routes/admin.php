@@ -328,11 +328,23 @@ $router->put('/api/admin/settings', function ($params) {
 // ── Users and roles (FR-056, FR-061) ──────────────────────────────────────
 $router->get('/api/admin/users', function ($params) {
     requireAdmin(requireAuth());
-    jsonResponse(array_map(fn($u) => [
-        'id' => (int) $u['id'], 'firstName' => $u['first_name'], 'lastName' => $u['last_name'], 'email' => $u['email'],
-        'authType' => $u['auth_type'], 'role' => $u['portal_role'], 'roleLabel' => roleLabel($u['portal_role']),
-        'status' => $u['account_status'], 'isServiceAccount' => (bool) $u['is_osm_service_account'], 'lastLoginAt' => $u['last_login_at'],
-    ], dbAll('SELECT * FROM users ORDER BY created_at DESC')));
+    $links = dbAll('SELECT * FROM parent_child_links');
+    jsonResponse(array_map(function ($u) use ($links) {
+        // Linked children give a user "parent access" - a leader with linked children
+        // is dual-role (sees a Parent View of only their own children).
+        $children = array_values(array_map(
+            fn($l) => ['linkId' => (int) $l['id'], 'name' => $l['child_display_name'], 'sectionName' => $l['osm_section_name']],
+            array_filter($links, fn($l) => (int) $l['parent_user_id'] === (int) $u['id'])
+        ));
+        $isLeader = isLeaderRole($u['portal_role']);
+        $hasParent = $u['portal_role'] === 'parent' || count($children) > 0;
+        return [
+            'id' => (int) $u['id'], 'firstName' => $u['first_name'], 'lastName' => $u['last_name'], 'email' => $u['email'],
+            'authType' => $u['auth_type'], 'role' => $u['portal_role'], 'roleLabel' => roleLabel($u['portal_role']),
+            'status' => $u['account_status'], 'isServiceAccount' => (bool) $u['is_osm_service_account'], 'lastLoginAt' => $u['last_login_at'],
+            'children' => $children, 'isLeader' => $isLeader, 'hasParentAccess' => $hasParent, 'dualRole' => $isLeader && count($children) > 0,
+        ];
+    }, dbAll('SELECT * FROM users ORDER BY created_at DESC')));
 });
 
 $router->get('/api/admin/roles', function ($params) {
@@ -416,8 +428,12 @@ $router->post('/api/admin/parents', function ($params) {
 $router->post('/api/admin/parents/:id/children', function ($params) {
     $admin = requireAuth();
     requireAdmin($admin);
-    $parent = dbGet("SELECT * FROM users WHERE id = ? AND portal_role = 'parent'", [$params['id']]);
-    if (!$parent) jsonResponse(['error' => 'Parent account not found.'], 404);
+    // A child can be linked to ANY account, not just a parent-role one: linking a
+    // leader's own child to their leader account is what makes them dual-role (they
+    // gain a Parent View of only their own children). Access is unchanged - parent
+    // endpoints only ever return the caller's own linked children.
+    $parent = dbGet('SELECT * FROM users WHERE id = ?', [$params['id']]);
+    if (!$parent) jsonResponse(['error' => 'User account not found.'], 404);
     $body = requestBody();
     $osmMemberId = $body['osmMemberId'] ?? null;
     $childDisplayName = $body['childDisplayName'] ?? null;

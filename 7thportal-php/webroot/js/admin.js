@@ -290,21 +290,36 @@ async function renderNotices() {
 async function renderUsers() {
   const box = document.getElementById('tab-content');
   box.innerHTML = '<p class="muted">Loading&hellip;</p>';
-  const [users, roles] = await Promise.all([Api.get('/api/admin/users'), Api.get('/api/admin/roles')]);
+  const [users, roles, sectionsResp] = await Promise.all([Api.get('/api/admin/users'), Api.get('/api/admin/roles'), getSections()]);
+  const sections = sectionsResp.sections || [];
   const roleOptions = roles.map(r => `<option value="${r.value}">${escapeHtml(r.label)}</option>`).join('');
 
-  box.innerHTML = `<div class="card"><table>
-    <thead><tr><th>Name</th><th>Login</th><th>Role</th><th>Status</th><th></th></tr></thead>
+  // "Access" makes dual-role obvious: a leader who also has linked children.
+  const accessCell = (u) => {
+    const parts = [];
+    if (u.dualRole) parts.push('<span class="badge" data-status="active">Dual role</span>');
+    else if (u.isLeader) parts.push('<span class="badge" data-status="pending_approval">Leader</span>');
+    else if (u.role === 'parent') parts.push('<span class="badge" data-status="pending_approval">Parent</span>');
+    if (u.children.length) parts.push(`<span class="muted" style="font-size:.8rem">${u.children.length} child${u.children.length === 1 ? '' : 'ren'}: ${u.children.map(c => escapeHtml(c.name)).join(', ')}</span>`);
+    return parts.join('<br>') || '<span class="muted">&mdash;</span>';
+  };
+
+  box.innerHTML = `<div class="card">
+    <p class="muted">Link a child to a <strong>leader</strong> to make them dual-role - they gain a Parent View of only their own children. Use “Children” below.</p>
+    <table>
+    <thead><tr><th>Name</th><th>Login</th><th>Role</th><th>Access</th><th>Status</th><th></th></tr></thead>
     <tbody>${users.map(u => `
       <tr>
         <td>${escapeHtml(u.firstName)} ${escapeHtml(u.lastName)}${u.isServiceAccount ? ' <span class="badge" data-status="active">service</span>' : ''}</td>
         <td>${escapeHtml(u.email || '(OSM account)')}<br><span class="muted">${u.authType === 'osm' ? 'OSM login' : 'Local login'}</span></td>
         <td><select data-role="${u.id}">${roleOptions.replace(`value="${u.role}"`, `value="${u.role}" selected`)}</select></td>
+        <td>${accessCell(u)}</td>
         <td><select data-status="${u.id}">
           <option value="active" ${u.status === 'active' ? 'selected' : ''}>Active</option>
           <option value="suspended" ${u.status === 'suspended' ? 'selected' : ''}>Suspended</option>
         </select></td>
-        <td><button class="btn btn-secondary btn-sm" data-save="${u.id}">Save</button></td>
+        <td style="white-space:nowrap"><button class="btn btn-secondary btn-sm" data-save="${u.id}">Save</button>
+          <button class="btn btn-secondary btn-sm" data-kids="${u.id}">Children</button></td>
       </tr>`).join('')}</tbody>
   </table></div><div id="users-error"></div>`;
 
@@ -320,6 +335,77 @@ async function renderUsers() {
       document.getElementById('users-error').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
     }
   }));
+  document.querySelectorAll('[data-kids]').forEach(btn => btn.addEventListener('click', () => {
+    openChildrenModal(users.find(u => String(u.id) === btn.dataset.kids), sections);
+  }));
+}
+
+// Link/unlink a user's children (works for any account - a leader with linked
+// children becomes dual-role). Reused member picker via the OSM section members API.
+function openChildrenModal(user, sections) {
+  const kids = [...(user.children || [])];
+  const existing = document.getElementById('kids-modal'); if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'kids-modal'; modal.className = 'modal-backdrop';
+  const field = (label, html) => `<div class="field" style="max-width:280px"><label>${label}</label>${html}</div>`;
+  modal.innerHTML = `<div class="modal-box">
+    <h2>Children &mdash; ${escapeHtml(user.firstName)} ${escapeHtml(user.lastName)}</h2>
+    <p class="muted">Linking a child gives this account a <strong>Parent View</strong> of that child. For a leader (${escapeHtml(user.roleLabel)}), this makes them dual-role.</p>
+    <div id="kids-list"></div>
+    <h3>Link a child</h3>
+    ${sections.length ? `${field('Section', `<select id="kids-section">${sections.map(s => `<option value="${escapeHtml(s.sectionId)}" data-name="${escapeHtml(s.sectionName)}" data-type="${escapeHtml(s.sectionType)}">${escapeHtml(s.sectionName)}</option>`).join('')}</select>`)}
+    ${field('Member', `<select id="kids-member"><option>Loading&hellip;</option></select>`)}
+    <div id="kids-error"></div>
+    <button class="btn btn-secondary btn-sm" id="kids-link">Link child</button>` : '<p class="muted">Sign in with an OSM leader account to list section members to link.</p>'}
+    <div class="modal-actions" style="display:flex;gap:.5rem;margin-top:1rem"><button class="btn" id="kids-close">Done</button></div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) closeKids(); });
+
+  const renderList = () => {
+    document.getElementById('kids-list').innerHTML = kids.length === 0
+      ? '<p class="muted">No children linked.</p>'
+      : `<ul>${kids.map(c => `<li>${escapeHtml(c.name)} <span class="muted">(${escapeHtml(c.sectionName || '')})</span> <button class="btn btn-danger btn-sm" data-unlink="${c.linkId}">Unlink</button></li>`).join('')}</ul>`;
+    document.querySelectorAll('#kids-list [data-unlink]').forEach(b => b.addEventListener('click', async () => {
+      try {
+        await Api.delete(`/api/admin/parents/${user.id}/children/${b.dataset.unlink}`);
+        const i = kids.findIndex(c => String(c.linkId) === b.dataset.unlink);
+        if (i >= 0) kids.splice(i, 1);
+        renderList();
+      } catch (e) { document.getElementById('kids-error').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+    }));
+  };
+  renderList();
+
+  const closeKids = () => { modal.remove(); renderUsers(); };
+  document.getElementById('kids-close').addEventListener('click', closeKids);
+
+  const sectionSel = document.getElementById('kids-section');
+  if (sectionSel) {
+    const loadMembers = async () => {
+      const memberSel = document.getElementById('kids-member');
+      memberSel.innerHTML = '<option>Loading&hellip;</option>';
+      try {
+        const data = await Api.get(`/api/admin/osm/sections/${encodeURIComponent(sectionSel.value)}/members`);
+        memberSel.innerHTML = (data.members || []).map(m => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.firstName)} ${escapeHtml(m.lastName)}</option>`).join('') || '<option value="">No members found</option>';
+      } catch (e) { memberSel.innerHTML = '<option value="">Could not load members</option>'; }
+    };
+    sectionSel.addEventListener('change', loadMembers);
+    loadMembers();
+    document.getElementById('kids-link').addEventListener('click', async () => {
+      const opt = sectionSel.selectedOptions[0];
+      const memberOpt = document.getElementById('kids-member').selectedOptions[0];
+      if (!opt || !memberOpt || !memberOpt.value) return;
+      try {
+        const res = await Api.post(`/api/admin/parents/${user.id}/children`, {
+          osmMemberId: memberOpt.value, osmSectionId: opt.value, osmSectionName: opt.dataset.name,
+          osmSectionType: opt.dataset.type, childDisplayName: memberOpt.textContent,
+        });
+        kids.push({ linkId: res.linkId, name: memberOpt.textContent, sectionName: opt.dataset.name });
+        renderList();
+      } catch (e) { document.getElementById('kids-error').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+    });
+  }
 }
 
 // ── Parent accounts ───────────────────────────────────────────────────────
