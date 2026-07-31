@@ -17,31 +17,43 @@
       return;
     }
 
-    content.innerHTML = `
+    const header = `
       <div class="child-card" style="margin-bottom:1.25rem;">
         <div class="child-avatar" style="width:64px;height:64px;font-size:1.4rem;">${escapeHtml(initials(c.name))}</div>
         <div>
           <h1 style="margin-bottom:0.15rem;">${escapeHtml(c.name)}</h1>
           <span class="muted">${escapeHtml(c.sectionName || '')}${c.dob ? ' &middot; DOB ' + formatDate(c.dob) : ''}${c.patrol ? ' &middot; ' + escapeHtml(c.patrol) : ''}</span>
         </div>
-      </div>
+      </div>`;
 
-      ${!c.profileAvailable ? '<div class="alert alert-warning">This child\'s full profile could not be matched in OSM right now, but section, programme and badge information may still be available below.</div>' : ''}
+    // Live: programme, badges and the full profile are managed in OSM (the portal
+    // does not read them from the server). Show a clean link-out rather than empty
+    // "not available" cards.
+    if (c.detailInOsm) {
+      content.innerHTML = header + `
+        <div class="card">
+          <h2>Programme, events &amp; badges</h2>
+          <p class="muted">${escapeHtml(c.name)}'s programme, upcoming events and badge progress are kept in OSM, along with contact details and payments.</p>
+          <a class="btn" href="${c.osmLink}" target="_blank" rel="noopener">Open in OSM &rarr;</a>
+        </div>`;
+      return;
+    }
 
+    content.innerHTML = header + `
       <div class="grid cols-2">
         <div class="card">
           <h2>Upcoming programme</h2>
-          ${c.programmeAvailable ? renderProgramme(c.programme) : '<p class="muted">Programme information is not available right now.</p>'}
+          ${c.programmeAvailable ? renderProgramme(c.programme) : '<p class="muted">No programme information right now.</p>'}
         </div>
         <div class="card">
           <h2>Upcoming events</h2>
-          ${c.eventsAvailable ? renderEvents(c.events) : '<p class="muted">Event information is not available right now.</p>'}
+          ${c.eventsAvailable ? renderEvents(c.events) : '<p class="muted">No event information right now.</p>'}
         </div>
       </div>
 
       <div class="card">
         <h2>Badge progress</h2>
-        ${c.badgesAvailable ? renderBadges(c.badges) : '<p class="muted">Badge information is not available right now.</p>'}
+        ${c.badgesAvailable ? renderBadges(c.badges) : '<p class="muted">No badge information right now.</p>'}
         <div class="osm-link-row">This is a read-only summary. <a href="${c.osmLink}" target="_blank" rel="noopener">Manage badges, contact details, events and payments in OSM &rarr;</a></div>
       </div>
     `;
