@@ -272,6 +272,28 @@ textarea { min-height: 5rem; resize: vertical; }
   .card table.data-table, .card > table:not(.kv-table) { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 }
 
+/* Responsive "cards" tables: on phones a <table class="rcards"> collapses each row
+   into a card, each cell showing its data-label. High-use journeys use this instead
+   of a side-scrolling table. Cells: add data-label; give the actions cell class
+   "rcard-actions" and any full-width heading cell "rcard-title". */
+@media (max-width: 640px) {
+  table.rcards, table.rcards tbody { display: block; overflow: visible; }
+  table.rcards thead { display: none; }
+  /* flex column so cells keep DOM order on desktop but can be re-ordered on mobile */
+  table.rcards tr { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius); padding: 0.5rem 0.75rem; margin-bottom: 0.6rem; background: var(--card); }
+  table.rcards td.rcard-title { order: -1; }
+  table.rcards td.rcard-actions { order: 99; }
+  table.rcards td { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.3rem 0; border: none; text-align: right; }
+  table.rcards td::before { content: attr(data-label); font-weight: 600; color: var(--muted); text-align: left; flex: 0 0 38%; }
+  table.rcards td[data-label=""]::before { content: ""; flex: 0; }
+  table.rcards td.rcard-title { justify-content: flex-start; font-weight: 700; font-size: 1rem; border-bottom: 1px solid var(--border); margin-bottom: 0.3rem; padding-bottom: 0.4rem; }
+  table.rcards td.rcard-title::before { content: ""; flex: 0; }
+  table.rcards td.rcard-actions { justify-content: flex-start; padding-top: 0.5rem; }
+  table.rcards td.rcard-actions::before { content: ""; flex: 0; }
+  table.rcards td.rcard-actions .btn { flex: 1 1 auto; text-align: center; }
+  table.rcards td select, table.rcards td input { max-width: 62%; }
+}
+
 /* Admin tab strip for mobile (sidebar tabs are hidden on phones) */
 .admin-mobile-tabs { display: none; }
 @media (max-width: 899px) {

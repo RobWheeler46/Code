@@ -27,16 +27,16 @@ async function renderList() {
   META = data.meta;
 
   box.innerHTML = `<div class="card">
-    ${data.registers.length ? `<table class="data-table">
+    ${data.registers.length ? `<table class="data-table rcards">
       <thead><tr><th>Session</th><th>Section</th><th>Date</th><th>Source</th><th>Present</th><th>Status</th></tr></thead>
       <tbody>${data.registers.map(r => `
         <tr class="att-row clickable" data-id="${r.id}">
-          <td><strong>${escapeHtml(r.title)}</strong></td>
-          <td class="muted">${escapeHtml(r.sectionName || r.sectionId)}</td>
-          <td class="muted">${formatDate(r.sessionDate)}</td>
-          <td class="muted">${escapeHtml(r.sourceLabel || r.sourceTypeLabel)}</td>
-          <td>${r.presentCount}/${r.total}</td>
-          <td><span class="badge" data-status="${r.status === 'submitted' ? 'active' : 'suspended'}">${r.status === 'submitted' ? 'Submitted' : 'Open'}</span></td>
+          <td class="rcard-title"><strong>${escapeHtml(r.title)}</strong></td>
+          <td data-label="Section" class="muted">${escapeHtml(r.sectionName || r.sectionId)}</td>
+          <td data-label="Date" class="muted">${formatDate(r.sessionDate)}</td>
+          <td data-label="Source" class="muted">${escapeHtml(r.sourceLabel || r.sourceTypeLabel)}</td>
+          <td data-label="Present">${r.presentCount}/${r.total}</td>
+          <td data-label="Status"><span class="badge" data-status="${r.status === 'submitted' ? 'active' : 'suspended'}">${r.status === 'submitted' ? 'Submitted' : 'Open'}</span></td>
         </tr>`).join('')}</tbody>
     </table>` : '<div class="empty-state">No registers yet. Create one to take attendance for a session.</div>'}
   </div>`;
@@ -104,13 +104,13 @@ async function renderRegister(id) {
   const groupsHtml = groups.length ? groups.map(g => `
     <div class="att-group">
       <h3 style="margin:.8rem 0 .3rem">${escapeHtml(g.grouping)} <span class="muted" style="font-weight:400">(${g.members.length})</span></h3>
-      <table class="data-table"><tbody>
+      <table class="data-table rcards"><tbody>
         ${g.members.map(m => `<tr>
-          <td style="width:45%">${escapeHtml(m.name)}</td>
-          <td>${open
+          <td class="rcard-title" style="width:45%">${escapeHtml(m.name)}</td>
+          <td data-label="Status">${open
             ? `<select class="att-mark" data-id="${m.id}">${statusOpts(m.status)}</select>`
             : `<span class="badge" data-status="${m.status === 'absent' ? 'deleted' : (m.status === 'unknown' ? 'archived' : 'active')}">${escapeHtml(META.statuses[m.status] || m.status)}</span>`}</td>
-          <td>${open ? `<input class="att-note" data-id="${m.id}" placeholder="Note (optional)" value="${escapeHtml(m.note || '')}" style="width:100%">` : (m.note ? `<span class="muted">${escapeHtml(m.note)}</span>` : '')}</td>
+          <td${(open || m.note) ? ' data-label="Note"' : ''}>${open ? `<input class="att-note" data-id="${m.id}" placeholder="Note (optional)" value="${escapeHtml(m.note || '')}" style="width:100%">` : (m.note ? `<span class="muted">${escapeHtml(m.note)}</span>` : '')}</td>
         </tr>`).join('')}
       </tbody></table>
     </div>`).join('') : '<p class="muted">No members yet. Use “Sync roster” to load them from OSM, or add a guest.</p>';
