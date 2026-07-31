@@ -26,6 +26,13 @@ const ADMIN_TABS = [
   // be redundant here.
   const sidebar = document.getElementById('app-sidebar');
   sidebar.innerHTML = `<div class="sidebar-role">Admin</div><nav>${ADMIN_TABS.map(t => `<button class="admin-tab-btn" data-tab="${t.tab}">${t.label}</button>`).join('')}</nav>`;
+  // The sidebar is hidden on phones, so mirror the tabs as a horizontal scrolling
+  // strip above the content for mobile admins (admin stays laptop-first otherwise).
+  const tabContent = document.getElementById('tab-content');
+  const strip = document.createElement('div');
+  strip.className = 'admin-mobile-tabs';
+  strip.innerHTML = ADMIN_TABS.map(t => `<button class="admin-tab-btn" data-tab="${t.tab}">${t.label}</button>`).join('');
+  tabContent.parentNode.insertBefore(strip, tabContent);
   document.querySelectorAll('.admin-tab-btn').forEach(btn => {
     btn.addEventListener('click', () => selectTab(btn.dataset.tab));
   });

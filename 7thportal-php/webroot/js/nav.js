@@ -75,6 +75,45 @@ function renderSidebar(me, cfg) {
   target.innerHTML = `<div class="sidebar-role">${escapeHtml(roleLine)}</div><nav>${links}</nav>`;
 }
 
+// Mobile navigation: a slide-in drawer (shown via the header burger below 900px)
+// carrying the same links as the sidebar plus the role switcher, so the whole app
+// is navigable on a phone. Reuses sidebarLinksForRole so there's one source of nav.
+function renderMobileDrawer(me, cfg, pillLabel) {
+  document.getElementById('nav-drawer')?.remove();
+  const currentPage = location.pathname.split('/').pop() || 'index.html';
+  const isAdmin = currentPage === 'admin.html';
+  // On the admin page the sidebar is admin sub-nav; give the drawer the normal app
+  // nav plus a link back into Admin so a mobile admin isn't stranded.
+  let links = sidebarLinksForRole(me, cfg);
+  if (isAdmin && me.role === 'admin' && !links.some(l => l.href === 'admin.html')) links.push({ href: 'admin.html', label: 'Admin' });
+  const linksHtml = links.map(l => `<a href="${l.href}"${currentPage === l.href ? ' class="active"' : ''}>${escapeHtml(l.label)}</a>`).join('');
+
+  const drawer = document.createElement('div');
+  drawer.id = 'nav-drawer';
+  drawer.className = 'nav-drawer';
+  drawer.innerHTML = `
+    <div class="nav-drawer-backdrop" id="nav-drawer-backdrop"></div>
+    <aside class="nav-drawer-panel" role="dialog" aria-label="Menu">
+      <div class="nav-drawer-head">
+        <span class="sidebar-role">${escapeHtml(pillLabel)}</span>
+        <button class="nav-drawer-close" id="nav-drawer-close" aria-label="Close menu">&times;</button>
+      </div>
+      ${me.dualRole ? `<div class="nav-drawer-switch">${viewSwitcherHtml(me)}</div>` : ''}
+      <nav>${linksHtml}</nav>
+      <a href="#" id="drawer-logout" class="nav-drawer-logout">Log out</a>
+    </aside>`;
+  document.body.appendChild(drawer);
+
+  const close = () => { drawer.classList.remove('open'); document.getElementById('nav-burger')?.setAttribute('aria-expanded', 'false'); };
+  const open = () => { drawer.classList.add('open'); document.getElementById('nav-burger')?.setAttribute('aria-expanded', 'true'); };
+  document.getElementById('nav-burger')?.addEventListener('click', open);
+  document.getElementById('nav-drawer-close').addEventListener('click', close);
+  document.getElementById('nav-drawer-backdrop').addEventListener('click', close);
+  drawer.querySelector('nav').addEventListener('click', e => { if (e.target.tagName === 'A') close(); });
+  document.getElementById('drawer-logout').addEventListener('click', async (e) => { e.preventDefault(); await Api.post('/api/auth/logout'); location.href = 'login.html'; });
+  wireViewSwitcher(drawer); // wire only the drawer's switcher (top bar wired separately)
+}
+
 // A dual-role user's Parent/Leader toggle. Switching stores the view server-side
 // (audited) then lands on that view's dashboard.
 function viewSwitcherHtml(me) {
@@ -82,8 +121,8 @@ function viewSwitcherHtml(me) {
   const btn = (view, label) => `<button class="view-switch${me.activeView === view ? ' active' : ''}" data-view="${view}">${label}</button>`;
   return `<div class="view-switcher" title="You are both a parent and a leader">${btn('parent', 'Parent')}${btn('leader', 'Leader')}</div>`;
 }
-function wireViewSwitcher() {
-  document.querySelectorAll('.view-switch').forEach(b => b.addEventListener('click', async () => {
+function wireViewSwitcher(root = document) {
+  root.querySelectorAll('.view-switch').forEach(b => b.addEventListener('click', async () => {
     if (b.classList.contains('active')) return;
     const view = b.dataset.view;
     try { await Api.post('/api/context', { view }); } catch (e) { alert(e.message); return; }
@@ -115,6 +154,7 @@ async function requireUserNav(pageView) {
   const target = document.getElementById('app-nav');
   if (target) {
     target.innerHTML = `
+      <button class="nav-burger" id="nav-burger" aria-label="Open menu" aria-expanded="false">&#9776;</button>
       <div class="brand-block">
         <a class="brand" href="${activeView === 'parent' ? 'parent-dashboard.html' : 'leader-dashboard.html'}">7thPortal</a>
         <span class="tagline">Skills for Life | 7th Swindon</span>
@@ -132,6 +172,7 @@ async function requireUserNav(pageView) {
       location.href = 'login.html';
     });
     wireViewSwitcher();
+    renderMobileDrawer(me, cfg, pillLabel);
   }
   renderSidebar(me, cfg);
   return me;
