@@ -424,6 +424,15 @@ async function renderParents() {
 
   box.innerHTML = `
     <div class="card">
+      <h2>Preview OSM contact fields</h2>
+      <p class="muted">Check which parent/contact fields OSM returns for a section &mdash; this is how we confirm whether parents and their children can be preloaded automatically instead of linked by hand. Read-only; nothing is stored.</p>
+      <div class="cap-actions">
+        <select id="cf-section">${sections.map(s => `<option value="${escapeHtml(s.sectionId)}">${escapeHtml(s.sectionName)}</option>`).join('')}</select>
+        <button class="btn btn-secondary" id="cf-go"${sections.length ? '' : ' disabled'}>Show fields</button>
+      </div>
+      <div id="cf-result" style="margin-top:.8rem"></div>
+    </div>
+    <div class="card">
       <h2>Add a parent/carer account</h2>
       <form id="parent-form">
         <div class="grid cols-3">
@@ -454,6 +463,29 @@ async function renderParents() {
     } catch (err) {
       document.getElementById('parent-error').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
     }
+  });
+
+  const cfGo = document.getElementById('cf-go');
+  if (cfGo) cfGo.addEventListener('click', async () => {
+    const sid = document.getElementById('cf-section').value;
+    const out = document.getElementById('cf-result');
+    cfGo.disabled = true; cfGo.textContent = 'Reading OSM…'; out.innerHTML = '';
+    try {
+      const d = await Api.get(`/api/admin/osm/sections/${encodeURIComponent(sid)}/contact-fields`);
+      if (!d.available) {
+        out.innerHTML = `<div class="alert alert-warning">${escapeHtml(d.reason || 'Not available.')}${d.blocked ? ' Wait a minute and try again - OSM rate-limits repeated reads.' : ''}</div>`;
+      } else {
+        const parentFields = d.fields.filter(f => f.parentish);
+        out.innerHTML = `
+          <p class="muted">${d.memberCount} member row(s) &middot; ${d.source === 'demo' ? 'demo shape (not live)' : 'from OSM'} &middot; ${parentFields.length} parent/contact field(s) detected.</p>
+          ${parentFields.length
+            ? '<div class="alert alert-success">Parent/contact fields are present &mdash; an automatic preload of parents + linked children is feasible.</div>'
+            : '<div class="alert alert-warning">No parent/contact fields were detected in this response &mdash; the current OSM scope may not include them.</div>'}
+          <div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Field</th><th>Sample (masked)</th><th>Parent/contact?</th></tr></thead>
+          <tbody>${d.fields.map(f => `<tr${f.parentish ? ' style="background:color-mix(in srgb, var(--card) 88%, var(--green))"' : ''}><td><code>${escapeHtml(f.path)}</code></td><td class="muted">${escapeHtml(f.sample)}</td><td>${f.parentish ? '✓' : ''}</td></tr>`).join('')}</tbody></table></div>`;
+      }
+    } catch (e) { out.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+    finally { cfGo.disabled = false; cfGo.textContent = 'Show fields'; }
   });
 
   document.getElementById('parent-list').innerHTML = parents.length === 0 ? '<p class="muted">No parent accounts yet.</p>' : parents.map(p => `

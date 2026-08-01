@@ -376,6 +376,49 @@ function osmGridMembers(string $accessToken, string $sectionId, ?string $termId)
     return ['ok' => true, 'members' => $members, 'count' => count($members), 'columns' => $columns];
 }
 
+// Mask a value so a contact-grid sample can be shown without exposing full PII.
+function osmMaskValue($v): string
+{
+    if (is_array($v)) return '{…}';
+    $s = trim((string) $v);
+    if ($s === '') return '(empty)';
+    if (filter_var($s, FILTER_VALIDATE_EMAIL)) { $p = explode('@', $s); return mb_substr($p[0], 0, 2) . '•••@' . ($p[1] ?? ''); }
+    if (preg_match('/^\+?[\d][\d ()\-]{6,}$/', $s)) return '•••••' . mb_substr($s, -3) . ' (phone-like)';
+    return mb_strlen($s) > 4 ? mb_substr($s, 0, 3) . '…(' . mb_strlen($s) . ' chars)' : $s;
+}
+function osmFlattenFields($node, string $prefix, array &$out): void
+{
+    if (!is_array($node)) return;
+    foreach ($node as $k => $v) {
+        $key = $prefix === '' ? (string) $k : $prefix . '.' . $k;
+        if (is_array($v)) osmFlattenFields($v, $key, $out);
+        else $out[$key] = osmMaskValue($v);
+    }
+}
+
+// Read-only probe: what fields does OSM's contact grid actually return for a section?
+// Flattens the first member row into dotted paths with masked sample values, and
+// flags the ones that look parent/contact-related - so we can confirm whether
+// parent names/emails are available (for a future preload) WITHOUT storing anything.
+function osmGridContactFields(string $accessToken, string $sectionId, ?string $termId): array
+{
+    if (!$termId) return ['ok' => false, 'error' => 'No current OSM term for this section.'];
+    $r = osmRawData('POST', $accessToken, '/ext/members/contact/grid/', ['action' => 'getMembers'], ['section_id' => $sectionId, 'term_id' => $termId]);
+    if (!$r['ok']) {
+        $blocked = $r['bodySnippet'] && stripos($r['bodySnippet'], 'blocked') !== false;
+        return ['ok' => false, 'blocked' => $blocked, 'error' => $blocked ? 'OSM temporarily blocked the request' : ($r['error'] ?? ('HTTP ' . $r['status']))];
+    }
+    $items = $r['items'] ?? [];
+    $first = (isset($items[0]) && is_array($items[0])) ? $items[0] : [];
+    $flat = [];
+    osmFlattenFields($first, '', $flat);
+    $fields = [];
+    foreach ($flat as $path => $masked) {
+        $fields[] = ['path' => $path, 'sample' => $masked, 'parentish' => (bool) preg_match('/parent|carer|guardian|contact|email|phone|mobile|primary|mum|dad/i', $path)];
+    }
+    return ['ok' => true, 'memberCount' => count($items), 'fields' => $fields];
+}
+
 // Resolve a user's live section roster: demo fixture for demo sign-in, else the
 // live OSM grid using the user's own token + the section's current term. Shared by
 // the /roster endpoint and attendance pre-population. Fetch-only - never stores.

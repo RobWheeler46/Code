@@ -435,6 +435,37 @@ $router->post('/api/admin/parents', function ($params) {
     jsonResponse(['id' => $result['lastInsertId'], 'setupUrl' => $setupUrl, 'emailed' => $emailed]);
 });
 
+// Read-only probe (see if a bulk parent+child preload is feasible): shows which
+// fields OSM's contact grid returns for a section, so we can confirm parent
+// names/emails are present before building any import. Masked sample; nothing stored.
+$router->get('/api/admin/osm/sections/:sectionId/contact-fields', function ($params) {
+    $admin = requireAuth();
+    requireAdmin($admin);
+    $service = getServiceAccount() ?? $admin;
+    try { $token = ensureFreshToken($service); }
+    catch (Throwable $e) { jsonResponse(['available' => false, 'reason' => 'No usable OSM token - connect an OSM service account, or sign in with OSM.']); }
+
+    if ($token === 'demo') {
+        // Representative shape so the tool is demonstrable offline (values are fake).
+        jsonResponse(['available' => true, 'source' => 'demo', 'memberCount' => 2, 'fields' => [
+            ['path' => 'scoutid', 'sample' => 'm20…(4 chars)', 'parentish' => false],
+            ['path' => 'firstname', 'sample' => 'Ame…(6 chars)', 'parentish' => false],
+            ['path' => 'lastname', 'sample' => 'Tur…(6 chars)', 'parentish' => false],
+            ['path' => 'contact_primary_1.firstname', 'sample' => 'Sar…(5 chars)', 'parentish' => true],
+            ['path' => 'contact_primary_1.lastname', 'sample' => 'Tur…(6 chars)', 'parentish' => true],
+            ['path' => 'contact_primary_1.email1', 'sample' => 'sa•••@example.com', 'parentish' => true],
+            ['path' => 'contact_primary_1.phone1', 'sample' => '•••••789 (phone-like)', 'parentish' => true],
+        ]]);
+    }
+    $svc = dbGet('SELECT * FROM users WHERE id = ?', [$service['id']]);
+    $term = osmCurrentTermFromData(json_decode($svc['osm_terms_json'] ?? '[]', true) ?: [], $params['sectionId']);
+    $tid = $term && ($term['termId'] ?? '') !== '' ? $term['termId'] : null;
+    $res = osmGridContactFields($token, $params['sectionId'], $tid);
+    if (empty($res['ok'])) jsonResponse(['available' => false, 'reason' => $res['error'] ?? 'OSM did not return contact fields.', 'blocked' => !empty($res['blocked'])]);
+    logAudit(['userId' => $admin['id'], 'action' => 'admin_osm_contact_fields_probe', 'entityType' => 'osm_section', 'entityId' => $params['sectionId'], 'ipAddress' => clientIp(), 'details' => ['memberCount' => $res['memberCount'], 'fieldCount' => count($res['fields'])]]);
+    jsonResponse(['available' => true, 'source' => 'osm', 'memberCount' => $res['memberCount'], 'fields' => $res['fields']]);
+});
+
 $router->post('/api/admin/parents/:id/children', function ($params) {
     $admin = requireAuth();
     requireAdmin($admin);
