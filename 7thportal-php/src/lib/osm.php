@@ -330,6 +330,7 @@ function osmRawData(string $method, string $accessToken, string $pathname, array
         'ok' => $status >= 200 && $status < 300 && is_array($items),
         'count' => is_array($items) ? count($items) : null,
         'items' => is_array($items) ? $items : null,
+        'payload' => is_array($data) ? $data : null,
         'error' => $err,
         'bodySnippet' => is_array($data) ? null : substr((string) $raw, 0, 140),
     ];
@@ -396,6 +397,22 @@ function osmFlattenFields($node, string $prefix, array &$out): void
     }
 }
 
+// Deep-mask a payload for inspection: scalars masked, long lists capped to 2 items
+// so the overall SHAPE (incl. any contact/meta structure) is visible without dumping
+// the whole section or exposing PII.
+function osmMaskDeep($node)
+{
+    if (!is_array($node)) return osmMaskValue($node);
+    if (array_is_list($node) && count($node) > 2) {
+        $out = array_map('osmMaskDeep', array_slice($node, 0, 2));
+        $out[] = '…(' . count($node) . ' items total, first 2 shown)';
+        return $out;
+    }
+    $out = [];
+    foreach ($node as $k => $v) $out[$k] = osmMaskDeep($v);
+    return $out;
+}
+
 // Read-only probe: what fields does OSM's contact grid actually return for a section?
 // Flattens the first member row into dotted paths with masked sample values, and
 // flags the ones that look parent/contact-related - so we can confirm whether
@@ -412,11 +429,24 @@ function osmGridContactFields(string $accessToken, string $sectionId, ?string $t
     $first = (isset($items[0]) && is_array($items[0])) ? $items[0] : [];
     $flat = [];
     osmFlattenFields($first, '', $flat);
+    $rx = '/parent|carer|guardian|contact|email|phone|mobile|primary|secondary|mum|dad|relationship|address|postcode/i';
     $fields = [];
     foreach ($flat as $path => $masked) {
-        $fields[] = ['path' => $path, 'sample' => $masked, 'parentish' => (bool) preg_match('/parent|carer|guardian|contact|email|phone|mobile|primary|mum|dad/i', $path)];
+        // Flag by path OR by a value that looks like an email/phone (contacts hidden
+        // behind opaque custom_data column ids still get caught this way).
+        $looksContact = preg_match($rx, $path) || preg_match('/@|\(phone/i', (string) $masked);
+        $fields[] = ['path' => $path, 'sample' => $masked, 'parentish' => (bool) $looksContact];
     }
-    return ['ok' => true, 'memberCount' => count($items), 'fields' => $fields];
+    // Full shape (masked, list-capped) so we can see where/if contacts live even when
+    // they're not in the obvious first-row fields, plus OSM's meta/structure block.
+    $payload = $r['payload'] ?? [];
+    return [
+        'ok' => true,
+        'memberCount' => count($items),
+        'fields' => $fields,
+        'topLevelKeys' => is_array($payload) ? array_keys($payload) : [],
+        'maskedPayload' => osmMaskDeep($payload),
+    ];
 }
 
 // Resolve a user's live section roster: demo fixture for demo sign-in, else the

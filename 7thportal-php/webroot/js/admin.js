@@ -476,13 +476,19 @@ async function renderParents() {
         out.innerHTML = `<div class="alert alert-warning">${escapeHtml(d.reason || 'Not available.')}${d.blocked ? ' Wait a minute and try again - OSM rate-limits repeated reads.' : ''}</div>`;
       } else {
         const parentFields = d.fields.filter(f => f.parentish);
+        const payloadJson = d.maskedPayload ? JSON.stringify(d.maskedPayload, null, 2) : '';
         out.innerHTML = `
-          <p class="muted">${d.memberCount} member row(s) &middot; ${d.source === 'demo' ? 'demo shape (not live)' : 'from OSM'} &middot; ${parentFields.length} parent/contact field(s) detected.</p>
+          <p class="muted">${d.memberCount} member row(s) &middot; ${d.source === 'demo' ? 'demo shape (not live)' : 'from OSM'} &middot; ${parentFields.length} parent/contact field(s) detected${d.topLevelKeys && d.topLevelKeys.length ? ' &middot; top-level keys: ' + d.topLevelKeys.map(escapeHtml).join(', ') : ''}.</p>
           ${parentFields.length
             ? '<div class="alert alert-success">Parent/contact fields are present &mdash; an automatic preload of parents + linked children is feasible.</div>'
-            : '<div class="alert alert-warning">No parent/contact fields were detected in this response &mdash; the current OSM scope may not include them.</div>'}
+            : '<div class="alert alert-warning">No parent/contact fields detected in the member rows. Check the full response below &mdash; if contacts aren\'t there at all, OSM\'s scope for this app doesn\'t include them (we\'d need a contact scope). If you see them under odd keys, send me the shape and I\'ll map them.</div>'}
           <div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Field</th><th>Sample (masked)</th><th>Parent/contact?</th></tr></thead>
-          <tbody>${d.fields.map(f => `<tr${f.parentish ? ' style="background:color-mix(in srgb, var(--card) 88%, var(--green))"' : ''}><td><code>${escapeHtml(f.path)}</code></td><td class="muted">${escapeHtml(f.sample)}</td><td>${f.parentish ? '✓' : ''}</td></tr>`).join('')}</tbody></table></div>`;
+          <tbody>${d.fields.map(f => `<tr${f.parentish ? ' style="background:color-mix(in srgb, var(--card) 88%, var(--green))"' : ''}><td><code>${escapeHtml(f.path)}</code></td><td class="muted">${escapeHtml(f.sample)}</td><td>${f.parentish ? '✓' : ''}</td></tr>`).join('')}</tbody></table></div>
+          ${payloadJson ? `<div class="cap-head" style="margin-top:1rem"><h3 style="margin:0">Full response shape (masked)</h3><button class="btn btn-secondary btn-sm" id="cf-copy">Copy</button></div>
+            <p class="muted">Values are masked; long lists show the first 2. Paste this to confirm exactly where contacts live.</p>
+            <pre id="cf-json" style="overflow:auto;max-height:340px;background:var(--bg);padding:1rem;border-radius:8px;font-size:.78rem">${escapeHtml(payloadJson)}</pre>` : ''}`;
+        const copyBtn = document.getElementById('cf-copy');
+        if (copyBtn) copyBtn.addEventListener('click', () => navigator.clipboard.writeText(payloadJson).then(() => { copyBtn.textContent = 'Copied'; }, () => { copyBtn.textContent = 'Copy failed'; }));
       }
     } catch (e) { out.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
     finally { cfGo.disabled = false; cfGo.textContent = 'Show fields'; }

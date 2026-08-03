@@ -455,6 +455,9 @@ $router->get('/api/admin/osm/sections/:sectionId/contact-fields', function ($par
             ['path' => 'contact_primary_1.lastname', 'sample' => 'Tur…(6 chars)', 'parentish' => true],
             ['path' => 'contact_primary_1.email1', 'sample' => 'sa•••@example.com', 'parentish' => true],
             ['path' => 'contact_primary_1.phone1', 'sample' => '•••••789 (phone-like)', 'parentish' => true],
+        ], 'topLevelKeys' => ['identifier', 'items', 'meta'], 'maskedPayload' => [
+            'identifier' => 'scoutid',
+            'items' => [['scoutid' => '12…(5 chars)', 'firstname' => 'Ame…(6 chars)', 'contact_primary_1' => ['email1' => 'sa•••@example.com']], '…(2 items total, first 2 shown)'],
         ]]);
     }
     $svc = dbGet('SELECT * FROM users WHERE id = ?', [$service['id']]);
@@ -463,7 +466,10 @@ $router->get('/api/admin/osm/sections/:sectionId/contact-fields', function ($par
     $res = osmGridContactFields($token, $params['sectionId'], $tid);
     if (empty($res['ok'])) jsonResponse(['available' => false, 'reason' => $res['error'] ?? 'OSM did not return contact fields.', 'blocked' => !empty($res['blocked'])]);
     logAudit(['userId' => $admin['id'], 'action' => 'admin_osm_contact_fields_probe', 'entityType' => 'osm_section', 'entityId' => $params['sectionId'], 'ipAddress' => clientIp(), 'details' => ['memberCount' => $res['memberCount'], 'fieldCount' => count($res['fields'])]]);
-    jsonResponse(['available' => true, 'source' => 'osm', 'memberCount' => $res['memberCount'], 'fields' => $res['fields']]);
+    jsonResponse([
+        'available' => true, 'source' => 'osm', 'memberCount' => $res['memberCount'], 'fields' => $res['fields'],
+        'topLevelKeys' => $res['topLevelKeys'] ?? [], 'maskedPayload' => $res['maskedPayload'] ?? null,
+    ]);
 });
 
 $router->post('/api/admin/parents/:id/children', function ($params) {
