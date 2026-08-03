@@ -525,6 +525,56 @@ $router->get('/api/admin/osm/sections/:sectionId/parent-import-preview', functio
     ], 'parents' => $parentsOut]);
 });
 
+// Apply the parent import (backlog: parent preload). Creates DORMANT parent
+// accounts (local login, no password, no invite email auto-sent) and links their
+// children. Re-derives the plan server-side from OSM (never trusts the client),
+// is idempotent (skips existing accounts/links) and audited. Admin only.
+$router->post('/api/admin/osm/sections/:sectionId/parent-import-apply', function ($params) {
+    $admin = requireAuth();
+    requireAdmin($admin);
+    $service = getServiceAccount() ?? $admin;
+    try { $token = ensureFreshToken($service); }
+    catch (Throwable $e) { jsonResponse(['error' => 'No usable OSM token - connect an OSM service account, or sign in with OSM.'], 400); }
+    if ($token === 'demo') jsonResponse(['error' => 'Demo mode - the import needs a real OSM sign-in.'], 400);
+
+    $svc = dbGet('SELECT * FROM users WHERE id = ?', [$service['id']]);
+    $term = osmCurrentTermFromData(json_decode($svc['osm_terms_json'] ?? '[]', true) ?: [], $params['sectionId']);
+    $tid = $term && ($term['termId'] ?? '') !== '' ? $term['termId'] : null;
+    $plan = osmParseParentImport($token, $params['sectionId'], $tid);
+    if (empty($plan['ok'])) jsonResponse(['error' => $plan['error'] ?? 'OSM did not return contacts.', 'blocked' => !empty($plan['blocked'])], 502);
+
+    $body = requestBody();
+    $sectionName = trim((string) ($body['sectionName'] ?? '')) ?: (dbGet('SELECT section_name FROM osm_sections WHERE osm_section_id = ?', [$params['sectionId']])['section_name'] ?? null);
+    $sectionType = trim((string) ($body['sectionType'] ?? '')) ?: (dbGet('SELECT section_type FROM osm_sections WHERE osm_section_id = ?', [$params['sectionId']])['section_type'] ?? null);
+
+    $parentsCreated = 0; $parentsExisting = 0; $linksCreated = 0;
+    foreach ($plan['parents'] as $email => $p) {
+        $u = dbGet('SELECT id FROM users WHERE lower(email) = ?', [$email]);
+        if ($u) {
+            $parentsExisting++;
+            $uid = (int) $u['id'];
+        } else {
+            // Dormant account: no password, an invite token so the parent can set one
+            // later via the normal setup flow, but NO email is sent here.
+            $result = dbRun(
+                "INSERT INTO users (auth_type, email, first_name, last_name, portal_role, invite_token, invite_expires_at) VALUES ('local', ?, ?, ?, 'parent', ?, ?)",
+                [$email, $p['firstName'] ?: ($p['name'] ?: 'Parent'), $p['lastName'] ?: '', bin2hex(random_bytes(24)), gmdate('Y-m-d\TH:i:s\Z', time() + 30 * 24 * 3600)]
+            );
+            $uid = (int) $result['lastInsertId'];
+            $parentsCreated++;
+        }
+        foreach ($p['children'] as $c) {
+            $res = dbRun(
+                'INSERT OR IGNORE INTO parent_child_links (parent_user_id, osm_member_id, osm_section_id, osm_section_name, osm_section_type, child_display_name, linked_by) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [$uid, $c['memberId'], $params['sectionId'], $sectionName, $sectionType, $c['name'], $admin['id']]
+            );
+            if (($res['rowCount'] ?? 0) > 0) $linksCreated++;
+        }
+    }
+    logAudit(['userId' => $admin['id'], 'action' => 'admin_osm_parent_import_apply', 'entityType' => 'osm_section', 'entityId' => $params['sectionId'], 'ipAddress' => clientIp(), 'details' => ['parentsCreated' => $parentsCreated, 'parentsExisting' => $parentsExisting, 'linksCreated' => $linksCreated, 'youth' => $plan['youth']]]);
+    jsonResponse(['ok' => true, 'parentsCreated' => $parentsCreated, 'parentsExisting' => $parentsExisting, 'linksCreated' => $linksCreated]);
+});
+
 $router->post('/api/admin/parents/:id/children', function ($params) {
     $admin = requireAuth();
     requireAdmin($admin);

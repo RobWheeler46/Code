@@ -530,7 +530,24 @@ async function renderParents() {
         </div>
         <p class="muted">Skipped: ${s.skipped.adults} leaders/young leaders &middot; ${s.skipped.hidden} hidden from parent portal &middot; ${s.skipped.noEmail} contact(s) with no email.</p>
         <div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Parent/carer</th><th>Email</th><th>Account</th><th>Children</th></tr></thead><tbody>${rows}</tbody></table></div>
-        <p class="muted" style="margin-top:.6rem">Nothing has been created. When you're happy with this, we can add an &ldquo;Apply import&rdquo; step (creates dormant accounts + links; no emails sent).</p>`;
+        <p class="muted" style="margin-top:.6rem">Nothing has been created yet. Applying creates <strong>dormant</strong> parent accounts (no password, <strong>no emails sent</strong>) and links the children. It's safe to re-run &mdash; existing accounts and links are skipped.</p>
+        <div id="pi-apply-wrap">${(s.parentsNew + s.linksToCreate) > 0 ? '<button class="btn btn-primary" id="pi-apply">Apply import</button>' : '<p class="muted">Nothing new to import.</p>'}</div>`;
+      const applyBtn = document.getElementById('pi-apply');
+      if (applyBtn) applyBtn.addEventListener('click', () => {
+        const sec = sections.find(x => x.sectionId === sid) || {};
+        document.getElementById('pi-apply-wrap').innerHTML = `
+          <div class="alert alert-warning">Create <strong>${s.parentsNew}</strong> dormant parent account(s) and <strong>${s.linksToCreate}</strong> child link(s)? No emails will be sent.
+          <div class="cap-actions" style="margin-top:.6rem"><button class="btn btn-primary" id="pi-confirm">Yes, apply</button><button class="btn btn-secondary" id="pi-cancel">Cancel</button></div></div>`;
+        document.getElementById('pi-cancel').addEventListener('click', () => piGo.click());
+        document.getElementById('pi-confirm').addEventListener('click', async () => {
+          const c = document.getElementById('pi-confirm'); c.disabled = true; c.textContent = 'Applying…';
+          try {
+            const r = await Api.post(`/api/admin/osm/sections/${encodeURIComponent(sid)}/parent-import-apply`, { sectionName: sec.sectionName, sectionType: sec.sectionType });
+            document.getElementById('pi-apply-wrap').innerHTML = `<div class="alert alert-success">Done. Created ${r.parentsCreated} parent account(s) and ${r.linksCreated} child link(s) (${r.parentsExisting} parent(s) already existed). Accounts are dormant &mdash; use the invite/reset flow to give parents access when ready.</div>`;
+            renderParents();
+          } catch (e) { document.getElementById('pi-apply-wrap').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+        });
+      });
     } catch (e) { out.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
     finally { piGo.disabled = false; piGo.textContent = 'Preview import'; }
   });

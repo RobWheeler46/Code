@@ -508,7 +508,7 @@ function osmParseParentImport(string $accessToken, string $sectionId, ?string $t
             $pname = trim($pick($cd, '2') . ' ' . $pick($cd, '3'));
             if ($email === '') { if ($pname !== '') $skipNoEmail++; continue; }
             if ((string) ($emailFlags[(string) $memberId][$grp]['parent_portal_hide'] ?? 'no') === 'yes') { $skipHidden++; continue; }
-            if (!isset($parents[$email])) $parents[$email] = ['name' => $pname, 'phone' => $pick($cd, '18'), 'children' => []];
+            if (!isset($parents[$email])) $parents[$email] = ['name' => $pname, 'firstName' => $pick($cd, '2'), 'lastName' => $pick($cd, '3'), 'phone' => $pick($cd, '18'), 'children' => []];
             $dup = false;
             foreach ($parents[$email]['children'] as $c) { if ($c['memberId'] === (string) $memberId) { $dup = true; break; } }
             if (!$dup) $parents[$email]['children'][] = ['memberId' => (string) $memberId, 'name' => $childName];
