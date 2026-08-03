@@ -477,6 +477,54 @@ $router->get('/api/admin/osm/sections/:sectionId/contact-fields', function ($par
     ]);
 });
 
+// Dry-run preview of a parent+child import from OSM (backlog: parent preload).
+// READ-ONLY - creates and links nothing; it only shows what an import WOULD do,
+// cross-referenced against existing accounts/links. Emails are masked.
+$router->get('/api/admin/osm/sections/:sectionId/parent-import-preview', function ($params) {
+    $admin = requireAuth();
+    requireAdmin($admin);
+    $service = getServiceAccount() ?? $admin;
+    try { $token = ensureFreshToken($service); }
+    catch (Throwable $e) { jsonResponse(['available' => false, 'reason' => 'No usable OSM token - connect an OSM service account, or sign in with OSM.']); }
+
+    if ($token === 'demo') {
+        jsonResponse(['available' => true, 'source' => 'demo', 'summary' => [
+            'youth' => 3, 'parentsTotal' => 3, 'parentsNew' => 2, 'parentsExisting' => 1, 'linksToCreate' => 4, 'linksExisting' => 1,
+            'skipped' => ['hidden' => 1, 'noEmail' => 1, 'adults' => 10],
+        ], 'parents' => [
+            ['emailMasked' => 'ni•••@example.com', 'name' => 'Nicola Wheeler', 'existingUser' => false, 'children' => [['name' => 'Jack Wheeler', 'alreadyLinked' => false]]],
+            ['emailMasked' => 'ro•••@example.com', 'name' => 'Rob Wheeler', 'existingUser' => true, 'children' => [['name' => 'Jack Wheeler', 'alreadyLinked' => true], ['name' => 'Holly Wheeler', 'alreadyLinked' => false]]],
+            ['emailMasked' => 'sm•••@example.com', 'name' => 'Simon Mullery', 'existingUser' => false, 'children' => [['name' => 'Isabelle Mullery', 'alreadyLinked' => false]]],
+        ]]);
+    }
+
+    $svc = dbGet('SELECT * FROM users WHERE id = ?', [$service['id']]);
+    $term = osmCurrentTermFromData(json_decode($svc['osm_terms_json'] ?? '[]', true) ?: [], $params['sectionId']);
+    $tid = $term && ($term['termId'] ?? '') !== '' ? $term['termId'] : null;
+    $plan = osmParseParentImport($token, $params['sectionId'], $tid);
+    if (empty($plan['ok'])) jsonResponse(['available' => false, 'reason' => $plan['error'] ?? 'OSM did not return contacts.', 'blocked' => !empty($plan['blocked'])]);
+
+    $parentsOut = []; $parentsNew = 0; $parentsExisting = 0; $linksToCreate = 0; $linksExisting = 0;
+    foreach ($plan['parents'] as $email => $p) {
+        $u = dbGet('SELECT id FROM users WHERE lower(email) = ?', [$email]);
+        $existing = (bool) $u;
+        $existing ? $parentsExisting++ : $parentsNew++;
+        $childrenOut = [];
+        foreach ($p['children'] as $c) {
+            $linked = $existing && dbGet('SELECT 1 FROM parent_child_links WHERE parent_user_id = ? AND osm_member_id = ? LIMIT 1', [$u['id'], $c['memberId']]);
+            $linked ? $linksExisting++ : $linksToCreate++;
+            $childrenOut[] = ['name' => $c['name'], 'alreadyLinked' => (bool) $linked];
+        }
+        $parentsOut[] = ['emailMasked' => osmMaskValue($email), 'name' => $p['name'], 'existingUser' => $existing, 'children' => $childrenOut];
+    }
+    usort($parentsOut, fn($a, $b) => strcmp((string) $a['name'], (string) $b['name']));
+    logAudit(['userId' => $admin['id'], 'action' => 'admin_osm_parent_import_preview', 'entityType' => 'osm_section', 'entityId' => $params['sectionId'], 'ipAddress' => clientIp(), 'details' => ['youth' => $plan['youth'], 'parents' => count($parentsOut), 'linksToCreate' => $linksToCreate]]);
+    jsonResponse(['available' => true, 'source' => 'osm', 'summary' => [
+        'youth' => $plan['youth'], 'parentsTotal' => count($parentsOut), 'parentsNew' => $parentsNew, 'parentsExisting' => $parentsExisting,
+        'linksToCreate' => $linksToCreate, 'linksExisting' => $linksExisting, 'skipped' => $plan['skipped'],
+    ], 'parents' => $parentsOut]);
+});
+
 $router->post('/api/admin/parents/:id/children', function ($params) {
     $admin = requireAuth();
     requireAdmin($admin);

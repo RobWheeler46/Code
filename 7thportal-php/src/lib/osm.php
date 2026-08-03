@@ -475,6 +475,48 @@ function osmGridContactFields(string $accessToken, string $sectionId, ?string $t
     ];
 }
 
+// Parse the contact grid into a parent-import PLAN (dry run - reads only, writes
+// nothing). For each YOUTH member (patrol_id >= 0; leaders/young-leaders are
+// negative and skipped), takes Primary Contact 1 & 2 (custom_data groups 1 and 2),
+// respecting the parent_portal_hide flag, and groups children under each parent
+// email. Emails are returned raw here; the caller masks them for display.
+function osmParseParentImport(string $accessToken, string $sectionId, ?string $termId): array
+{
+    if (!$termId) return ['ok' => false, 'error' => 'No current OSM term for this section.'];
+    $r = osmRawData('POST', $accessToken, '/ext/members/contact/grid/', ['action' => 'getMembers'], ['section_id' => $sectionId, 'term_id' => $termId]);
+    if (!$r['ok']) {
+        $blocked = $r['bodySnippet'] && stripos($r['bodySnippet'], 'blocked') !== false;
+        return ['ok' => false, 'blocked' => $blocked, 'error' => $blocked ? 'OSM temporarily blocked the request' : ($r['error'] ?? ('HTTP ' . $r['status']))];
+    }
+    $payload = $r['payload'] ?? [];
+    $rows = $payload['data'] ?? $r['items'] ?? [];
+    $emailFlags = $payload['meta']['email_flags'] ?? [];
+    $pick = fn($cd, $k) => (isset($cd[$k]) && trim((string) $cd[$k]) !== '') ? trim((string) $cd[$k]) : '';
+
+    $parents = []; $skipHidden = 0; $skipNoEmail = 0; $adults = 0; $youth = 0;
+    foreach ($rows as $memberId => $m) {
+        if (!is_array($m)) continue;
+        if ((int) ($m['patrol_id'] ?? 0) < 0) { $adults++; continue; } // Leaders / Young Leaders units
+        if ((string) ($m['active'] ?? '1') !== '1') continue;
+        $youth++;
+        $childName = trim(($m['first_name'] ?? $m['firstname'] ?? '') . ' ' . ($m['last_name'] ?? $m['lastname'] ?? ''));
+        $cdAll = $m['custom_data'] ?? [];
+        foreach (['1', '2'] as $grp) {
+            $cd = $cdAll[$grp] ?? null;
+            if (!is_array($cd)) continue;
+            $email = strtolower($pick($cd, '12') ?: $pick($cd, '14'));
+            $pname = trim($pick($cd, '2') . ' ' . $pick($cd, '3'));
+            if ($email === '') { if ($pname !== '') $skipNoEmail++; continue; }
+            if ((string) ($emailFlags[(string) $memberId][$grp]['parent_portal_hide'] ?? 'no') === 'yes') { $skipHidden++; continue; }
+            if (!isset($parents[$email])) $parents[$email] = ['name' => $pname, 'phone' => $pick($cd, '18'), 'children' => []];
+            $dup = false;
+            foreach ($parents[$email]['children'] as $c) { if ($c['memberId'] === (string) $memberId) { $dup = true; break; } }
+            if (!$dup) $parents[$email]['children'][] = ['memberId' => (string) $memberId, 'name' => $childName];
+        }
+    }
+    return ['ok' => true, 'parents' => $parents, 'skipped' => ['hidden' => $skipHidden, 'noEmail' => $skipNoEmail, 'adults' => $adults], 'youth' => $youth];
+}
+
 // Resolve a user's live section roster: demo fixture for demo sign-in, else the
 // live OSM grid using the user's own token + the section's current term. Shared by
 // the /roster endpoint and attendance pre-population. Fetch-only - never stores.

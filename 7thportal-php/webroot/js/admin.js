@@ -433,6 +433,15 @@ async function renderParents() {
       <div id="cf-result" style="margin-top:.8rem"></div>
     </div>
     <div class="card">
+      <h2>Preview parent import from OSM <span class="badge" data-status="draft">dry run</span></h2>
+      <p class="muted">Shows exactly which parent accounts would be created and which children linked, from OSM's contact data &mdash; deduplicated by email, skipping leaders and any contact marked &ldquo;hide from parent portal&rdquo;. <strong>This creates and links nothing</strong>; it's a read-only preview.</p>
+      <div class="cap-actions">
+        <select id="pi-section">${sections.map(s => `<option value="${escapeHtml(s.sectionId)}">${escapeHtml(s.sectionName)}</option>`).join('')}</select>
+        <button class="btn btn-secondary" id="pi-go"${sections.length ? '' : ' disabled'}>Preview import</button>
+      </div>
+      <div id="pi-result" style="margin-top:.8rem"></div>
+    </div>
+    <div class="card">
       <h2>Add a parent/carer account</h2>
       <form id="parent-form">
         <div class="grid cols-3">
@@ -495,6 +504,35 @@ async function renderParents() {
       }
     } catch (e) { out.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
     finally { cfGo.disabled = false; cfGo.textContent = 'Show fields'; }
+  });
+
+  const piGo = document.getElementById('pi-go');
+  if (piGo) piGo.addEventListener('click', async () => {
+    const sid = document.getElementById('pi-section').value;
+    const out = document.getElementById('pi-result');
+    piGo.disabled = true; piGo.textContent = 'Reading OSM…'; out.innerHTML = '';
+    try {
+      const d = await Api.get(`/api/admin/osm/sections/${encodeURIComponent(sid)}/parent-import-preview`);
+      if (!d.available) { out.innerHTML = `<div class="alert alert-warning">${escapeHtml(d.reason || 'Not available.')}${d.blocked ? ' Wait a minute and try again - OSM rate-limits repeated reads.' : ''}</div>`; return; }
+      const s = d.summary;
+      const rows = d.parents.map(p => `<tr>
+          <td>${escapeHtml(p.name || '(no name)')}</td>
+          <td class="muted">${escapeHtml(p.emailMasked)}</td>
+          <td>${p.existingUser ? '<span class="badge" data-status="active">existing</span>' : '<span class="badge" data-status="pending_approval">new</span>'}</td>
+          <td>${p.children.map(c => `${escapeHtml(c.name)}${c.alreadyLinked ? ' <span class="badge" data-status="archived">linked</span>' : ''}`).join('<br>')}</td>
+        </tr>`).join('');
+      out.innerHTML = `
+        <div class="cap-stats">
+          <div class="card"><div class="muted">Youth</div><div class="cap-big">${s.youth}</div></div>
+          <div class="card"><div class="muted">Parent accounts to create</div><div class="cap-big">${s.parentsNew}</div></div>
+          <div class="card"><div class="muted">Child links to create</div><div class="cap-big">${s.linksToCreate}</div></div>
+          <div class="card"><div class="muted">Already existing</div><div class="cap-big">${s.parentsExisting}p / ${s.linksExisting}l</div></div>
+        </div>
+        <p class="muted">Skipped: ${s.skipped.adults} leaders/young leaders &middot; ${s.skipped.hidden} hidden from parent portal &middot; ${s.skipped.noEmail} contact(s) with no email.</p>
+        <div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Parent/carer</th><th>Email</th><th>Account</th><th>Children</th></tr></thead><tbody>${rows}</tbody></table></div>
+        <p class="muted" style="margin-top:.6rem">Nothing has been created. When you're happy with this, we can add an &ldquo;Apply import&rdquo; step (creates dormant accounts + links; no emails sent).</p>`;
+    } catch (e) { out.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+    finally { piGo.disabled = false; piGo.textContent = 'Preview import'; }
   });
 
   document.getElementById('parent-list').innerHTML = parents.length === 0 ? '<p class="muted">No parent accounts yet.</p>' : parents.map(p => `
