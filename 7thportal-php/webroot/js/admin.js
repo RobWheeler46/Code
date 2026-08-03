@@ -476,12 +476,15 @@ async function renderParents() {
         out.innerHTML = `<div class="alert alert-warning">${escapeHtml(d.reason || 'Not available.')}${d.blocked ? ' Wait a minute and try again - OSM rate-limits repeated reads.' : ''}</div>`;
       } else {
         const parentFields = d.fields.filter(f => f.parentish);
+        const groups = d.contactGroups || [];
         const payloadJson = d.maskedPayload ? JSON.stringify(d.maskedPayload, null, 2) : '';
         out.innerHTML = `
-          <p class="muted">${d.memberCount} member row(s) &middot; ${d.source === 'demo' ? 'demo shape (not live)' : 'from OSM'} &middot; ${parentFields.length} parent/contact field(s) detected${d.topLevelKeys && d.topLevelKeys.length ? ' &middot; top-level keys: ' + d.topLevelKeys.map(escapeHtml).join(', ') : ''}.</p>
-          ${parentFields.length
-            ? '<div class="alert alert-success">Parent/contact fields are present &mdash; an automatic preload of parents + linked children is feasible.</div>'
-            : '<div class="alert alert-warning">No parent/contact fields detected in the member rows. Check the full response below &mdash; if contacts aren\'t there at all, OSM\'s scope for this app doesn\'t include them (we\'d need a contact scope). If you see them under odd keys, send me the shape and I\'ll map them.</div>'}
+          <p class="muted">${d.memberCount} member row(s) &middot; ${d.source === 'demo' ? 'demo shape (not live)' : 'from OSM'} &middot; ${parentFields.length} parent/contact field(s) detected.</p>
+          ${groups.length
+            ? `<div class="alert alert-success">Parent/carer contacts are present &mdash; a preload of parents + linked children is feasible.<br>Contact groups: ${groups.map(g => `<strong>${escapeHtml(g.name)}</strong> (${g.fields.map(escapeHtml).join(', ')})`).join(' &middot; ')}</div>`
+            : (parentFields.length
+              ? '<div class="alert alert-success">Contact-looking fields are present &mdash; a preload looks feasible.</div>'
+              : '<div class="alert alert-warning">No parent/contact fields detected. Check the full response below &mdash; if contacts aren\'t there, OSM\'s scope for this app doesn\'t include them; if under odd keys, send me the shape.</div>')}
           <div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Field</th><th>Sample (masked)</th><th>Parent/contact?</th></tr></thead>
           <tbody>${d.fields.map(f => `<tr${f.parentish ? ' style="background:color-mix(in srgb, var(--card) 88%, var(--green))"' : ''}><td><code>${escapeHtml(f.path)}</code></td><td class="muted">${escapeHtml(f.sample)}</td><td>${f.parentish ? '✓' : ''}</td></tr>`).join('')}</tbody></table></div>
           ${payloadJson ? `<div class="cap-head" style="margin-top:1rem"><h3 style="margin:0">Full response shape (masked)</h3><button class="btn btn-secondary btn-sm" id="cf-copy">Copy</button></div>

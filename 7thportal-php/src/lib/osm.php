@@ -425,25 +425,51 @@ function osmGridContactFields(string $accessToken, string $sectionId, ?string $t
         $blocked = $r['bodySnippet'] && stripos($r['bodySnippet'], 'blocked') !== false;
         return ['ok' => false, 'blocked' => $blocked, 'error' => $blocked ? 'OSM temporarily blocked the request' : ($r['error'] ?? ('HTTP ' . $r['status']))];
     }
-    $items = $r['items'] ?? [];
-    $first = (isset($items[0]) && is_array($items[0])) ? $items[0] : [];
-    $flat = [];
-    osmFlattenFields($first, '', $flat);
-    $rx = '/parent|carer|guardian|contact|email|phone|mobile|primary|secondary|mum|dad|relationship|address|postcode/i';
-    $fields = [];
-    foreach ($flat as $path => $masked) {
-        // Flag by path OR by a value that looks like an email/phone (contacts hidden
-        // behind opaque custom_data column ids still get caught this way).
-        $looksContact = preg_match($rx, $path) || preg_match('/@|\(phone/i', (string) $masked);
-        $fields[] = ['path' => $path, 'sample' => $masked, 'parentish' => (bool) $looksContact];
-    }
-    // Full shape (masked, list-capped) so we can see where/if contacts live even when
-    // they're not in the obvious first-row fields, plus OSM's meta/structure block.
     $payload = $r['payload'] ?? [];
+    // The contact grid keys members by id (not a list), so normalise to a list.
+    $memberRows = array_values($r['items'] ?? []);
+    $first = (isset($memberRows[0]) && is_array($memberRows[0])) ? $memberRows[0] : [];
+
+    // meta.structure maps OSM's numeric group/column ids to human labels, and tells
+    // us which groups are contacts (Primary Contact 1/2 = parents/carers).
+    $groups = [];
+    foreach ($payload['meta']['structure'] ?? [] as $g) {
+        if (!is_array($g)) continue;
+        $gid = (string) ($g['group_id'] ?? '');
+        $name = (string) ($g['name'] ?? '');
+        $ident = (string) ($g['identifier'] ?? '');
+        $cols = [];
+        foreach ($g['columns'] ?? [] as $c) {
+            if (is_array($c)) $cols[(string) ($c['column_id'] ?? '')] = (string) ($c['label'] ?? $c['varname'] ?? ('col ' . ($c['column_id'] ?? '')));
+        }
+        $groups[$gid] = ['name' => $name ?: $ident ?: ('Group ' . $gid), 'isContact' => (bool) preg_match('/contact|parent|carer|guardian|primary|emergency/i', $ident . ' ' . $name), 'cols' => $cols];
+    }
+
+    $fields = [];
+    // Basic top-level fields (name, patrol, dob…).
+    foreach ($first as $k => $v) {
+        if ($k === 'custom_data' || is_array($v)) continue;
+        $fields[] = ['path' => (string) $k, 'sample' => osmMaskValue($v), 'parentish' => false];
+    }
+    // Contact/custom fields, labelled via meta.structure.
+    foreach (($first['custom_data'] ?? []) as $gid => $cols) {
+        if (!is_array($cols)) continue;
+        $g = $groups[(string) $gid] ?? ['name' => 'Group ' . $gid, 'isContact' => false, 'cols' => []];
+        foreach ($cols as $cid => $val) {
+            $label = $g['cols'][(string) $cid] ?? ('col ' . $cid);
+            $masked = osmMaskValue($val);
+            $parentish = $g['isContact'] || (bool) preg_match('/email|phone|mobile|parent|carer/i', $label) || (bool) preg_match('/@|\(phone/i', (string) $masked);
+            $fields[] = ['path' => $g['name'] . ' › ' . $label, 'sample' => $masked, 'parentish' => $parentish];
+        }
+    }
+    $contactGroups = [];
+    foreach ($groups as $g) { if ($g['isContact'] && $g['cols']) $contactGroups[] = ['name' => $g['name'], 'fields' => array_values($g['cols'])]; }
+
     return [
         'ok' => true,
-        'memberCount' => count($items),
+        'memberCount' => count($memberRows),
         'fields' => $fields,
+        'contactGroups' => $contactGroups,
         'topLevelKeys' => is_array($payload) ? array_keys($payload) : [],
         'maskedPayload' => osmMaskDeep($payload),
     ];

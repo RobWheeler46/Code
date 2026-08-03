@@ -453,11 +453,15 @@ $router->get('/api/admin/osm/sections/:sectionId/contact-fields', function ($par
             ['path' => 'lastname', 'sample' => 'Tur…(6 chars)', 'parentish' => false],
             ['path' => 'contact_primary_1.firstname', 'sample' => 'Sar…(5 chars)', 'parentish' => true],
             ['path' => 'contact_primary_1.lastname', 'sample' => 'Tur…(6 chars)', 'parentish' => true],
-            ['path' => 'contact_primary_1.email1', 'sample' => 'sa•••@example.com', 'parentish' => true],
-            ['path' => 'contact_primary_1.phone1', 'sample' => '•••••789 (phone-like)', 'parentish' => true],
-        ], 'topLevelKeys' => ['identifier', 'items', 'meta'], 'maskedPayload' => [
-            'identifier' => 'scoutid',
-            'items' => [['scoutid' => '12…(5 chars)', 'firstname' => 'Ame…(6 chars)', 'contact_primary_1' => ['email1' => 'sa•••@example.com']], '…(2 items total, first 2 shown)'],
+            ['path' => 'Primary Contact 1 › Email 1', 'sample' => 'sa•••@example.com', 'parentish' => true],
+            ['path' => 'Primary Contact 1 › Phone 1', 'sample' => '•••••789 (phone-like)', 'parentish' => true],
+            ['path' => 'Primary Contact 2 › First name', 'sample' => 'Dav…(5 chars)', 'parentish' => true],
+            ['path' => 'Primary Contact 2 › Email 1', 'sample' => 'da•••@example.com', 'parentish' => true],
+        ], 'contactGroups' => [
+            ['name' => 'Primary Contact 1', 'fields' => ['First name', 'Last name', 'Email 1', 'Phone 1']],
+            ['name' => 'Primary Contact 2', 'fields' => ['First name', 'Last name', 'Email 1', 'Phone 1']],
+        ], 'topLevelKeys' => ['status', 'data', 'meta'], 'maskedPayload' => [
+            'data' => ['12345' => ['first_name' => 'Ame…(6 chars)', 'custom_data' => ['1' => ['12' => 'sa•••@example.com']]]],
         ]]);
     }
     $svc = dbGet('SELECT * FROM users WHERE id = ?', [$service['id']]);
@@ -468,6 +472,7 @@ $router->get('/api/admin/osm/sections/:sectionId/contact-fields', function ($par
     logAudit(['userId' => $admin['id'], 'action' => 'admin_osm_contact_fields_probe', 'entityType' => 'osm_section', 'entityId' => $params['sectionId'], 'ipAddress' => clientIp(), 'details' => ['memberCount' => $res['memberCount'], 'fieldCount' => count($res['fields'])]]);
     jsonResponse([
         'available' => true, 'source' => 'osm', 'memberCount' => $res['memberCount'], 'fields' => $res['fields'],
+        'contactGroups' => $res['contactGroups'] ?? [],
         'topLevelKeys' => $res['topLevelKeys'] ?? [], 'maskedPayload' => $res['maskedPayload'] ?? null,
     ]);
 });
