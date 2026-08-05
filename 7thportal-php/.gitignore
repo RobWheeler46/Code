@@ -14,3 +14,4 @@ data/login-debug.log
 
 # Extracted deploy folder (duplicate of dist/ - build artifact)
 7thportal-php-deploy/
+data/activity-uploads/

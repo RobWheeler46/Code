@@ -730,6 +730,15 @@ async function renderSettings() {
         <span id="attendance-settings-saved"></span>
       </form>
     </div>
+    <div class="card">
+      <h2>Activity Approval forms</h2>
+      <p class="muted">Digital Activity Approval form with a two-stage approval workflow (Section Lead &rarr; GLV): draft/resume, evidence uploads, request-more-info/reject, and a draft calendar entry on final approval. Self-approval is blocked; all steps audited. Ships off by default.</p>
+      <form id="activity-settings-form">
+        <div class="field"><label style="font-weight:400;"><input type="checkbox" id="act-forms-enabled" ${settings.activityFormsEnabled ? 'checked' : ''}> Enable Activity Approval forms</label></div>
+        <button class="btn btn-primary" type="submit">Save</button>
+        <span id="activity-settings-saved"></span>
+      </form>
+    </div>
   `;
   document.getElementById('gallery-settings-form').addEventListener('submit', async e => {
     e.preventDefault();
@@ -784,6 +793,11 @@ async function renderSettings() {
     e.preventDefault();
     await Api.put('/api/admin/settings', { attendanceEnabled: document.getElementById('att-enabled').checked });
     document.getElementById('attendance-settings-saved').textContent = 'Saved.';
+  });
+  document.getElementById('activity-settings-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    await Api.put('/api/admin/settings', { activityFormsEnabled: document.getElementById('act-forms-enabled').checked });
+    document.getElementById('activity-settings-saved').textContent = 'Saved.';
   });
   document.getElementById('settings-form').addEventListener('submit', async e => {
     e.preventDefault();

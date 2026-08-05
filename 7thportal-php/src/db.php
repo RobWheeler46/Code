@@ -656,6 +656,58 @@ CREATE TABLE IF NOT EXISTS attendance_marks (
 );
 CREATE INDEX IF NOT EXISTS idx_attendance_marks_register ON attendance_marks(register_id);
 
+-- Activity Approval forms (Activity Approval Testing Pack). A digital form + a
+-- two-stage sequential approval workflow (Section Lead -> GLV). Off by default.
+-- Uploaded evidence lives in data/activity-uploads (private, authenticated-proxy
+-- only, same as receipts/gallery). activity_form_events is the approval trail.
+CREATE TABLE IF NOT EXISTS activity_forms (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  reference TEXT,
+  created_by INTEGER NOT NULL REFERENCES users(id),
+  leader_name TEXT, leader_phone TEXT, leader_email TEXT,
+  activity_description TEXT, activity_location TEXT, activity_date TEXT, activity_end_date TEXT,
+  osm_section_id TEXT, section_names TEXT, yp_count INTEGER, adult_count INTEGER,
+  qualifications TEXT, in_touch TEXT,
+  risk_assessment_confirmed INTEGER NOT NULL DEFAULT 0,
+  public_liability_confirmed INTEGER NOT NULL DEFAULT 0,
+  activity_rules_confirmed INTEGER NOT NULL DEFAULT 0,
+  add_to_calendar INTEGER NOT NULL DEFAULT 1,
+  notes TEXT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','awaiting_section','awaiting_glv','approved','rejected','more_info')),
+  more_info_stage TEXT,
+  submitted_at TEXT,
+  section_decided_by INTEGER REFERENCES users(id), section_decided_at TEXT,
+  glv_decided_by INTEGER REFERENCES users(id), glv_decided_at TEXT,
+  calendar_entry_id INTEGER REFERENCES calendar_entries(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_activity_forms_status ON activity_forms(status, osm_section_id);
+CREATE INDEX IF NOT EXISTS idx_activity_forms_creator ON activity_forms(created_by, status);
+
+CREATE TABLE IF NOT EXISTS activity_form_files (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  form_id INTEGER NOT NULL REFERENCES activity_forms(id) ON DELETE CASCADE,
+  doc_type TEXT NOT NULL DEFAULT 'supporting' CHECK(doc_type IN ('risk_assessment','public_liability','unity_insurance','supporting')),
+  storage_key TEXT NOT NULL,
+  ext TEXT NOT NULL,
+  original_filename TEXT,
+  uploaded_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_activity_form_files_form ON activity_form_files(form_id);
+
+CREATE TABLE IF NOT EXISTS activity_form_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  form_id INTEGER NOT NULL REFERENCES activity_forms(id) ON DELETE CASCADE,
+  actor_user_id INTEGER REFERENCES users(id),
+  action TEXT NOT NULL,
+  stage TEXT,
+  comment TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_activity_form_events_form ON activity_form_events(form_id);
+
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(portal_role, account_status);
 CREATE INDEX IF NOT EXISTS idx_parent_links_parent ON parent_child_links(parent_user_id);
 CREATE INDEX IF NOT EXISTS idx_notices_status ON notices(status, audience, start_date);

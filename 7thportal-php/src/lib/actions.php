@@ -73,6 +73,8 @@ function buildActionCentre(array $user): array
         if (function_exists('calendarActionItems')) $items = array_merge($items, calendarActionItems($user));
         // Open attendance registers to complete (FR-SEC-ATT).
         if (function_exists('attendanceActionItems')) $items = array_merge($items, attendanceActionItems($user));
+        // Activity forms to complete/approve (Activity Approval pack).
+        if (function_exists('activityActionItems')) $items = array_merge($items, activityActionItems($user));
     }
 
     if ($isAdmin) {
