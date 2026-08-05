@@ -88,12 +88,17 @@ function renderLeader(box) {
       <p class="muted">Parent packs, kit lists, risk assessments, linked albums and expense accounts. Leader-only items are never shown to parents.</p>
       ${(HUB.items || []).length ? `<table class="data-table"><thead><tr><th>Hub item</th><th>Status</th><th>Visibility</th><th>Owner</th><th></th></tr></thead><tbody>${itemRows}</tbody></table>` : '<p class="muted">No items yet.</p>'}
     </div>
-    ${locationsLeader()}`;
+    ${locationsLeader()}
+    ${rotaLeader()}`;
 
   document.getElementById('ev-edit').addEventListener('click', openHubEdit);
   document.getElementById('ev-add-item').addEventListener('click', () => openItemForm(null));
   const locAdd = document.getElementById('loc-add'); if (locAdd) locAdd.addEventListener('click', () => openLocationForm(null));
   box.querySelectorAll('.loc-edit').forEach(b => b.addEventListener('click', () => openLocationForm((HUB.locations || []).find(l => l.id == b.dataset.id))));
+  const adultAdd = document.getElementById('rota-adult-add'); if (adultAdd) adultAdd.addEventListener('click', () => openAdultForm(null));
+  const entryAdd = document.getElementById('rota-entry-add'); if (entryAdd) entryAdd.addEventListener('click', () => openRotaEntryForm(null));
+  box.querySelectorAll('.rota-adult-edit').forEach(b => b.addEventListener('click', () => openAdultForm((HUB.rota.adults || []).find(a => a.id == b.dataset.id))));
+  box.querySelectorAll('.rota-entry-edit').forEach(b => b.addEventListener('click', () => openRotaEntryForm((HUB.rota.entries || []).find(e => e.id == b.dataset.id))));
   document.getElementById('ev-preview').addEventListener('click', () => { PARENT_PREVIEW = true; loadHub(); });
   const pub = document.getElementById('ev-publish'); if (pub) pub.addEventListener('click', () => setHubStatus('published'));
   const unpub = document.getElementById('ev-unpublish'); if (unpub) unpub.addEventListener('click', () => setHubStatus('draft'));
@@ -114,6 +119,8 @@ function overviewCard() {
   const o = HUB.overview; if (!o) return '';
   const bits = [`${o.emergencyLocations} emergency`];
   if (o.days) bits.push(`${o.days} day${o.days === 1 ? '' : 's'}`);
+  if (o.rotaAdults) bits.push(`${o.rotaAdults} adult${o.rotaAdults === 1 ? '' : 's'}`);
+  if (o.rotaGaps) bits.push(`<span style="color:#c62828">${o.rotaGaps} rota gap${o.rotaGaps === 1 ? '' : 's'}</span>`);
   if (o.openActions) bits.push(`${o.openActions} open action${o.openActions === 1 ? '' : 's'}`);
   return `<div class="card"><div class="muted">Camp planning</div>
     <div style="font-size:1.3rem;font-weight:800;margin-top:.2rem">${o.locations} location${o.locations === 1 ? '' : 's'}</div>
@@ -192,6 +199,80 @@ function openLocationForm(loc) {
     try { await Api.delete(`/api/events/${window.HUB_ID}/locations/${loc.id}`); m.remove(); loadHub(); }
     catch (e) { document.getElementById('lo-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
   });
+}
+
+// ── Camp adult rota (FR-CAMP-OP-018..021) ───────────────────────────────────────
+function rotaLeader() {
+  const r = HUB.rota; if (!r) return '';
+  const adults = r.adults || [], entries = r.entries || [];
+  const adultChips = adults.length ? adults.map(a => `<button class="btn btn-secondary btn-sm rota-adult-edit" data-id="${a.id}">${escapeHtml(a.name)}${a.isDriver ? ' 🚗' : ''}${a.isFirstAider ? ' ➕' : ''}</button>`).join(' ') : '<span class="muted">No adults added yet.</span>';
+
+  // Group entries by day, then session.
+  const byDay = {};
+  for (const e of entries) (byDay[e.dayLabel] ||= []).push(e);
+  const daysHtml = Object.keys(byDay).length ? Object.entries(byDay).map(([day, es]) => `
+    <h3 style="margin:.8rem 0 .3rem">${escapeHtml(day)}</h3>
+    <table class="data-table rcards"><thead><tr><th>Session</th><th>Role</th><th>Adult</th><th>Activity</th><th></th></tr></thead>
+    <tbody>${es.sort((a, b) => a.session.localeCompare(b.session)).map(e => `<tr${e.gap ? ' style="box-shadow:inset 3px 0 0 #c62828"' : ''}>
+        <td data-label="Session">${escapeHtml(e.sessionLabel)}</td>
+        <td data-label="Role" class="rcard-title">${escapeHtml(e.roleLabel)}</td>
+        <td data-label="Adult">${e.adultName ? escapeHtml(e.adultName) : `<span class="badge" data-status="deleted">${escapeHtml(e.gap || 'Gap')}</span>`}${(e.gap && e.adultName) ? ` <span class="badge" data-status="suspended">${escapeHtml(e.gap)}</span>` : ''}</td>
+        <td data-label="Activity" class="muted">${escapeHtml(e.activity || '—')}</td>
+        <td class="rcard-actions"><button class="btn btn-secondary btn-sm rota-entry-edit" data-id="${e.id}">Edit</button></td>
+      </tr>`).join('')}</tbody></table>`).join('') : '<p class="muted">No rota entries yet. Add the adult team, then add entries per day/session.</p>';
+
+  return `
+    <div class="card">
+      <div class="cap-head"><h2 style="margin:0">Adult rota</h2>
+        <span>${r.gaps > 0 ? `<span class="badge" data-status="deleted">${r.gaps} gap${r.gaps === 1 ? '' : 's'}</span>` : `<span class="badge" data-status="active">No gaps</span>`}</span></div>
+      <p class="muted">Assign the adult team to day/session roles. A role with no adult (or a driver/first-aid role filled by someone not qualified) is flagged as a gap. Leader-only.</p>
+      <div style="margin:.4rem 0 .8rem"><strong>Adult team</strong> <button class="btn btn-sm" id="rota-adult-add" style="margin-left:.4rem">Add adult</button>
+        <div style="margin-top:.4rem;display:flex;gap:.3rem;flex-wrap:wrap">${adultChips}</div>
+        <p class="field help">🚗 driver · ➕ first aider &middot; tap a name to edit.</p></div>
+      <div class="cap-head" style="margin-bottom:.3rem"><strong>Rota</strong><button class="btn btn-sm" id="rota-entry-add">Add entry</button></div>
+      ${daysHtml}
+    </div>`;
+}
+
+function openAdultForm(a) {
+  const isEdit = !!a; const x = a || { isDriver: false, isFirstAider: false };
+  const m = modal(`<h2>${isEdit ? 'Edit adult' : 'Add adult'}</h2><div id="ra-msg"></div>
+    ${field('Name', `<input id="ra-name" value="${escapeHtml(x.name || '')}">`)}
+    <div class="field"><label style="font-weight:400"><input type="checkbox" id="ra-driver" ${x.isDriver ? 'checked' : ''}> Authorised driver</label></div>
+    <div class="field"><label style="font-weight:400"><input type="checkbox" id="ra-firstaid" ${x.isFirstAider ? 'checked' : ''}> First aider</label></div>
+    ${field('Permits / skills (leader-only)', `<textarea id="ra-skills" rows="2">${escapeHtml(x.skills || '')}</textarea>`)}
+    <div class="modal-actions" style="display:flex;gap:.5rem;margin-top:1rem"><button class="btn" id="ra-save">${isEdit ? 'Save' : 'Add'}</button><button class="btn btn-secondary" id="ra-cancel">Cancel</button>${isEdit ? '<button class="btn btn-secondary" id="ra-delete" style="margin-left:auto">Delete</button>' : ''}</div>`);
+  m.querySelector('#ra-cancel').addEventListener('click', () => m.remove());
+  m.querySelector('#ra-save').addEventListener('click', async () => {
+    const payload = { name: document.getElementById('ra-name').value.trim(), isDriver: document.getElementById('ra-driver').checked, isFirstAider: document.getElementById('ra-firstaid').checked, skills: document.getElementById('ra-skills').value.trim() };
+    if (!payload.name) { document.getElementById('ra-msg').innerHTML = '<div class="alert alert-error">A name is required.</div>'; return; }
+    try { if (isEdit) await Api.patch(`/api/events/${window.HUB_ID}/rota/adults/${a.id}`, payload); else await Api.post(`/api/events/${window.HUB_ID}/rota/adults`, payload); m.remove(); loadHub(); }
+    catch (e) { document.getElementById('ra-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
+  const del = document.getElementById('ra-delete');
+  if (del) del.addEventListener('click', async () => { try { await Api.delete(`/api/events/${window.HUB_ID}/rota/adults/${a.id}`); m.remove(); loadHub(); } catch (e) { document.getElementById('ra-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; } });
+}
+
+function openRotaEntryForm(e) {
+  const isEdit = !!e; const x = e || { session: 'am', role: 'duty_scouter' };
+  const meta = HUB.rota.meta;
+  const adults = HUB.rota.adults || [];
+  const m = modal(`<h2>${isEdit ? 'Edit rota entry' : 'Add rota entry'}</h2><div id="re-msg"></div>
+    <div class="cap-actions">${field('Day', `<input id="re-day" value="${escapeHtml(x.dayLabel || '')}" placeholder="e.g. Sat 22 Aug">`)}${field('Session', `<select id="re-session">${selOpts(meta.sessions, x.session)}</select>`)}</div>
+    ${field('Role', `<select id="re-role">${selOpts(meta.roles, x.role)}</select>`)}
+    ${field('Adult', `<select id="re-adult"><option value="">— unassigned (gap) —</option>${adults.map(a => `<option value="${a.id}"${a.id == x.adultId ? ' selected' : ''}>${escapeHtml(a.name)}${a.isDriver ? ' (driver)' : ''}${a.isFirstAider ? ' (first aid)' : ''}</option>`).join('')}</select>`)}
+    ${field('Activity (optional)', `<input id="re-activity" value="${escapeHtml(x.activity || '')}">`)}
+    ${field('Notes (optional)', `<textarea id="re-notes" rows="2">${escapeHtml(x.notes || '')}</textarea>`)}
+    <div class="modal-actions" style="display:flex;gap:.5rem;margin-top:1rem"><button class="btn" id="re-save">${isEdit ? 'Save' : 'Add'}</button><button class="btn btn-secondary" id="re-cancel">Cancel</button>${isEdit ? '<button class="btn btn-secondary" id="re-delete" style="margin-left:auto">Delete</button>' : ''}</div>`);
+  m.querySelector('#re-cancel').addEventListener('click', () => m.remove());
+  m.querySelector('#re-save').addEventListener('click', async () => {
+    const payload = { dayLabel: document.getElementById('re-day').value.trim(), session: document.getElementById('re-session').value, role: document.getElementById('re-role').value, adultId: document.getElementById('re-adult').value || null, activity: document.getElementById('re-activity').value.trim(), notes: document.getElementById('re-notes').value.trim() };
+    if (!payload.dayLabel) { document.getElementById('re-msg').innerHTML = '<div class="alert alert-error">A day is required.</div>'; return; }
+    try { if (isEdit) await Api.patch(`/api/events/${window.HUB_ID}/rota/entries/${e.id}`, payload); else await Api.post(`/api/events/${window.HUB_ID}/rota/entries`, payload); m.remove(); loadHub(); }
+    catch (err) { document.getElementById('re-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`; }
+  });
+  const del = document.getElementById('re-delete');
+  if (del) del.addEventListener('click', async () => { try { await Api.delete(`/api/events/${window.HUB_ID}/rota/entries/${e.id}`); m.remove(); loadHub(); } catch (err) { document.getElementById('re-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`; } });
 }
 
 function modal(html) {

@@ -17,6 +17,18 @@ const EVENT_LOCATION_VISIBILITIES = ['parents' => 'Parent-visible', 'leaders' =>
 // Types that count as emergency locations for the prominent directory / offline pack.
 const EVENT_EMERGENCY_TYPES = ['hospital', 'minor_injuries', 'dentist', 'vet'];
 
+// Camp Planning Toolkit - adult rota (FR-CAMP-OP-018..021).
+const CAMP_ROTA_ROLES = [
+    'duty_scouter' => 'Duty scouter', 'asst_duty_scouter' => 'Assistant duty scouter',
+    'driver' => 'Driver', 'instructor' => 'Instructor', 'activity_supervisor' => 'Activity supervisor',
+    'qm_food' => 'QM food', 'qm_stores' => 'QM stores', 'shopping' => 'Shopping', 'campfire' => 'Campfire',
+    'wide_game' => 'Wide game coordinator', 'first_aid' => 'First aid', 'free_period' => 'Free period', 'other' => 'Other',
+];
+const CAMP_ROTA_SESSIONS = ['am' => 'Morning', 'pm' => 'Afternoon', 'evening' => 'Evening', 'night' => 'Overnight', 'all_day' => 'All day'];
+// Roles that require a specifically-qualified adult, for gap detection.
+const CAMP_ROTA_ROLES_NEED_DRIVER = ['driver'];
+const CAMP_ROTA_ROLES_NEED_FIRST_AID = ['first_aid'];
+
 function eventHubEnabled(): bool
 {
     $row = dbGet("SELECT value FROM settings WHERE key = 'event_hub_enabled'");
@@ -96,6 +108,44 @@ function serializeLocation(array $l): array
     ];
 }
 
+function serializeRotaAdult(array $a): array
+{
+    return ['id' => (int) $a['id'], 'name' => $a['name'], 'isDriver' => (bool) $a['is_driver'], 'isFirstAider' => (bool) $a['is_first_aider'], 'skills' => $a['skills']];
+}
+function serializeRotaEntry(array $e, array $adultsById): array
+{
+    $adult = $e['adult_id'] !== null ? ($adultsById[(int) $e['adult_id']] ?? null) : null;
+    // A gap: no adult, or the assigned adult isn't qualified for a role that needs it.
+    $gap = null;
+    if (!$adult) $gap = 'No adult assigned';
+    elseif (in_array($e['role'], CAMP_ROTA_ROLES_NEED_DRIVER, true) && !$adult['is_driver']) $gap = 'Assigned adult is not a driver';
+    elseif (in_array($e['role'], CAMP_ROTA_ROLES_NEED_FIRST_AID, true) && !$adult['is_first_aider']) $gap = 'Assigned adult is not a first aider';
+    return [
+        'id' => (int) $e['id'], 'dayLabel' => $e['day_label'], 'session' => $e['session'],
+        'sessionLabel' => CAMP_ROTA_SESSIONS[$e['session']] ?? $e['session'],
+        'role' => $e['role'], 'roleLabel' => CAMP_ROTA_ROLES[$e['role']] ?? $e['role'],
+        'adultId' => $e['adult_id'] !== null ? (int) $e['adult_id'] : null,
+        'adultName' => $adult['name'] ?? null, 'activity' => $e['activity'], 'notes' => $e['notes'],
+        'gap' => $gap,
+    ];
+}
+
+// The camp's rota: adult team + entries (grouped-ready) + a gap count for the overview.
+function eventCampRota(int $hubId): array
+{
+    $adults = dbAll('SELECT * FROM camp_rota_adults WHERE hub_id = ? ORDER BY sort_order, name', [$hubId]);
+    $byId = [];
+    foreach ($adults as $a) $byId[(int) $a['id']] = $a;
+    $entries = array_map(fn($e) => serializeRotaEntry($e, $byId), dbAll('SELECT * FROM camp_rota_entries WHERE hub_id = ? ORDER BY sort_order, id', [$hubId]));
+    $gaps = count(array_filter($entries, fn($e) => $e['gap'] !== null));
+    return [
+        'adults' => array_map('serializeRotaAdult', $adults),
+        'entries' => $entries,
+        'gaps' => $gaps,
+        'meta' => ['roles' => CAMP_ROTA_ROLES, 'sessions' => CAMP_ROTA_SESSIONS],
+    ];
+}
+
 // Camp overview summary for the leader dashboard (FR-CAMP-OP-003). Honest about the
 // data we hold in this slice - no attendee/leader counts (that's the deferred
 // programme/allocation module); dates, status, readiness, item + location tallies.
@@ -110,12 +160,16 @@ function eventCampOverview(array $hub): array
     }
     $emergency = count(array_filter($locs, fn($l) => $l['visibility'] === 'emergency' || in_array($l['location_type'], EVENT_EMERGENCY_TYPES, true)));
     $readiness = eventHubReadiness($hub);
+    $rota = eventCampRota((int) $hub['id']);
     return [
         'days' => $days,
         'parentItems' => count(array_filter($items, fn($i) => $i['visibility'] === 'parents')),
         'leaderItems' => count(array_filter($items, fn($i) => $i['visibility'] === 'leaders')),
         'locations' => count($locs),
         'emergencyLocations' => $emergency,
+        'rotaAdults' => count($rota['adults']),
+        'rotaEntries' => count($rota['entries']),
+        'rotaGaps' => $rota['gaps'],
         'openActions' => $readiness['total'] - $readiness['complete'],
         'readiness' => $readiness,
     ];

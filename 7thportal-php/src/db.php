@@ -473,6 +473,37 @@ CREATE TABLE IF NOT EXISTS event_locations (
 );
 CREATE INDEX IF NOT EXISTS idx_event_locations_hub ON event_locations(hub_id);
 
+-- Camp Planning Toolkit: adult rota (FR-CAMP-OP-018..021). The camp's adult team
+-- (with driver/first-aid flags + permits/skills notes) and rota entries by day,
+-- session, role and optional activity. An entry with no adult assigned is a "gap".
+-- Leader-only; parents never see any of this.
+CREATE TABLE IF NOT EXISTS camp_rota_adults (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  hub_id INTEGER NOT NULL REFERENCES event_hubs(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  is_driver INTEGER NOT NULL DEFAULT 0,
+  is_first_aider INTEGER NOT NULL DEFAULT 0,
+  skills TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_camp_rota_adults_hub ON camp_rota_adults(hub_id);
+
+CREATE TABLE IF NOT EXISTS camp_rota_entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  hub_id INTEGER NOT NULL REFERENCES event_hubs(id) ON DELETE CASCADE,
+  day_label TEXT NOT NULL,
+  session TEXT NOT NULL DEFAULT 'am' CHECK(session IN ('am','pm','evening','night','all_day')),
+  role TEXT NOT NULL DEFAULT 'other',
+  adult_id INTEGER REFERENCES camp_rota_adults(id) ON DELETE SET NULL,
+  activity TEXT,
+  notes TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_camp_rota_entries_hub ON camp_rota_entries(hub_id);
+
 -- Incident and near-miss logging (FRD FR-INC). Safeguarding-sensitive: this does
 -- NOT replace formal Scouts safeguarding/accident reporting - the module signposts
 -- to those and restricts access. Ships off by default. Restricted records

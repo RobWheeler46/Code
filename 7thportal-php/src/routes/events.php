@@ -84,6 +84,8 @@ $router->get('/api/events/:id', function ($params) {
         'locations' => array_map('serializeLocation', $locs),
         'readiness' => $isLeaderView ? eventHubReadiness($hub) : null,
         'overview' => $isLeaderView ? eventCampOverview($hub) : null,
+        // Adult rota is leader-only (FR-CAMP-OP: parents never see operational data).
+        'rota' => $isLeaderView ? eventCampRota((int) $hub['id']) : null,
         'locationMeta' => ['types' => EVENT_LOCATION_TYPES, 'visibilities' => EVENT_LOCATION_VISIBILITIES],
     ]));
 });
@@ -110,6 +112,8 @@ $router->delete('/api/events/:id', function ($params) {
     if (!$hub) jsonResponse(['error' => 'Event not found.'], 404);
     dbRun('DELETE FROM event_hub_items WHERE hub_id = ?', [$hub['id']]);
     dbRun('DELETE FROM event_locations WHERE hub_id = ?', [$hub['id']]);
+    dbRun('DELETE FROM camp_rota_entries WHERE hub_id = ?', [$hub['id']]);
+    dbRun('DELETE FROM camp_rota_adults WHERE hub_id = ?', [$hub['id']]);
     dbRun('DELETE FROM event_hubs WHERE id = ?', [$hub['id']]);
     logAudit(['userId' => $user['id'], 'action' => 'event_hub_delete', 'entityType' => 'event_hub', 'entityId' => (string) $hub['id'], 'ipAddress' => clientIp(), 'details' => ['title' => $hub['title']]]);
     jsonResponse(['ok' => true]);
@@ -171,6 +175,106 @@ $router->delete('/api/events/:id/locations/:locId', function ($params) {
     if (!$loc) jsonResponse(['error' => 'Location not found.'], 404);
     dbRun('DELETE FROM event_locations WHERE id = ?', [$loc['id']]);
     logAudit(['userId' => $user['id'], 'action' => 'camp_location_delete', 'entityType' => 'event_hub', 'entityId' => (string) $params['id'], 'ipAddress' => clientIp()]);
+    jsonResponse(['ok' => true]);
+});
+
+// ── Camp adult rota (FR-CAMP-OP-018..021) ───────────────────────────────────
+function eventHubForManage($id): array
+{
+    $hub = dbGet('SELECT id FROM event_hubs WHERE id = ?', [$id]);
+    if (!$hub) jsonResponse(['error' => 'Event not found.'], 404);
+    return $hub;
+}
+
+// -- Adult team --
+$router->post('/api/events/:id/rota/adults', function ($params) {
+    $user = requireAuth();
+    requireEventHubEnabled();
+    if (!eventHubCanManage($user)) jsonResponse(['error' => 'Not permitted.'], 403);
+    $hub = eventHubForManage($params['id']);
+    $b = requestBody();
+    $name = trim((string) ($b['name'] ?? ''));
+    if ($name === '') jsonResponse(['error' => 'A name is required.'], 400);
+    $result = dbRun('INSERT INTO camp_rota_adults (hub_id, name, is_driver, is_first_aider, skills) VALUES (?, ?, ?, ?, ?)',
+        [$hub['id'], $name, !empty($b['isDriver']) ? 1 : 0, !empty($b['isFirstAider']) ? 1 : 0, trim((string) ($b['skills'] ?? '')) ?: null]);
+    logAudit(['userId' => $user['id'], 'action' => 'camp_rota_adult_add', 'entityType' => 'event_hub', 'entityId' => (string) $hub['id'], 'ipAddress' => clientIp()]);
+    jsonResponse(serializeRotaAdult(dbGet('SELECT * FROM camp_rota_adults WHERE id = ?', [$result['lastInsertId']])), 201);
+});
+$router->patch('/api/events/:id/rota/adults/:aid', function ($params) {
+    $user = requireAuth();
+    requireEventHubEnabled();
+    if (!eventHubCanManage($user)) jsonResponse(['error' => 'Not permitted.'], 403);
+    $a = dbGet('SELECT * FROM camp_rota_adults WHERE id = ? AND hub_id = ?', [$params['aid'], $params['id']]);
+    if (!$a) jsonResponse(['error' => 'Adult not found.'], 404);
+    $b = requestBody();
+    dbRun('UPDATE camp_rota_adults SET name = ?, is_driver = ?, is_first_aider = ?, skills = ? WHERE id = ?', [
+        trim((string) ($b['name'] ?? $a['name'])) ?: $a['name'],
+        array_key_exists('isDriver', $b) ? (!empty($b['isDriver']) ? 1 : 0) : $a['is_driver'],
+        array_key_exists('isFirstAider', $b) ? (!empty($b['isFirstAider']) ? 1 : 0) : $a['is_first_aider'],
+        array_key_exists('skills', $b) ? (trim((string) $b['skills']) ?: null) : $a['skills'], $a['id'],
+    ]);
+    jsonResponse(serializeRotaAdult(dbGet('SELECT * FROM camp_rota_adults WHERE id = ?', [$a['id']])));
+});
+$router->delete('/api/events/:id/rota/adults/:aid', function ($params) {
+    $user = requireAuth();
+    requireEventHubEnabled();
+    if (!eventHubCanManage($user)) jsonResponse(['error' => 'Not permitted.'], 403);
+    $a = dbGet('SELECT * FROM camp_rota_adults WHERE id = ? AND hub_id = ?', [$params['aid'], $params['id']]);
+    if (!$a) jsonResponse(['error' => 'Adult not found.'], 404);
+    dbRun('DELETE FROM camp_rota_adults WHERE id = ?', [$a['id']]); // entries keep the slot, adult_id -> NULL (a gap)
+    logAudit(['userId' => $user['id'], 'action' => 'camp_rota_adult_delete', 'entityType' => 'event_hub', 'entityId' => (string) $params['id'], 'ipAddress' => clientIp()]);
+    jsonResponse(['ok' => true]);
+});
+
+// -- Rota entries --
+function eventRotaEntryFields(array $b, array $existing = []): array
+{
+    return [
+        'day_label' => trim((string) ($b['dayLabel'] ?? $existing['day_label'] ?? '')),
+        'session' => array_key_exists($b['session'] ?? null, CAMP_ROTA_SESSIONS) ? $b['session'] : ($existing['session'] ?? 'am'),
+        'role' => array_key_exists($b['role'] ?? null, CAMP_ROTA_ROLES) ? $b['role'] : ($existing['role'] ?? 'other'),
+        'adult_id' => array_key_exists('adultId', $b) ? (!empty($b['adultId']) ? (int) $b['adultId'] : null) : ($existing['adult_id'] ?? null),
+        'activity' => array_key_exists('activity', $b) ? (trim((string) $b['activity']) ?: null) : ($existing['activity'] ?? null),
+        'notes' => array_key_exists('notes', $b) ? (trim((string) $b['notes']) ?: null) : ($existing['notes'] ?? null),
+    ];
+}
+$router->post('/api/events/:id/rota/entries', function ($params) {
+    $user = requireAuth();
+    requireEventHubEnabled();
+    if (!eventHubCanManage($user)) jsonResponse(['error' => 'Not permitted.'], 403);
+    $hub = eventHubForManage($params['id']);
+    $f = eventRotaEntryFields(requestBody());
+    if ($f['day_label'] === '') jsonResponse(['error' => 'A day is required.'], 400);
+    // A chosen adult must belong to this hub's team.
+    if ($f['adult_id'] !== null && !dbGet('SELECT 1 FROM camp_rota_adults WHERE id = ? AND hub_id = ?', [$f['adult_id'], $hub['id']])) jsonResponse(['error' => 'Unknown adult.'], 400);
+    $cols = array_keys($f);
+    $result = dbRun('INSERT INTO camp_rota_entries (hub_id, ' . implode(',', $cols) . ') VALUES (?, ' . implode(',', array_fill(0, count($cols), '?')) . ')', [$hub['id'], ...array_values($f)]);
+    logAudit(['userId' => $user['id'], 'action' => 'camp_rota_entry_add', 'entityType' => 'event_hub', 'entityId' => (string) $hub['id'], 'ipAddress' => clientIp()]);
+    $byId = []; foreach (dbAll('SELECT * FROM camp_rota_adults WHERE hub_id = ?', [$hub['id']]) as $a) $byId[(int) $a['id']] = $a;
+    jsonResponse(serializeRotaEntry(dbGet('SELECT * FROM camp_rota_entries WHERE id = ?', [$result['lastInsertId']]), $byId), 201);
+});
+$router->patch('/api/events/:id/rota/entries/:eid', function ($params) {
+    $user = requireAuth();
+    requireEventHubEnabled();
+    if (!eventHubCanManage($user)) jsonResponse(['error' => 'Not permitted.'], 403);
+    $e = dbGet('SELECT * FROM camp_rota_entries WHERE id = ? AND hub_id = ?', [$params['eid'], $params['id']]);
+    if (!$e) jsonResponse(['error' => 'Entry not found.'], 404);
+    $f = eventRotaEntryFields(requestBody(), $e);
+    if ($f['day_label'] === '') jsonResponse(['error' => 'A day is required.'], 400);
+    if ($f['adult_id'] !== null && !dbGet('SELECT 1 FROM camp_rota_adults WHERE id = ? AND hub_id = ?', [$f['adult_id'], $params['id']])) jsonResponse(['error' => 'Unknown adult.'], 400);
+    $set = implode(', ', array_map(fn($c) => "$c = ?", array_keys($f)));
+    dbRun("UPDATE camp_rota_entries SET $set, updated_at = datetime('now') WHERE id = ?", [...array_values($f), $e['id']]);
+    $byId = []; foreach (dbAll('SELECT * FROM camp_rota_adults WHERE hub_id = ?', [$params['id']]) as $a) $byId[(int) $a['id']] = $a;
+    jsonResponse(serializeRotaEntry(dbGet('SELECT * FROM camp_rota_entries WHERE id = ?', [$e['id']]), $byId));
+});
+$router->delete('/api/events/:id/rota/entries/:eid', function ($params) {
+    $user = requireAuth();
+    requireEventHubEnabled();
+    if (!eventHubCanManage($user)) jsonResponse(['error' => 'Not permitted.'], 403);
+    $e = dbGet('SELECT * FROM camp_rota_entries WHERE id = ? AND hub_id = ?', [$params['eid'], $params['id']]);
+    if (!$e) jsonResponse(['error' => 'Entry not found.'], 404);
+    dbRun('DELETE FROM camp_rota_entries WHERE id = ?', [$e['id']]);
+    logAudit(['userId' => $user['id'], 'action' => 'camp_rota_entry_delete', 'entityType' => 'event_hub', 'entityId' => (string) $params['id'], 'ipAddress' => clientIp()]);
     jsonResponse(['ok' => true]);
 });
 
