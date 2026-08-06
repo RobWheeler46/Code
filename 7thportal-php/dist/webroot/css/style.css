@@ -222,6 +222,9 @@ textarea { min-height: 5rem; resize: vertical; }
 .cap-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 .cap-head h2 { margin: 0; }
 .cap-actions { display: inline-flex; gap: 0.5rem; flex-wrap: wrap; }
+.af-sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.35rem 1rem; }
+.af-sec-opt { display: flex; align-items: center; gap: 0.45rem; font-weight: 400; padding: 0.15rem 0; }
+.af-sec-opt input { width: auto; margin: 0; }
 .data-table th, .data-table td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .data-table th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 .data-table input { padding: 0.3rem 0.4rem; border: 1px solid var(--border); border-radius: 5px; font: inherit; }

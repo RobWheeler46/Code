@@ -22,6 +22,12 @@ const ACTIVITY_DOC_TYPES = [
     'unity_insurance' => 'Unity Insurance approval',
     'supporting' => 'Other supporting document',
 ];
+// The group's sections, offered as a multi-select on the form (improved-flow spec).
+const ACTIVITY_SECTIONS = [
+    'Sparrowhawks Beavers', 'Falcon Beavers', 'Kingfisher Beavers',
+    'Isambard Cubs', 'Kingdom Cubs', 'Brunel Cubs',
+    'Discovery Scouts', 'Endeavour Scouts',
+];
 
 function activityFormsEnabled(): bool
 {
@@ -74,16 +80,16 @@ function activityValidate(array $f): array
     $req = [
         'leader_name' => 'Leader name', 'leader_phone' => 'Leader phone', 'leader_email' => 'Leader email',
         'activity_description' => 'Activity description', 'activity_location' => 'Location', 'activity_date' => 'Activity date',
-        'section_names' => 'Participating section(s)',
+        'section_names' => 'Participating section(s)', 'in_touch' => 'In Touch process',
     ];
     foreach ($req as $k => $label) { if (trim((string) ($f[$k] ?? '')) === '') $missing[] = $label; }
     if ((int) ($f['yp_count'] ?? 0) <= 0) $missing[] = 'Estimated number of young people';
+    if ((int) ($f['adult_count'] ?? 0) <= 0) $missing[] = 'Estimated number of adults';
     if (!$f['risk_assessment_confirmed']) $missing[] = 'Risk assessment confirmation';
     if (!$f['public_liability_confirmed']) $missing[] = 'Public liability confirmation';
     if (!$f['activity_rules_confirmed']) $missing[] = 'Activity rules confirmation';
-    // At least the risk assessment document must be attached.
-    $hasRa = dbGet("SELECT 1 FROM activity_form_files WHERE form_id = ? AND doc_type = 'risk_assessment' LIMIT 1", [$f['id'] ?? 0]);
-    if (!$hasRa) $missing[] = 'Risk assessment document upload';
+    // A risk assessment document is recommended, not required (improved-flow spec):
+    // the risk-assessment confirmation checkbox above is the required gate.
     return $missing;
 }
 

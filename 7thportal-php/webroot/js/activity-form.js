@@ -52,12 +52,12 @@ function editView() {
       <div class="cap-actions">${F('Date', `<input id="f-activityDate" type="date" value="${esc(FORM.activityDate)}">`)}${F('End date (optional)', `<input id="f-activityEndDate" type="date" value="${esc(FORM.activityEndDate)}">`)}</div>
     </div>
     <div class="card"><h2>Participants</h2>
-      ${F('Participating section(s)', `<input id="f-sectionNames" value="${esc(FORM.sectionNames)}" placeholder="e.g. Cubs, Scouts">`)}
-      <div class="cap-actions">${F('Young people (est.)', `<input id="f-ypCount" type="number" min="0" value="${FORM.ypCount ?? ''}" style="width:110px">`)}${F('Adults (est.)', `<input id="f-adultCount" type="number" min="0" value="${FORM.adultCount ?? ''}" style="width:110px">`)}</div>
+      ${sectionsField()}
+      <div class="cap-actions">${F('Young people (est.)', `<input id="f-ypCount" type="number" min="1" value="${FORM.ypCount ?? ''}" style="width:110px">`)}${F('Adults (est.)', `<input id="f-adultCount" type="number" min="1" value="${FORM.adultCount ?? ''}" style="width:110px">`)}</div>
       ${F('Relevant qualifications', `<textarea id="f-qualifications" rows="2">${esc(FORM.qualifications)}</textarea>`)}
     </div>
     <div class="card"><h2>Safety &amp; confirmations</h2>
-      ${F('In Touch process', `<textarea id="f-inTouch" rows="2">${esc(FORM.inTouch)}</textarea>`)}
+      ${F('In Touch process', `<textarea id="f-inTouch" rows="2">${esc(FORM.inTouch)}</textarea>`, 'Required. How the In Touch / emergency contact arrangements will work for this activity.')}
       ${cb('f-riskAssessmentConfirmed', FORM.riskAssessmentConfirmed, 'A risk assessment has been completed for this activity.')}
       ${cb('f-publicLiabilityConfirmed', FORM.publicLiabilityConfirmed, 'Public liability cover is confirmed (documents attached where needed).')}
       ${cb('f-activityRulesConfirmed', FORM.activityRulesConfirmed, 'The relevant activity rules will be followed.')}
@@ -70,13 +70,23 @@ function editView() {
     </div></div>`;
 }
 
+// Participating sections: a multi-select of the group's sections (improved-flow
+// spec). Stored as a comma-joined string in section_names, so no schema change.
+function sectionsField() {
+  const chosen = new Set(String(FORM.sectionNames || '').split(',').map(s => s.trim()).filter(Boolean));
+  const opts = (META.sections || []).map((name, i) =>
+    `<label class="af-sec-opt"><input type="checkbox" class="af-section" id="f-sec-${i}" value="${esc(name)}"${chosen.has(name) ? ' checked' : ''}> ${esc(name)}</label>`).join('');
+  return `<div class="field"><label>Participating section(s)</label><div class="af-sections">${opts}</div></div>`;
+}
+
 function collect() {
   const v = id => { const el = document.getElementById(id); return el ? el.value : undefined; };
   const c = id => { const el = document.getElementById(id); return el ? el.checked : undefined; };
+  const sections = Array.from(document.querySelectorAll('.af-section')).filter(x => x.checked).map(x => x.value).join(', ');
   return {
     leaderName: v('f-leaderName'), leaderPhone: v('f-leaderPhone'), leaderEmail: v('f-leaderEmail'),
     activityDescription: v('f-activityDescription'), location: v('f-location'), activityDate: v('f-activityDate'), activityEndDate: v('f-activityEndDate'),
-    sectionNames: v('f-sectionNames'), ypCount: v('f-ypCount'), adultCount: v('f-adultCount'), qualifications: v('f-qualifications'),
+    sectionNames: sections, ypCount: v('f-ypCount'), adultCount: v('f-adultCount'), qualifications: v('f-qualifications'),
     inTouch: v('f-inTouch'), riskAssessmentConfirmed: c('f-riskAssessmentConfirmed'), publicLiabilityConfirmed: c('f-publicLiabilityConfirmed'),
     activityRulesConfirmed: c('f-activityRulesConfirmed'), addToCalendar: c('f-addToCalendar'), notes: v('f-notes'),
   };
@@ -118,13 +128,13 @@ async function autoSaveNow() {
 function recomputeMissing() {
   const c = collect();
   const M = [];
-  const req = { leaderName: 'Leader name', leaderPhone: 'Leader phone', leaderEmail: 'Leader email', activityDescription: 'Activity description', location: 'Location', activityDate: 'Activity date', sectionNames: 'Participating section(s)' };
+  const req = { leaderName: 'Leader name', leaderPhone: 'Leader phone', leaderEmail: 'Leader email', activityDescription: 'Activity description', location: 'Location', activityDate: 'Activity date', sectionNames: 'Participating section(s)', inTouch: 'In Touch process' };
   for (const k in req) if (!String(c[k] || '').trim()) M.push(req[k]);
   if (!(parseInt(c.ypCount, 10) > 0)) M.push('Estimated number of young people');
+  if (!(parseInt(c.adultCount, 10) > 0)) M.push('Estimated number of adults');
   if (!c.riskAssessmentConfirmed) M.push('Risk assessment confirmation');
   if (!c.publicLiabilityConfirmed) M.push('Public liability confirmation');
   if (!c.activityRulesConfirmed) M.push('Activity rules confirmation');
-  if (!(FILES || []).some(f => f.docType === 'risk_assessment')) M.push('Risk assessment document upload');
   return M;
 }
 
@@ -157,7 +167,7 @@ function filesView() {
       <input type="file" id="af-file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg">
       <button class="btn btn-secondary" id="af-upload">Upload</button>
     </div><div id="af-upload-msg"></div>` : '';
-  return `<div class="card"><h2>Documents</h2><p class="muted">Risk assessment, public liability, Unity Insurance approval and any supporting documents. PDF, DOCX, XLSX, PNG, JPG up to 10MB.</p>${list}${uploader}</div>`;
+  return `<div class="card"><h2>Documents</h2><p class="muted">Risk assessment (recommended), public liability, Unity Insurance approval and any supporting documents. PDF, DOCX, XLSX, PNG, JPG up to 10MB.</p>${list}${uploader}</div>`;
 }
 
 // ── Approver panel ──────────────────────────────────────────────────────────────

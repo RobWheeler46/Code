@@ -99,7 +99,7 @@ $router->get('/api/activity/forms/:id', function ($params) {
         'events' => array_map('serializeActivityEvent', dbAll('SELECT * FROM activity_form_events WHERE form_id = ? ORDER BY id', [$f['id']])),
         'myActions' => activityMyActions($user, $f),
         'missing' => activityValidate($f),
-        'meta' => ['statuses' => ACTIVITY_STATUSES, 'docTypes' => ACTIVITY_DOC_TYPES],
+        'meta' => ['statuses' => ACTIVITY_STATUSES, 'docTypes' => ACTIVITY_DOC_TYPES, 'sections' => ACTIVITY_SECTIONS],
     ]);
 });
 
