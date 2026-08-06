@@ -79,9 +79,16 @@ $router->post('/api/activity/forms', function ($params) {
     requireLeader($user);
     requireActivityFormsEnabled();
     if (!activityCanComplete($user)) jsonResponse(['error' => 'Your role cannot raise activity forms.'], 403);
+    // Prefill the leader-in-charge phone from the user's remembered phone; if we
+    // don't have one yet, seed it once from OSM (best-effort) and remember it.
+    $phone = trim((string) ($user['phone'] ?? ''));
+    if ($phone === '') {
+        $seeded = osmFindOwnPhone($user);
+        if ($seeded !== null && $seeded !== '') { $phone = $seeded; dbRun('UPDATE users SET phone = ? WHERE id = ?', [$phone, $user['id']]); }
+    }
     $result = dbRun(
-        "INSERT INTO activity_forms (created_by, leader_name, leader_email, status) VALUES (?, ?, ?, 'draft')",
-        [$user['id'], trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')), $user['email'] ?? null]
+        "INSERT INTO activity_forms (created_by, leader_name, leader_phone, leader_email, status) VALUES (?, ?, ?, ?, 'draft')",
+        [$user['id'], trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')), $phone ?: null, $user['email'] ?? null]
     );
     $id = (int) $result['lastInsertId'];
     dbRun('UPDATE activity_forms SET reference = ? WHERE id = ?', ['AAF-' . str_pad((string) $id, 4, '0', STR_PAD_LEFT), $id]);
@@ -117,6 +124,15 @@ $router->patch('/api/activity/forms/:id', function ($params) {
     $fields = activityFieldsFromBody(requestBody(), $f);
     $set = implode(', ', array_map(fn($c) => "$c = ?", array_keys($fields)));
     dbRun("UPDATE activity_forms SET $set, updated_at = datetime('now') WHERE id = ?", [...array_values($fields), $f['id']]);
+    // Remember the leader's own phone for future forms, but only when the
+    // leader-in-charge is the person filling it in (unnamed or their own name).
+    $newPhone = trim((string) ($fields['leader_phone'] ?? ''));
+    $formLeader = trim((string) ($fields['leader_name'] ?? ''));
+    $ownName = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? ''));
+    $isSelf = $formLeader === '' || strcasecmp($formLeader, $ownName) === 0;
+    if ($isSelf && $newPhone !== '' && $newPhone !== trim((string) ($user['phone'] ?? ''))) {
+        dbRun('UPDATE users SET phone = ? WHERE id = ?', [$newPhone, $user['id']]);
+    }
     jsonResponse(serializeActivityForm(activityFormOr404($f['id']), true));
 });
 

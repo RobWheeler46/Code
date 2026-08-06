@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT,
   first_name TEXT NOT NULL,
   last_name TEXT NOT NULL,
+  phone TEXT,
   portal_role TEXT NOT NULL CHECK(portal_role IN ('parent','section_leader','assistant_leader','group_leadership','trustee_viewer','treasurer','chair','admin')),
   account_status TEXT NOT NULL DEFAULT 'active' CHECK(account_status IN ('active','suspended','deleted')),
   osm_roles_json TEXT,
@@ -767,6 +768,13 @@ SQL
 $usersTermsSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'")['sql'] ?? '';
 if ($usersTermsSql && !str_contains($usersTermsSql, 'osm_terms_json')) {
     db()->exec('ALTER TABLE users ADD COLUMN osm_terms_json TEXT');
+}
+
+// Migration: users gained phone - the leader's own phone, remembered from the
+// last Activity Approval form they filled (and seeded once from OSM), so future
+// forms prefill it. Add the column if an older users table predates it.
+if ($usersTermsSql && !str_contains($usersTermsSql, 'phone')) {
+    db()->exec('ALTER TABLE users ADD COLUMN phone TEXT');
 }
 
 // Migration: section_capacity gained active_count (an admin-entered active-member

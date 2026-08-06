@@ -517,6 +517,70 @@ function osmParseParentImport(string $accessToken, string $sectionId, ?string $t
     return ['ok' => true, 'parents' => $parents, 'skipped' => ['hidden' => $skipHidden, 'noEmail' => $skipNoEmail, 'adults' => $adults], 'youth' => $youth];
 }
 
+// Best-effort: find the logged-in leader's OWN phone number from OSM's contact
+// grid, so an Activity Approval draft can seed it once. Matches their row by
+// their login email (the contact block carrying that email supplies the phone,
+// keeping the two coherent), falling back to a full-name match. Fetch-only,
+// never throws, returns a phone string or null. Only their own contact data is
+// read - nothing about youth or other members is retained.
+function osmFindOwnPhone(array $user): ?string
+{
+    $me = dbGet('SELECT * FROM users WHERE id = ?', [$user['id']]);
+    if (!$me || ($me['auth_type'] ?? '') !== 'osm') return null;
+    try { $token = ensureFreshToken($me); } catch (Throwable $e) { return null; }
+    if ($token === 'demo') return null;
+
+    $email = strtolower(trim((string) ($me['email'] ?? '')));
+    $fullName = strtolower(trim(($me['first_name'] ?? '') . ' ' . ($me['last_name'] ?? '')));
+    $terms = json_decode($me['osm_terms_json'] ?? '[]', true) ?: [];
+    $sectionIds = array_values(array_filter(array_column(json_decode($me['osm_roles_json'] ?? '[]', true) ?: [], 'sectionid')));
+    $phoneRe = '/^\+?[\d][\d ()\-]{6,}$/';
+
+    foreach ($sectionIds as $sid) {
+        $sid = (string) $sid;
+        $term = osmCurrentTermFromData($terms, $sid);
+        $tid = $term && ($term['termId'] ?? '') !== '' ? $term['termId'] : null;
+        if (!$tid) continue;
+        $r = osmRawData('POST', $token, '/ext/members/contact/grid/', ['action' => 'getMembers'], ['section_id' => $sid, 'term_id' => $tid]);
+        if (empty($r['ok'])) continue;
+        $rows = $r['payload']['data'] ?? $r['items'] ?? [];
+        if (!is_array($rows)) continue;
+        // Prefer the contact block that carries the leader's own login email.
+        if ($email !== '') {
+            foreach ($rows as $m) {
+                if (!is_array($m)) continue;
+                foreach (($m['custom_data'] ?? []) as $grp) {
+                    if (!is_array($grp)) continue;
+                    $hasEmail = false; $phone = null;
+                    foreach ($grp as $val) {
+                        $v = trim((string) $val);
+                        if ($v === '') continue;
+                        if (strtolower($v) === $email) $hasEmail = true;
+                        elseif ($phone === null && preg_match($phoneRe, $v)) $phone = $v;
+                    }
+                    if ($hasEmail && $phone !== null) return $phone;
+                }
+            }
+        }
+        // Fallback: match the member row by name, take its first phone-like value.
+        if ($fullName !== '') {
+            foreach ($rows as $m) {
+                if (!is_array($m)) continue;
+                $rn = strtolower(trim(($m['first_name'] ?? $m['firstname'] ?? '') . ' ' . ($m['last_name'] ?? $m['lastname'] ?? '')));
+                if ($rn !== $fullName) continue;
+                foreach (($m['custom_data'] ?? []) as $grp) {
+                    if (!is_array($grp)) continue;
+                    foreach ($grp as $val) {
+                        $v = trim((string) $val);
+                        if ($v !== '' && preg_match($phoneRe, $v)) return $v;
+                    }
+                }
+            }
+        }
+    }
+    return null;
+}
+
 // Resolve a user's live section roster: demo fixture for demo sign-in, else the
 // live OSM grid using the user's own token + the section's current term. Shared by
 // the /roster endpoint and attendance pre-population. Fetch-only - never stores.
