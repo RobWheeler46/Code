@@ -225,6 +225,21 @@ textarea { min-height: 5rem; resize: vertical; }
 .af-sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.35rem 1rem; }
 .af-sec-opt { display: flex; align-items: center; gap: 0.45rem; font-weight: 400; padding: 0.15rem 0; }
 .af-sec-opt input { width: auto; margin: 0; }
+/* Activity Approval - approval route stepper + progress bar */
+.af-route { list-style: none; display: flex; margin: 0; padding: 0; }
+.af-step { flex: 1; display: flex; flex-direction: column; align-items: center; text-align: center; position: relative; padding: 0 0.25rem; min-width: 64px; }
+.af-step::before { content: ''; position: absolute; top: 16px; left: -50%; width: 100%; height: 2px; background: var(--border); z-index: 0; }
+.af-step:first-child::before { display: none; }
+.af-step-dot { position: relative; z-index: 1; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; background: var(--card); border: 2px solid var(--border); color: var(--muted); }
+.af-step-label { margin-top: 0.4rem; font-size: 0.8rem; line-height: 1.25; color: var(--text); }
+.af-step-sub { display: block; font-size: 0.7rem; color: var(--muted); }
+.af-step[data-state="done"] .af-step-dot { background: var(--green); border-color: var(--green); color: #fff; }
+.af-step[data-state="done"]::before { background: var(--green); }
+.af-step[data-state="current"] .af-step-dot { border-color: var(--purple); color: var(--purple); }
+.af-step[data-state="current"] .af-step-label { font-weight: 600; }
+.af-progress { margin-bottom: 0.7rem; }
+.af-progress-bar { height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; }
+.af-progress-bar span { display: block; height: 100%; background: var(--green); transition: width 0.2s ease; }
 .data-table th, .data-table td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .data-table th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 .data-table input { padding: 0.3rem 0.4rem; border: 1px solid var(--border); border-radius: 5px; font: inherit; }

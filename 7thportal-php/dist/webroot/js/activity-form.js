@@ -19,7 +19,7 @@ async function load() {
   catch (e) { box.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; return; }
   FORM = d.form; FILES = d.files; EVENTS = d.events; ACTIONS = d.myActions; MISSING = d.missing; META = d.meta;
 
-  box.innerHTML = header() + returnedNote() + (ACTIONS.canEdit ? editView() : readView()) + filesView() + approverPanel() + submitBar() + trailView();
+  box.innerHTML = header() + returnedNote() + routeView() + (ACTIONS.canEdit ? editView() : readView()) + filesView() + approverPanel() + submitBar() + trailView();
   wire();
 }
 
@@ -132,24 +132,54 @@ async function autoSaveNow() {
   }
 }
 
-// Client-side mirror of the server's required-item check, so the submit bar
-// updates live as the form is filled (server re-validates on submit anyway).
-function recomputeMissing() {
-  const c = collect();
-  const M = [];
-  const req = { leaderName: 'Leader name', leaderPhone: 'Leader phone', leaderEmail: 'Leader email', activityDescription: 'Activity description', location: 'Location', activityDate: 'Activity date', sectionNames: 'Participating section(s)', inTouch: 'In Touch process' };
-  for (const k in req) if (!String(c[k] || '').trim()) M.push(req[k]);
-  if (!(parseInt(c.ypCount, 10) > 0)) M.push('Estimated number of young people');
-  if (!(parseInt(c.adultCount, 10) > 0)) M.push('Estimated number of adults');
-  if (!c.riskAssessmentConfirmed) M.push('Risk assessment confirmation');
-  if (!c.activityRulesConfirmed) M.push('Activity rules confirmation');
+// Single source of truth for required items (label + whether complete), mirroring
+// the server's activityValidate. Accepts a values object so it works both from the
+// live DOM (collect()) and from the loaded FORM before the DOM exists.
+function requiredChecks(c) {
+  const checks = [];
+  const add = (ok, label) => checks.push({ ok: !!ok, label });
+  const txt = v => String(v == null ? '' : v).trim();
   const hasDoc = t => (FILES || []).some(f => f.docType === t);
+  add(txt(c.leaderName), 'Leader name');
+  add(txt(c.leaderPhone), 'Leader phone');
+  add(txt(c.leaderEmail), 'Leader email');
+  add(txt(c.activityDescription), 'Activity description');
+  add(txt(c.location), 'Location');
+  add(txt(c.activityDate), 'Activity date');
+  add(txt(c.sectionNames), 'Participating section(s)');
+  add(txt(c.inTouch), 'In Touch process');
+  add(parseInt(c.ypCount, 10) > 0, 'Estimated number of young people');
+  add(parseInt(c.adultCount, 10) > 0, 'Estimated number of adults');
+  add(c.riskAssessmentConfirmed, 'Risk assessment confirmation');
+  add(c.activityRulesConfirmed, 'Activity rules confirmation');
   if (c.externalProviderUsed) {
-    if (!c.publicLiabilityConfirmed) M.push('Public liability confirmation');
-    if (!hasDoc('public_liability')) M.push('Public liability document');
+    add(c.publicLiabilityConfirmed, 'Public liability confirmation');
+    add(hasDoc('public_liability'), 'Public liability document');
   }
-  if (c.unityApprovalRequired && !hasDoc('unity_insurance')) M.push('Unity Insurance approval document');
-  return M;
+  if (c.unityApprovalRequired) add(hasDoc('unity_insurance'), 'Unity Insurance approval document');
+  return checks;
+}
+function recomputeMissing() { return requiredChecks(collect()).filter(x => !x.ok).map(x => x.label); }
+
+// The two-stage approval route as a stepper, reflecting where the form is now.
+function routeView() {
+  const s = FORM.status;
+  const steps = [{ label: 'Submitted' }, { label: 'Section Lead', sub: 'within 5 days' }, { label: 'GLV', sub: 'within 7 days' }, { label: 'Approved' }];
+  let doneUpto = -1, currentIdx = -1;
+  if (s === 'draft') currentIdx = 0;
+  else if (s === 'awaiting_section') { doneUpto = 0; currentIdx = 1; }
+  else if (s === 'awaiting_glv') { doneUpto = 1; currentIdx = 2; }
+  else if (s === 'approved') doneUpto = 3;
+  else if (s === 'more_info') { doneUpto = 0; currentIdx = FORM.moreInfoStage === 'glv' ? 2 : 1; }
+  else if (s === 'rejected') doneUpto = 0;
+  const cells = steps.map((st, i) => {
+    const state = i <= doneUpto ? 'done' : (i === currentIdx ? 'current' : 'todo');
+    return `<li class="af-step" data-state="${state}"><span class="af-step-dot">${state === 'done' ? '✓' : (i + 1)}</span>
+      <span class="af-step-label">${esc(st.label)}${st.sub ? `<span class="af-step-sub">${esc(st.sub)}</span>` : ''}</span></li>`;
+  }).join('');
+  const note = s === 'rejected' ? '<div class="alert alert-error" style="margin-top:.6rem">This form was rejected.</div>'
+    : (s === 'more_info' ? '<p class="muted" style="margin-top:.6rem">Returned for more information — update and resubmit to continue the route.</p>' : '');
+  return `<div class="card"><h2>Approval route</h2><ol class="af-route">${cells}</ol>${note}</div>`;
 }
 
 // ── Read-only summary (approvers / finished forms) ──────────────────────────────
@@ -202,10 +232,17 @@ function approverPanel() {
 // ── Submit bar (creator) ────────────────────────────────────────────────────────
 function submitBar() {
   if (!ACTIONS.canSubmit) return '';
-  return `<div class="card"><h2>Review &amp; submit</h2><div id="af-submit-bar">${submitBarInner(MISSING)}</div></div>`;
+  return `<div class="card"><h2>Review &amp; submit</h2><div id="af-submit-bar">${submitBarInner(requiredChecks(FORM))}</div></div>`;
 }
-function submitBarInner(missing) {
-  return `${missing.length
+function submitBarInner(checks) {
+  const missing = checks.filter(x => !x.ok).map(x => x.label);
+  const done = checks.length - missing.length;
+  const pct = checks.length ? Math.round(done / checks.length * 100) : 100;
+  return `<div class="af-progress">
+      <div class="af-progress-bar"><span style="width:${pct}%"></span></div>
+      <div class="muted" style="margin-top:.3rem">${done} of ${checks.length} required items complete</div>
+    </div>
+    ${missing.length
       ? `<div class="alert alert-warning">Before submitting, complete: ${missing.map(esc).join(', ')}.</div>`
       : '<div class="alert alert-success">All required items are complete.</div>'}
     <div class="cap-actions">
@@ -217,7 +254,7 @@ function submitBarInner(missing) {
 function refreshSubmitBar() {
   const el = document.getElementById('af-submit-bar');
   if (!el) return;
-  el.innerHTML = submitBarInner(recomputeMissing());
+  el.innerHTML = submitBarInner(requiredChecks(collect()));
   wireSubmitButtons();
 }
 
