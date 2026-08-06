@@ -699,6 +699,8 @@ CREATE TABLE IF NOT EXISTS activity_forms (
   activity_description TEXT, activity_location TEXT, activity_date TEXT, activity_end_date TEXT,
   osm_section_id TEXT, section_names TEXT, yp_count INTEGER, adult_count INTEGER,
   qualifications TEXT, in_touch TEXT,
+  external_provider_used INTEGER NOT NULL DEFAULT 0,
+  unity_approval_required INTEGER NOT NULL DEFAULT 0,
   risk_assessment_confirmed INTEGER NOT NULL DEFAULT 0,
   public_liability_confirmed INTEGER NOT NULL DEFAULT 0,
   activity_rules_confirmed INTEGER NOT NULL DEFAULT 0,
@@ -773,6 +775,15 @@ if ($usersTermsSql && !str_contains($usersTermsSql, 'osm_terms_json')) {
 $secCapSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='section_capacity'")['sql'] ?? '';
 if ($secCapSql && !str_contains($secCapSql, 'active_count')) {
     db()->exec('ALTER TABLE section_capacity ADD COLUMN active_count INTEGER');
+}
+
+// Migration: activity_forms gained conditional-insurance flags (improved-flow
+// spec). external_provider_used gates the public-liability confirmation + PL
+// document; unity_approval_required gates the Unity Insurance approval document.
+$activityFormsSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='activity_forms'")['sql'] ?? '';
+if ($activityFormsSql && !str_contains($activityFormsSql, 'external_provider_used')) {
+    db()->exec('ALTER TABLE activity_forms ADD COLUMN external_provider_used INTEGER NOT NULL DEFAULT 0');
+    db()->exec('ALTER TABLE activity_forms ADD COLUMN unity_approval_required INTEGER NOT NULL DEFAULT 0');
 }
 
 // Migration: the finance module was rebuilt from a single-item-per-claim

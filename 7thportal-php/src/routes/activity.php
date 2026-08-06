@@ -47,6 +47,8 @@ function activityFieldsFromBody(array $b, array $existing): array
         'adult_count' => array_key_exists('adultCount', $b) ? (int) $b['adultCount'] : ($existing['adult_count'] ?? null),
         'qualifications' => $val('qualifications', 'qualifications'),
         'in_touch' => $val('inTouch', 'in_touch'),
+        'external_provider_used' => $bool('externalProviderUsed', 'external_provider_used'),
+        'unity_approval_required' => $bool('unityApprovalRequired', 'unity_approval_required'),
         'risk_assessment_confirmed' => $bool('riskAssessmentConfirmed', 'risk_assessment_confirmed'),
         'public_liability_confirmed' => $bool('publicLiabilityConfirmed', 'public_liability_confirmed'),
         'activity_rules_confirmed' => $bool('activityRulesConfirmed', 'activity_rules_confirmed'),

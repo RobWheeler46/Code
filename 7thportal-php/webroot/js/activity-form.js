@@ -59,7 +59,15 @@ function editView() {
     <div class="card"><h2>Safety &amp; confirmations</h2>
       ${F('In Touch process', `<textarea id="f-inTouch" rows="2">${esc(FORM.inTouch)}</textarea>`, 'Required. How the In Touch / emergency contact arrangements will work for this activity.')}
       ${cb('f-riskAssessmentConfirmed', FORM.riskAssessmentConfirmed, 'A risk assessment has been completed for this activity.')}
-      ${cb('f-publicLiabilityConfirmed', FORM.publicLiabilityConfirmed, 'Public liability cover is confirmed (documents attached where needed).')}
+      ${cb('f-externalProviderUsed', FORM.externalProviderUsed, 'This activity uses an external provider or instructor (e.g. climbing centre, activity company).')}
+      <div id="af-pl-block" style="margin-left:1.5rem"${FORM.externalProviderUsed ? '' : ' hidden'}>
+        ${cb('f-publicLiabilityConfirmed', FORM.publicLiabilityConfirmed, 'Public liability cover for the external provider is confirmed.')}
+        <div class="field help">Attach the provider's public liability document under "Documents" below (required).</div>
+      </div>
+      ${cb('f-unityApprovalRequired', FORM.unityApprovalRequired, 'This activity needs Unity Insurance approval (e.g. adventurous or overseas activity).')}
+      <div id="af-unity-block" style="margin-left:1.5rem"${FORM.unityApprovalRequired ? '' : ' hidden'}>
+        <div class="field help">Attach the Unity Insurance approval document under "Documents" below (required).</div>
+      </div>
       ${cb('f-activityRulesConfirmed', FORM.activityRulesConfirmed, 'The relevant activity rules will be followed.')}
     </div>
     <div class="card"><h2>Other</h2>
@@ -87,7 +95,8 @@ function collect() {
     leaderName: v('f-leaderName'), leaderPhone: v('f-leaderPhone'), leaderEmail: v('f-leaderEmail'),
     activityDescription: v('f-activityDescription'), location: v('f-location'), activityDate: v('f-activityDate'), activityEndDate: v('f-activityEndDate'),
     sectionNames: sections, ypCount: v('f-ypCount'), adultCount: v('f-adultCount'), qualifications: v('f-qualifications'),
-    inTouch: v('f-inTouch'), riskAssessmentConfirmed: c('f-riskAssessmentConfirmed'), publicLiabilityConfirmed: c('f-publicLiabilityConfirmed'),
+    inTouch: v('f-inTouch'), externalProviderUsed: c('f-externalProviderUsed'), unityApprovalRequired: c('f-unityApprovalRequired'),
+    riskAssessmentConfirmed: c('f-riskAssessmentConfirmed'), publicLiabilityConfirmed: c('f-publicLiabilityConfirmed'),
     activityRulesConfirmed: c('f-activityRulesConfirmed'), addToCalendar: c('f-addToCalendar'), notes: v('f-notes'),
   };
 }
@@ -133,8 +142,13 @@ function recomputeMissing() {
   if (!(parseInt(c.ypCount, 10) > 0)) M.push('Estimated number of young people');
   if (!(parseInt(c.adultCount, 10) > 0)) M.push('Estimated number of adults');
   if (!c.riskAssessmentConfirmed) M.push('Risk assessment confirmation');
-  if (!c.publicLiabilityConfirmed) M.push('Public liability confirmation');
   if (!c.activityRulesConfirmed) M.push('Activity rules confirmation');
+  const hasDoc = t => (FILES || []).some(f => f.docType === t);
+  if (c.externalProviderUsed) {
+    if (!c.publicLiabilityConfirmed) M.push('Public liability confirmation');
+    if (!hasDoc('public_liability')) M.push('Public liability document');
+  }
+  if (c.unityApprovalRequired && !hasDoc('unity_insurance')) M.push('Unity Insurance approval document');
   return M;
 }
 
@@ -148,7 +162,9 @@ function readView() {
     ${row('Date', FORM.activityDate ? formatDate(FORM.activityDate) + (FORM.activityEndDate ? ' – ' + formatDate(FORM.activityEndDate) : '') : '')}
     ${row('Section(s)', FORM.sectionNames)}${row('Numbers', (FORM.ypCount ?? '?') + ' YP / ' + (FORM.adultCount ?? '?') + ' adults')}
     ${row('Qualifications', FORM.qualifications)}${row('In Touch', FORM.inTouch)}
-    <tr><td class="muted">Confirmations</td><td>Risk assessment: ${yn(FORM.riskAssessmentConfirmed)} · Public liability: ${yn(FORM.publicLiabilityConfirmed)} · Activity rules: ${yn(FORM.activityRulesConfirmed)}</td></tr>
+    ${row('External provider', FORM.externalProviderUsed ? 'Yes — public liability confirmed: ' + yn(FORM.publicLiabilityConfirmed) : '')}
+    ${row('Unity Insurance approval', FORM.unityApprovalRequired ? 'Required' : '')}
+    <tr><td class="muted">Confirmations</td><td>Risk assessment: ${yn(FORM.riskAssessmentConfirmed)} · Activity rules: ${yn(FORM.activityRulesConfirmed)}</td></tr>
     ${row('Notes', FORM.notes)}
   </table></div>`;
 }
@@ -256,8 +272,19 @@ function wireAutoSave() {
   if (!root) return;
   root.querySelectorAll('[id^="f-"]').forEach(el => {
     const evt = (el.type === 'checkbox' || el.tagName === 'SELECT' || el.type === 'date') ? 'change' : 'input';
-    el.addEventListener(evt, () => { scheduleAutoSave(); refreshSubmitBar(); });
+    el.addEventListener(evt, () => { scheduleAutoSave(); applyConditionalVisibility(); refreshSubmitBar(); });
   });
+  applyConditionalVisibility();
+}
+
+// Show the public-liability / Unity blocks only when their toggle is ticked.
+function applyConditionalVisibility() {
+  const toggle = (cbId, blockId) => {
+    const cb = document.getElementById(cbId), block = document.getElementById(blockId);
+    if (cb && block) block.hidden = !cb.checked;
+  };
+  toggle('f-externalProviderUsed', 'af-pl-block');
+  toggle('f-unityApprovalRequired', 'af-unity-block');
 }
 
 // Ensure any pending edit is persisted before an action that depends on it (submit).

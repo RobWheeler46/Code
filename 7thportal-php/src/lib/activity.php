@@ -86,11 +86,26 @@ function activityValidate(array $f): array
     if ((int) ($f['yp_count'] ?? 0) <= 0) $missing[] = 'Estimated number of young people';
     if ((int) ($f['adult_count'] ?? 0) <= 0) $missing[] = 'Estimated number of adults';
     if (!$f['risk_assessment_confirmed']) $missing[] = 'Risk assessment confirmation';
-    if (!$f['public_liability_confirmed']) $missing[] = 'Public liability confirmation';
     if (!$f['activity_rules_confirmed']) $missing[] = 'Activity rules confirmation';
+    // Public liability only applies when an external activity provider is used
+    // (improved-flow spec): then both the confirmation and a PL document are required.
+    if (!empty($f['external_provider_used'])) {
+        if (!$f['public_liability_confirmed']) $missing[] = 'Public liability confirmation';
+        if (!activityHasDoc($f, 'public_liability')) $missing[] = 'Public liability document';
+    }
+    // Unity Insurance approval document required only when the activity needs it.
+    if (!empty($f['unity_approval_required']) && !activityHasDoc($f, 'unity_insurance')) {
+        $missing[] = 'Unity Insurance approval document';
+    }
     // A risk assessment document is recommended, not required (improved-flow spec):
     // the risk-assessment confirmation checkbox above is the required gate.
     return $missing;
+}
+
+// Whether a form has at least one uploaded document of the given type.
+function activityHasDoc(array $f, string $docType): bool
+{
+    return (bool) dbGet('SELECT 1 FROM activity_form_files WHERE form_id = ? AND doc_type = ? LIMIT 1', [$f['id'] ?? 0, $docType]);
 }
 
 function serializeActivityForm(array $f, bool $full = false): array
@@ -114,6 +129,8 @@ function serializeActivityForm(array $f, bool $full = false): array
         'activityEndDate' => $f['activity_end_date'], 'sectionId' => $f['osm_section_id'],
         'ypCount' => $f['yp_count'] !== null ? (int) $f['yp_count'] : null, 'adultCount' => $f['adult_count'] !== null ? (int) $f['adult_count'] : null,
         'qualifications' => $f['qualifications'], 'inTouch' => $f['in_touch'],
+        'externalProviderUsed' => (bool) $f['external_provider_used'],
+        'unityApprovalRequired' => (bool) $f['unity_approval_required'],
         'riskAssessmentConfirmed' => (bool) $f['risk_assessment_confirmed'],
         'publicLiabilityConfirmed' => (bool) $f['public_liability_confirmed'],
         'activityRulesConfirmed' => (bool) $f['activity_rules_confirmed'],
