@@ -43,7 +43,8 @@ function editView() {
   return `<div id="af-edit">
     <div class="card"><h2>Leader details</h2>
       ${F('Name', `<input id="f-leaderName" value="${esc(FORM.leaderName)}">`)}
-      <div class="cap-actions">${F('Phone', `<input id="f-leaderPhone" value="${esc(FORM.leaderPhone)}">`)}${F('Email', `<input id="f-leaderEmail" type="email" value="${esc(FORM.leaderEmail)}">`)}</div>
+      ${F('Phone', `<input id="f-leaderPhone" value="${esc(FORM.leaderPhone)}">`)}
+      ${F('Email', `<input id="f-leaderEmail" type="email" value="${esc(FORM.leaderEmail)}">`)}
     </div>
     <div class="card"><h2>Activity details</h2>
       ${F('Description', `<textarea id="f-activityDescription" rows="2">${esc(FORM.activityDescription)}</textarea>`)}
