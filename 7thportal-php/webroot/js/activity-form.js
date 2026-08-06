@@ -175,16 +175,15 @@ function requiredChecks(c) {
 }
 function recomputeMissing() { return requiredChecks(collect()).filter(x => !x.ok).map(x => x.label); }
 
-// The two-stage approval route as a stepper, reflecting where the form is now.
+// The GLV-only approval route as a stepper, reflecting where the form is now.
 function routeView() {
   const s = FORM.status;
-  const steps = [{ label: 'Submitted' }, { label: 'Section Lead', sub: 'within 5 days' }, { label: 'GLV', sub: 'within 7 days' }, { label: 'Approved' }];
+  const steps = [{ label: 'Submitted' }, { label: 'GLV approval', sub: 'within 7 days' }, { label: 'Approved' }];
   let doneUpto = -1, currentIdx = -1;
   if (s === 'draft') currentIdx = 0;
-  else if (s === 'awaiting_section') { doneUpto = 0; currentIdx = 1; }
-  else if (s === 'awaiting_glv') { doneUpto = 1; currentIdx = 2; }
-  else if (s === 'approved') doneUpto = 3;
-  else if (s === 'more_info') { doneUpto = 0; currentIdx = FORM.moreInfoStage === 'glv' ? 2 : 1; }
+  else if (s === 'awaiting_glv' || s === 'awaiting_section') { doneUpto = 0; currentIdx = 1; }
+  else if (s === 'approved') doneUpto = 2;
+  else if (s === 'more_info') { doneUpto = 0; currentIdx = 1; }
   else if (s === 'rejected') doneUpto = 0;
   const cells = steps.map((st, i) => {
     const state = i <= doneUpto ? 'done' : (i === currentIdx ? 'current' : 'todo');
@@ -233,9 +232,8 @@ function filesView() {
 
 // ── Approver panel ──────────────────────────────────────────────────────────────
 function approverPanel() {
-  if (!(ACTIONS.canApproveSection || ACTIONS.canApproveGlv)) return '';
-  const stage = ACTIONS.canApproveGlv ? 'GLV (final)' : 'Section Lead';
-  return `<div class="card"><h2>Your decision — ${stage}</h2>
+  if (!ACTIONS.canApproveGlv) return '';
+  return `<div class="card"><h2>Your decision — GLV approval</h2>
     ${F('Comment (required to return or reject)', `<textarea id="ap-comment" rows="2"></textarea>`)}
     <div class="cap-actions">
       <button class="btn" id="ap-approve">Approve</button>

@@ -798,6 +798,13 @@ if ($activityFormsSql && !str_contains($activityFormsSql, 'external_provider_use
 if ($activityFormsSql && !str_contains($activityFormsSql, 'activity_type')) {
     db()->exec('ALTER TABLE activity_forms ADD COLUMN activity_type TEXT');
 }
+// Migration: GLV-only workflow (glv-only-1.0) drops the Section Lead stage. Move
+// any in-flight forms still awaiting Section Lead approval into the GLV queue so
+// nothing is stranded. Idempotent - the guard skips it once none remain.
+if (dbGet("SELECT 1 FROM activity_forms WHERE status = 'awaiting_section' OR more_info_stage = 'section' LIMIT 1")) {
+    db()->exec("UPDATE activity_forms SET status = 'awaiting_glv' WHERE status = 'awaiting_section'");
+    db()->exec("UPDATE activity_forms SET more_info_stage = 'glv' WHERE more_info_stage = 'section'");
+}
 
 // Migration: the finance module was rebuilt from a single-item-per-claim
 // model to the header+items model above (7thPortal_Expenses_Data_Model.docx).

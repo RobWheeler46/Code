@@ -70,18 +70,13 @@ function activityCanComplete(array $user): bool
 {
     return in_array($user['portal_role'], ['section_leader', 'assistant_leader', 'group_leadership', 'admin'], true);
 }
-// Section Lead stage approver (never the submitter - no self-approval, FR "Self-
-// approval is blocked").
-function activityCanApproveSection(array $user, array $form): bool
-{
-    if ((int) $form['created_by'] === (int) $user['id']) return false;
-    return in_array($user['portal_role'], ['section_leader', 'group_leadership', 'admin'], true);
-}
-// GLV (final) stage approver.
+// GLV approver - the single approval stage (glv-only-1.0 workflow). Never the
+// submitter (no self-approval). Group Leadership are the GLV approvers; admins
+// and the chair act as the fallback / senior-leadership approver group.
 function activityCanApproveGlv(array $user, array $form): bool
 {
     if ((int) $form['created_by'] === (int) $user['id']) return false;
-    return in_array($user['portal_role'], ['group_leadership', 'admin'], true);
+    return in_array($user['portal_role'], ['group_leadership', 'admin', 'chair'], true);
 }
 // Who may view a form: its creator, an approver for its current/any stage, or admin.
 function activityCanView(array $user, array $form): bool
@@ -91,11 +86,12 @@ function activityCanView(array $user, array $form): bool
     return in_array($user['portal_role'], ['section_leader'], true); // section leads can see section forms
 }
 
-// The approver who can act right now, given the form's stage.
+// The approver who can act right now. GLV-only workflow: any pending form needs
+// GLV approval (awaiting_section is legacy - kept so any in-flight form migrated
+// from the old two-stage route can still be actioned).
 function activityCanActNow(array $user, array $form): bool
 {
-    if ($form['status'] === 'awaiting_section') return activityCanApproveSection($user, $form);
-    if ($form['status'] === 'awaiting_glv') return activityCanApproveGlv($user, $form);
+    if (in_array($form['status'], ['awaiting_glv', 'awaiting_section'], true)) return activityCanApproveGlv($user, $form);
     return false;
 }
 
@@ -212,14 +208,10 @@ function activityActionItems(array $user): array
         $ref = $f['reference'] ?: ('AAF-' . str_pad((string) $f['id'], 4, '0', STR_PAD_LEFT));
         $items[] = actionItem('act-form-' . $f['id'], 'Medium', 'Activity form', 'Activity form to complete: ' . $ref, 'You', 'Open', 'activity-form.html?id=' . $f['id']);
     }
-    if (in_array($user['portal_role'], ['section_leader', 'group_leadership', 'admin'], true)) {
-        foreach (dbAll("SELECT id, reference FROM activity_forms WHERE status = 'awaiting_section' AND created_by != ?", [$user['id']]) as $f) {
-            $ref = $f['reference'] ?: ('AAF-' . str_pad((string) $f['id'], 4, '0', STR_PAD_LEFT));
-            $items[] = actionItem('act-sec-' . $f['id'], 'High', 'Activity form', 'Activity form to approve (Section Lead): ' . $ref, 'Section Lead', 'Open', 'activity-form.html?id=' . $f['id']);
-        }
-    }
-    if (in_array($user['portal_role'], ['group_leadership', 'admin'], true)) {
-        foreach (dbAll("SELECT id, reference FROM activity_forms WHERE status = 'awaiting_glv' AND created_by != ?", [$user['id']]) as $f) {
+    // GLV-only workflow: only GLV approvers get approval tasks. Section Leaders no
+    // longer receive them just because it's their section's activity.
+    if (in_array($user['portal_role'], ['group_leadership', 'admin', 'chair'], true)) {
+        foreach (dbAll("SELECT id, reference FROM activity_forms WHERE status IN ('awaiting_glv','awaiting_section') AND created_by != ?", [$user['id']]) as $f) {
             $ref = $f['reference'] ?: ('AAF-' . str_pad((string) $f['id'], 4, '0', STR_PAD_LEFT));
             $items[] = actionItem('act-glv-' . $f['id'], 'High', 'Activity form', 'Activity form to approve (GLV): ' . $ref, 'GLV', 'Open', 'activity-form.html?id=' . $f['id']);
         }

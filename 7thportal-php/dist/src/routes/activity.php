@@ -21,8 +21,7 @@ function activityMyActions(array $user, array $f): array
     return [
         'canEdit' => $editable,
         'canSubmit' => $editable,
-        'canApproveSection' => $f['status'] === 'awaiting_section' && activityCanApproveSection($user, $f),
-        'canApproveGlv' => $f['status'] === 'awaiting_glv' && activityCanApproveGlv($user, $f),
+        'canApproveGlv' => in_array($f['status'], ['awaiting_glv', 'awaiting_section'], true) && activityCanApproveGlv($user, $f),
         'canDelete' => $isCreator && $f['status'] === 'draft',
         'isCreator' => $isCreator,
     ];
@@ -147,16 +146,14 @@ $router->post('/api/activity/forms/:id/submit', function ($params) {
     $missing = activityValidate($f);
     if ($missing) jsonResponse(['error' => 'Some required items are missing.', 'missing' => $missing], 400);
 
-    // A returned form resumes at the stage that asked for more info; a fresh draft
-    // starts at the Section Lead stage.
-    $resume = $f['status'] === 'more_info' && $f['more_info_stage'] === 'glv';
-    $newStatus = $resume ? 'awaiting_glv' : 'awaiting_section';
-    dbRun("UPDATE activity_forms SET status = ?, more_info_stage = NULL, submitted_at = COALESCE(submitted_at, datetime('now')), updated_at = datetime('now') WHERE id = ?", [$newStatus, $f['id']]);
+    // GLV-only workflow: every submission (and every resubmission after a
+    // more-information request) routes directly to the GLV approval queue.
+    dbRun("UPDATE activity_forms SET status = 'awaiting_glv', more_info_stage = NULL, submitted_at = COALESCE(submitted_at, datetime('now')), updated_at = datetime('now') WHERE id = ?", [$f['id']]);
     activityLogEvent((int) $f['id'], $user['id'], $f['status'] === 'more_info' ? 'resubmit' : 'submit', null, null);
     logAudit(['userId' => $user['id'], 'action' => 'activity_form_submit', 'entityType' => 'activity_form', 'entityId' => (string) $f['id'], 'ipAddress' => clientIp()]);
     $ref = $f['reference'] ?: ('AAF-' . $f['id']);
-    if ($newStatus === 'awaiting_section') notifyRoles(['section_leader', 'group_leadership', 'admin'], 'activity_form', 'Activity form to approve', $ref . ' has been submitted for Section Lead approval.', 'activity-form.html?id=' . $f['id']);
-    else notifyRoles(['group_leadership', 'admin'], 'activity_form', 'Activity form to approve', $ref . ' has been resubmitted for GLV approval.', 'activity-form.html?id=' . $f['id']);
+    $verb = $f['status'] === 'more_info' ? 'resubmitted' : 'submitted';
+    notifyRoles(['group_leadership', 'admin', 'chair'], 'activity_form', 'Activity form to approve', $ref . ' has been ' . $verb . ' for GLV approval.', 'activity-form.html?id=' . $f['id']);
     jsonResponse(serializeActivityForm(activityFormOr404($f['id']), true));
 });
 
@@ -188,18 +185,13 @@ $router->post('/api/activity/forms/:id/approve', function ($params) {
     $comment = trim((string) (requestBody()['comment'] ?? '')) ?: null;
     $ref = $f['reference'] ?: ('AAF-' . $f['id']);
 
-    if ($f['status'] === 'awaiting_section') {
-        dbRun("UPDATE activity_forms SET status = 'awaiting_glv', section_decided_by = ?, section_decided_at = datetime('now'), updated_at = datetime('now') WHERE id = ?", [$user['id'], $f['id']]);
-        activityLogEvent((int) $f['id'], $user['id'], 'section_approve', 'section', $comment);
-        notifyRoles(['group_leadership', 'admin'], 'activity_form', 'Activity form to approve (GLV)', $ref . ' passed Section Lead approval and needs GLV sign-off.', 'activity-form.html?id=' . $f['id']);
-        notify((int) $f['created_by'], 'activity_form', 'Activity form progressed', $ref . ' was approved by the Section Lead and is now with GLV.', 'activity-form.html?id=' . $f['id']);
-    } else { // awaiting_glv -> final approval
-        $calId = activityCreateCalendarEntry($f, (int) $user['id']);
-        dbRun("UPDATE activity_forms SET status = 'approved', glv_decided_by = ?, glv_decided_at = datetime('now'), calendar_entry_id = ?, updated_at = datetime('now') WHERE id = ?", [$user['id'], $calId, $f['id']]);
-        activityLogEvent((int) $f['id'], $user['id'], 'glv_approve', 'glv', $comment);
-        if ($calId) activityLogEvent((int) $f['id'], $user['id'], 'calendar_created', 'glv', null);
-        notify((int) $f['created_by'], 'activity_form', 'Activity form approved', $ref . ' has been fully approved.' . ($calId ? ' A draft calendar entry was created.' : ''), 'activity-form.html?id=' . $f['id']);
-    }
+    // GLV-only workflow: a GLV approval is final. On approval we create the draft
+    // calendar entry (Event/Camp Hub shell where enabled is a deferred action).
+    $calId = activityCreateCalendarEntry($f, (int) $user['id']);
+    dbRun("UPDATE activity_forms SET status = 'approved', glv_decided_by = ?, glv_decided_at = datetime('now'), calendar_entry_id = ?, updated_at = datetime('now') WHERE id = ?", [$user['id'], $calId, $f['id']]);
+    activityLogEvent((int) $f['id'], $user['id'], 'glv_approve', 'glv', $comment);
+    if ($calId) activityLogEvent((int) $f['id'], $user['id'], 'calendar_created', 'glv', null);
+    notify((int) $f['created_by'], 'activity_form', 'Activity form approved', $ref . ' has been approved.' . ($calId ? ' A draft calendar entry was created.' : ''), 'activity-form.html?id=' . $f['id']);
     logAudit(['userId' => $user['id'], 'action' => 'activity_form_approve', 'entityType' => 'activity_form', 'entityId' => (string) $f['id'], 'ipAddress' => clientIp(), 'details' => ['stage' => $f['status']]]);
     jsonResponse(serializeActivityForm(activityFormOr404($f['id']), true));
 });
