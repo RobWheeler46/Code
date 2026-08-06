@@ -75,8 +75,6 @@ function editView() {
     <div class="card"><h2>Other</h2>
       ${cb('f-addToCalendar', FORM.addToCalendar, 'Add to the internal calendar when approved.')}
       ${F('Notes (optional)', `<textarea id="f-notes" rows="2">${esc(FORM.notes)}</textarea>`)}
-      <button class="btn btn-secondary" id="f-save">Save now</button> <span id="f-saved" class="muted" style="margin-left:.4rem"></span>
-      <div class="field help">Your changes save automatically as you type.</div>
     </div></div>`;
 }
 
@@ -249,7 +247,9 @@ function approverPanel() {
 // ── Submit bar (creator) ────────────────────────────────────────────────────────
 function submitBar() {
   if (!ACTIONS.canSubmit) return '';
-  return `<div class="card"><h2>Review &amp; submit</h2><div id="af-submit-bar">${submitBarInner(requiredChecks(FORM))}</div></div>`;
+  return `<div class="card"><h2>Review &amp; submit</h2><div id="af-submit-bar">${submitBarInner(requiredChecks(FORM))}</div>
+    <div style="margin-top:.5rem"><span id="f-saved" class="muted"></span></div>
+    <p class="field help" style="margin-top:.2rem">Your changes save automatically as you type.</p></div>`;
 }
 function submitBarInner(checks) {
   const missing = checks.filter(x => !x.ok).map(x => x.label);
@@ -264,7 +264,8 @@ function submitBarInner(checks) {
       : '<div class="alert alert-success">All required items are complete.</div>'}
     <div class="cap-actions">
       <button class="btn" id="af-submit"${missing.length ? ' disabled' : ''}>${FORM.status === 'more_info' ? 'Resubmit' : 'Submit for approval'}</button>
-      ${ACTIONS.canDelete ? '<button class="btn btn-secondary" id="af-delete" style="margin-left:auto">Delete draft</button>' : ''}
+      <button class="btn btn-secondary" id="f-save" style="margin-left:auto">Save now</button>
+      ${ACTIONS.canDelete ? '<button class="btn btn-secondary" id="af-delete">Delete draft</button>' : ''}
     </div>`;
 }
 // Re-render just the submit bar (called live as fields change) and re-wire it.
@@ -287,7 +288,6 @@ function trailView() {
 // ── Wiring ──────────────────────────────────────────────────────────────────────
 function wire() {
   const on = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
-  on('f-save', async () => { try { await save(); refreshSubmitBar(); } catch (e) { alert(e.message); } });
   wireSubmitButtons();
   wireAutoSave();
   on('af-upload', async () => {
@@ -313,6 +313,7 @@ function wire() {
 // Wired separately so refreshSubmitBar() can re-attach after re-rendering the bar.
 function wireSubmitButtons() {
   const on = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
+  on('f-save', async () => { try { await save(); } catch (e) { alert(e.message); } });
   on('af-submit', async () => {
     try { await autoSaveFlush(); await Api.post(`/api/activity/forms/${ID}/submit`, {}); load(); }
     catch (e) { alert(e.message + (e.missing ? '\nMissing: ' + e.missing.join(', ') : '')); }
