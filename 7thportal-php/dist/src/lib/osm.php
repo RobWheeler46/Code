@@ -145,6 +145,46 @@ function osmGet(string $accessToken, string $pathname, array $params = []): arra
     return is_array($data) ? $data : [];
 }
 
+// ── OSM login diagnostic helpers ───────────────────────────────────────────────
+// Purpose: capture exactly what OSM returns for a login (especially a PARENT) so we
+// can see whether their child links come through, WITHOUT persisting anything or
+// logging the person in. Read-only; the results live only in the session.
+
+// Recursively strip token/secret-like values so the captured payload can be shown.
+function osmDiagnosticRedact($node)
+{
+    if (is_array($node)) {
+        $out = [];
+        foreach ($node as $k => $v) {
+            if (is_string($k) && preg_match('/token|secret|password|access|refresh|authorization|bearer/i', $k)) {
+                $out[$k] = '[redacted]';
+            } else {
+                $out[$k] = osmDiagnosticRedact($v);
+            }
+        }
+        return $out;
+    }
+    return $node;
+}
+
+// Walk the payload and flag every key that looks like it could hold child/parent
+// data, with its path and a short value preview - so children are easy to spot.
+function osmDiagnosticScan($node, string $path = '', array &$hits = []): array
+{
+    if (count($hits) >= 80) return $hits;
+    if (is_array($node)) {
+        foreach ($node as $k => $v) {
+            $childPath = $path === '' ? (string) $k : ($path . '.' . $k);
+            if (is_string($k) && preg_match('/child|parent|guardian|youth|member|linked|scout|contact|kid|family|dependent/i', $k)) {
+                $preview = is_scalar($v) ? (string) $v : json_encode($v);
+                $hits[] = ['path' => $childPath, 'key' => (string) $k, 'type' => gettype($v), 'count' => is_array($v) ? count($v) : null, 'preview' => mb_substr((string) $preview, 0, 90)];
+            }
+            osmDiagnosticScan($v, $childPath, $hits);
+        }
+    }
+    return $hits;
+}
+
 function osmGetStartupData(string $accessToken): array
 {
     $data = osmGet($accessToken, '/ext/generic/startup/', ['action' => 'getDataPayload']);
@@ -289,9 +329,213 @@ function osmRawData(string $method, string $accessToken, string $pathname, array
         'status' => $status,
         'ok' => $status >= 200 && $status < 300 && is_array($items),
         'count' => is_array($items) ? count($items) : null,
+        'items' => is_array($items) ? $items : null,
+        'payload' => is_array($data) ? $data : null,
         'error' => $err,
         'bodySnippet' => is_array($data) ? null : substr((string) $raw, 0, 140),
     ];
+}
+
+// Live member roster (names) for one section. Uses the SAME proven grid call as
+// the count, but keeps the member rows instead of just measuring them. Deliberately
+// fetch-only: nothing here is stored - the caller returns it straight to an
+// authorised leader and it is never written to the portal DB (named child data
+// stays in OSM, the source of truth). Best-effort name extraction across the
+// field-name variants OSM uses; the first row's column names are returned as
+// `columns` so the mapping can be confirmed against a real response.
+function osmGridMembers(string $accessToken, string $sectionId, ?string $termId): array
+{
+    if (!$termId) return ['ok' => false, 'error' => 'No current OSM term for this section.'];
+    $r = osmRawData('POST', $accessToken, '/ext/members/contact/grid/', ['action' => 'getMembers'], ['section_id' => $sectionId, 'term_id' => $termId]);
+    if (!$r['ok']) {
+        $blocked = $r['bodySnippet'] && stripos($r['bodySnippet'], 'blocked') !== false;
+        return ['ok' => false, 'blocked' => $blocked, 'error' => $blocked ? 'OSM temporarily blocked the request' : ($r['error'] ?? ('HTTP ' . $r['status']))];
+    }
+    $pick = function (array $row, array $keys) {
+        foreach ($keys as $k) {
+            if (isset($row[$k]) && trim((string) $row[$k]) !== '') return trim((string) $row[$k]);
+        }
+        return null;
+    };
+    $members = [];
+    foreach ($r['items'] as $row) {
+        if (!is_array($row)) continue;
+        $first = $pick($row, ['firstname', 'first_name', 'firstName']);
+        $last = $pick($row, ['lastname', 'last_name', 'lastName']);
+        $name = trim(($first ?? '') . ' ' . ($last ?? '')) ?: $pick($row, ['name', 'full_name', 'fullname']);
+        $members[] = [
+            'id' => $pick($row, ['scoutid', 'member_id', 'memberid', 'id']),
+            'name' => $name ?: 'Member',
+            'firstName' => $first,
+            'lastName' => $last,
+            'patrol' => $pick($row, ['patrol', 'patrolname', 'patrol_name']),
+        ];
+    }
+    usort($members, fn($a, $b) => strcmp(($a['lastName'] ?? '') . $a['name'], ($b['lastName'] ?? '') . $b['name']));
+    // Column names only (not values) - safe to surface for mapping confirmation.
+    $columns = (isset($r['items'][0]) && is_array($r['items'][0])) ? array_keys($r['items'][0]) : [];
+    return ['ok' => true, 'members' => $members, 'count' => count($members), 'columns' => $columns];
+}
+
+// Mask a value so a contact-grid sample can be shown without exposing full PII.
+function osmMaskValue($v): string
+{
+    if (is_array($v)) return '{…}';
+    $s = trim((string) $v);
+    if ($s === '') return '(empty)';
+    if (filter_var($s, FILTER_VALIDATE_EMAIL)) { $p = explode('@', $s); return mb_substr($p[0], 0, 2) . '•••@' . ($p[1] ?? ''); }
+    if (preg_match('/^\+?[\d][\d ()\-]{6,}$/', $s)) return '•••••' . mb_substr($s, -3) . ' (phone-like)';
+    return mb_strlen($s) > 4 ? mb_substr($s, 0, 3) . '…(' . mb_strlen($s) . ' chars)' : $s;
+}
+function osmFlattenFields($node, string $prefix, array &$out): void
+{
+    if (!is_array($node)) return;
+    foreach ($node as $k => $v) {
+        $key = $prefix === '' ? (string) $k : $prefix . '.' . $k;
+        if (is_array($v)) osmFlattenFields($v, $key, $out);
+        else $out[$key] = osmMaskValue($v);
+    }
+}
+
+// Deep-mask a payload for inspection: scalars masked, long lists capped to 2 items
+// so the overall SHAPE (incl. any contact/meta structure) is visible without dumping
+// the whole section or exposing PII.
+function osmMaskDeep($node)
+{
+    if (!is_array($node)) return osmMaskValue($node);
+    if (array_is_list($node) && count($node) > 2) {
+        $out = array_map('osmMaskDeep', array_slice($node, 0, 2));
+        $out[] = '…(' . count($node) . ' items total, first 2 shown)';
+        return $out;
+    }
+    $out = [];
+    foreach ($node as $k => $v) $out[$k] = osmMaskDeep($v);
+    return $out;
+}
+
+// Read-only probe: what fields does OSM's contact grid actually return for a section?
+// Flattens the first member row into dotted paths with masked sample values, and
+// flags the ones that look parent/contact-related - so we can confirm whether
+// parent names/emails are available (for a future preload) WITHOUT storing anything.
+function osmGridContactFields(string $accessToken, string $sectionId, ?string $termId): array
+{
+    if (!$termId) return ['ok' => false, 'error' => 'No current OSM term for this section.'];
+    $r = osmRawData('POST', $accessToken, '/ext/members/contact/grid/', ['action' => 'getMembers'], ['section_id' => $sectionId, 'term_id' => $termId]);
+    if (!$r['ok']) {
+        $blocked = $r['bodySnippet'] && stripos($r['bodySnippet'], 'blocked') !== false;
+        return ['ok' => false, 'blocked' => $blocked, 'error' => $blocked ? 'OSM temporarily blocked the request' : ($r['error'] ?? ('HTTP ' . $r['status']))];
+    }
+    $payload = $r['payload'] ?? [];
+    // The contact grid keys members by id (not a list), so normalise to a list.
+    $memberRows = array_values($r['items'] ?? []);
+    $first = (isset($memberRows[0]) && is_array($memberRows[0])) ? $memberRows[0] : [];
+
+    // meta.structure maps OSM's numeric group/column ids to human labels, and tells
+    // us which groups are contacts (Primary Contact 1/2 = parents/carers).
+    $groups = [];
+    foreach ($payload['meta']['structure'] ?? [] as $g) {
+        if (!is_array($g)) continue;
+        $gid = (string) ($g['group_id'] ?? '');
+        $name = (string) ($g['name'] ?? '');
+        $ident = (string) ($g['identifier'] ?? '');
+        $cols = [];
+        foreach ($g['columns'] ?? [] as $c) {
+            if (is_array($c)) $cols[(string) ($c['column_id'] ?? '')] = (string) ($c['label'] ?? $c['varname'] ?? ('col ' . ($c['column_id'] ?? '')));
+        }
+        $groups[$gid] = ['name' => $name ?: $ident ?: ('Group ' . $gid), 'isContact' => (bool) preg_match('/contact|parent|carer|guardian|primary|emergency/i', $ident . ' ' . $name), 'cols' => $cols];
+    }
+
+    $fields = [];
+    // Basic top-level fields (name, patrol, dob…).
+    foreach ($first as $k => $v) {
+        if ($k === 'custom_data' || is_array($v)) continue;
+        $fields[] = ['path' => (string) $k, 'sample' => osmMaskValue($v), 'parentish' => false];
+    }
+    // Contact/custom fields, labelled via meta.structure.
+    foreach (($first['custom_data'] ?? []) as $gid => $cols) {
+        if (!is_array($cols)) continue;
+        $g = $groups[(string) $gid] ?? ['name' => 'Group ' . $gid, 'isContact' => false, 'cols' => []];
+        foreach ($cols as $cid => $val) {
+            $label = $g['cols'][(string) $cid] ?? ('col ' . $cid);
+            $masked = osmMaskValue($val);
+            $parentish = $g['isContact'] || (bool) preg_match('/email|phone|mobile|parent|carer/i', $label) || (bool) preg_match('/@|\(phone/i', (string) $masked);
+            $fields[] = ['path' => $g['name'] . ' › ' . $label, 'sample' => $masked, 'parentish' => $parentish];
+        }
+    }
+    $contactGroups = [];
+    foreach ($groups as $g) { if ($g['isContact'] && $g['cols']) $contactGroups[] = ['name' => $g['name'], 'fields' => array_values($g['cols'])]; }
+
+    return [
+        'ok' => true,
+        'memberCount' => count($memberRows),
+        'fields' => $fields,
+        'contactGroups' => $contactGroups,
+        'topLevelKeys' => is_array($payload) ? array_keys($payload) : [],
+        'maskedPayload' => osmMaskDeep($payload),
+    ];
+}
+
+// Parse the contact grid into a parent-import PLAN (dry run - reads only, writes
+// nothing). For each YOUTH member (patrol_id >= 0; leaders/young-leaders are
+// negative and skipped), takes Primary Contact 1 & 2 (custom_data groups 1 and 2),
+// respecting the parent_portal_hide flag, and groups children under each parent
+// email. Emails are returned raw here; the caller masks them for display.
+function osmParseParentImport(string $accessToken, string $sectionId, ?string $termId): array
+{
+    if (!$termId) return ['ok' => false, 'error' => 'No current OSM term for this section.'];
+    $r = osmRawData('POST', $accessToken, '/ext/members/contact/grid/', ['action' => 'getMembers'], ['section_id' => $sectionId, 'term_id' => $termId]);
+    if (!$r['ok']) {
+        $blocked = $r['bodySnippet'] && stripos($r['bodySnippet'], 'blocked') !== false;
+        return ['ok' => false, 'blocked' => $blocked, 'error' => $blocked ? 'OSM temporarily blocked the request' : ($r['error'] ?? ('HTTP ' . $r['status']))];
+    }
+    $payload = $r['payload'] ?? [];
+    $rows = $payload['data'] ?? $r['items'] ?? [];
+    $emailFlags = $payload['meta']['email_flags'] ?? [];
+    $pick = fn($cd, $k) => (isset($cd[$k]) && trim((string) $cd[$k]) !== '') ? trim((string) $cd[$k]) : '';
+
+    $parents = []; $skipHidden = 0; $skipNoEmail = 0; $adults = 0; $youth = 0;
+    foreach ($rows as $memberId => $m) {
+        if (!is_array($m)) continue;
+        if ((int) ($m['patrol_id'] ?? 0) < 0) { $adults++; continue; } // Leaders / Young Leaders units
+        if ((string) ($m['active'] ?? '1') !== '1') continue;
+        $youth++;
+        $childName = trim(($m['first_name'] ?? $m['firstname'] ?? '') . ' ' . ($m['last_name'] ?? $m['lastname'] ?? ''));
+        $cdAll = $m['custom_data'] ?? [];
+        foreach (['1', '2'] as $grp) {
+            $cd = $cdAll[$grp] ?? null;
+            if (!is_array($cd)) continue;
+            $email = strtolower($pick($cd, '12') ?: $pick($cd, '14'));
+            $pname = trim($pick($cd, '2') . ' ' . $pick($cd, '3'));
+            if ($email === '') { if ($pname !== '') $skipNoEmail++; continue; }
+            if ((string) ($emailFlags[(string) $memberId][$grp]['parent_portal_hide'] ?? 'no') === 'yes') { $skipHidden++; continue; }
+            if (!isset($parents[$email])) $parents[$email] = ['name' => $pname, 'firstName' => $pick($cd, '2'), 'lastName' => $pick($cd, '3'), 'phone' => $pick($cd, '18'), 'children' => []];
+            $dup = false;
+            foreach ($parents[$email]['children'] as $c) { if ($c['memberId'] === (string) $memberId) { $dup = true; break; } }
+            if (!$dup) $parents[$email]['children'][] = ['memberId' => (string) $memberId, 'name' => $childName];
+        }
+    }
+    return ['ok' => true, 'parents' => $parents, 'skipped' => ['hidden' => $skipHidden, 'noEmail' => $skipNoEmail, 'adults' => $adults], 'youth' => $youth];
+}
+
+// Resolve a user's live section roster: demo fixture for demo sign-in, else the
+// live OSM grid using the user's own token + the section's current term. Shared by
+// the /roster endpoint and attendance pre-population. Fetch-only - never stores.
+// Returns ['ok'=>bool, 'source'=>'demo'|'osm', 'members'=>[...], 'columns'=>[...]]
+// or ['ok'=>false, 'blocked'=>bool, 'error'=>string].
+function osmSectionRoster(array $user, string $sectionId): array
+{
+    $me = dbGet('SELECT * FROM users WHERE id = ?', [$user['id']]);
+    try { $token = ensureFreshToken($me); }
+    catch (Throwable $e) { return ['ok' => false, 'error' => 'Live member names need an OSM sign-in. Sign in with OSM, then try again.']; }
+    if ($token === 'demo') {
+        return ['ok' => true, 'source' => 'demo', 'members' => osmDemoRosterForSection($sectionId), 'columns' => []];
+    }
+    $terms = json_decode($me['osm_terms_json'] ?? '[]', true) ?: [];
+    $term = osmCurrentTermFromData($terms, $sectionId);
+    $tid = $term && ($term['termId'] ?? '') !== '' ? $term['termId'] : null;
+    $res = osmGridMembers($token, $sectionId, $tid);
+    if (empty($res['ok'])) return ['ok' => false, 'blocked' => !empty($res['blocked']), 'error' => $res['error'] ?? 'Could not fetch members from OSM.'];
+    return ['ok' => true, 'source' => 'osm', 'members' => $res['members'], 'columns' => $res['columns'] ?? []];
 }
 
 // Aggregate member count for a section. OSM serves the member list via POST to
@@ -408,6 +652,19 @@ const OSM_DEMO_MEMBERS = [
         ['id' => 'm203', 'firstName' => 'Freddie', 'lastName' => 'Brown', 'dob' => '2013-11-20', 'patrol' => 'Kestrel Patrol'],
     ],
 ];
+// Demo roster in the same shape osmGridMembers() returns, so the live-roster
+// feature is fully clickable in demo mode without a real OSM token.
+function osmDemoRosterForSection(string $sectionId): array
+{
+    return array_map(fn($m) => [
+        'id' => $m['id'],
+        'name' => trim($m['firstName'] . ' ' . $m['lastName']),
+        'firstName' => $m['firstName'],
+        'lastName' => $m['lastName'],
+        'patrol' => $m['patrol'] ?? null,
+    ], OSM_DEMO_MEMBERS[$sectionId] ?? []);
+}
+
 const OSM_DEMO_PROGRAMME = [
     's101' => [
         ['date' => '2026-07-14', 'title' => 'Pioneering skills', 'notes' => 'Bring old bedsheets for shelter building.'],

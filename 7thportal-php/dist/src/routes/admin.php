@@ -63,13 +63,23 @@ $router->get('/api/admin/osm/sections', function ($params) {
 $router->get('/api/admin/osm/sections/:sectionId/members', function ($params) {
     $admin = requireAuth();
     requireAdmin($admin);
+    // Use the proven roster path (demo fixture, or the live POST-grid call that OSM
+    // actually serves) via the service account - the old osmDataSectionMembers hit a
+    // blocked/demo-blind read, so the member picker came back empty.
     $service = getServiceAccount() ?? $admin;
-    $result = osmDataReadTokenFor(array_merge($service, ['portal_role' => 'section_leader']));
-    if ($result['unavailable']) jsonResponse(['available' => false, 'reason' => $result['reason'], 'members' => []]);
-    $members = osmDataSectionMembers($result['token'], $params['sectionId']);
+    $roster = osmSectionRoster($service, $params['sectionId']);
+    if (empty($roster['ok'])) {
+        jsonResponse(['available' => false, 'reason' => $roster['error'] ?? 'OSM members are unavailable right now.', 'blocked' => !empty($roster['blocked']), 'members' => []]);
+    }
+    $members = array_map(fn($m) => [
+        'id' => $m['id'],
+        'firstName' => $m['firstName'] ?? $m['name'],
+        'lastName' => $m['lastName'] ?? '',
+        'name' => $m['name'],
+    ], $roster['members']);
     // Named child/member drill-down is audited (FRD 6.1 / FR-OSM-CAP-011).
-    logAudit(['userId' => $admin['id'], 'action' => 'admin_section_member_drilldown', 'entityType' => 'osm_section', 'entityId' => $params['sectionId'], 'ipAddress' => clientIp(), 'details' => ['count' => count($members['members'] ?? [])]]);
-    jsonResponse($members);
+    logAudit(['userId' => $admin['id'], 'action' => 'admin_section_member_drilldown', 'entityType' => 'osm_section', 'entityId' => $params['sectionId'], 'ipAddress' => clientIp(), 'details' => ['count' => count($members), 'source' => $roster['source']]]);
+    jsonResponse(['available' => true, 'members' => $members, 'source' => $roster['source']]);
 });
 
 // ── Section capacity tracker & movement trends (FRD 29) ────────────────────
@@ -286,8 +296,12 @@ $router->get('/api/admin/settings', function ($params) {
         'financeRetentionDays' => (int) ($map['finance_retention_days'] ?? 730),
         'documentLibraryEnabled' => ($map['document_library_enabled'] ?? null) === 'true',
         'equipmentRegisterEnabled' => ($map['equipment_register_enabled'] ?? null) === 'true',
+        'qmBookingEnabled' => ($map['qm_booking_enabled'] ?? null) === 'true',
         'incidentLoggingEnabled' => ($map['incident_logging_enabled'] ?? null) === 'true',
         'eventHubEnabled' => ($map['event_hub_enabled'] ?? null) === 'true',
+        'calendarEnabled' => ($map['calendar_enabled'] ?? null) === 'true',
+        'attendanceEnabled' => ($map['attendance_enabled'] ?? null) === 'true',
+        'activityFormsEnabled' => ($map['activity_forms_enabled'] ?? null) === 'true',
     ]);
 });
 
@@ -312,8 +326,12 @@ $router->put('/api/admin/settings', function ($params) {
     if (!empty($body['financeRetentionDays'])) $upsert('finance_retention_days', (string) $body['financeRetentionDays']);
     if (array_key_exists('documentLibraryEnabled', $body)) $upsert('document_library_enabled', $body['documentLibraryEnabled'] ? 'true' : 'false');
     if (array_key_exists('equipmentRegisterEnabled', $body)) $upsert('equipment_register_enabled', $body['equipmentRegisterEnabled'] ? 'true' : 'false');
+    if (array_key_exists('qmBookingEnabled', $body)) $upsert('qm_booking_enabled', $body['qmBookingEnabled'] ? 'true' : 'false');
     if (array_key_exists('incidentLoggingEnabled', $body)) $upsert('incident_logging_enabled', $body['incidentLoggingEnabled'] ? 'true' : 'false');
     if (array_key_exists('eventHubEnabled', $body)) $upsert('event_hub_enabled', $body['eventHubEnabled'] ? 'true' : 'false');
+    if (array_key_exists('calendarEnabled', $body)) $upsert('calendar_enabled', $body['calendarEnabled'] ? 'true' : 'false');
+    if (array_key_exists('attendanceEnabled', $body)) $upsert('attendance_enabled', $body['attendanceEnabled'] ? 'true' : 'false');
+    if (array_key_exists('activityFormsEnabled', $body)) $upsert('activity_forms_enabled', $body['activityFormsEnabled'] ? 'true' : 'false');
 
     logAudit(['userId' => $user['id'], 'action' => array_key_exists('galleryEnabled', $body) ? 'admin_toggle_gallery' : (array_key_exists('financeEnabled', $body) ? 'admin_toggle_finance' : 'admin_update_settings'), 'ipAddress' => clientIp(), 'details' => $body]);
     jsonResponse(['ok' => true]);
@@ -322,11 +340,23 @@ $router->put('/api/admin/settings', function ($params) {
 // ── Users and roles (FR-056, FR-061) ──────────────────────────────────────
 $router->get('/api/admin/users', function ($params) {
     requireAdmin(requireAuth());
-    jsonResponse(array_map(fn($u) => [
-        'id' => (int) $u['id'], 'firstName' => $u['first_name'], 'lastName' => $u['last_name'], 'email' => $u['email'],
-        'authType' => $u['auth_type'], 'role' => $u['portal_role'], 'roleLabel' => roleLabel($u['portal_role']),
-        'status' => $u['account_status'], 'isServiceAccount' => (bool) $u['is_osm_service_account'], 'lastLoginAt' => $u['last_login_at'],
-    ], dbAll('SELECT * FROM users ORDER BY created_at DESC')));
+    $links = dbAll('SELECT * FROM parent_child_links');
+    jsonResponse(array_map(function ($u) use ($links) {
+        // Linked children give a user "parent access" - a leader with linked children
+        // is dual-role (sees a Parent View of only their own children).
+        $children = array_values(array_map(
+            fn($l) => ['linkId' => (int) $l['id'], 'name' => $l['child_display_name'], 'sectionName' => $l['osm_section_name']],
+            array_filter($links, fn($l) => (int) $l['parent_user_id'] === (int) $u['id'])
+        ));
+        $isLeader = isLeaderRole($u['portal_role']);
+        $hasParent = $u['portal_role'] === 'parent' || count($children) > 0;
+        return [
+            'id' => (int) $u['id'], 'firstName' => $u['first_name'], 'lastName' => $u['last_name'], 'email' => $u['email'],
+            'authType' => $u['auth_type'], 'role' => $u['portal_role'], 'roleLabel' => roleLabel($u['portal_role']),
+            'status' => $u['account_status'], 'isServiceAccount' => (bool) $u['is_osm_service_account'], 'lastLoginAt' => $u['last_login_at'],
+            'children' => $children, 'isLeader' => $isLeader, 'hasParentAccess' => $hasParent, 'dualRole' => $isLeader && count($children) > 0,
+        ];
+    }, dbAll('SELECT * FROM users ORDER BY created_at DESC')));
 });
 
 $router->get('/api/admin/roles', function ($params) {
@@ -407,11 +437,155 @@ $router->post('/api/admin/parents', function ($params) {
     jsonResponse(['id' => $result['lastInsertId'], 'setupUrl' => $setupUrl, 'emailed' => $emailed]);
 });
 
+// Read-only probe (see if a bulk parent+child preload is feasible): shows which
+// fields OSM's contact grid returns for a section, so we can confirm parent
+// names/emails are present before building any import. Masked sample; nothing stored.
+$router->get('/api/admin/osm/sections/:sectionId/contact-fields', function ($params) {
+    $admin = requireAuth();
+    requireAdmin($admin);
+    $service = getServiceAccount() ?? $admin;
+    try { $token = ensureFreshToken($service); }
+    catch (Throwable $e) { jsonResponse(['available' => false, 'reason' => 'No usable OSM token - connect an OSM service account, or sign in with OSM.']); }
+
+    if ($token === 'demo') {
+        // Representative shape so the tool is demonstrable offline (values are fake).
+        jsonResponse(['available' => true, 'source' => 'demo', 'memberCount' => 2, 'fields' => [
+            ['path' => 'scoutid', 'sample' => 'm20…(4 chars)', 'parentish' => false],
+            ['path' => 'firstname', 'sample' => 'Ame…(6 chars)', 'parentish' => false],
+            ['path' => 'lastname', 'sample' => 'Tur…(6 chars)', 'parentish' => false],
+            ['path' => 'contact_primary_1.firstname', 'sample' => 'Sar…(5 chars)', 'parentish' => true],
+            ['path' => 'contact_primary_1.lastname', 'sample' => 'Tur…(6 chars)', 'parentish' => true],
+            ['path' => 'Primary Contact 1 › Email 1', 'sample' => 'sa•••@example.com', 'parentish' => true],
+            ['path' => 'Primary Contact 1 › Phone 1', 'sample' => '•••••789 (phone-like)', 'parentish' => true],
+            ['path' => 'Primary Contact 2 › First name', 'sample' => 'Dav…(5 chars)', 'parentish' => true],
+            ['path' => 'Primary Contact 2 › Email 1', 'sample' => 'da•••@example.com', 'parentish' => true],
+        ], 'contactGroups' => [
+            ['name' => 'Primary Contact 1', 'fields' => ['First name', 'Last name', 'Email 1', 'Phone 1']],
+            ['name' => 'Primary Contact 2', 'fields' => ['First name', 'Last name', 'Email 1', 'Phone 1']],
+        ], 'topLevelKeys' => ['status', 'data', 'meta'], 'maskedPayload' => [
+            'data' => ['12345' => ['first_name' => 'Ame…(6 chars)', 'custom_data' => ['1' => ['12' => 'sa•••@example.com']]]],
+        ]]);
+    }
+    $svc = dbGet('SELECT * FROM users WHERE id = ?', [$service['id']]);
+    $term = osmCurrentTermFromData(json_decode($svc['osm_terms_json'] ?? '[]', true) ?: [], $params['sectionId']);
+    $tid = $term && ($term['termId'] ?? '') !== '' ? $term['termId'] : null;
+    $res = osmGridContactFields($token, $params['sectionId'], $tid);
+    if (empty($res['ok'])) jsonResponse(['available' => false, 'reason' => $res['error'] ?? 'OSM did not return contact fields.', 'blocked' => !empty($res['blocked'])]);
+    logAudit(['userId' => $admin['id'], 'action' => 'admin_osm_contact_fields_probe', 'entityType' => 'osm_section', 'entityId' => $params['sectionId'], 'ipAddress' => clientIp(), 'details' => ['memberCount' => $res['memberCount'], 'fieldCount' => count($res['fields'])]]);
+    jsonResponse([
+        'available' => true, 'source' => 'osm', 'memberCount' => $res['memberCount'], 'fields' => $res['fields'],
+        'contactGroups' => $res['contactGroups'] ?? [],
+        'topLevelKeys' => $res['topLevelKeys'] ?? [], 'maskedPayload' => $res['maskedPayload'] ?? null,
+    ]);
+});
+
+// Dry-run preview of a parent+child import from OSM (backlog: parent preload).
+// READ-ONLY - creates and links nothing; it only shows what an import WOULD do,
+// cross-referenced against existing accounts/links. Emails are masked.
+$router->get('/api/admin/osm/sections/:sectionId/parent-import-preview', function ($params) {
+    $admin = requireAuth();
+    requireAdmin($admin);
+    $service = getServiceAccount() ?? $admin;
+    try { $token = ensureFreshToken($service); }
+    catch (Throwable $e) { jsonResponse(['available' => false, 'reason' => 'No usable OSM token - connect an OSM service account, or sign in with OSM.']); }
+
+    if ($token === 'demo') {
+        jsonResponse(['available' => true, 'source' => 'demo', 'summary' => [
+            'youth' => 3, 'parentsTotal' => 3, 'parentsNew' => 2, 'parentsExisting' => 1, 'linksToCreate' => 4, 'linksExisting' => 1,
+            'skipped' => ['hidden' => 1, 'noEmail' => 1, 'adults' => 10],
+        ], 'parents' => [
+            ['emailMasked' => 'ni•••@example.com', 'name' => 'Nicola Wheeler', 'existingUser' => false, 'children' => [['name' => 'Jack Wheeler', 'alreadyLinked' => false]]],
+            ['emailMasked' => 'ro•••@example.com', 'name' => 'Rob Wheeler', 'existingUser' => true, 'children' => [['name' => 'Jack Wheeler', 'alreadyLinked' => true], ['name' => 'Holly Wheeler', 'alreadyLinked' => false]]],
+            ['emailMasked' => 'sm•••@example.com', 'name' => 'Simon Mullery', 'existingUser' => false, 'children' => [['name' => 'Isabelle Mullery', 'alreadyLinked' => false]]],
+        ]]);
+    }
+
+    $svc = dbGet('SELECT * FROM users WHERE id = ?', [$service['id']]);
+    $term = osmCurrentTermFromData(json_decode($svc['osm_terms_json'] ?? '[]', true) ?: [], $params['sectionId']);
+    $tid = $term && ($term['termId'] ?? '') !== '' ? $term['termId'] : null;
+    $plan = osmParseParentImport($token, $params['sectionId'], $tid);
+    if (empty($plan['ok'])) jsonResponse(['available' => false, 'reason' => $plan['error'] ?? 'OSM did not return contacts.', 'blocked' => !empty($plan['blocked'])]);
+
+    $parentsOut = []; $parentsNew = 0; $parentsExisting = 0; $linksToCreate = 0; $linksExisting = 0;
+    foreach ($plan['parents'] as $email => $p) {
+        $u = dbGet('SELECT id FROM users WHERE lower(email) = ?', [$email]);
+        $existing = (bool) $u;
+        $existing ? $parentsExisting++ : $parentsNew++;
+        $childrenOut = [];
+        foreach ($p['children'] as $c) {
+            $linked = $existing && dbGet('SELECT 1 FROM parent_child_links WHERE parent_user_id = ? AND osm_member_id = ? LIMIT 1', [$u['id'], $c['memberId']]);
+            $linked ? $linksExisting++ : $linksToCreate++;
+            $childrenOut[] = ['name' => $c['name'], 'alreadyLinked' => (bool) $linked];
+        }
+        $parentsOut[] = ['emailMasked' => osmMaskValue($email), 'name' => $p['name'], 'existingUser' => $existing, 'children' => $childrenOut];
+    }
+    usort($parentsOut, fn($a, $b) => strcmp((string) $a['name'], (string) $b['name']));
+    logAudit(['userId' => $admin['id'], 'action' => 'admin_osm_parent_import_preview', 'entityType' => 'osm_section', 'entityId' => $params['sectionId'], 'ipAddress' => clientIp(), 'details' => ['youth' => $plan['youth'], 'parents' => count($parentsOut), 'linksToCreate' => $linksToCreate]]);
+    jsonResponse(['available' => true, 'source' => 'osm', 'summary' => [
+        'youth' => $plan['youth'], 'parentsTotal' => count($parentsOut), 'parentsNew' => $parentsNew, 'parentsExisting' => $parentsExisting,
+        'linksToCreate' => $linksToCreate, 'linksExisting' => $linksExisting, 'skipped' => $plan['skipped'],
+    ], 'parents' => $parentsOut]);
+});
+
+// Apply the parent import (backlog: parent preload). Creates DORMANT parent
+// accounts (local login, no password, no invite email auto-sent) and links their
+// children. Re-derives the plan server-side from OSM (never trusts the client),
+// is idempotent (skips existing accounts/links) and audited. Admin only.
+$router->post('/api/admin/osm/sections/:sectionId/parent-import-apply', function ($params) {
+    $admin = requireAuth();
+    requireAdmin($admin);
+    $service = getServiceAccount() ?? $admin;
+    try { $token = ensureFreshToken($service); }
+    catch (Throwable $e) { jsonResponse(['error' => 'No usable OSM token - connect an OSM service account, or sign in with OSM.'], 400); }
+    if ($token === 'demo') jsonResponse(['error' => 'Demo mode - the import needs a real OSM sign-in.'], 400);
+
+    $svc = dbGet('SELECT * FROM users WHERE id = ?', [$service['id']]);
+    $term = osmCurrentTermFromData(json_decode($svc['osm_terms_json'] ?? '[]', true) ?: [], $params['sectionId']);
+    $tid = $term && ($term['termId'] ?? '') !== '' ? $term['termId'] : null;
+    $plan = osmParseParentImport($token, $params['sectionId'], $tid);
+    if (empty($plan['ok'])) jsonResponse(['error' => $plan['error'] ?? 'OSM did not return contacts.', 'blocked' => !empty($plan['blocked'])], 502);
+
+    $body = requestBody();
+    $sectionName = trim((string) ($body['sectionName'] ?? '')) ?: (dbGet('SELECT section_name FROM osm_sections WHERE osm_section_id = ?', [$params['sectionId']])['section_name'] ?? null);
+    $sectionType = trim((string) ($body['sectionType'] ?? '')) ?: (dbGet('SELECT section_type FROM osm_sections WHERE osm_section_id = ?', [$params['sectionId']])['section_type'] ?? null);
+
+    $parentsCreated = 0; $parentsExisting = 0; $linksCreated = 0;
+    foreach ($plan['parents'] as $email => $p) {
+        $u = dbGet('SELECT id FROM users WHERE lower(email) = ?', [$email]);
+        if ($u) {
+            $parentsExisting++;
+            $uid = (int) $u['id'];
+        } else {
+            // Dormant account: no password, an invite token so the parent can set one
+            // later via the normal setup flow, but NO email is sent here.
+            $result = dbRun(
+                "INSERT INTO users (auth_type, email, first_name, last_name, portal_role, invite_token, invite_expires_at) VALUES ('local', ?, ?, ?, 'parent', ?, ?)",
+                [$email, $p['firstName'] ?: ($p['name'] ?: 'Parent'), $p['lastName'] ?: '', bin2hex(random_bytes(24)), gmdate('Y-m-d\TH:i:s\Z', time() + 30 * 24 * 3600)]
+            );
+            $uid = (int) $result['lastInsertId'];
+            $parentsCreated++;
+        }
+        foreach ($p['children'] as $c) {
+            $res = dbRun(
+                'INSERT OR IGNORE INTO parent_child_links (parent_user_id, osm_member_id, osm_section_id, osm_section_name, osm_section_type, child_display_name, linked_by) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [$uid, $c['memberId'], $params['sectionId'], $sectionName, $sectionType, $c['name'], $admin['id']]
+            );
+            if (($res['rowCount'] ?? 0) > 0) $linksCreated++;
+        }
+    }
+    logAudit(['userId' => $admin['id'], 'action' => 'admin_osm_parent_import_apply', 'entityType' => 'osm_section', 'entityId' => $params['sectionId'], 'ipAddress' => clientIp(), 'details' => ['parentsCreated' => $parentsCreated, 'parentsExisting' => $parentsExisting, 'linksCreated' => $linksCreated, 'youth' => $plan['youth']]]);
+    jsonResponse(['ok' => true, 'parentsCreated' => $parentsCreated, 'parentsExisting' => $parentsExisting, 'linksCreated' => $linksCreated]);
+});
+
 $router->post('/api/admin/parents/:id/children', function ($params) {
     $admin = requireAuth();
     requireAdmin($admin);
-    $parent = dbGet("SELECT * FROM users WHERE id = ? AND portal_role = 'parent'", [$params['id']]);
-    if (!$parent) jsonResponse(['error' => 'Parent account not found.'], 404);
+    // A child can be linked to ANY account, not just a parent-role one: linking a
+    // leader's own child to their leader account is what makes them dual-role (they
+    // gain a Parent View of only their own children). Access is unchanged - parent
+    // endpoints only ever return the caller's own linked children.
+    $parent = dbGet('SELECT * FROM users WHERE id = ?', [$params['id']]);
+    if (!$parent) jsonResponse(['error' => 'User account not found.'], 404);
     $body = requestBody();
     $osmMemberId = $body['osmMemberId'] ?? null;
     $childDisplayName = $body['childDisplayName'] ?? null;

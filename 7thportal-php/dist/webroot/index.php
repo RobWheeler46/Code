@@ -49,8 +49,12 @@ require_once __DIR__ . '/../src/lib/finance.php';
 require_once __DIR__ . '/../src/lib/documents.php';
 require_once __DIR__ . '/../src/lib/notifications.php';
 require_once __DIR__ . '/../src/lib/equipment.php';
+require_once __DIR__ . '/../src/lib/quartermaster.php';
 require_once __DIR__ . '/../src/lib/incidents.php';
 require_once __DIR__ . '/../src/lib/events.php';
+require_once __DIR__ . '/../src/lib/calendar.php';
+require_once __DIR__ . '/../src/lib/attendance.php';
+require_once __DIR__ . '/../src/lib/activity.php';
 require_once __DIR__ . '/../src/lib/actions.php';
 
 // Idempotent maintenance, mirrors the one-off boot tasks in the Node
@@ -104,12 +108,17 @@ require_once __DIR__ . '/../src/routes/notices.php';
 require_once __DIR__ . '/../src/routes/admin.php';
 require_once __DIR__ . '/../src/routes/gallery.php';
 require_once __DIR__ . '/../src/routes/finance.php';
+require_once __DIR__ . '/../src/routes/governance.php';
 require_once __DIR__ . '/../src/routes/documents.php';
 require_once __DIR__ . '/../src/routes/actions.php';
 require_once __DIR__ . '/../src/routes/notifications.php';
 require_once __DIR__ . '/../src/routes/equipment.php';
+require_once __DIR__ . '/../src/routes/quartermaster.php';
 require_once __DIR__ . '/../src/routes/incidents.php';
 require_once __DIR__ . '/../src/routes/events.php';
+require_once __DIR__ . '/../src/routes/calendar.php';
+require_once __DIR__ . '/../src/routes/attendance.php';
+require_once __DIR__ . '/../src/routes/activity.php';
 
 // NFR-007: never expose technical error details to end users - the response
 // body stays generic, but the server-side log (error_log + data/login-debug.log

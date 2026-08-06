@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <title>Log in - 7thPortal</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=202608061239">
 </head>
 <body>
   <header id="app-nav" class="app-nav"></header>
@@ -18,6 +18,7 @@
       <a class="btn btn-primary" href="/auth/osm/login">Log in with OSM</a>
       <div id="demo-leader-link" style="margin-top:0.75rem; display:none;">
         <a class="btn btn-secondary btn-sm" href="/auth/demo/login?as=leader">Try Demo Mode instead (leader)</a>
+        <a class="btn btn-secondary btn-sm" href="/auth/demo/login?as=leaderparent">Try Demo Mode instead (leader + parent)</a>
         <a class="btn btn-secondary btn-sm" href="/auth/demo/login?as=admin">Try Demo Mode instead (admin)</a>
       </div>
     </div>
@@ -39,10 +40,11 @@
       </form>
       <p class="field help" style="margin-top:1rem;">Trouble signing in? Contact your section leader or the Portal Administrator. Password resets for your OSM account itself are handled directly in OSM.</p>
     </div>
+    <p class="field help" style="text-align:center;margin-top:1.5rem;"><a href="osm-diagnostic.html">OSM login diagnostic</a> &middot; read-only check of what OSM returns for a sign-in</p>
   </div>
 
-  <script src="js/api.js"></script>
-  <script src="js/nav.js"></script>
-  <script src="js/login.js"></script>
+  <script src="js/api.js?v=202608061239"></script>
+  <script src="js/nav.js?v=202608061239"></script>
+  <script src="js/login.js?v=202608061239"></script>
 </body>
 </html>

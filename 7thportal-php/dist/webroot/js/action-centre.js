@@ -21,16 +21,16 @@ async function renderActions() {
       <div class="card"><div class="muted">Open actions</div><div class="cap-big">${s.total}</div></div>
     </div>
     <div class="card">
-      ${data.items.length ? `<table class="data-table">
+      ${data.items.length ? `<table class="data-table rcards">
         <thead><tr><th>Priority</th><th>Type</th><th>Action</th><th>Owner</th><th>Due</th><th></th></tr></thead>
         <tbody>${data.items.map(i => `
           <tr>
-            <td><span class="badge" data-status="${PRIORITY_BADGE[i.priority] || 'draft'}">${i.priority}</span></td>
-            <td>${escapeHtml(i.type)}</td>
-            <td>${escapeHtml(i.action)}</td>
-            <td class="muted">${escapeHtml(i.owner)}</td>
-            <td class="muted">${i.due ? formatDate(i.due) : '&mdash;'}</td>
-            <td style="white-space:nowrap">
+            <td data-label="Priority"><span class="badge" data-status="${PRIORITY_BADGE[i.priority] || 'draft'}">${i.priority}</span></td>
+            <td data-label="Type">${escapeHtml(i.type)}</td>
+            <td data-label="Action" class="rcard-title">${escapeHtml(i.action)}</td>
+            <td data-label="Owner" class="muted">${escapeHtml(i.owner)}</td>
+            <td data-label="Due" class="muted">${i.due ? formatDate(i.due) : '&mdash;'}</td>
+            <td class="rcard-actions" style="white-space:nowrap">
               <a class="btn btn-secondary btn-sm" href="${escapeHtml(i.link)}">${escapeHtml(i.status)}</a>
               ${i.dismissible ? `<button class="btn btn-sm act-dismiss" data-key="${escapeHtml(i.key)}" title="Dismiss">&times;</button>` : ''}
             </td>

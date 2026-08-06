@@ -1,7 +1,8 @@
 (async () => {
-  const me = await requireUserNav();
+  const me = await requireUserNav('leader');
   if (!me) return;
-  if (me.role === 'parent') {
+  // No leader capability -> this is a parent-only account; send them to their view.
+  if (!(me.capabilities && me.capabilities.leader)) {
     location.href = 'parent-dashboard.html';
     return;
   }
@@ -35,7 +36,7 @@ function renderSections(sections, clickable) {
       <h2>${escapeHtml(s.sectionName)}</h2>
       ${s.meetingDay ? `<p class="muted">${escapeHtml(s.meetingDay)} ${escapeHtml(s.meetingTime || '')} &middot; ${escapeHtml(s.location || '')}</p>` : ''}
       ${s.currentTerm && s.currentTerm.name ? `<p class="muted">Current term: ${escapeHtml(s.currentTerm.name)}${s.currentTerm.startDate ? ` (${formatDate(s.currentTerm.startDate)}${s.currentTerm.endDate ? ' - ' + formatDate(s.currentTerm.endDate) : ''})` : ''}</p>` : ''}
-      ${s.memberCount !== undefined && s.memberCount !== null ? `<p>${s.memberCount} member${s.memberCount === 1 ? '' : 's'}</p>` : ''}
+      ${s.memberCount !== undefined && s.memberCount !== null ? `<p><strong>${s.memberCount}</strong> member${s.memberCount === 1 ? '' : 's'}${s.memberCountSyncedAt ? ` <span class="muted">&middot; OSM ${formatDate(s.memberCountSyncedAt)}</span>` : ''}</p>` : ''}
       ${s.nextProgrammeItem ? `<p class="muted">Next meeting: ${formatDate(s.nextProgrammeItem.date)} - ${escapeHtml(s.nextProgrammeItem.title)}</p>` : ''}
       ${s.nextEvent ? `<p class="muted">Next event: ${formatDate(s.nextEvent.date)} - ${escapeHtml(s.nextEvent.name)}</p>` : ''}
     `;

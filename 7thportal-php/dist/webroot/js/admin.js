@@ -26,6 +26,13 @@ const ADMIN_TABS = [
   // be redundant here.
   const sidebar = document.getElementById('app-sidebar');
   sidebar.innerHTML = `<div class="sidebar-role">Admin</div><nav>${ADMIN_TABS.map(t => `<button class="admin-tab-btn" data-tab="${t.tab}">${t.label}</button>`).join('')}</nav>`;
+  // The sidebar is hidden on phones, so mirror the tabs as a horizontal scrolling
+  // strip above the content for mobile admins (admin stays laptop-first otherwise).
+  const tabContent = document.getElementById('tab-content');
+  const strip = document.createElement('div');
+  strip.className = 'admin-mobile-tabs';
+  strip.innerHTML = ADMIN_TABS.map(t => `<button class="admin-tab-btn" data-tab="${t.tab}">${t.label}</button>`).join('');
+  tabContent.parentNode.insertBefore(strip, tabContent);
   document.querySelectorAll('.admin-tab-btn').forEach(btn => {
     btn.addEventListener('click', () => selectTab(btn.dataset.tab));
   });
@@ -290,21 +297,36 @@ async function renderNotices() {
 async function renderUsers() {
   const box = document.getElementById('tab-content');
   box.innerHTML = '<p class="muted">Loading&hellip;</p>';
-  const [users, roles] = await Promise.all([Api.get('/api/admin/users'), Api.get('/api/admin/roles')]);
+  const [users, roles, sectionsResp] = await Promise.all([Api.get('/api/admin/users'), Api.get('/api/admin/roles'), getSections()]);
+  const sections = sectionsResp.sections || [];
   const roleOptions = roles.map(r => `<option value="${r.value}">${escapeHtml(r.label)}</option>`).join('');
 
-  box.innerHTML = `<div class="card"><table>
-    <thead><tr><th>Name</th><th>Login</th><th>Role</th><th>Status</th><th></th></tr></thead>
+  // "Access" makes dual-role obvious: a leader who also has linked children.
+  const accessCell = (u) => {
+    const parts = [];
+    if (u.dualRole) parts.push('<span class="badge" data-status="active">Dual role</span>');
+    else if (u.isLeader) parts.push('<span class="badge" data-status="pending_approval">Leader</span>');
+    else if (u.role === 'parent') parts.push('<span class="badge" data-status="pending_approval">Parent</span>');
+    if (u.children.length) parts.push(`<span class="muted" style="font-size:.8rem">${u.children.length} child${u.children.length === 1 ? '' : 'ren'}: ${u.children.map(c => escapeHtml(c.name)).join(', ')}</span>`);
+    return parts.join('<br>') || '<span class="muted">&mdash;</span>';
+  };
+
+  box.innerHTML = `<div class="card">
+    <p class="muted">Link a child to a <strong>leader</strong> to make them dual-role - they gain a Parent View of only their own children. Use “Children” below.</p>
+    <table>
+    <thead><tr><th>Name</th><th>Login</th><th>Role</th><th>Access</th><th>Status</th><th></th></tr></thead>
     <tbody>${users.map(u => `
       <tr>
         <td>${escapeHtml(u.firstName)} ${escapeHtml(u.lastName)}${u.isServiceAccount ? ' <span class="badge" data-status="active">service</span>' : ''}</td>
         <td>${escapeHtml(u.email || '(OSM account)')}<br><span class="muted">${u.authType === 'osm' ? 'OSM login' : 'Local login'}</span></td>
         <td><select data-role="${u.id}">${roleOptions.replace(`value="${u.role}"`, `value="${u.role}" selected`)}</select></td>
+        <td>${accessCell(u)}</td>
         <td><select data-status="${u.id}">
           <option value="active" ${u.status === 'active' ? 'selected' : ''}>Active</option>
           <option value="suspended" ${u.status === 'suspended' ? 'selected' : ''}>Suspended</option>
         </select></td>
-        <td><button class="btn btn-secondary btn-sm" data-save="${u.id}">Save</button></td>
+        <td style="white-space:nowrap"><button class="btn btn-secondary btn-sm" data-save="${u.id}">Save</button>
+          <button class="btn btn-secondary btn-sm" data-kids="${u.id}">Children</button></td>
       </tr>`).join('')}</tbody>
   </table></div><div id="users-error"></div>`;
 
@@ -320,6 +342,77 @@ async function renderUsers() {
       document.getElementById('users-error').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
     }
   }));
+  document.querySelectorAll('[data-kids]').forEach(btn => btn.addEventListener('click', () => {
+    openChildrenModal(users.find(u => String(u.id) === btn.dataset.kids), sections);
+  }));
+}
+
+// Link/unlink a user's children (works for any account - a leader with linked
+// children becomes dual-role). Reused member picker via the OSM section members API.
+function openChildrenModal(user, sections) {
+  const kids = [...(user.children || [])];
+  const existing = document.getElementById('kids-modal'); if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'kids-modal'; modal.className = 'modal-backdrop';
+  const field = (label, html) => `<div class="field" style="max-width:280px"><label>${label}</label>${html}</div>`;
+  modal.innerHTML = `<div class="modal-box">
+    <h2>Children &mdash; ${escapeHtml(user.firstName)} ${escapeHtml(user.lastName)}</h2>
+    <p class="muted">Linking a child gives this account a <strong>Parent View</strong> of that child. For a leader (${escapeHtml(user.roleLabel)}), this makes them dual-role.</p>
+    <div id="kids-list"></div>
+    <h3>Link a child</h3>
+    ${sections.length ? `${field('Section', `<select id="kids-section">${sections.map(s => `<option value="${escapeHtml(s.sectionId)}" data-name="${escapeHtml(s.sectionName)}" data-type="${escapeHtml(s.sectionType)}">${escapeHtml(s.sectionName)}</option>`).join('')}</select>`)}
+    ${field('Member', `<select id="kids-member"><option>Loading&hellip;</option></select>`)}
+    <div id="kids-error"></div>
+    <button class="btn btn-secondary btn-sm" id="kids-link">Link child</button>` : '<p class="muted">Sign in with an OSM leader account to list section members to link.</p>'}
+    <div class="modal-actions" style="display:flex;gap:.5rem;margin-top:1rem"><button class="btn" id="kids-close">Done</button></div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) closeKids(); });
+
+  const renderList = () => {
+    document.getElementById('kids-list').innerHTML = kids.length === 0
+      ? '<p class="muted">No children linked.</p>'
+      : `<ul>${kids.map(c => `<li>${escapeHtml(c.name)} <span class="muted">(${escapeHtml(c.sectionName || '')})</span> <button class="btn btn-danger btn-sm" data-unlink="${c.linkId}">Unlink</button></li>`).join('')}</ul>`;
+    document.querySelectorAll('#kids-list [data-unlink]').forEach(b => b.addEventListener('click', async () => {
+      try {
+        await Api.delete(`/api/admin/parents/${user.id}/children/${b.dataset.unlink}`);
+        const i = kids.findIndex(c => String(c.linkId) === b.dataset.unlink);
+        if (i >= 0) kids.splice(i, 1);
+        renderList();
+      } catch (e) { document.getElementById('kids-error').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+    }));
+  };
+  renderList();
+
+  const closeKids = () => { modal.remove(); renderUsers(); };
+  document.getElementById('kids-close').addEventListener('click', closeKids);
+
+  const sectionSel = document.getElementById('kids-section');
+  if (sectionSel) {
+    const loadMembers = async () => {
+      const memberSel = document.getElementById('kids-member');
+      memberSel.innerHTML = '<option>Loading&hellip;</option>';
+      try {
+        const data = await Api.get(`/api/admin/osm/sections/${encodeURIComponent(sectionSel.value)}/members`);
+        memberSel.innerHTML = (data.members || []).map(m => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.firstName)} ${escapeHtml(m.lastName)}</option>`).join('') || '<option value="">No members found</option>';
+      } catch (e) { memberSel.innerHTML = '<option value="">Could not load members</option>'; }
+    };
+    sectionSel.addEventListener('change', loadMembers);
+    loadMembers();
+    document.getElementById('kids-link').addEventListener('click', async () => {
+      const opt = sectionSel.selectedOptions[0];
+      const memberOpt = document.getElementById('kids-member').selectedOptions[0];
+      if (!opt || !memberOpt || !memberOpt.value) return;
+      try {
+        const res = await Api.post(`/api/admin/parents/${user.id}/children`, {
+          osmMemberId: memberOpt.value, osmSectionId: opt.value, osmSectionName: opt.dataset.name,
+          osmSectionType: opt.dataset.type, childDisplayName: memberOpt.textContent,
+        });
+        kids.push({ linkId: res.linkId, name: memberOpt.textContent, sectionName: opt.dataset.name });
+        renderList();
+      } catch (e) { document.getElementById('kids-error').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+    });
+  }
 }
 
 // ── Parent accounts ───────────────────────────────────────────────────────
@@ -330,6 +423,24 @@ async function renderParents() {
   const sections = sectionsResp.sections || [];
 
   box.innerHTML = `
+    <div class="card">
+      <h2>Preview OSM contact fields</h2>
+      <p class="muted">Check which parent/contact fields OSM returns for a section &mdash; this is how we confirm whether parents and their children can be preloaded automatically instead of linked by hand. Read-only; nothing is stored.</p>
+      <div class="cap-actions">
+        <select id="cf-section">${sections.map(s => `<option value="${escapeHtml(s.sectionId)}">${escapeHtml(s.sectionName)}</option>`).join('')}</select>
+        <button class="btn btn-secondary" id="cf-go"${sections.length ? '' : ' disabled'}>Show fields</button>
+      </div>
+      <div id="cf-result" style="margin-top:.8rem"></div>
+    </div>
+    <div class="card">
+      <h2>Preview parent import from OSM <span class="badge" data-status="draft">dry run</span></h2>
+      <p class="muted">Shows exactly which parent accounts would be created and which children linked, from OSM's contact data &mdash; deduplicated by email, skipping leaders and any contact marked &ldquo;hide from parent portal&rdquo;. <strong>This creates and links nothing</strong>; it's a read-only preview.</p>
+      <div class="cap-actions">
+        <select id="pi-section">${sections.map(s => `<option value="${escapeHtml(s.sectionId)}">${escapeHtml(s.sectionName)}</option>`).join('')}</select>
+        <button class="btn btn-secondary" id="pi-go"${sections.length ? '' : ' disabled'}>Preview import</button>
+      </div>
+      <div id="pi-result" style="margin-top:.8rem"></div>
+    </div>
     <div class="card">
       <h2>Add a parent/carer account</h2>
       <form id="parent-form">
@@ -361,6 +472,84 @@ async function renderParents() {
     } catch (err) {
       document.getElementById('parent-error').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
     }
+  });
+
+  const cfGo = document.getElementById('cf-go');
+  if (cfGo) cfGo.addEventListener('click', async () => {
+    const sid = document.getElementById('cf-section').value;
+    const out = document.getElementById('cf-result');
+    cfGo.disabled = true; cfGo.textContent = 'Reading OSM…'; out.innerHTML = '';
+    try {
+      const d = await Api.get(`/api/admin/osm/sections/${encodeURIComponent(sid)}/contact-fields`);
+      if (!d.available) {
+        out.innerHTML = `<div class="alert alert-warning">${escapeHtml(d.reason || 'Not available.')}${d.blocked ? ' Wait a minute and try again - OSM rate-limits repeated reads.' : ''}</div>`;
+      } else {
+        const parentFields = d.fields.filter(f => f.parentish);
+        const groups = d.contactGroups || [];
+        const payloadJson = d.maskedPayload ? JSON.stringify(d.maskedPayload, null, 2) : '';
+        out.innerHTML = `
+          <p class="muted">${d.memberCount} member row(s) &middot; ${d.source === 'demo' ? 'demo shape (not live)' : 'from OSM'} &middot; ${parentFields.length} parent/contact field(s) detected.</p>
+          ${groups.length
+            ? `<div class="alert alert-success">Parent/carer contacts are present &mdash; a preload of parents + linked children is feasible.<br>Contact groups: ${groups.map(g => `<strong>${escapeHtml(g.name)}</strong> (${g.fields.map(escapeHtml).join(', ')})`).join(' &middot; ')}</div>`
+            : (parentFields.length
+              ? '<div class="alert alert-success">Contact-looking fields are present &mdash; a preload looks feasible.</div>'
+              : '<div class="alert alert-warning">No parent/contact fields detected. Check the full response below &mdash; if contacts aren\'t there, OSM\'s scope for this app doesn\'t include them; if under odd keys, send me the shape.</div>')}
+          <div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Field</th><th>Sample (masked)</th><th>Parent/contact?</th></tr></thead>
+          <tbody>${d.fields.map(f => `<tr${f.parentish ? ' style="background:color-mix(in srgb, var(--card) 88%, var(--green))"' : ''}><td><code>${escapeHtml(f.path)}</code></td><td class="muted">${escapeHtml(f.sample)}</td><td>${f.parentish ? '✓' : ''}</td></tr>`).join('')}</tbody></table></div>
+          ${payloadJson ? `<div class="cap-head" style="margin-top:1rem"><h3 style="margin:0">Full response shape (masked)</h3><button class="btn btn-secondary btn-sm" id="cf-copy">Copy</button></div>
+            <p class="muted">Values are masked; long lists show the first 2. Paste this to confirm exactly where contacts live.</p>
+            <pre id="cf-json" style="overflow:auto;max-height:340px;background:var(--bg);padding:1rem;border-radius:8px;font-size:.78rem">${escapeHtml(payloadJson)}</pre>` : ''}`;
+        const copyBtn = document.getElementById('cf-copy');
+        if (copyBtn) copyBtn.addEventListener('click', () => navigator.clipboard.writeText(payloadJson).then(() => { copyBtn.textContent = 'Copied'; }, () => { copyBtn.textContent = 'Copy failed'; }));
+      }
+    } catch (e) { out.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+    finally { cfGo.disabled = false; cfGo.textContent = 'Show fields'; }
+  });
+
+  const piGo = document.getElementById('pi-go');
+  if (piGo) piGo.addEventListener('click', async () => {
+    const sid = document.getElementById('pi-section').value;
+    const out = document.getElementById('pi-result');
+    piGo.disabled = true; piGo.textContent = 'Reading OSM…'; out.innerHTML = '';
+    try {
+      const d = await Api.get(`/api/admin/osm/sections/${encodeURIComponent(sid)}/parent-import-preview`);
+      if (!d.available) { out.innerHTML = `<div class="alert alert-warning">${escapeHtml(d.reason || 'Not available.')}${d.blocked ? ' Wait a minute and try again - OSM rate-limits repeated reads.' : ''}</div>`; return; }
+      const s = d.summary;
+      const rows = d.parents.map(p => `<tr>
+          <td>${escapeHtml(p.name || '(no name)')}</td>
+          <td class="muted">${escapeHtml(p.emailMasked)}</td>
+          <td>${p.existingUser ? '<span class="badge" data-status="active">existing</span>' : '<span class="badge" data-status="pending_approval">new</span>'}</td>
+          <td>${p.children.map(c => `${escapeHtml(c.name)}${c.alreadyLinked ? ' <span class="badge" data-status="archived">linked</span>' : ''}`).join('<br>')}</td>
+        </tr>`).join('');
+      out.innerHTML = `
+        <div class="cap-stats">
+          <div class="card"><div class="muted">Youth</div><div class="cap-big">${s.youth}</div></div>
+          <div class="card"><div class="muted">Parent accounts to create</div><div class="cap-big">${s.parentsNew}</div></div>
+          <div class="card"><div class="muted">Child links to create</div><div class="cap-big">${s.linksToCreate}</div></div>
+          <div class="card"><div class="muted">Already existing</div><div class="cap-big">${s.parentsExisting}p / ${s.linksExisting}l</div></div>
+        </div>
+        <p class="muted">Skipped: ${s.skipped.adults} leaders/young leaders &middot; ${s.skipped.hidden} hidden from parent portal &middot; ${s.skipped.noEmail} contact(s) with no email.</p>
+        <div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Parent/carer</th><th>Email</th><th>Account</th><th>Children</th></tr></thead><tbody>${rows}</tbody></table></div>
+        <p class="muted" style="margin-top:.6rem">Nothing has been created yet. Applying creates <strong>dormant</strong> parent accounts (no password, <strong>no emails sent</strong>) and links the children. It's safe to re-run &mdash; existing accounts and links are skipped.</p>
+        <div id="pi-apply-wrap">${(s.parentsNew + s.linksToCreate) > 0 ? '<button class="btn btn-primary" id="pi-apply">Apply import</button>' : '<p class="muted">Nothing new to import.</p>'}</div>`;
+      const applyBtn = document.getElementById('pi-apply');
+      if (applyBtn) applyBtn.addEventListener('click', () => {
+        const sec = sections.find(x => x.sectionId === sid) || {};
+        document.getElementById('pi-apply-wrap').innerHTML = `
+          <div class="alert alert-warning">Create <strong>${s.parentsNew}</strong> dormant parent account(s) and <strong>${s.linksToCreate}</strong> child link(s)? No emails will be sent.
+          <div class="cap-actions" style="margin-top:.6rem"><button class="btn btn-primary" id="pi-confirm">Yes, apply</button><button class="btn btn-secondary" id="pi-cancel">Cancel</button></div></div>`;
+        document.getElementById('pi-cancel').addEventListener('click', () => piGo.click());
+        document.getElementById('pi-confirm').addEventListener('click', async () => {
+          const c = document.getElementById('pi-confirm'); c.disabled = true; c.textContent = 'Applying…';
+          try {
+            const r = await Api.post(`/api/admin/osm/sections/${encodeURIComponent(sid)}/parent-import-apply`, { sectionName: sec.sectionName, sectionType: sec.sectionType });
+            document.getElementById('pi-apply-wrap').innerHTML = `<div class="alert alert-success">Done. Created ${r.parentsCreated} parent account(s) and ${r.linksCreated} child link(s) (${r.parentsExisting} parent(s) already existed). Accounts are dormant &mdash; use the invite/reset flow to give parents access when ready.</div>`;
+            renderParents();
+          } catch (e) { document.getElementById('pi-apply-wrap').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+        });
+      });
+    } catch (e) { out.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+    finally { piGo.disabled = false; piGo.textContent = 'Preview import'; }
   });
 
   document.getElementById('parent-list').innerHTML = parents.length === 0 ? '<p class="muted">No parent accounts yet.</p>' : parents.map(p => `
@@ -497,6 +686,15 @@ async function renderSettings() {
       </form>
     </div>
     <div class="card">
+      <h2>Quartermaster booking</h2>
+      <p class="muted">Leaders request equipment from the stores; Quartermasters (Group Leadership Team &amp; admins) approve at item level and run the collection/return workflow. Builds on the equipment register - nothing is reserved until a QM approves. Ships off by default.</p>
+      <form id="qm-settings-form">
+        <div class="field"><label style="font-weight:400;"><input type="checkbox" id="qm-enabled" ${settings.qmBookingEnabled ? 'checked' : ''}> Enable Quartermaster booking</label></div>
+        <button class="btn btn-primary" type="submit">Save</button>
+        <span id="qm-settings-saved"></span>
+      </form>
+    </div>
+    <div class="card">
       <h2>Incident &amp; near-miss logging</h2>
       <p class="muted">Record local operational incidents, near misses and follow-up actions. <strong>This does not replace formal Scouts safeguarding or accident reporting</strong> - the module signposts to those and restricts sensitive records to admins, GLV, the reporter and the assigned owner, with full audit. Ships off by default.</p>
       <form id="incident-settings-form">
@@ -512,6 +710,33 @@ async function renderSettings() {
         <div class="field"><label style="font-weight:400;"><input type="checkbox" id="ev-enabled" ${settings.eventHubEnabled ? 'checked' : ''}> Enable the event &amp; camp hub</label></div>
         <button class="btn btn-primary" type="submit">Save</button>
         <span id="eventhub-settings-saved"></span>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Internal calendar</h2>
+      <p class="muted">A single planning calendar for leaders and QMs that overlays Event &amp; Camp Hub dates and Quartermaster booking resource blocks with local planning placeholders. Entries stay leader-only until published parent-safe. OSM stays the source of truth for OSM programme data. Ships off by default.</p>
+      <form id="calendar-settings-form">
+        <div class="field"><label style="font-weight:400;"><input type="checkbox" id="cal-enabled" ${settings.calendarEnabled ? 'checked' : ''}> Enable the internal calendar</label></div>
+        <button class="btn btn-primary" type="submit">Save</button>
+        <span id="calendar-settings-saved"></span>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Section attendance</h2>
+      <p class="muted">Lets section leaders take attendance registers for their own section, pre-filled from the live OSM roster and grouped by Six/Patrol, with parent-safe printable registers. <strong>Unlike the rest of the OSM integration, attendance records are stored</strong> (name + present/absent per session) so they survive OSM membership changes. Emergency contact details are not part of this. Ships off by default.</p>
+      <form id="attendance-settings-form">
+        <div class="field"><label style="font-weight:400;"><input type="checkbox" id="att-enabled" ${settings.attendanceEnabled ? 'checked' : ''}> Enable section attendance</label></div>
+        <button class="btn btn-primary" type="submit">Save</button>
+        <span id="attendance-settings-saved"></span>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Activity Approval forms</h2>
+      <p class="muted">Digital Activity Approval form with a two-stage approval workflow (Section Lead &rarr; GLV): draft/resume, evidence uploads, request-more-info/reject, and a draft calendar entry on final approval. Self-approval is blocked; all steps audited. Ships off by default.</p>
+      <form id="activity-settings-form">
+        <div class="field"><label style="font-weight:400;"><input type="checkbox" id="act-forms-enabled" ${settings.activityFormsEnabled ? 'checked' : ''}> Enable Activity Approval forms</label></div>
+        <button class="btn btn-primary" type="submit">Save</button>
+        <span id="activity-settings-saved"></span>
       </form>
     </div>
   `;
@@ -544,6 +769,11 @@ async function renderSettings() {
     await Api.put('/api/admin/settings', { equipmentRegisterEnabled: document.getElementById('e-enabled').checked });
     document.getElementById('equipment-settings-saved').textContent = 'Saved.';
   });
+  document.getElementById('qm-settings-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    await Api.put('/api/admin/settings', { qmBookingEnabled: document.getElementById('qm-enabled').checked });
+    document.getElementById('qm-settings-saved').textContent = 'Saved.';
+  });
   document.getElementById('incident-settings-form').addEventListener('submit', async e => {
     e.preventDefault();
     await Api.put('/api/admin/settings', { incidentLoggingEnabled: document.getElementById('i-enabled').checked });
@@ -553,6 +783,21 @@ async function renderSettings() {
     e.preventDefault();
     await Api.put('/api/admin/settings', { eventHubEnabled: document.getElementById('ev-enabled').checked });
     document.getElementById('eventhub-settings-saved').textContent = 'Saved.';
+  });
+  document.getElementById('calendar-settings-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    await Api.put('/api/admin/settings', { calendarEnabled: document.getElementById('cal-enabled').checked });
+    document.getElementById('calendar-settings-saved').textContent = 'Saved.';
+  });
+  document.getElementById('attendance-settings-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    await Api.put('/api/admin/settings', { attendanceEnabled: document.getElementById('att-enabled').checked });
+    document.getElementById('attendance-settings-saved').textContent = 'Saved.';
+  });
+  document.getElementById('activity-settings-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    await Api.put('/api/admin/settings', { activityFormsEnabled: document.getElementById('act-forms-enabled').checked });
+    document.getElementById('activity-settings-saved').textContent = 'Saved.';
   });
   document.getElementById('settings-form').addEventListener('submit', async e => {
     e.preventDefault();

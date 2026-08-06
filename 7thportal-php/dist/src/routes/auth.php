@@ -5,7 +5,7 @@
 // per-browser, which is what that Map was standing in for anyway.
 
 $router->get('/api/config', function ($params) {
-    jsonResponse(['osmConfigured' => osmIsConfigured(), 'demoModeAllowed' => osmDemoModeAllowed(), 'galleryEnabled' => galleryEnabled(), 'financeEnabled' => financeEnabled(), 'documentLibraryEnabled' => documentLibraryEnabled(), 'equipmentRegisterEnabled' => equipmentRegisterEnabled(), 'incidentLoggingEnabled' => incidentLoggingEnabled(), 'eventHubEnabled' => eventHubEnabled()]);
+    jsonResponse(['osmConfigured' => osmIsConfigured(), 'demoModeAllowed' => osmDemoModeAllowed(), 'galleryEnabled' => galleryEnabled(), 'financeEnabled' => financeEnabled(), 'documentLibraryEnabled' => documentLibraryEnabled(), 'equipmentRegisterEnabled' => equipmentRegisterEnabled(), 'qmBookingEnabled' => qmBookingEnabled(), 'incidentLoggingEnabled' => incidentLoggingEnabled(), 'eventHubEnabled' => eventHubEnabled(), 'calendarEnabled' => calendarEnabled(), 'attendanceEnabled' => attendanceEnabled(), 'activityFormsEnabled' => activityFormsEnabled()]);
 });
 
 $router->get('/auth/osm/login', function ($params) {
@@ -15,7 +15,7 @@ $router->get('/auth/osm/login', function ($params) {
         header('Location: /login.html?error=' . rawurlencode('OSM is not configured yet on this server. Ask a Portal Administrator to add OSM app credentials, or try Demo Mode below.'));
         exit;
     }
-    $intent = queryParam('intent') === 'service' ? 'service' : 'login';
+    $intent = in_array(queryParam('intent'), ['service', 'diagnostic'], true) ? queryParam('intent') : 'login';
     if ($intent === 'service') {
         $current = !empty($_SESSION['userId']) ? dbGet('SELECT portal_role FROM users WHERE id = ?', [$_SESSION['userId']]) : null;
         if (!$current || $current['portal_role'] !== 'admin') {
@@ -73,6 +73,29 @@ $router->get('/auth/osm/callback', function ($params) {
         $step = 'fetch_startup_data';
         $startup = osmGetStartupData($token['accessToken']);
         loginLog('Step 2/4 OK: fetched OSM startup data', ['hasGlobals' => isset($startup['data']['globals']), 'roleCount' => count($startup['data']['globals']['roles'] ?? [])]);
+
+        // Diagnostic intent: capture what OSM returned (esp. for a parent) and STOP -
+        // no user is created, no session is set. The redacted payload lives only in
+        // this session for a one-time in-browser view; nothing is persisted.
+        if ($intent === 'diagnostic') {
+            $identity = null;
+            try { $identity = osmExtractIdentity($startup); } catch (Throwable $e) { /* a parent payload may carry no leader identity */ }
+            $flags = osmDiagnosticScan($startup);
+            $_SESSION['osm_diagnostic'] = [
+                'capturedAt' => gmdate('c'),
+                'identity' => $identity ? [
+                    'osmUserId' => $identity['osmUserId'], 'firstName' => $identity['firstName'], 'lastName' => $identity['lastName'],
+                    'email' => $identity['email'], 'roleCount' => count($identity['roles']), 'termSectionCount' => count($identity['terms']),
+                ] : null,
+                'topLevelKeys' => array_keys($startup),
+                'globalsKeys' => array_keys($startup['data']['globals'] ?? []),
+                'flags' => $flags,
+                'raw' => osmDiagnosticRedact($startup),
+            ];
+            loginLog('DIAGNOSTIC capture complete (no login performed)', ['topLevelKeys' => array_keys($startup), 'globalsKeys' => array_keys($startup['data']['globals'] ?? []), 'flagCount' => count($flags), 'hasIdentity' => (bool) $identity]);
+            header('Location: /osm-diagnostic.html?done=1');
+            exit;
+        }
 
         $step = 'extract_identity';
         $identity = osmExtractIdentity($startup);
@@ -145,7 +168,7 @@ $router->get('/auth/osm/callback', function ($params) {
 // the app with fake data before OSM credentials are configured.
 $router->get('/auth/demo/login', function ($params) {
     if (!osmDemoModeAllowed()) { http_response_code(403); echo 'Demo mode is disabled on this server.'; exit; }
-    $as = in_array(queryParam('as'), ['parent', 'leader', 'admin', 'treasurer', 'chair', 'trustee'], true) ? queryParam('as') : 'parent';
+    $as = in_array(queryParam('as'), ['parent', 'leader', 'leaderparent', 'admin', 'treasurer', 'chair', 'trustee'], true) ? queryParam('as') : 'parent';
 
     if ($as === 'parent') {
         $user = dbGet("SELECT * FROM users WHERE email = 'demo.parent@example.com'");
@@ -181,9 +204,15 @@ $router->get('/auth/demo/login', function ($params) {
         if ($as === 'leader') {
             try { gallerySeedDemoAlbumIfMissing((int) $user['id']); } catch (Throwable $e) { /* best effort, matches Node's .catch(() => {}) */ }
         }
+        // Dual-role demo persona: a section leader (leads Cubs) who is ALSO a parent
+        // of a child in another section (Scouts) - exercises Parent View <-> Leader View.
+        if ($as === 'leaderparent') {
+            dbRun("INSERT OR IGNORE INTO parent_child_links (parent_user_id, osm_member_id, osm_section_id, osm_section_name, osm_section_type, child_display_name) VALUES (?, 'm203', 's102', 'Scouts', 'scouts', 'Freddie Brown')", [$user['id']]);
+        }
     }
 
     dbRun("UPDATE users SET last_login_at = datetime('now') WHERE id = ?", [$user['id']]);
+    unset($_SESSION['view']); // fresh login starts in the default view for the role
     $_SESSION['userId'] = $user['id'];
     logAudit(['userId' => $user['id'], 'action' => 'login', 'ipAddress' => clientIp(), 'details' => ['method' => 'demo', 'as' => $as]]);
     header('Location: ' . (isLeaderRole($user['portal_role']) ? '/leader-dashboard.html' : '/parent-dashboard.html'));
@@ -263,8 +292,38 @@ $router->post('/api/auth/logout', function ($params) {
 
 $router->get('/api/me', function ($params) {
     $user = requireAuth();
+    $caps = ['parent' => userHasParentAccess($user), 'leader' => userHasLeaderAccess($user)];
     jsonResponse(array_merge(publicUser($user), [
         'osmConnected' => !empty($user['osm_access_token']),
         'isServiceAccount' => (bool) $user['is_osm_service_account'],
+        'capabilities' => $caps,
+        'dualRole' => $caps['parent'] && $caps['leader'],
+        'activeView' => userActiveView($user),
     ]));
+});
+
+// One-time in-browser result of the OSM login diagnostic (see /auth/osm/login?
+// intent=diagnostic). Scoped to the session that ran it; persists nothing.
+$router->get('/api/osm/diagnostic/result', function ($params) {
+    if (empty($_SESSION['osm_diagnostic'])) jsonResponse(['error' => 'No diagnostic captured in this session yet.'], 404);
+    jsonResponse($_SESSION['osm_diagnostic']);
+});
+$router->post('/api/osm/diagnostic/clear', function ($params) {
+    unset($_SESSION['osm_diagnostic']);
+    jsonResponse(['ok' => true]);
+});
+
+// Switch the active view (Parent View <-> Leader View) for a dual-role user. Only a
+// view the user actually has is accepted; the choice is audited so leader-context
+// and parent-context access stay distinguishable (FRD dual-role audit requirement).
+$router->post('/api/context', function ($params) {
+    $user = requireAuth();
+    $view = requestBody()['view'] ?? '';
+    $caps = ['parent' => userHasParentAccess($user), 'leader' => userHasLeaderAccess($user)];
+    if (!in_array($view, ['parent', 'leader'], true) || empty($caps[$view])) {
+        jsonResponse(['error' => 'You do not have access to that view.'], 400);
+    }
+    $_SESSION['view'] = $view;
+    logAudit(['userId' => $user['id'], 'action' => 'switch_view', 'ipAddress' => clientIp(), 'details' => ['view' => $view]]);
+    jsonResponse(['ok' => true, 'activeView' => $view]);
 });

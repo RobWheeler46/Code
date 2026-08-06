@@ -16,9 +16,22 @@ function requireAuth(): array
     return $user;
 }
 
+// The user's active view, clamped to what they're actually allowed (never trusts a
+// stale session value). Defaults to leader for a leader, else parent.
+function userActiveView(array $user): string
+{
+    $view = $_SESSION['view'] ?? null;
+    if ($view === 'parent' && userHasParentAccess($user)) return 'parent';
+    if ($view === 'leader' && userHasLeaderAccess($user)) return 'leader';
+    return userHasLeaderAccess($user) ? 'leader' : 'parent';
+}
+
+// Parent-view access: a parent, or any user (e.g. a dual-role leader) who has their
+// own linked children. Parent endpoints only ever return the caller's own children,
+// so this never grants a leader access to anyone else's data.
 function requireParent(array $user): void
 {
-    if ($user['portal_role'] !== 'parent') jsonResponse(['error' => 'Parent/carer access required.'], 403);
+    if (!userHasParentAccess($user)) jsonResponse(['error' => 'Parent/carer access required.'], 403);
 }
 
 function requireLeader(array $user): void

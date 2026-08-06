@@ -452,6 +452,58 @@ CREATE TABLE IF NOT EXISTS event_hub_items (
 );
 CREATE INDEX IF NOT EXISTS idx_event_hub_items_hub ON event_hub_items(hub_id);
 
+-- Camp Planning Toolkit: location & emergency directory (FRD FR-CAMP-OP-004..008).
+-- Structured locations per event/camp with a visibility tier: parent-visible (e.g.
+-- drop-off/collection), leader-only, or emergency (leader-only + shown prominently
+-- in the emergency directory / offline pack). Parents only ever see 'parents' rows.
+CREATE TABLE IF NOT EXISTS event_locations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  hub_id INTEGER NOT NULL REFERENCES event_hubs(id) ON DELETE CASCADE,
+  location_type TEXT NOT NULL DEFAULT 'other' CHECK(location_type IN ('campsite','hospital','minor_injuries','dentist','optician','vet','fuel','gas','supermarket','supplier','activity_venue','drop_off','collection','other')),
+  name TEXT NOT NULL,
+  address TEXT,
+  phone TEXT,
+  opening_times TEXT,
+  notes TEXT,
+  map_url TEXT,
+  visibility TEXT NOT NULL DEFAULT 'leaders' CHECK(visibility IN ('parents','leaders','emergency')),
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_event_locations_hub ON event_locations(hub_id);
+
+-- Camp Planning Toolkit: adult rota (FR-CAMP-OP-018..021). The camp's adult team
+-- (with driver/first-aid flags + permits/skills notes) and rota entries by day,
+-- session, role and optional activity. An entry with no adult assigned is a "gap".
+-- Leader-only; parents never see any of this.
+CREATE TABLE IF NOT EXISTS camp_rota_adults (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  hub_id INTEGER NOT NULL REFERENCES event_hubs(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  is_driver INTEGER NOT NULL DEFAULT 0,
+  is_first_aider INTEGER NOT NULL DEFAULT 0,
+  skills TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_camp_rota_adults_hub ON camp_rota_adults(hub_id);
+
+CREATE TABLE IF NOT EXISTS camp_rota_entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  hub_id INTEGER NOT NULL REFERENCES event_hubs(id) ON DELETE CASCADE,
+  day_label TEXT NOT NULL,
+  session TEXT NOT NULL DEFAULT 'am' CHECK(session IN ('am','pm','evening','night','all_day')),
+  role TEXT NOT NULL DEFAULT 'other',
+  adult_id INTEGER REFERENCES camp_rota_adults(id) ON DELETE SET NULL,
+  activity TEXT,
+  notes TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_camp_rota_entries_hub ON camp_rota_entries(hub_id);
+
 -- Incident and near-miss logging (FRD FR-INC). Safeguarding-sensitive: this does
 -- NOT replace formal Scouts safeguarding/accident reporting - the module signposts
 -- to those and restricts access. Ships off by default. Restricted records
@@ -506,6 +558,186 @@ CREATE TABLE IF NOT EXISTS equipment_assets (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_equipment_status ON equipment_assets(status, category);
+
+-- Quartermaster Booking (FRD FR-QM / backlog LATER-005). Builds on the equipment
+-- register: leaders raise booking requests for stores items and Quartermasters
+-- (Group Leadership Team + admins) approve/substitute at item-line level, then run
+-- the collection -> return -> condition-check workflow. Not self-service: nothing is
+-- reserved until a QM approves. Ships off by default. Parents are never granted
+-- access (FR-QM-024). Overdue/due-back are derived at read time from return_at, so
+-- they are not stored states.
+CREATE TABLE IF NOT EXISTS qm_bookings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  reference TEXT,
+  requester_user_id INTEGER NOT NULL REFERENCES users(id),
+  purpose TEXT,
+  osm_section_id TEXT,
+  section_name TEXT,
+  event_hub_id INTEGER REFERENCES event_hubs(id) ON DELETE SET NULL,
+  event_name TEXT,
+  collect_at TEXT,
+  return_at TEXT,
+  collection_details TEXT,
+  return_details TEXT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','submitted','approved','partially_approved','ready_for_collection','collected','returned','closed','cancelled')),
+  cancel_reason TEXT,
+  submitted_at TEXT,
+  decided_by INTEGER REFERENCES users(id),
+  decided_at TEXT,
+  collected_at TEXT,
+  collected_by_name TEXT,
+  returned_at TEXT,
+  return_condition_note TEXT,
+  closed_by INTEGER REFERENCES users(id),
+  closed_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_qm_bookings_status ON qm_bookings(status, return_at);
+CREATE INDEX IF NOT EXISTS idx_qm_bookings_requester ON qm_bookings(requester_user_id, status);
+
+CREATE TABLE IF NOT EXISTS qm_booking_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  booking_id INTEGER NOT NULL REFERENCES qm_bookings(id) ON DELETE CASCADE,
+  equipment_asset_id INTEGER REFERENCES equipment_assets(id) ON DELETE SET NULL,
+  item_name TEXT NOT NULL,
+  requested_qty INTEGER NOT NULL DEFAULT 1,
+  approved_qty INTEGER,
+  substitute_asset_id INTEGER REFERENCES equipment_assets(id) ON DELETE SET NULL,
+  substitute_name TEXT,
+  line_status TEXT NOT NULL DEFAULT 'requested' CHECK(line_status IN ('requested','approved','rejected','substituted','more_info')),
+  qm_notes TEXT,
+  issue_condition TEXT,
+  return_condition TEXT,
+  damage_notes TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_qm_booking_items_booking ON qm_booking_items(booking_id);
+CREATE INDEX IF NOT EXISTS idx_qm_booking_items_asset ON qm_booking_items(equipment_asset_id);
+
+-- Internal calendar (FRD FR-CAL / backlog LATER-007). A local planning layer that
+-- links modules together - it does NOT replace OSM as the source of truth for OSM
+-- programme/event data. The calendar view aggregates these local entries with
+-- Event & Camp Hub records and QM booking resource blocks (read live from those
+-- tables, not copied). Entries are leader-only until deliberately published to
+-- parents with a parent-safe title/description. Ships off by default.
+CREATE TABLE IF NOT EXISTS calendar_entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  entry_type TEXT NOT NULL DEFAULT 'placeholder' CHECK(entry_type IN ('placeholder','activity','deadline','note')),
+  scope TEXT NOT NULL DEFAULT 'group' CHECK(scope IN ('group','section')),
+  osm_section_id TEXT,
+  section_name TEXT,
+  start_at TEXT NOT NULL,
+  end_at TEXT,
+  all_day INTEGER NOT NULL DEFAULT 1,
+  location TEXT,
+  owner_name TEXT,
+  notes TEXT,
+  parent_safe_title TEXT,
+  parent_safe_description TEXT,
+  visibility TEXT NOT NULL DEFAULT 'leaders' CHECK(visibility IN ('leaders','parents')),
+  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','published','cancelled')),
+  converted_event_hub_id INTEGER REFERENCES event_hubs(id) ON DELETE SET NULL,
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_calendar_entries_range ON calendar_entries(start_at, end_at);
+
+-- Section attendance registers (FRD FR-SEC-ATT / FR-SEC-REG). A register is a local
+-- historical record of who attended a session, pre-populated from the live OSM
+-- roster and then owned locally. Unlike the roster (fetch-not-stored), attendance
+-- IS stored - the member name/grouping are snapshotted per row so the record
+-- survives later OSM membership changes (FR-SEC-REG-005). This is the deliberate,
+-- FRD-authorised exception to "counts only, never store names". Emergency contact
+-- details are NOT part of this and are never stored here. Ships off by default.
+CREATE TABLE IF NOT EXISTS attendance_registers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  osm_section_id TEXT NOT NULL,
+  section_name TEXT,
+  title TEXT NOT NULL,
+  session_date TEXT NOT NULL,
+  source_type TEXT NOT NULL DEFAULT 'ad_hoc' CHECK(source_type IN ('ad_hoc','calendar','event')),
+  source_ref_id INTEGER,
+  source_label TEXT,
+  notes TEXT,
+  status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','submitted')),
+  created_by INTEGER REFERENCES users(id),
+  submitted_by INTEGER REFERENCES users(id),
+  submitted_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_attendance_registers_section ON attendance_registers(osm_section_id, session_date);
+
+CREATE TABLE IF NOT EXISTS attendance_marks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  register_id INTEGER NOT NULL REFERENCES attendance_registers(id) ON DELETE CASCADE,
+  osm_member_id TEXT,
+  member_name TEXT NOT NULL,
+  grouping TEXT,
+  status TEXT NOT NULL DEFAULT 'unknown' CHECK(status IN ('present','absent','late','left_early','excused','unknown','guest')),
+  note TEXT,
+  sort_name TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(register_id, osm_member_id)
+);
+CREATE INDEX IF NOT EXISTS idx_attendance_marks_register ON attendance_marks(register_id);
+
+-- Activity Approval forms (Activity Approval Testing Pack). A digital form + a
+-- two-stage sequential approval workflow (Section Lead -> GLV). Off by default.
+-- Uploaded evidence lives in data/activity-uploads (private, authenticated-proxy
+-- only, same as receipts/gallery). activity_form_events is the approval trail.
+CREATE TABLE IF NOT EXISTS activity_forms (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  reference TEXT,
+  created_by INTEGER NOT NULL REFERENCES users(id),
+  leader_name TEXT, leader_phone TEXT, leader_email TEXT,
+  activity_description TEXT, activity_location TEXT, activity_date TEXT, activity_end_date TEXT,
+  osm_section_id TEXT, section_names TEXT, yp_count INTEGER, adult_count INTEGER,
+  qualifications TEXT, in_touch TEXT,
+  risk_assessment_confirmed INTEGER NOT NULL DEFAULT 0,
+  public_liability_confirmed INTEGER NOT NULL DEFAULT 0,
+  activity_rules_confirmed INTEGER NOT NULL DEFAULT 0,
+  add_to_calendar INTEGER NOT NULL DEFAULT 1,
+  notes TEXT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','awaiting_section','awaiting_glv','approved','rejected','more_info')),
+  more_info_stage TEXT,
+  submitted_at TEXT,
+  section_decided_by INTEGER REFERENCES users(id), section_decided_at TEXT,
+  glv_decided_by INTEGER REFERENCES users(id), glv_decided_at TEXT,
+  calendar_entry_id INTEGER REFERENCES calendar_entries(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_activity_forms_status ON activity_forms(status, osm_section_id);
+CREATE INDEX IF NOT EXISTS idx_activity_forms_creator ON activity_forms(created_by, status);
+
+CREATE TABLE IF NOT EXISTS activity_form_files (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  form_id INTEGER NOT NULL REFERENCES activity_forms(id) ON DELETE CASCADE,
+  doc_type TEXT NOT NULL DEFAULT 'supporting' CHECK(doc_type IN ('risk_assessment','public_liability','unity_insurance','supporting')),
+  storage_key TEXT NOT NULL,
+  ext TEXT NOT NULL,
+  original_filename TEXT,
+  uploaded_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_activity_form_files_form ON activity_form_files(form_id);
+
+CREATE TABLE IF NOT EXISTS activity_form_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  form_id INTEGER NOT NULL REFERENCES activity_forms(id) ON DELETE CASCADE,
+  actor_user_id INTEGER REFERENCES users(id),
+  action TEXT NOT NULL,
+  stage TEXT,
+  comment TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_activity_form_events_form ON activity_form_events(form_id);
 
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(portal_role, account_status);
 CREATE INDEX IF NOT EXISTS idx_parent_links_parent ON parent_child_links(parent_user_id);

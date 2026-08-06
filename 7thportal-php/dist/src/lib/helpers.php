@@ -14,6 +14,19 @@ const LEADER_ROLES = ['section_leader', 'assistant_leader', 'group_leadership', 
 
 function roleLabel(string $role): string { return ROLE_LABELS[$role] ?? $role; }
 function isLeaderRole(string $role): bool { return in_array($role, LEADER_ROLES, true); }
+
+// Dual-role support (FRD "Dual-role User Behaviour"): a person may be both a parent
+// and a section leader. Capabilities are DERIVED, not a stored role - "leader" from
+// the portal_role, "parent" from having linked children - so a leader who also has
+// a child in the group can switch into a Parent View that shows ONLY their own
+// children, with the two views' permissions never merged.
+function userHasLeaderAccess(array $user): bool { return isLeaderRole($user['portal_role']); }
+function userHasParentAccess(array $user): bool
+{
+    // A parent account with no children yet still needs the no-linked-child journey.
+    if (($user['portal_role'] ?? '') === 'parent') return true;
+    return (bool) dbGet('SELECT 1 FROM parent_child_links WHERE parent_user_id = ? LIMIT 1', [(int) $user['id']]);
+}
 function isAdminRole(string $role): bool { return $role === 'admin'; }
 function canSeeSensitiveChildData(string $role): bool { return in_array($role, ['section_leader', 'admin'], true); }
 
@@ -24,6 +37,12 @@ function isTreasurerRole(string $role): bool { return in_array($role, ['treasure
 function isChairRole(string $role): bool { return in_array($role, ['chair', 'admin'], true); }
 // Who may view the read-only Trustee Board finance dashboard.
 function isTrusteeDashboardRole(string $role): bool { return in_array($role, ['trustee_viewer', 'chair', 'treasurer', 'admin'], true); }
+
+// Quartermaster Booking (FRD FR-QM). Like finance's approver model, QM authority
+// is layered onto the existing roles rather than adding a new OSM role: the Group
+// Leadership Team and admins act as Quartermasters (approve/substitute/handover/
+// return), while any leader may raise a request. Trustee viewers get counts only.
+function isQuartermasterRole(string $role): bool { return in_array($role, ['group_leadership', 'admin'], true); }
 
 // "Now" in milliseconds, matching the millisecond-epoch strings stored in
 // osm_token_expires_at (kept the same unit as the Node version for parity).
