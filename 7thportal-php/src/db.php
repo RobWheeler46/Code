@@ -698,7 +698,7 @@ CREATE TABLE IF NOT EXISTS activity_forms (
   leader_name TEXT, leader_phone TEXT, leader_email TEXT,
   activity_description TEXT, activity_location TEXT, activity_date TEXT, activity_end_date TEXT,
   osm_section_id TEXT, section_names TEXT, yp_count INTEGER, adult_count INTEGER,
-  qualifications TEXT, in_touch TEXT,
+  activity_type TEXT, qualifications TEXT, in_touch TEXT,
   external_provider_used INTEGER NOT NULL DEFAULT 0,
   unity_approval_required INTEGER NOT NULL DEFAULT 0,
   risk_assessment_confirmed INTEGER NOT NULL DEFAULT 0,
@@ -784,6 +784,11 @@ $activityFormsSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND 
 if ($activityFormsSql && !str_contains($activityFormsSql, 'external_provider_used')) {
     db()->exec('ALTER TABLE activity_forms ADD COLUMN external_provider_used INTEGER NOT NULL DEFAULT 0');
     db()->exec('ALTER TABLE activity_forms ADD COLUMN unity_approval_required INTEGER NOT NULL DEFAULT 0');
+}
+// Migration: activity_forms gained activity_type (improved-flow spec) - the
+// selected activity type drives whether "Relevant qualifications" is required.
+if ($activityFormsSql && !str_contains($activityFormsSql, 'activity_type')) {
+    db()->exec('ALTER TABLE activity_forms ADD COLUMN activity_type TEXT');
 }
 
 // Migration: the finance module was rebuilt from a single-item-per-claim

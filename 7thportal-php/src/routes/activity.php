@@ -45,6 +45,7 @@ function activityFieldsFromBody(array $b, array $existing): array
         'osm_section_id' => $val('sectionId', 'osm_section_id'),
         'yp_count' => array_key_exists('ypCount', $b) ? (int) $b['ypCount'] : ($existing['yp_count'] ?? null),
         'adult_count' => array_key_exists('adultCount', $b) ? (int) $b['adultCount'] : ($existing['adult_count'] ?? null),
+        'activity_type' => $val('activityType', 'activity_type'),
         'qualifications' => $val('qualifications', 'qualifications'),
         'in_touch' => $val('inTouch', 'in_touch'),
         'external_provider_used' => $bool('externalProviderUsed', 'external_provider_used'),
@@ -101,7 +102,7 @@ $router->get('/api/activity/forms/:id', function ($params) {
         'events' => array_map('serializeActivityEvent', dbAll('SELECT * FROM activity_form_events WHERE form_id = ? ORDER BY id', [$f['id']])),
         'myActions' => activityMyActions($user, $f),
         'missing' => activityValidate($f),
-        'meta' => ['statuses' => ACTIVITY_STATUSES, 'docTypes' => ACTIVITY_DOC_TYPES, 'sections' => ACTIVITY_SECTIONS],
+        'meta' => ['statuses' => ACTIVITY_STATUSES, 'docTypes' => ACTIVITY_DOC_TYPES, 'sections' => ACTIVITY_SECTIONS, 'activityTypes' => activityTypeOptions()],
     ]);
 });
 

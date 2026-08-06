@@ -28,6 +28,32 @@ const ACTIVITY_SECTIONS = [
     'Isambard Cubs', 'Kingdom Cubs', 'Brunel Cubs',
     'Discovery Scouts', 'Endeavour Scouts',
 ];
+// Activity types. Adventurous activities (requiresQualification) make the
+// "Relevant qualifications" field required (improved-flow spec: qualifications
+// requiredWhen activityType.requiresQualification).
+const ACTIVITY_TYPES = [
+    'indoor' => ['label' => 'Indoor / meeting-night activity', 'requiresQualification' => false],
+    'day_trip' => ['label' => 'Day trip / outing', 'requiresQualification' => false],
+    'hike' => ['label' => 'Hike / walk (non-technical)', 'requiresQualification' => false],
+    'camp' => ['label' => 'Camp / nights away', 'requiresQualification' => false],
+    'water' => ['label' => 'Water activity (kayak, canoe, sail, paddleboard, etc.)', 'requiresQualification' => true],
+    'climbing' => ['label' => 'Climbing / abseiling', 'requiresQualification' => true],
+    'caving' => ['label' => 'Caving / potholing', 'requiresQualification' => true],
+    'archery_shooting' => ['label' => 'Archery / shooting', 'requiresQualification' => true],
+    'other_adventurous' => ['label' => 'Other adventurous activity (permit required)', 'requiresQualification' => true],
+    'other' => ['label' => 'Other', 'requiresQualification' => false],
+];
+// Activity types as an ordered list for the client (value + label + flag).
+function activityTypeOptions(): array
+{
+    $out = [];
+    foreach (ACTIVITY_TYPES as $k => $t) $out[] = ['value' => $k, 'label' => $t['label'], 'requiresQualification' => $t['requiresQualification']];
+    return $out;
+}
+function activityTypeRequiresQualification(?string $type): bool
+{
+    return !empty(ACTIVITY_TYPES[$type ?? '']['requiresQualification']);
+}
 
 function activityFormsEnabled(): bool
 {
@@ -97,6 +123,10 @@ function activityValidate(array $f): array
     if (!empty($f['unity_approval_required']) && !activityHasDoc($f, 'unity_insurance')) {
         $missing[] = 'Unity Insurance approval document';
     }
+    // Qualifications required for adventurous activity types (permit-requiring).
+    if (activityTypeRequiresQualification($f['activity_type'] ?? null) && trim((string) ($f['qualifications'] ?? '')) === '') {
+        $missing[] = 'Relevant qualifications';
+    }
     // A risk assessment document is recommended, not required (improved-flow spec):
     // the risk-assessment confirmation checkbox above is the required gate.
     return $missing;
@@ -128,6 +158,8 @@ function serializeActivityForm(array $f, bool $full = false): array
         'leaderName' => $f['leader_name'], 'leaderPhone' => $f['leader_phone'], 'leaderEmail' => $f['leader_email'],
         'activityEndDate' => $f['activity_end_date'], 'sectionId' => $f['osm_section_id'],
         'ypCount' => $f['yp_count'] !== null ? (int) $f['yp_count'] : null, 'adultCount' => $f['adult_count'] !== null ? (int) $f['adult_count'] : null,
+        'activityType' => $f['activity_type'],
+        'activityTypeLabel' => ACTIVITY_TYPES[$f['activity_type'] ?? '']['label'] ?? null,
         'qualifications' => $f['qualifications'], 'inTouch' => $f['in_touch'],
         'externalProviderUsed' => (bool) $f['external_provider_used'],
         'unityApprovalRequired' => (bool) $f['unity_approval_required'],

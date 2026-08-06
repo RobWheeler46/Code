@@ -48,6 +48,7 @@ function editView() {
     </div>
     <div class="card"><h2>Activity details</h2>
       ${F('Description', `<textarea id="f-activityDescription" rows="2">${esc(FORM.activityDescription)}</textarea>`)}
+      ${F('Activity type', `<select id="f-activityType">${activityTypeOptionsHtml()}</select>`, 'Adventurous / permit-requiring types need relevant qualifications recorded below.')}
       ${F('Location', `<input id="f-location" value="${esc(FORM.location)}">`)}
       <div class="cap-actions">${F('Date', `<input id="f-activityDate" type="date" value="${esc(FORM.activityDate)}">`)}${F('End date (optional)', `<input id="f-activityEndDate" type="date" value="${esc(FORM.activityEndDate)}">`)}</div>
     </div>
@@ -55,6 +56,7 @@ function editView() {
       ${sectionsField()}
       <div class="cap-actions">${F('Young people (est.)', `<input id="f-ypCount" type="number" min="1" value="${FORM.ypCount ?? ''}" style="width:110px">`)}${F('Adults (est.)', `<input id="f-adultCount" type="number" min="1" value="${FORM.adultCount ?? ''}" style="width:110px">`)}</div>
       ${F('Relevant qualifications', `<textarea id="f-qualifications" rows="2">${esc(FORM.qualifications)}</textarea>`)}
+      <div id="af-qual-req" class="field help" hidden>Required for the selected activity type — name the relevant permit(s) or qualification(s) and who holds them.</div>
     </div>
     <div class="card"><h2>Safety &amp; confirmations</h2>
       ${F('In Touch process', `<textarea id="f-inTouch" rows="2">${esc(FORM.inTouch)}</textarea>`, 'Required. How the In Touch / emergency contact arrangements will work for this activity.')}
@@ -87,6 +89,18 @@ function sectionsField() {
   return `<div class="field"><label>Participating section(s)</label><div class="af-sections">${opts}</div></div>`;
 }
 
+// Activity-type <option>s, marking permit-requiring types.
+function activityTypeOptionsHtml() {
+  const cur = FORM.activityType || '';
+  const opts = (META.activityTypes || []).map(t =>
+    `<option value="${esc(t.value)}"${t.value === cur ? ' selected' : ''}>${esc(t.label)}${t.requiresQualification ? ' — qualifications required' : ''}</option>`).join('');
+  return `<option value=""${cur ? '' : ' selected'}>Select…</option>${opts}`;
+}
+function activityTypeRequiresQual(value) {
+  const t = (META.activityTypes || []).find(x => x.value === value);
+  return !!(t && t.requiresQualification);
+}
+
 function collect() {
   const v = id => { const el = document.getElementById(id); return el ? el.value : undefined; };
   const c = id => { const el = document.getElementById(id); return el ? el.checked : undefined; };
@@ -94,7 +108,8 @@ function collect() {
   return {
     leaderName: v('f-leaderName'), leaderPhone: v('f-leaderPhone'), leaderEmail: v('f-leaderEmail'),
     activityDescription: v('f-activityDescription'), location: v('f-location'), activityDate: v('f-activityDate'), activityEndDate: v('f-activityEndDate'),
-    sectionNames: sections, ypCount: v('f-ypCount'), adultCount: v('f-adultCount'), qualifications: v('f-qualifications'),
+    sectionNames: sections, ypCount: v('f-ypCount'), adultCount: v('f-adultCount'),
+    activityType: v('f-activityType'), qualifications: v('f-qualifications'),
     inTouch: v('f-inTouch'), externalProviderUsed: c('f-externalProviderUsed'), unityApprovalRequired: c('f-unityApprovalRequired'),
     riskAssessmentConfirmed: c('f-riskAssessmentConfirmed'), publicLiabilityConfirmed: c('f-publicLiabilityConfirmed'),
     activityRulesConfirmed: c('f-activityRulesConfirmed'), addToCalendar: c('f-addToCalendar'), notes: v('f-notes'),
@@ -157,6 +172,7 @@ function requiredChecks(c) {
     add(hasDoc('public_liability'), 'Public liability document');
   }
   if (c.unityApprovalRequired) add(hasDoc('unity_insurance'), 'Unity Insurance approval document');
+  if (activityTypeRequiresQual(c.activityType)) add(txt(c.qualifications), 'Relevant qualifications');
   return checks;
 }
 function recomputeMissing() { return requiredChecks(collect()).filter(x => !x.ok).map(x => x.label); }
@@ -190,6 +206,7 @@ function readView() {
     ${row('Leader', FORM.leaderName)}${row('Phone', FORM.leaderPhone)}${row('Email', FORM.leaderEmail)}
     ${row('Activity', FORM.activityDescription)}${row('Location', FORM.location)}
     ${row('Date', FORM.activityDate ? formatDate(FORM.activityDate) + (FORM.activityEndDate ? ' – ' + formatDate(FORM.activityEndDate) : '') : '')}
+    ${row('Activity type', FORM.activityTypeLabel)}
     ${row('Section(s)', FORM.sectionNames)}${row('Numbers', (FORM.ypCount ?? '?') + ' YP / ' + (FORM.adultCount ?? '?') + ' adults')}
     ${row('Qualifications', FORM.qualifications)}${row('In Touch', FORM.inTouch)}
     ${row('External provider', FORM.externalProviderUsed ? 'Yes — public liability confirmed: ' + yn(FORM.publicLiabilityConfirmed) : '')}
@@ -322,6 +339,8 @@ function applyConditionalVisibility() {
   };
   toggle('f-externalProviderUsed', 'af-pl-block');
   toggle('f-unityApprovalRequired', 'af-unity-block');
+  const sel = document.getElementById('f-activityType'), qualHint = document.getElementById('af-qual-req');
+  if (sel && qualHint) qualHint.hidden = !activityTypeRequiresQual(sel.value);
 }
 
 // Ensure any pending edit is persisted before an action that depends on it (submit).
