@@ -65,10 +65,13 @@ $router->get('/api/patrol-points/competitions/:id', function ($params) {
     }
     $submissions = array_map(fn($s) => serializePpSubmission($s, $linesBySub[(int) $s['id']] ?? [], $teamNames, $catNames, $userNames), $subs);
 
+    $participants = array_map('serializePpParticipant', dbAll('SELECT * FROM pp_participants WHERE competition_id = ? ORDER BY display_name', [$c['id']]));
+
     jsonResponse([
         'competition' => serializePpCompetition($c, true),
         'teams' => array_map('serializePpTeam', $teams),
         'categories' => array_map('serializePpCategory', $cats),
+        'participants' => $participants,
         'submissions' => $submissions,
         'leaderboard' => ppLeaderboard((int) $c['id']),
         'myActions' => [
@@ -77,7 +80,7 @@ $router->get('/api/patrol-points/competitions/:id', function ($params) {
             'isCreator' => (int) $c['created_by'] === (int) $user['id'],
             'userId' => (int) $user['id'],
         ],
-        'meta' => ['statuses' => PP_STATUSES, 'approvalModes' => PP_APPROVAL_MODES, 'pointsTypes' => PP_POINTS_TYPES, 'transitions' => PP_TRANSITIONS],
+        'meta' => ['statuses' => PP_STATUSES, 'approvalModes' => PP_APPROVAL_MODES, 'pointsTypes' => PP_POINTS_TYPES, 'transitions' => PP_TRANSITIONS, 'sections' => ppSectionsForUser($user)],
     ]);
 });
 
@@ -168,8 +171,119 @@ $router->delete('/api/patrol-points/competitions/:id/teams/:tid', function ($par
     if (dbGet('SELECT 1 FROM pp_score_lines l JOIN pp_submissions s ON s.id = l.submission_id WHERE l.team_id = ? AND s.competition_id = ? LIMIT 1', [(int) $params['tid'], $c['id']])) {
         jsonResponse(['error' => 'This team already has scores and cannot be removed.'], 409);
     }
+    if (dbGet('SELECT 1 FROM pp_participants WHERE team_id = ? LIMIT 1', [(int) $params['tid']])) {
+        jsonResponse(['error' => 'Remove this team\'s members before deleting it.'], 409);
+    }
     dbRun('DELETE FROM pp_teams WHERE id = ? AND competition_id = ?', [(int) $params['tid'], $c['id']]);
     jsonResponse(['ok' => true]);
+});
+
+// ── Participants (team membership) ───────────────────────────────────────────────
+// OSM roster for a section the leader leads, annotated with who is already in.
+$router->get('/api/patrol-points/competitions/:id/roster', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requirePatrolPointsEnabled();
+    $c = ppCompetitionOr404($params['id']);
+    $sectionId = (string) queryParam('sectionId');
+    if ($sectionId === '') jsonResponse(['error' => 'Choose a section.'], 422);
+    if (!array_filter(ppSectionsForUser($user), fn($s) => $s['id'] === $sectionId)) jsonResponse(['error' => 'That is not one of your sections.'], 403);
+    $roster = osmSectionRoster($user, $sectionId);
+    if (empty($roster['ok'])) jsonResponse(['error' => $roster['error'] ?? 'Could not load the OSM roster.', 'blocked' => !empty($roster['blocked'])], 502);
+    $inComp = [];
+    foreach (dbAll('SELECT person_ref FROM pp_participants WHERE competition_id = ? AND person_ref IS NOT NULL', [$c['id']]) as $p) $inComp[(string) $p['person_ref']] = true;
+    $members = array_map(fn($m) => [
+        'id' => (string) $m['id'], 'name' => $m['name'], 'patrol' => $m['patrol'] ?? null,
+        'alreadyIn' => isset($inComp[(string) $m['id']]),
+    ], $roster['members']);
+    jsonResponse(['source' => $roster['source'], 'members' => $members]);
+});
+
+// Add participant(s): a batch of OSM members, or a single manual entry.
+$router->post('/api/patrol-points/competitions/:id/participants', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requirePatrolPointsEnabled();
+    $c = ppRequireEditableComp($user, $params['id']);
+    $b = requestBody();
+    $team = dbGet('SELECT * FROM pp_teams WHERE id = ? AND competition_id = ?', [(int) ($b['teamId'] ?? 0), $c['id']]);
+    if (!$team) jsonResponse(['error' => 'Choose a valid team.'], 422);
+    // Who is already in this competition (any team), to enforce one team per person.
+    $inComp = [];
+    foreach (dbAll('SELECT person_ref FROM pp_participants WHERE competition_id = ? AND person_ref IS NOT NULL', [$c['id']]) as $p) $inComp[(string) $p['person_ref']] = true;
+
+    $added = 0; $skipped = 0;
+    if (is_array($b['members'] ?? null)) {
+        foreach ($b['members'] as $m) {
+            $ref = trim((string) ($m['personRef'] ?? ''));
+            $name = trim((string) ($m['displayName'] ?? ''));
+            if ($ref === '' || $name === '') { $skipped++; continue; }
+            if (isset($inComp[$ref])) { $skipped++; continue; } // already in this competition
+            dbRun('INSERT INTO pp_participants (competition_id, team_id, person_ref, display_name, source, patrol) VALUES (?, ?, ?, ?, \'osm\', ?)', [$c['id'], $team['id'], $ref, $name, trim((string) ($m['patrol'] ?? '')) ?: null]);
+            $inComp[$ref] = true; $added++;
+        }
+    } else {
+        $name = trim((string) ($b['displayName'] ?? ''));
+        if ($name === '') jsonResponse(['error' => 'A participant name is required.'], 422);
+        dbRun('INSERT INTO pp_participants (competition_id, team_id, display_name, source) VALUES (?, ?, ?, \'manual\')', [$c['id'], $team['id'], $name]);
+        $added = 1;
+    }
+    jsonResponse(['ok' => true, 'added' => $added, 'skipped' => $skipped], 201);
+});
+
+// Move a participant to another team (still one team per person).
+$router->patch('/api/patrol-points/competitions/:id/participants/:pid', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requirePatrolPointsEnabled();
+    $c = ppRequireEditableComp($user, $params['id']);
+    $team = dbGet('SELECT * FROM pp_teams WHERE id = ? AND competition_id = ?', [(int) (requestBody()['teamId'] ?? 0), $c['id']]);
+    if (!$team) jsonResponse(['error' => 'Choose a valid team.'], 422);
+    dbRun('UPDATE pp_participants SET team_id = ? WHERE id = ? AND competition_id = ?', [$team['id'], (int) $params['pid'], $c['id']]);
+    jsonResponse(['ok' => true]);
+});
+
+$router->delete('/api/patrol-points/competitions/:id/participants/:pid', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requirePatrolPointsEnabled();
+    $c = ppRequireEditableComp($user, $params['id']);
+    dbRun('DELETE FROM pp_participants WHERE id = ? AND competition_id = ?', [(int) $params['pid'], $c['id']]);
+    jsonResponse(['ok' => true]);
+});
+
+// Auto-generate balanced teams from a section roster (editable + confirmed after).
+$router->post('/api/patrol-points/competitions/:id/auto-teams', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requirePatrolPointsEnabled();
+    $c = ppRequireEditableComp($user, $params['id']);
+    $b = requestBody();
+    $sectionId = (string) ($b['sectionId'] ?? '');
+    $count = max(2, min(12, (int) ($b['teamCount'] ?? 0)));
+    if (!array_filter(ppSectionsForUser($user), fn($s) => $s['id'] === $sectionId)) jsonResponse(['error' => 'That is not one of your sections.'], 403);
+    $roster = osmSectionRoster($user, $sectionId);
+    if (empty($roster['ok'])) jsonResponse(['error' => $roster['error'] ?? 'Could not load the OSM roster.'], 502);
+    // Only members not already in the competition.
+    $inComp = [];
+    foreach (dbAll('SELECT person_ref FROM pp_participants WHERE competition_id = ? AND person_ref IS NOT NULL', [$c['id']]) as $p) $inComp[(string) $p['person_ref']] = true;
+    $pool = array_values(array_filter($roster['members'], fn($m) => !isset($inComp[(string) $m['id']])));
+    if (!$pool) jsonResponse(['error' => 'No new members to place — everyone is already in the competition.'], 422);
+
+    // Create the teams, then round-robin the pool for balanced sizes.
+    $teamIds = [];
+    for ($i = 1; $i <= $count; $i++) {
+        $res = dbRun('INSERT INTO pp_teams (competition_id, name, sort_order) VALUES (?, ?, ?)', [$c['id'], 'Team ' . $i, $i]);
+        $teamIds[] = (int) $res['lastInsertId'];
+    }
+    $assigned = 0;
+    foreach ($pool as $idx => $m) {
+        $tid = $teamIds[$idx % $count];
+        dbRun('INSERT INTO pp_participants (competition_id, team_id, person_ref, display_name, source, patrol) VALUES (?, ?, ?, ?, \'osm\', ?)', [$c['id'], $tid, (string) $m['id'], $m['name'], $m['patrol'] ?? null]);
+        $assigned++;
+    }
+    logAudit(['userId' => $user['id'], 'action' => 'pp_auto_teams', 'entityType' => 'pp_competition', 'entityId' => (string) $c['id'], 'ipAddress' => clientIp(), 'details' => ['teams' => $count, 'assigned' => $assigned]]);
+    jsonResponse(['ok' => true, 'teams' => $count, 'assigned' => $assigned], 201);
 });
 
 // ── Categories ──────────────────────────────────────────────────────────────────

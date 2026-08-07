@@ -3,10 +3,14 @@
 // comment-required score submissions (multi-team, approvable, no self-approval)
 // and a derived tie-aware leaderboard. Optional module, off by default.
 //
-// MVP scope: team-level scoring (no per-participant membership snapshots),
-// 'free'/'fixed' category point types, a single per-competition approval mode,
-// corrections via new submissions (no revision chains), leader workspace only
-// (parent-facing leaderboard deferred). See DECISIONS notes / README follow-ups.
+// Scope: team-level scoring with per-participant team membership (OSM-linked or
+// manual, one active team per person per competition, membership locked once the
+// competition is completed). 'free'/'fixed' category point types, a single
+// per-competition approval mode, corrections via new submissions (no revision
+// chains), leader workspace only (parent-facing leaderboard deferred).
+// Still deferred: per-submission membership snapshots, selectable/ranged point
+// types, per-category approval rules, revision chains, parent leaderboard,
+// evidence attachments. See README follow-ups.
 
 const PP_STATUSES = ['draft' => 'Draft', 'open' => 'Open', 'paused' => 'Paused', 'completed' => 'Completed', 'archived' => 'Archived'];
 const PP_APPROVAL_MODES = ['immediate' => 'Immediate (scores count at once)', 'approval' => 'Requires approval'];
@@ -67,6 +71,22 @@ function serializePpCompetition(array $c, bool $full = false): array
 function serializePpTeam(array $t): array
 {
     return ['id' => (int) $t['id'], 'name' => $t['name'], 'sortOrder' => (int) $t['sort_order']];
+}
+function serializePpParticipant(array $p): array
+{
+    return [
+        'id' => (int) $p['id'], 'teamId' => (int) $p['team_id'], 'name' => $p['display_name'],
+        'source' => $p['source'], 'personRef' => $p['person_ref'], 'patrol' => $p['patrol'],
+    ];
+}
+// The leader's own sections (id + name) from their OSM roles, for the roster picker.
+function ppSectionsForUser(array $user): array
+{
+    $out = [];
+    foreach (json_decode($user['osm_roles_json'] ?? '[]', true) ?: [] as $r) {
+        if (!empty($r['sectionid'])) $out[] = ['id' => (string) $r['sectionid'], 'name' => $r['sectionname'] ?? ('Section ' . $r['sectionid'])];
+    }
+    return $out;
 }
 function serializePpCategory(array $c): array
 {

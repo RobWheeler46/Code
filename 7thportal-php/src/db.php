@@ -797,6 +797,23 @@ CREATE TABLE IF NOT EXISTS pp_score_lines (
 );
 CREATE INDEX IF NOT EXISTS idx_pp_score_lines_sub ON pp_score_lines(submission_id);
 CREATE INDEX IF NOT EXISTS idx_pp_score_lines_team ON pp_score_lines(team_id);
+-- Competition participants: a young person (OSM-linked or manual) assigned to one
+-- team within a competition. One active team per person per competition (enforced
+-- for OSM members by the partial unique index). Membership is retained and locked
+-- once the competition is completed (FRD v2.1 s13 PP-TEAM-003/004/005, BR-03/04).
+CREATE TABLE IF NOT EXISTS pp_participants (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  competition_id INTEGER NOT NULL REFERENCES pp_competitions(id) ON DELETE CASCADE,
+  team_id INTEGER NOT NULL REFERENCES pp_teams(id) ON DELETE CASCADE,
+  person_ref TEXT,
+  display_name TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT 'manual' CHECK(source IN ('osm','manual')),
+  patrol TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_pp_participants_comp ON pp_participants(competition_id);
+CREATE INDEX IF NOT EXISTS idx_pp_participants_team ON pp_participants(team_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pp_participants_person ON pp_participants(competition_id, person_ref) WHERE person_ref IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(portal_role, account_status);
 CREATE INDEX IF NOT EXISTS idx_parent_links_parent ON parent_child_links(parent_user_id);

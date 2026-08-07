@@ -1,6 +1,6 @@
 // Patrol Points - single competition: lifecycle, teams, categories, scoring,
 // approvals and the live leaderboard.
-let C, TEAMS, CATS, SUBS, BOARD, ACT, META, ID;
+let C, TEAMS, CATS, PARTS, SUBS, BOARD, ACT, META, ID;
 const SKEY = { draft: 'suspended', open: 'active', paused: 'pending_approval', completed: 'active', archived: 'deleted' };
 const SUB_SKEY = { pending: 'pending_approval', approved: 'active', rejected: 'deleted', returned: 'suspended' };
 const esc = s => escapeHtml(s == null ? '' : String(s));
@@ -19,12 +19,13 @@ async function load() {
   let d;
   try { d = await Api.get(`/api/patrol-points/competitions/${ID}`); }
   catch (e) { box.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; return; }
-  C = d.competition; TEAMS = d.teams; CATS = d.categories; SUBS = d.submissions; BOARD = d.leaderboard; ACT = d.myActions; META = d.meta;
+  C = d.competition; TEAMS = d.teams; CATS = d.categories; PARTS = d.participants || []; SUBS = d.submissions; BOARD = d.leaderboard; ACT = d.myActions; META = d.meta;
   document.getElementById('pp-title').textContent = C.name;
   document.getElementById('pp-head').innerHTML = lifecycleButtons() + '<a class="btn btn-secondary" href="patrol-points.html">Back</a>';
   const editable = ACT.canManage && ['draft', 'open', 'paused'].includes(C.status);
   box.innerHTML = summaryCard() + leaderboardCard() + (ACT.canSubmit ? submitCard() : '')
-    + (editable ? teamsCard() + categoriesCard() : '') + submissionsCard();
+    + ((editable || TEAMS.length) ? teamsCard(!editable) : '')
+    + (editable ? membersCard() + categoriesCard() : '') + submissionsCard();
   wire();
 }
 
@@ -58,17 +59,69 @@ function leaderboardCard() {
     <p class="field help">Totals reflect approved scores only; tied teams share a position.</p></div>`;
 }
 
-function teamsCard() {
-  const list = TEAMS.length ? TEAMS.map(t => `<tr>
-      <td><input class="pp-team-name" data-id="${t.id}" value="${esc(t.name)}"></td>
-      <td style="text-align:right"><button class="btn btn-secondary btn-sm pp-team-del" data-id="${t.id}">Remove</button></td>
-    </tr>`).join('') : '<tr><td colspan="2" class="muted">No teams yet.</td></tr>';
-  return `<div class="card"><h2>Teams</h2>
-    <table class="data-table"><tbody>${list}</tbody></table>
-    <div class="cap-actions" style="margin-top:.6rem">
-      <input id="pp-team-new" placeholder="New team name">
-      <button class="btn btn-secondary" id="pp-team-add">Add team</button>
-    </div></div>`;
+function teamsCard(readOnly) {
+  const byTeam = {}; TEAMS.forEach(t => byTeam[t.id] = []);
+  PARTS.forEach(p => (byTeam[p.teamId] = byTeam[p.teamId] || []).push(p));
+  const teamOpts = (sel) => TEAMS.map(t => `<option value="${t.id}"${t.id === sel ? ' selected' : ''}>${esc(t.name)}</option>`).join('');
+  const chip = (p, teamId) => readOnly
+    ? `<span class="pp-chip">${esc(p.name)}${p.patrol ? ` <span class="muted">(${esc(p.patrol)})</span>` : ''}</span>`
+    : `<span class="pp-chip">${esc(p.name)}<select class="pp-move" data-id="${p.id}" title="Move team">${teamOpts(teamId)}</select><button class="pp-chip-x pp-part-del" data-id="${p.id}" title="Remove">×</button></span>`;
+  const block = (t) => {
+    const members = byTeam[t.id] || [];
+    return `<div class="pp-team">
+      <div class="cap-head" style="align-items:center">
+        ${readOnly ? `<strong>${esc(t.name)}</strong>` : `<input class="pp-team-name" data-id="${t.id}" value="${esc(t.name)}" style="max-width:240px">`}
+        <span class="muted">${members.length} member${members.length === 1 ? '' : 's'}</span></div>
+      <div class="pp-chips">${members.length ? members.map(p => chip(p, t.id)).join('') : '<span class="muted">No members yet.</span>'}</div>
+      ${readOnly ? '' : `<div style="margin-top:.3rem"><button class="btn btn-secondary btn-sm pp-team-del" data-id="${t.id}">Remove team</button></div>`}
+    </div>`;
+  };
+  return `<div class="card"><h2>Teams &amp; members</h2>
+    ${TEAMS.length ? TEAMS.map(block).join('') : '<p class="muted">No teams yet.</p>'}
+    ${readOnly ? '' : `<div class="cap-actions" style="margin-top:.6rem"><input id="pp-team-new" placeholder="New team name"><button class="btn btn-secondary" id="pp-team-add">Add team</button></div>`}
+  </div>`;
+}
+
+function membersCard() {
+  const hasSections = (META.sections || []).length > 0;
+  const sectionOpts = (META.sections || []).map(s => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
+  const teamOpts = TEAMS.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
+  return `<div class="card"><h2>Add members</h2>
+    ${hasSections ? `
+    <h3 style="margin:.2rem 0 .3rem;font-size:1rem">From an OSM section</h3>
+    <div class="cap-actions"><select id="pp-r-section">${sectionOpts}</select><button class="btn btn-secondary" id="pp-r-load">Load roster</button></div>
+    <div id="pp-roster"></div>
+    <h3 style="margin:.9rem 0 .3rem;font-size:1rem">Auto-generate balanced teams</h3>
+    <div class="cap-actions"><select id="pp-a-section">${sectionOpts}</select>
+      <label class="muted">Teams <input id="pp-a-count" type="number" min="2" max="12" value="4" style="width:70px"></label>
+      <button class="btn btn-secondary" id="pp-a-go">Generate</button></div>
+    <p class="field help">Creates the teams and shares the section's members out evenly; edit afterwards as needed.</p>` : '<p class="muted">Sign in with an OSM leader account to add young people from a section.</p>'}
+    <h3 style="margin:.9rem 0 .3rem;font-size:1rem">Add someone manually</h3>
+    <div class="cap-actions"><input id="pp-m-name" placeholder="Name"><select id="pp-m-team">${teamOpts}</select>
+      <button class="btn btn-secondary" id="pp-m-add"${TEAMS.length ? '' : ' disabled'}>Add</button></div>
+    <div id="pp-m-msg"></div>
+  </div>`;
+}
+
+async function loadRoster() {
+  const sid = document.getElementById('pp-r-section').value;
+  const host = document.getElementById('pp-roster');
+  host.innerHTML = '<p class="muted">Loading roster&hellip;</p>';
+  let data;
+  try { data = await Api.get(`/api/patrol-points/competitions/${ID}/roster?sectionId=${encodeURIComponent(sid)}`); }
+  catch (e) { host.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; return; }
+  if (!data.members.length) { host.innerHTML = '<p class="muted">No members found for that section.</p>'; return; }
+  const teamOpts = TEAMS.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
+  host.innerHTML = `<div class="af-sections" style="margin-top:.4rem">${data.members.map(m => `
+      <label class="af-sec-opt"><input type="checkbox" class="pp-r-mem" data-ref="${esc(m.id)}" data-name="${esc(m.name)}" data-patrol="${esc(m.patrol || '')}"${m.alreadyIn ? ' disabled' : ''}> ${esc(m.name)}${m.patrol ? ` <span class="muted">(${esc(m.patrol)})</span>` : ''}${m.alreadyIn ? ' <span class="muted">— already in</span>' : ''}</label>`).join('')}</div>
+    <div class="cap-actions" style="margin-top:.5rem"><select id="pp-r-team">${teamOpts}</select><button class="btn btn-secondary" id="pp-r-add"${TEAMS.length ? '' : ' disabled'}>Add selected</button></div>`;
+  const addBtn = document.getElementById('pp-r-add');
+  if (addBtn) addBtn.addEventListener('click', async () => {
+    const members = Array.from(document.querySelectorAll('.pp-r-mem:checked')).map(el => ({ personRef: el.dataset.ref, displayName: el.dataset.name, patrol: el.dataset.patrol }));
+    if (!members.length) return;
+    try { await Api.post(`/api/patrol-points/competitions/${ID}/participants`, { teamId: Number(document.getElementById('pp-r-team').value), members }); load(); }
+    catch (e) { alert(e.message); }
+  });
 }
 
 function categoriesCard() {
@@ -157,6 +210,30 @@ function wire() {
   document.querySelectorAll('.pp-team-name').forEach(inp => inp.addEventListener('change', async () => {
     try { await Api.patch(`/api/patrol-points/competitions/${ID}/teams/${inp.dataset.id}`, { name: inp.value.trim() }); load(); } catch (e) { msg(e.message, true); }
   }));
+
+  // Members / participants
+  on('pp-r-load', loadRoster);
+  document.querySelectorAll('.pp-move').forEach(sel => sel.addEventListener('change', async () => {
+    try { await Api.patch(`/api/patrol-points/competitions/${ID}/participants/${sel.dataset.id}`, { teamId: Number(sel.value) }); load(); } catch (e) { msg(e.message, true); }
+  }));
+  document.querySelectorAll('.pp-part-del').forEach(b => b.addEventListener('click', async () => {
+    try { await Api.delete(`/api/patrol-points/competitions/${ID}/participants/${b.dataset.id}`); load(); } catch (e) { msg(e.message, true); }
+  }));
+  on('pp-m-add', async () => {
+    const name = document.getElementById('pp-m-name').value.trim();
+    const mmsg = document.getElementById('pp-m-msg');
+    if (!name) { mmsg.innerHTML = '<div class="alert alert-error">A name is required.</div>'; return; }
+    try { await Api.post(`/api/patrol-points/competitions/${ID}/participants`, { teamId: Number(document.getElementById('pp-m-team').value), displayName: name }); load(); }
+    catch (e) { mmsg.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
+  on('pp-a-go', async () => {
+    const mmsg = document.getElementById('pp-m-msg');
+    try {
+      const r = await Api.post(`/api/patrol-points/competitions/${ID}/auto-teams`, { sectionId: document.getElementById('pp-a-section').value, teamCount: Number(document.getElementById('pp-a-count').value) });
+      mmsg.innerHTML = `<div class="alert alert-success">Created ${r.teams} teams and placed ${r.assigned} members.</div>`;
+      load();
+    } catch (e) { mmsg.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
 
   // Categories
   const catType = document.getElementById('pp-cat-type');

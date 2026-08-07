@@ -240,6 +240,14 @@ textarea { min-height: 5rem; resize: vertical; }
 .af-progress { margin-bottom: 0.7rem; }
 .af-progress-bar { height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; }
 .af-progress-bar span { display: block; height: 100%; background: var(--green); transition: width 0.2s ease; }
+/* Patrol Points teams & members */
+.pp-team { padding: 0.6rem 0; border-bottom: 1px solid var(--border); }
+.pp-team:last-child { border-bottom: 0; }
+.pp-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem; }
+.pp-chip { display: inline-flex; align-items: center; gap: 0.35rem; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-pill); padding: 0.15rem 0.3rem 0.15rem 0.6rem; font-size: 0.85rem; }
+.pp-chip select { font: inherit; font-size: 0.78rem; padding: 0.1rem 0.2rem; border: 1px solid var(--border); border-radius: 5px; background: var(--card); }
+.pp-chip-x { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 0.2rem; }
+.pp-chip-x:hover { color: var(--red); }
 .data-table th, .data-table td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .data-table th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 .data-table input { padding: 0.3rem 0.4rem; border: 1px solid var(--border); border-radius: 5px; font: inherit; }
