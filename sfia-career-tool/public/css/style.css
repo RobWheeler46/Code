@@ -713,3 +713,8 @@ textarea { min-height: 5rem; resize: vertical; }
 .preview-item p { margin: 0.25rem 0; font-size: 0.92rem; }
 .preview-exp { font-size: 0.85rem; }
 .preview-label { font-weight: 700; color: var(--teal-dark); }
+
+/* v0.35 assessment type toggle */
+.assess-type-toggle { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.assess-type { border: 1px solid var(--border); border-radius: 10px; padding: 0.6rem 0.9rem; cursor: pointer; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 0.4rem; }
+.assess-type:has(input:checked) { border-color: var(--teal); background: var(--sky); }

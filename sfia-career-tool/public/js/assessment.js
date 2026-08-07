@@ -12,6 +12,54 @@ function statusChip(status, levelDiff) {
   return gapBadge(label);
 }
 
+// ---------- Start screen (FRD v0.35: Core role or Business role assessment) ----------
+
+async function renderStartScreen() {
+  const container = document.getElementById('assessment-container');
+  const [roles, businessRoles] = await Promise.all([Api.get('/api/roles'), Api.get('/api/user/business-roles').catch(() => [])]);
+  container.innerHTML = `
+    <div class="card" style="max-width:640px; margin:1.5rem auto;">
+      <h1>Start a self-assessment</h1>
+      <p class="muted">Assess your readiness against a role. A <strong>core role</strong> assesses SFIA skills; a <strong>business role</strong> also assesses the organisation&rsquo;s Skills &amp; Knowledge Framework items, with separate SFIA and Skills &amp; Knowledge readiness.</p>
+      <div id="start-alert"></div>
+      <div class="field"><label>Assessment type</label>
+        <div class="assess-type-toggle">
+          <label class="assess-type"><input type="radio" name="atype" value="core" checked> Core role (SFIA)</label>
+          <label class="assess-type"><input type="radio" name="atype" value="business" ${businessRoles.length ? '' : 'disabled'}> Business role (SFIA + Skills &amp; Knowledge)</label>
+        </div>
+        ${businessRoles.length ? '' : '<p class="muted" style="font-size:0.8rem;">No published business roles are available to assess against yet.</p>'}
+      </div>
+      <div class="field" id="core-picker"><label>Role</label>
+        <select id="start-role"><option value="">Select a role…</option>${roles.map(r => `<option value="${r.id}">${escapeHtml(r.title)}</option>`).join('')}</select>
+      </div>
+      <div class="field" id="business-picker" style="display:none;"><label>Business role</label>
+        <select id="start-brole"><option value="">Select a business role…</option>${businessRoles.map(b => `<option value="${b.id}">${escapeHtml(b.business_role_name)} — ${escapeHtml(b.core_role_title)} (${b.item_count} items)</option>`).join('')}</select>
+      </div>
+      <button class="btn btn-primary" id="start-btn" type="button">Start assessment</button>
+    </div>
+  `;
+  const showType = () => {
+    const t = container.querySelector('input[name="atype"]:checked').value;
+    document.getElementById('core-picker').style.display = t === 'core' ? '' : 'none';
+    document.getElementById('business-picker').style.display = t === 'business' ? '' : 'none';
+  };
+  container.querySelectorAll('input[name="atype"]').forEach(r => r.addEventListener('change', showType));
+  document.getElementById('start-btn').addEventListener('click', async () => {
+    const t = container.querySelector('input[name="atype"]:checked').value;
+    const alertBox = document.getElementById('start-alert'); alertBox.innerHTML = '';
+    const body = t === 'business'
+      ? { businessRoleProfileId: Number(document.getElementById('start-brole').value) }
+      : { roleProfileId: Number(document.getElementById('start-role').value) };
+    if ((t === 'business' && !body.businessRoleProfileId) || (t === 'core' && !body.roleProfileId)) {
+      alertBox.innerHTML = '<div class="alert alert-error">Select a role first.</div>'; return;
+    }
+    try {
+      const res = await Api.post('/api/user/assessments', body);
+      location.href = `assessment.html?id=${res.id}`;
+    } catch (e) { alertBox.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
+}
+
 // ---------- Stepper ----------
 
 function renderStepper() {
@@ -26,8 +74,8 @@ function renderStepper() {
       <div class="role-card-head">
         <span class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
         <div>
-          <h1 style="margin:0;">${escapeHtml(attempt.role.title)}</h1>
-          <p class="muted" style="margin:0.2rem 0 0;">Guided self-assessment${attempt.role.grade ? ' · Grade ' + escapeHtml(attempt.role.grade) : ''} · ${total} skills</p>
+          <h1 style="margin:0;">${escapeHtml(attempt.businessRole ? attempt.businessRole.business_role_name : attempt.role.title)}</h1>
+          <p class="muted" style="margin:0.2rem 0 0;">Guided self-assessment${attempt.businessRole ? ' · SFIA + Skills & Knowledge' : (attempt.role.grade ? ' · Grade ' + escapeHtml(attempt.role.grade) : '')} · ${total} questions</p>
         </div>
       </div>
       <div class="assessment-progress"><div class="assessment-progress-bar" style="width:${Math.round((answeredCount/total)*100)}%"></div></div>
@@ -35,7 +83,7 @@ function renderStepper() {
     </div>
 
     <div class="card">
-      <p class="muted" style="margin-top:0;">${escapeHtml(q.skillCode)}${q.skillName && q.skillName !== q.skillCode ? ' · ' + escapeHtml(q.skillName) : ''} · this role needs <strong>${escapeHtml(levelLabelShort(q.requiredLevel.number, q.requiredLevel.name))}</strong></p>
+      <p class="muted" style="margin-top:0;"><span class="badge" data-status="${q.kind === 'framework' ? 'active' : 'published'}">${q.kind === 'framework' ? 'Skills & Knowledge' : 'SFIA skill'}</span> ${escapeHtml(q.skillCode)}${q.skillName && q.skillName !== q.skillCode ? ' · ' + escapeHtml(q.skillName) : ''} · target <strong>${escapeHtml(levelLabelShort(q.requiredLevel.number, q.requiredLevel.name))}</strong></p>
       <h2>Which statement best describes your current level in ${escapeHtml(q.skillName && q.skillName !== q.skillCode ? q.skillName : q.skillCode)}?</h2>
       <div class="assess-options">
         ${q.options.map(o => `
@@ -101,6 +149,16 @@ function renderStepper() {
 async function saveCurrent() {
   const q = attempt.questions[step];
   if (!q.response) return;
+  if (q.kind === 'framework') {
+    await Api.put(`/api/user/assessments/${attempt.id}/framework-responses`, {
+      frameworkItemId: q.frameworkItemId,
+      level: q.requiredLevel.number,
+      selfAssessedLevel: q.response.selfAssessedLevelId || null,
+      confidence: q.response.confidence || null,
+      evidenceText: q.response.evidenceText || null
+    }).catch(() => {});
+    return;
+  }
   await Api.put(`/api/user/assessments/${attempt.id}/responses`, {
     sfiaSkillId: q.sfiaSkillId,
     selfAssessedLevelId: q.response.selfAssessedLevelId || null,
@@ -113,7 +171,7 @@ async function finish() {
   await saveCurrent();
   const unanswered = attempt.questions.filter(x => !x.response || x.response.selfAssessedLevelId == null);
   if (unanswered.length > 0) {
-    document.getElementById('assess-alert').innerHTML = `<div class="alert alert-error">Answer all ${attempt.questions.length} skills first — ${unanswered.length} still unanswered (${unanswered.map(u => u.skillCode).join(', ')}).</div>`;
+    document.getElementById('assess-alert').innerHTML = `<div class="alert alert-error">Answer all ${attempt.questions.length} questions first — ${unanswered.length} still unanswered (${unanswered.map(u => u.skillCode).join(', ')}).</div>`;
     return;
   }
   try {
@@ -129,39 +187,64 @@ async function finish() {
 async function renderResults(id) {
   const container = document.getElementById('assessment-container');
   const r = await Api.get(`/api/user/assessments/${id}/results`);
+  const sfia = r.sfia || { total: r.total, met: r.met, gap: r.gap, percent: r.percent, details: r.details || [] };
+  const fw = r.framework;
+  const title = r.businessRole ? r.businessRole.business_role_name : (r.role.title + (r.role.grade ? ' · Grade ' + escapeHtml(r.role.grade) : ''));
+
+  const sfiaTable = `
+    <table class="skills-table">
+      <thead><tr><th>SFIA code</th><th>Skill</th><th>Target</th><th>Your level</th><th>Status</th><th>Action</th></tr></thead>
+      <tbody>
+        ${sfia.details.map(d => `
+          <tr>
+            <td data-label="SFIA code">${escapeHtml(d.skillCode)}</td>
+            <td data-label="Skill">${escapeHtml(d.skillName)}</td>
+            <td data-label="Target"><span class="level-pill">L${d.requiredLevel.number}</span></td>
+            <td data-label="Your level">${d.selfLevel ? `<span class="level-pill">L${d.selfLevel.number}</span>` : '&mdash;'}</td>
+            <td data-label="Status">${statusChip(d.status, d.levelDiff)}</td>
+            <td data-label="Action">${d.status === 'gap' ? `<button class="btn btn-secondary btn-sm" data-add-plan="${d.sfiaSkillId}" data-level="${d.requiredLevel.number}" type="button">Add to plan</button>` : ''}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+
+  const fwTable = fw ? `
+    <table class="skills-table">
+      <thead><tr><th>Technology / capability</th><th>Family</th><th>Target</th><th>Your level</th><th>Status</th></tr></thead>
+      <tbody>
+        ${fw.details.map(d => `
+          <tr>
+            <td data-label="Item">${escapeHtml(d.tech)}</td>
+            <td data-label="Family">${escapeHtml(d.family)}</td>
+            <td data-label="Target"><span class="level-pill">L${d.requiredLevel.number}</span></td>
+            <td data-label="Your level">${d.selfLevel ? `<span class="level-pill">L${d.selfLevel.number}</span>` : '&mdash;'}</td>
+            <td data-label="Status">${statusChip(d.status, d.levelDiff)}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>` : '';
+
   container.innerHTML = `
     <div class="card compare-hero">
-      <p class="muted" style="margin:0;">Assessment results</p>
-      <h1 style="margin:0.2rem 0;">${escapeHtml(r.role.title)}${r.role.grade ? ' · Grade ' + escapeHtml(r.role.grade) : ''}</h1>
-      <p><span class="readiness-label" data-ready="${escapeHtml(r.label)}">${escapeHtml(r.label)}</span> · ${r.percent}% of required skills met</p>
+      <p class="muted" style="margin:0;">Assessment results${r.assessmentType === 'business' ? ' · Business role' : ''}</p>
+      <h1 style="margin:0.2rem 0;">${escapeHtml(title)}</h1>
+      <p><span class="readiness-label" data-ready="${escapeHtml(r.label)}">${escapeHtml(r.label)}</span> · ${r.percent}% overall readiness</p>
       <div class="summary-stats">
-        <div class="stat-tile"><div class="num">${r.met}</div><div class="label">Skills met</div></div>
-        <div class="stat-tile"><div class="num">${r.gap}</div><div class="label">Development gaps</div></div>
-        <div class="stat-tile"><div class="num">${r.total}</div><div class="label">Skills assessed</div></div>
+        <div class="stat-tile"><div class="num">${r.percent}%</div><div class="label">Overall</div></div>
+        <div class="stat-tile"><div class="num">${sfia.percent}%</div><div class="label">SFIA readiness</div></div>
+        ${fw ? `<div class="stat-tile"><div class="num">${fw.percent}%</div><div class="label">Skills &amp; Knowledge</div></div>` : ''}
+        <div class="stat-tile"><div class="num">${r.evidencePercent != null ? r.evidencePercent + '%' : '—'}</div><div class="label">Evidence confidence</div></div>
       </div>
+      <p class="muted" style="font-size:0.82rem; margin-bottom:0;">Scores are development guidance only &mdash; not a formal promotion, hiring or performance decision.</p>
     </div>
     <div class="card">
-      <h2>Skill-by-skill readiness</h2>
-      <table class="skills-table">
-        <thead><tr><th>SFIA code</th><th>Skill</th><th>Required</th><th>Your level</th><th>Status</th><th>Action</th></tr></thead>
-        <tbody>
-          ${r.details.map(d => `
-            <tr>
-              <td data-label="SFIA code">${escapeHtml(d.skillCode)}</td>
-              <td data-label="Skill">${escapeHtml(d.skillName)}</td>
-              <td data-label="Required"><span class="level-pill">L${d.requiredLevel.number}</span></td>
-              <td data-label="Your level">${d.selfLevel ? `<span class="level-pill">L${d.selfLevel.number}</span>` : '&mdash;'}</td>
-              <td data-label="Status">${statusChip(d.status, d.levelDiff)}</td>
-              <td data-label="Action">${d.status === 'gap' ? `<button class="btn btn-secondary btn-sm" data-add-plan="${d.sfiaSkillId}" data-level="${d.requiredLevel.number}" type="button">Add to plan</button>` : ''}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
+      <h2>SFIA skill readiness</h2>
+      ${sfia.details.length ? sfiaTable : '<p class="muted">No SFIA skills on this role.</p>'}
+    </div>
+    ${fw ? `<div class="card"><h2>Skills &amp; Knowledge readiness</h2>${fwTable}<p class="muted" style="font-size:0.82rem;">Add Skills &amp; Knowledge gaps to your plan from the development plan page (SFIA gaps can be added directly below).</p></div>` : ''}
+    <div class="card">
       <div class="actions-row">
         <a class="btn btn-primary" href="plan.html">${svgIcon('plan', { className: 'btn-icon' })} My development plan</a>
         <a class="btn btn-secondary" href="coach.html">${svgIcon('coach', { className: 'btn-icon' })} Ask the Coach</a>
         <a class="btn btn-secondary" href="dashboard.html">Back to dashboard</a>
-        <a class="btn btn-secondary" href="role.html?id=${r.role.id}">View role profile</a>
       </div>
     </div>
     <div class="card" id="share-card"></div>
@@ -187,7 +270,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const params = new URLSearchParams(location.search);
   const id = params.get('id');
-  if (!id) { container.innerHTML = '<div class="card"><div class="empty-state">No assessment specified.</div></div>'; return; }
+  if (!id) { await renderStartScreen(); return; }
 
   try {
     if (params.get('results')) { await renderResults(id); return; }

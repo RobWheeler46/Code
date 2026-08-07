@@ -640,4 +640,26 @@ CREATE TABLE IF NOT EXISTS business_role_framework_items (
 CREATE INDEX IF NOT EXISTS idx_business_role_items ON business_role_framework_items(business_role_profile_id);
 `);
 
+// FRD v0.35: self-assessment can target a business role profile, covering both the inherited SFIA skills
+// and the business role's Skills & Knowledge Framework items. Additive: a nullable link on attempts + a
+// framework-response table alongside the existing SFIA assessment_responses.
+const assessmentAttemptColumns = db.prepare(`PRAGMA table_info(assessment_attempts)`).all().map(c => c.name);
+if (!assessmentAttemptColumns.includes('business_role_profile_id')) {
+  db.exec(`ALTER TABLE assessment_attempts ADD COLUMN business_role_profile_id INTEGER REFERENCES business_role_profiles(id)`);
+}
+db.exec(`
+CREATE TABLE IF NOT EXISTS assessment_framework_responses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  attempt_id INTEGER NOT NULL REFERENCES assessment_attempts(id),
+  framework_item_id TEXT NOT NULL REFERENCES framework_items(id),
+  level_number INTEGER NOT NULL,
+  self_assessed_level INTEGER,
+  confidence INTEGER,
+  evidence_text TEXT,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(attempt_id, framework_item_id, level_number)
+);
+CREATE INDEX IF NOT EXISTS idx_assessment_fw_responses_attempt ON assessment_framework_responses(attempt_id);
+`);
+
 module.exports = db;
