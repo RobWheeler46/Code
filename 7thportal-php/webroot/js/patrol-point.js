@@ -26,7 +26,8 @@ async function load() {
   const editable = ACT.canManage && ['draft', 'open', 'paused'].includes(C.status);
   box.innerHTML = summaryCard() + leaderboardCard() + (ACT.canSubmit ? submitCard() : '')
     + ((editable || TEAMS.length) ? teamsCard(!editable) : '')
-    + (editable ? membersCard() + categoriesCard() : '') + submissionsCard();
+    + (editable ? membersCard() + categoriesCard() : '') + submissionsCard()
+    + (ACT.canManage ? reportsCard() : '');
   wire();
 }
 
@@ -197,6 +198,35 @@ function submissionsCard() {
       <div class="pp-editor-slot" data-id="${s.id}"></div></div>`;
   }).join('');
   return `<div class="card"><h2>Score history</h2>${rows}</div>`;
+}
+
+// Reports: on-screen summary (computed from loaded data) + server-side CSV exports.
+function reportsCard() {
+  const eff = SUBS.filter(s => s.status === 'approved');
+  const byCat = {}; let awarded = 0, deducted = 0;
+  eff.forEach(s => s.lines.forEach(l => {
+    byCat[s.categoryName] = (byCat[s.categoryName] || 0) + l.points;
+    if (l.points >= 0) awarded += l.points; else deducted += l.points;
+  }));
+  const counts = {}; SUBS.forEach(s => counts[s.status] = (counts[s.status] || 0) + 1);
+  const catRows = Object.keys(byCat).length
+    ? Object.entries(byCat).map(([n, v]) => `<tr><td data-label="Category">${esc(n)}</td><td data-label="Effective points">${v}</td></tr>`).join('')
+    : '<tr><td colspan="2" class="muted">No approved scores yet.</td></tr>';
+  const chips = Object.entries(counts).map(([k, v]) => `${SUB_LABEL[k] || k}: ${v}`).join(' · ');
+  const base = `/api/patrol-points/competitions/${ID}/export`;
+  return `<div class="card"><h2>Reports</h2>
+    <div class="cap-stats">
+      <div class="card" style="margin:0"><div class="muted">Points awarded</div><div class="cap-big">${awarded}</div></div>
+      <div class="card" style="margin:0"><div class="muted">Deductions</div><div class="cap-big">${deducted}</div></div>
+    </div>
+    <h3 style="font-size:1rem;margin:.6rem 0 .3rem">Effective points by category</h3>
+    <table class="data-table rcards"><thead><tr><th>Category</th><th>Effective points</th></tr></thead><tbody>${catRows}</tbody></table>
+    <p class="muted" style="margin-top:.5rem">Submissions — ${chips || '—'}</p>
+    <div class="cap-actions" style="margin-top:.6rem">
+      <a class="btn btn-secondary" href="${base}/results.csv">Final results (CSV)</a>
+      <a class="btn btn-secondary" href="${base}/points.csv">Points history (CSV)</a>
+      <a class="btn btn-secondary" href="${base}/approvals.csv">Approval activity (CSV)</a>
+    </div></div>`;
 }
 
 // Inline editor for amending a pending/returned submission or proposing a correction.

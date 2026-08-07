@@ -434,6 +434,99 @@ $router->patch('/api/patrol-points/competitions/:id/submissions/:sid', function 
 });
 
 // ── Propose a correction to an approved score (creates a pending revision) ────────
+// ── Reports & exports (server-side, managers only; PP-RPT-001..004, PP-NFR-10) ───
+function ppCsv(array $rows): string
+{
+    $out = fopen('php://temp', 'r+');
+    foreach ($rows as $r) fputcsv($out, $r);
+    rewind($out);
+    $csv = stream_get_contents($out);
+    fclose($out);
+    return $csv;
+}
+function ppSendCsv(string $filenameBase, string $csv): void
+{
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . preg_replace('/[^\w.\-]/', '_', $filenameBase) . '.csv"');
+    echo "\xEF\xBB\xBF" . $csv; // BOM so Excel reads UTF-8
+    exit;
+}
+// Managers only - operational reports are not exposed to viewers (PP-RPT-002).
+function ppRequireReport(array $user, $id): array
+{
+    requireLeader($user);
+    requirePatrolPointsEnabled();
+    if (!ppCanManage($user)) jsonResponse(['error' => 'You cannot export Patrol Points reports.'], 403);
+    return ppCompetitionOr404($id);
+}
+function ppExportLookups(array $c): array
+{
+    $teams = []; foreach (dbAll('SELECT id, name FROM pp_teams WHERE competition_id = ?', [$c['id']]) as $t) $teams[(int) $t['id']] = $t['name'];
+    $cats = []; foreach (dbAll('SELECT id, name FROM pp_categories WHERE competition_id = ?', [$c['id']]) as $x) $cats[(int) $x['id']] = $x['name'];
+    $users = []; foreach (dbAll('SELECT id, first_name, last_name FROM users') as $u) $users[(int) $u['id']] = trim($u['first_name'] . ' ' . $u['last_name']);
+    return [$teams, $cats, $users];
+}
+function ppSubDisplayStatus(array $s): string
+{
+    return !empty($s['withdrawn']) ? 'withdrawn' : (!empty($s['superseded_by']) ? 'superseded' : $s['status']);
+}
+
+// Points history: one row per team score line, with status + effective flag.
+$router->get('/api/patrol-points/competitions/:id/export/points.csv', function ($params) {
+    $user = requireAuth();
+    $c = ppRequireReport($user, $params['id']);
+    [$teams, $cats, $users] = ppExportLookups($c);
+    $rows = [['Submission', 'Category', 'Team', 'Points', 'Status', 'Effective', 'Kind', 'Corrects submission', 'Submitter', 'Comment', 'Decided by', 'Decided at', 'Created at']];
+    foreach (dbAll('SELECT * FROM pp_submissions WHERE competition_id = ? ORDER BY id', [$c['id']]) as $s) {
+        $status = ppSubDisplayStatus($s);
+        $effective = ($s['status'] === 'approved' && empty($s['superseded_by']) && empty($s['withdrawn'])) ? 'yes' : 'no';
+        foreach (dbAll('SELECT * FROM pp_score_lines WHERE submission_id = ? ORDER BY id', [$s['id']]) as $l) {
+            $rows[] = [
+                (int) $s['id'], $cats[(int) $s['category_id']] ?? '', $teams[(int) $l['team_id']] ?? '', (int) $l['points'],
+                $status, $effective, $s['revises_id'] ? 'correction' : 'original', $s['revises_id'] ?: '',
+                $users[(int) $s['submitted_by']] ?? '', $s['comment'],
+                $s['decided_by'] ? ($users[(int) $s['decided_by']] ?? '') : '', $s['decided_at'] ?: '', $s['created_at'],
+            ];
+        }
+    }
+    logAudit(['userId' => $user['id'], 'action' => 'pp_export_points', 'entityType' => 'pp_competition', 'entityId' => (string) $c['id'], 'ipAddress' => clientIp()]);
+    ppSendCsv('patrol-points-' . $c['id'] . '-points', ppCsv($rows));
+});
+
+// Final result: leaderboard with competition/completion metadata (PP-RPT-004).
+$router->get('/api/patrol-points/competitions/:id/export/results.csv', function ($params) {
+    $user = requireAuth();
+    $c = ppRequireReport($user, $params['id']);
+    $rows = [
+        ['Competition', $c['name']],
+        ['Status', PP_STATUSES[$c['status']] ?? $c['status']],
+        ['Completed at', $c['completed_at'] ?: ''],
+        ['Exported at', gmdate('Y-m-d H:i') . ' UTC'],
+        [],
+        ['Position', 'Team', 'Total points'],
+    ];
+    foreach (ppLeaderboard((int) $c['id']) as $r) $rows[] = [$r['position'], $r['teamName'], $r['total']];
+    logAudit(['userId' => $user['id'], 'action' => 'pp_export_results', 'entityType' => 'pp_competition', 'entityId' => (string) $c['id'], 'ipAddress' => clientIp()]);
+    ppSendCsv('patrol-points-' . $c['id'] . '-results', ppCsv($rows));
+});
+
+// Approval activity: each submission with its decision, actor and timestamps.
+$router->get('/api/patrol-points/competitions/:id/export/approvals.csv', function ($params) {
+    $user = requireAuth();
+    $c = ppRequireReport($user, $params['id']);
+    [, $cats, $users] = ppExportLookups($c);
+    $rows = [['Submission', 'Category', 'Kind', 'Submitter', 'Status', 'Decided by', 'Decided at', 'Decision comment']];
+    foreach (dbAll('SELECT * FROM pp_submissions WHERE competition_id = ? ORDER BY COALESCE(decided_at, created_at), id', [$c['id']]) as $s) {
+        $rows[] = [
+            (int) $s['id'], $cats[(int) $s['category_id']] ?? '', $s['revises_id'] ? 'correction' : 'original',
+            $users[(int) $s['submitted_by']] ?? '', ppSubDisplayStatus($s),
+            $s['decided_by'] ? ($users[(int) $s['decided_by']] ?? '') : '', $s['decided_at'] ?: '', $s['decision_comment'] ?: '',
+        ];
+    }
+    logAudit(['userId' => $user['id'], 'action' => 'pp_export_approvals', 'entityType' => 'pp_competition', 'entityId' => (string) $c['id'], 'ipAddress' => clientIp()]);
+    ppSendCsv('patrol-points-' . $c['id'] . '-approvals', ppCsv($rows));
+});
+
 $router->post('/api/patrol-points/competitions/:id/submissions/:sid/revise', function ($params) {
     $user = requireAuth();
     requireLeader($user);
