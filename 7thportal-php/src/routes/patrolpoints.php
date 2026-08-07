@@ -113,7 +113,7 @@ $router->post('/api/patrol-points/competitions/:id/status', function ($params) {
         jsonResponse(['error' => 'Add at least one team before opening the competition.'], 422);
     }
     if ($to === 'completed') {
-        $pending = (int) dbGet("SELECT COUNT(*) n FROM pp_submissions WHERE competition_id = ? AND status = 'pending'", [$c['id']])['n'];
+        $pending = (int) dbGet("SELECT COUNT(*) n FROM pp_submissions WHERE competition_id = ? AND status = 'pending' AND withdrawn = 0", [$c['id']])['n'];
         if ($pending > 0) jsonResponse(['error' => "Resolve the $pending pending submission(s) before completing."], 409);
     }
     $completedAt = $to === 'completed' ? "datetime('now')" : 'completed_at';
@@ -141,6 +141,25 @@ function ppRequireEditableComp(array $user, $id): array
     $c = ppCompetitionOr404($id);
     if (in_array($c['status'], ['completed', 'archived'], true)) jsonResponse(['error' => 'A completed competition can no longer be changed.'], 409);
     return $c;
+}
+
+// Validate/resolve submitted score lines against a category (fixed categories use
+// the fixed value). Returns [teamId => points]; sends a 422 and exits on error.
+function ppCleanLines(array $cat, int $compId, $lines): array
+{
+    $lines = is_array($lines) ? $lines : [];
+    $validTeams = [];
+    foreach (dbAll('SELECT id FROM pp_teams WHERE competition_id = ?', [$compId]) as $t) $validTeams[(int) $t['id']] = true;
+    $clean = [];
+    foreach ($lines as $ln) {
+        $tid = (int) ($ln['teamId'] ?? 0);
+        if (!isset($validTeams[$tid])) continue;
+        $pts = $cat['points_type'] === 'fixed' ? (int) $cat['fixed_points'] : (is_numeric($ln['points'] ?? null) ? (int) $ln['points'] : null);
+        if ($pts === null) jsonResponse(['error' => 'Enter a points value for each selected team.'], 422);
+        $clean[$tid] = $pts;
+    }
+    if (!$clean) jsonResponse(['error' => 'Select at least one team to score.'], 422);
+    return $clean;
 }
 $router->post('/api/patrol-points/competitions/:id/teams', function ($params) {
     $user = requireAuth();
@@ -330,19 +349,7 @@ $router->post('/api/patrol-points/competitions/:id/submissions', function ($para
     if ($comment === '') jsonResponse(['error' => 'A comment is required for every score submission.'], 422);
     $cat = dbGet('SELECT * FROM pp_categories WHERE id = ? AND competition_id = ?', [(int) ($b['categoryId'] ?? 0), $c['id']]);
     if (!$cat) jsonResponse(['error' => 'Choose a valid scoring category.'], 422);
-    $lines = is_array($b['lines'] ?? null) ? $b['lines'] : [];
-    // Validate team ids and resolve points (fixed categories use the fixed value).
-    $validTeams = [];
-    foreach (dbAll('SELECT id FROM pp_teams WHERE competition_id = ?', [$c['id']]) as $t) $validTeams[(int) $t['id']] = true;
-    $clean = [];
-    foreach ($lines as $ln) {
-        $tid = (int) ($ln['teamId'] ?? 0);
-        if (!isset($validTeams[$tid])) continue;
-        $pts = $cat['points_type'] === 'fixed' ? (int) $cat['fixed_points'] : (is_numeric($ln['points'] ?? null) ? (int) $ln['points'] : null);
-        if ($pts === null) jsonResponse(['error' => 'Enter a points value for each selected team.'], 422);
-        $clean[$tid] = $pts; // one line per team
-    }
-    if (!$clean) jsonResponse(['error' => 'Select at least one team to score.'], 422);
+    $clean = ppCleanLines($cat, (int) $c['id'], $b['lines'] ?? []);
 
     $status = $c['approval_mode'] === 'approval' ? 'pending' : 'approved';
     $res = dbRun('INSERT INTO pp_submissions (competition_id, category_id, submitted_by, comment, status) VALUES (?, ?, ?, ?, ?)', [$c['id'], $cat['id'], $user['id'], $comment, $status]);
@@ -370,6 +377,11 @@ function ppDecide(string $action, string $newStatus, $params): void
     $comment = trim((string) (requestBody()['comment'] ?? '')) ?: null;
     if (in_array($action, ['reject', 'return'], true) && !$comment) jsonResponse(['error' => 'A comment is required to reject or return a submission.'], 422);
     dbRun("UPDATE pp_submissions SET status = ?, decided_by = ?, decided_at = datetime('now'), decision_comment = ? WHERE id = ?", [$newStatus, $user['id'], $comment, $s['id']]);
+    // Approving a revision supersedes the original it corrects, so the original's
+    // score stops counting and the revision's values take over (PP-APR-007, BR-09).
+    if ($action === 'approve' && $s['revises_id']) {
+        dbRun('UPDATE pp_submissions SET superseded_by = ? WHERE id = ?', [$s['id'], (int) $s['revises_id']]);
+    }
     logAudit(['userId' => $user['id'], 'action' => 'pp_submission_' . $action, 'entityType' => 'pp_submission', 'entityId' => (string) $s['id'], 'ipAddress' => clientIp()]);
     // Notify the submitter of the outcome (PP-NOT-002).
     $compName = dbGet('SELECT name FROM pp_competitions WHERE id = ?', [$s['competition_id']])['name'] ?? 'a competition';
@@ -380,3 +392,70 @@ function ppDecide(string $action, string $newStatus, $params): void
 $router->post('/api/patrol-points/competitions/:id/submissions/:sid/approve', fn($p) => ppDecide('approve', 'approved', $p));
 $router->post('/api/patrol-points/competitions/:id/submissions/:sid/reject', fn($p) => ppDecide('reject', 'rejected', $p));
 $router->post('/api/patrol-points/competitions/:id/submissions/:sid/return', fn($p) => ppDecide('return', 'returned', $p));
+
+// ── Withdraw / amend a pending-or-returned submission (submitter only) ───────────
+function ppOwnOpenSubmission(array $user, $params): array
+{
+    $s = dbGet('SELECT * FROM pp_submissions WHERE id = ? AND competition_id = ?', [(int) $params['sid'], (int) $params['id']]);
+    if (!$s) jsonResponse(['error' => 'Submission not found.'], 404);
+    if ((int) $s['submitted_by'] !== (int) $user['id']) jsonResponse(['error' => 'Only the submitter can change this submission.'], 403);
+    if (!empty($s['withdrawn']) || !in_array($s['status'], ['pending', 'returned'], true)) jsonResponse(['error' => 'Only a pending or returned submission can be changed.'], 409);
+    return $s;
+}
+$router->post('/api/patrol-points/competitions/:id/submissions/:sid/withdraw', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requirePatrolPointsEnabled();
+    $s = ppOwnOpenSubmission($user, $params);
+    dbRun('UPDATE pp_submissions SET withdrawn = 1 WHERE id = ?', [$s['id']]);
+    logAudit(['userId' => $user['id'], 'action' => 'pp_submission_withdraw', 'entityType' => 'pp_submission', 'entityId' => (string) $s['id'], 'ipAddress' => clientIp()]);
+    jsonResponse(['ok' => true]);
+});
+$router->patch('/api/patrol-points/competitions/:id/submissions/:sid', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requirePatrolPointsEnabled();
+    $c = ppCompetitionOr404($params['id']);
+    if (in_array($c['status'], ['completed', 'archived'], true)) jsonResponse(['error' => 'This competition can no longer be changed.'], 409);
+    $s = ppOwnOpenSubmission($user, $params);
+    $b = requestBody();
+    $comment = trim((string) ($b['comment'] ?? ''));
+    if ($comment === '') jsonResponse(['error' => 'A comment is required.'], 422);
+    $cat = dbGet('SELECT * FROM pp_categories WHERE id = ?', [$s['category_id']]);
+    $clean = ppCleanLines($cat, (int) $c['id'], $b['lines'] ?? []);
+    dbRun('DELETE FROM pp_score_lines WHERE submission_id = ?', [$s['id']]);
+    foreach ($clean as $tid => $pts) dbRun('INSERT INTO pp_score_lines (submission_id, team_id, points) VALUES (?, ?, ?)', [$s['id'], $tid, $pts]);
+    // Amending sends it back to the approver (or keeps it pending) for a fresh decision.
+    dbRun("UPDATE pp_submissions SET comment = ?, status = 'pending', decided_by = NULL, decided_at = NULL, decision_comment = NULL WHERE id = ?", [$comment, $s['id']]);
+    logAudit(['userId' => $user['id'], 'action' => 'pp_submission_amend', 'entityType' => 'pp_submission', 'entityId' => (string) $s['id'], 'ipAddress' => clientIp()]);
+    $who = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')) ?: 'A leader';
+    ppNotifyApprovers((int) $user['id'], 'Score to approve: ' . $c['name'], $who . ' amended a score in "' . $cat['name'] . '".', 'patrol-point.html?id=' . $c['id']);
+    jsonResponse(['ok' => true]);
+});
+
+// ── Propose a correction to an approved score (creates a pending revision) ────────
+$router->post('/api/patrol-points/competitions/:id/submissions/:sid/revise', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requirePatrolPointsEnabled();
+    if (!ppCanManage($user)) jsonResponse(['error' => 'Your role cannot propose corrections.'], 403);
+    $c = ppCompetitionOr404($params['id']);
+    if (in_array($c['status'], ['completed', 'archived'], true)) jsonResponse(['error' => 'This competition can no longer be changed.'], 409);
+    $orig = dbGet('SELECT * FROM pp_submissions WHERE id = ? AND competition_id = ?', [(int) $params['sid'], (int) $c['id']]);
+    if (!$orig) jsonResponse(['error' => 'Submission not found.'], 404);
+    if ($orig['status'] !== 'approved' || !empty($orig['superseded_by']) || !empty($orig['withdrawn'])) jsonResponse(['error' => 'Only an effective approved score can be corrected.'], 409);
+    if (dbGet("SELECT 1 FROM pp_submissions WHERE revises_id = ? AND status = 'pending' AND withdrawn = 0 LIMIT 1", [$orig['id']])) jsonResponse(['error' => 'A correction is already pending for this score.'], 409);
+    $b = requestBody();
+    $comment = trim((string) ($b['comment'] ?? ''));
+    if ($comment === '') jsonResponse(['error' => 'A comment explaining the correction is required.'], 422);
+    $cat = dbGet('SELECT * FROM pp_categories WHERE id = ?', [$orig['category_id']]);
+    $clean = ppCleanLines($cat, (int) $c['id'], $b['lines'] ?? []);
+    // Corrections always require approval, regardless of the competition mode (PP-APR-007).
+    $res = dbRun("INSERT INTO pp_submissions (competition_id, category_id, submitted_by, comment, status, revises_id) VALUES (?, ?, ?, ?, 'pending', ?)", [$c['id'], $orig['category_id'], $user['id'], $comment, $orig['id']]);
+    $sid = (int) $res['lastInsertId'];
+    foreach ($clean as $tid => $pts) dbRun('INSERT INTO pp_score_lines (submission_id, team_id, points) VALUES (?, ?, ?)', [$sid, $tid, $pts]);
+    logAudit(['userId' => $user['id'], 'action' => 'pp_submission_revise', 'entityType' => 'pp_submission', 'entityId' => (string) $sid, 'ipAddress' => clientIp(), 'details' => ['revises' => (int) $orig['id']]]);
+    $who = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')) ?: 'A leader';
+    ppNotifyApprovers((int) $user['id'], 'Correction to approve: ' . $c['name'], $who . ' proposed a correction to a score in "' . $cat['name'] . '".', 'patrol-point.html?id=' . $c['id']);
+    jsonResponse(['ok' => true], 201);
+});

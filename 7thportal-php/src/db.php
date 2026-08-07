@@ -783,6 +783,9 @@ CREATE TABLE IF NOT EXISTS pp_submissions (
   submitted_by INTEGER NOT NULL REFERENCES users(id),
   comment TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'approved' CHECK(status IN ('pending','approved','rejected','returned')),
+  withdrawn INTEGER NOT NULL DEFAULT 0,
+  revises_id INTEGER REFERENCES pp_submissions(id) ON DELETE SET NULL,
+  superseded_by INTEGER REFERENCES pp_submissions(id) ON DELETE SET NULL,
   decided_by INTEGER REFERENCES users(id),
   decided_at TEXT,
   decision_comment TEXT,
@@ -870,6 +873,16 @@ if ($activityFormsSql && !str_contains($activityFormsSql, 'external_provider_use
 // selected activity type drives whether "Relevant qualifications" is required.
 if ($activityFormsSql && !str_contains($activityFormsSql, 'activity_type')) {
     db()->exec('ALTER TABLE activity_forms ADD COLUMN activity_type TEXT');
+}
+// Migration: pp_submissions gained withdraw + revision columns (FRD v2.1 s13
+// PP-PTS-008/009). withdrawn cancels a pending/returned submission; revises_id
+// links a correction to the approved submission it replaces; superseded_by marks
+// the original once its revision is approved (so it stops counting).
+$ppSubsSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='pp_submissions'")['sql'] ?? '';
+if ($ppSubsSql && !str_contains($ppSubsSql, 'revises_id')) {
+    db()->exec('ALTER TABLE pp_submissions ADD COLUMN withdrawn INTEGER NOT NULL DEFAULT 0');
+    db()->exec('ALTER TABLE pp_submissions ADD COLUMN revises_id INTEGER');
+    db()->exec('ALTER TABLE pp_submissions ADD COLUMN superseded_by INTEGER');
 }
 // Migration: GLV-only workflow (glv-only-1.0) drops the Section Lead stage. Move
 // any in-flight forms still awaiting Section Lead approval into the GLV queue so

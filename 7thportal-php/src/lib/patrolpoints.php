@@ -6,11 +6,12 @@
 // Scope: team-level scoring with per-participant team membership (OSM-linked or
 // manual, one active team per person per competition, membership locked once the
 // competition is completed). 'free'/'fixed' category point types, a single
-// per-competition approval mode, corrections via new submissions (no revision
-// chains), leader workspace only (parent-facing leaderboard deferred).
+// per-competition approval mode. Submitters can withdraw or amend a pending/
+// returned submission; approved scores are corrected via a revision that keeps
+// the original effective until the revision is approved. Leader workspace only.
 // Still deferred: per-submission membership snapshots, selectable/ranged point
-// types, per-category approval rules, revision chains, parent leaderboard,
-// evidence attachments. See README follow-ups.
+// types, per-category approval rules, draft (unsubmitted) submissions, parent
+// leaderboard, evidence attachments. See README follow-ups.
 
 const PP_STATUSES = ['draft' => 'Draft', 'open' => 'Open', 'paused' => 'Paused', 'completed' => 'Completed', 'archived' => 'Archived'];
 const PP_APPROVAL_MODES = ['immediate' => 'Immediate (scores count at once)', 'approval' => 'Requires approval'];
@@ -70,7 +71,7 @@ function serializePpCompetition(array $c, bool $full = false): array
     ];
     if (!$full) {
         $base['teamCount'] = (int) dbGet('SELECT COUNT(*) n FROM pp_teams WHERE competition_id = ?', [$c['id']])['n'];
-        $base['pendingCount'] = (int) dbGet("SELECT COUNT(*) n FROM pp_submissions WHERE competition_id = ? AND status = 'pending'", [$c['id']])['n'];
+        $base['pendingCount'] = (int) dbGet("SELECT COUNT(*) n FROM pp_submissions WHERE competition_id = ? AND status = 'pending' AND withdrawn = 0", [$c['id']])['n'];
         return $base;
     }
     return array_merge($base, [
@@ -109,9 +110,12 @@ function serializePpCategory(array $c): array
 }
 function serializePpSubmission(array $s, array $lines, array $teamNames, array $catNames, array $userNames): array
 {
+    // Display status folds the withdraw flag and supersession over the stored status.
+    $status = !empty($s['withdrawn']) ? 'withdrawn' : (!empty($s['superseded_by']) ? 'superseded' : $s['status']);
     return [
         'id' => (int) $s['id'], 'categoryId' => (int) $s['category_id'], 'categoryName' => $catNames[(int) $s['category_id']] ?? '—',
-        'comment' => $s['comment'], 'status' => $s['status'],
+        'comment' => $s['comment'], 'status' => $status,
+        'isRevision' => $s['revises_id'] !== null, 'revisesId' => $s['revises_id'] !== null ? (int) $s['revises_id'] : null,
         'submittedBy' => $userNames[(int) $s['submitted_by']] ?? 'Leader', 'submittedById' => (int) $s['submitted_by'],
         'decidedBy' => $s['decided_by'] !== null ? ($userNames[(int) $s['decided_by']] ?? 'Leader') : null,
         'decisionComment' => $s['decision_comment'], 'createdAt' => $s['created_at'],
@@ -130,7 +134,8 @@ function ppLeaderboard(int $competitionId): array
     $rows = dbAll(
         "SELECT l.team_id, COALESCE(SUM(l.points), 0) AS total
          FROM pp_score_lines l JOIN pp_submissions s ON s.id = l.submission_id
-         WHERE s.competition_id = ? AND s.status = 'approved' GROUP BY l.team_id",
+         WHERE s.competition_id = ? AND s.status = 'approved' AND s.superseded_by IS NULL AND s.withdrawn = 0
+         GROUP BY l.team_id",
         [$competitionId]
     );
     foreach ($rows as $r) $totals[(int) $r['team_id']] = (int) $r['total'];
@@ -155,7 +160,7 @@ function patrolPointsActionItems(array $user): array
     $rows = dbAll(
         "SELECT s.id, s.competition_id, c.name AS comp_name
          FROM pp_submissions s JOIN pp_competitions c ON c.id = s.competition_id
-         WHERE s.status = 'pending' AND s.submitted_by != ? AND c.status IN ('open','paused')",
+         WHERE s.status = 'pending' AND s.withdrawn = 0 AND s.submitted_by != ? AND c.status IN ('open','paused')",
         [$user['id']]
     );
     foreach ($rows as $r) {

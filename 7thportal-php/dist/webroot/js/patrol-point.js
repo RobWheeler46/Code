@@ -2,7 +2,8 @@
 // approvals and the live leaderboard.
 let C, TEAMS, CATS, PARTS, SUBS, BOARD, ACT, META, ID;
 const SKEY = { draft: 'suspended', open: 'active', paused: 'pending_approval', completed: 'active', archived: 'deleted' };
-const SUB_SKEY = { pending: 'pending_approval', approved: 'active', rejected: 'deleted', returned: 'suspended' };
+const SUB_SKEY = { pending: 'pending_approval', approved: 'active', rejected: 'deleted', returned: 'suspended', withdrawn: 'deleted', superseded: 'suspended' };
+const SUB_LABEL = { pending: 'pending', approved: 'approved', rejected: 'rejected', returned: 'returned', withdrawn: 'withdrawn', superseded: 'superseded' };
 const esc = s => escapeHtml(s == null ? '' : String(s));
 
 (async () => {
@@ -167,25 +168,74 @@ function renderScoreInputs() {
 
 function submissionsCard() {
   if (!SUBS.length) return '<div class="card"><h2>Score history</h2><p class="muted">No scores submitted yet.</p></div>';
-  const canDecide = ACT.canManage && ['open', 'paused'].includes(C.status);
+  const openComp = ['open', 'paused'].includes(C.status);
   const rows = SUBS.map(s => {
     const lines = s.lines.map(l => `${esc(l.teamName)}: ${l.points >= 0 ? '+' : ''}${l.points}`).join(' · ');
     const mine = s.submittedById === ACT.userId;
-    const decide = (s.status === 'pending' && canDecide && !mine) ? `
-      <div class="cap-actions" style="margin-top:.4rem">
+    const dim = ['withdrawn', 'superseded', 'rejected'].includes(s.status) ? ' style="opacity:.6"' : '';
+    let actions = '';
+    if (openComp && s.status === 'pending' && ACT.canManage && !mine) {
+      actions = `<div class="cap-actions" style="margin-top:.4rem">
         <input class="pp-d-comment" data-id="${s.id}" placeholder="Comment (needed to reject/return)" style="flex:1;min-width:180px">
         <button class="btn btn-sm pp-approve" data-id="${s.id}">Approve</button>
         <button class="btn btn-secondary btn-sm pp-return" data-id="${s.id}">Return</button>
-        <button class="btn btn-secondary btn-sm pp-reject" data-id="${s.id}">Reject</button>
-      </div>` : (s.status === 'pending' && mine ? '<p class="field help">Awaiting another leader\'s approval (you can\'t approve your own).</p>' : '');
-    return `<div style="padding:.5rem 0;border-bottom:1px solid var(--border)">
-      <div class="cap-head"><strong>${esc(s.categoryName)}</strong>
-        <span class="badge" data-status="${SUB_SKEY[s.status]}">${esc(s.status)}</span></div>
+        <button class="btn btn-secondary btn-sm pp-reject" data-id="${s.id}">Reject</button></div>`;
+    } else if (openComp && mine && ['pending', 'returned'].includes(s.status)) {
+      actions = `<div class="cap-actions" style="margin-top:.4rem">
+        ${s.status === 'pending' ? '<span class="field help" style="margin:0">Awaiting another leader\'s approval.</span>' : ''}
+        <button class="btn btn-secondary btn-sm pp-amend" data-id="${s.id}" style="margin-left:auto">Amend</button>
+        <button class="btn btn-secondary btn-sm pp-withdraw" data-id="${s.id}">Withdraw</button></div>`;
+    } else if (openComp && s.status === 'approved' && ACT.canManage) {
+      actions = `<div class="cap-actions" style="margin-top:.4rem"><button class="btn btn-secondary btn-sm pp-revise" data-id="${s.id}" style="margin-left:auto">Propose correction</button></div>`;
+    }
+    return `<div${dim} style="padding:.5rem 0;border-bottom:1px solid var(--border)">
+      <div class="cap-head"><strong>${esc(s.categoryName)}${s.isRevision ? ' <span class="muted">· correction</span>' : ''}</strong>
+        <span class="badge" data-status="${SUB_SKEY[s.status]}">${esc(SUB_LABEL[s.status] || s.status)}</span></div>
       <div>${lines}</div>
-      <div class="muted" style="font-size:.85rem">“${esc(s.comment)}” — ${esc(s.submittedBy)}${s.decidedBy ? ` · ${s.status} by ${esc(s.decidedBy)}` : ''}${s.decisionComment ? ` — ${esc(s.decisionComment)}` : ''}</div>
-      ${decide}</div>`;
+      <div class="muted" style="font-size:.85rem">“${esc(s.comment)}” — ${esc(s.submittedBy)}${s.decidedBy ? ` · decided by ${esc(s.decidedBy)}` : ''}${s.decisionComment ? ` — ${esc(s.decisionComment)}` : ''}</div>
+      ${actions}
+      <div class="pp-editor-slot" data-id="${s.id}"></div></div>`;
   }).join('');
   return `<div class="card"><h2>Score history</h2>${rows}</div>`;
+}
+
+// Inline editor for amending a pending/returned submission or proposing a correction.
+function scoreEditor(s, mode) {
+  const cat = CATS.find(c => c.id === s.categoryId) || { pointsType: 'free' };
+  const fixed = cat.pointsType === 'fixed';
+  const existing = {}; s.lines.forEach(l => existing[l.teamId] = l.points);
+  const inputs = TEAMS.map(t => fixed
+    ? `<label class="af-sec-opt"><input type="checkbox" class="pp-e-team" data-id="${t.id}"${existing[t.id] !== undefined ? ' checked' : ''}> ${esc(t.name)} <span class="muted">(+${cat.fixedPoints})</span></label>`
+    : `<label class="af-sec-opt" style="justify-content:space-between">${esc(t.name)} <input type="number" class="pp-e-team" data-id="${t.id}" style="width:90px" value="${existing[t.id] !== undefined ? existing[t.id] : ''}" placeholder="pts"></label>`).join('');
+  return `<div class="card" style="margin:.4rem 0;background:var(--bg)">
+    <strong>${mode === 'revise' ? 'Propose correction' : 'Amend score'} — ${esc(s.categoryName)}</strong>
+    <div class="af-sections" style="margin-top:.4rem">${inputs}</div>
+    <div class="field"><label>${mode === 'revise' ? 'Reason for the correction' : 'Comment'} (required)</label><textarea class="pp-e-comment" rows="2">${mode === 'amend' ? esc(s.comment) : ''}</textarea></div>
+    <div class="cap-actions"><button class="btn btn-sm pp-e-save" data-mode="${mode}" data-id="${s.id}">${mode === 'revise' ? 'Submit correction' : 'Save'}</button><button class="btn btn-secondary btn-sm pp-e-cancel" data-id="${s.id}">Cancel</button></div>
+    <div class="pp-e-msg"></div></div>`;
+}
+function openEditor(id, mode) {
+  const s = SUBS.find(x => x.id === id);
+  const slot = document.querySelector(`.pp-editor-slot[data-id="${id}"]`);
+  if (!s || !slot) return;
+  slot.innerHTML = scoreEditor(s, mode);
+  slot.querySelector('.pp-e-cancel').addEventListener('click', () => slot.innerHTML = '');
+  slot.querySelector('.pp-e-save').addEventListener('click', async () => {
+    const emsg = slot.querySelector('.pp-e-msg');
+    const lines = [];
+    slot.querySelectorAll('.pp-e-team').forEach(el => {
+      if (el.type === 'checkbox') { if (el.checked) lines.push({ teamId: Number(el.dataset.id), points: 0 }); }
+      else if (el.value.trim() !== '') lines.push({ teamId: Number(el.dataset.id), points: Number(el.value) });
+    });
+    const comment = slot.querySelector('.pp-e-comment').value.trim();
+    if (!lines.length) { emsg.innerHTML = '<div class="alert alert-error">Score at least one team.</div>'; return; }
+    if (!comment) { emsg.innerHTML = '<div class="alert alert-error">A comment is required.</div>'; return; }
+    try {
+      if (mode === 'revise') await Api.post(`/api/patrol-points/competitions/${ID}/submissions/${id}/revise`, { comment, lines });
+      else await Api.patch(`/api/patrol-points/competitions/${ID}/submissions/${id}`, { comment, lines });
+      load();
+    } catch (e) { emsg.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
 }
 
 function wire() {
@@ -278,4 +328,12 @@ function wire() {
   decide('.pp-approve', 'approve');
   decide('.pp-reject', 'reject');
   decide('.pp-return', 'return');
+
+  // Withdraw / amend / correct
+  document.querySelectorAll('.pp-withdraw').forEach(b => b.addEventListener('click', async () => {
+    if (!confirm('Withdraw this submission?')) return;
+    try { await Api.post(`/api/patrol-points/competitions/${ID}/submissions/${b.dataset.id}/withdraw`, {}); load(); } catch (e) { msg(e.message, true); }
+  }));
+  document.querySelectorAll('.pp-amend').forEach(b => b.addEventListener('click', () => openEditor(Number(b.dataset.id), 'amend')));
+  document.querySelectorAll('.pp-revise').forEach(b => b.addEventListener('click', () => openEditor(Number(b.dataset.id), 'revise')));
 }
