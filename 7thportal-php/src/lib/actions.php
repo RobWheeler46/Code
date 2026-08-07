@@ -75,6 +75,8 @@ function buildActionCentre(array $user): array
         if (function_exists('attendanceActionItems')) $items = array_merge($items, attendanceActionItems($user));
         // Activity forms to complete/approve (Activity Approval pack).
         if (function_exists('activityActionItems')) $items = array_merge($items, activityActionItems($user));
+        // Patrol Points submissions awaiting a (non-conflicted) approver (FRD v2.1 s13).
+        if (function_exists('patrolPointsActionItems')) $items = array_merge($items, patrolPointsActionItems($user));
     }
 
     if ($isAdmin) {

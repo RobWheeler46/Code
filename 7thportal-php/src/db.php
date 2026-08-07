@@ -742,6 +742,62 @@ CREATE TABLE IF NOT EXISTS activity_form_events (
 );
 CREATE INDEX IF NOT EXISTS idx_activity_form_events_form ON activity_form_events(form_id);
 
+-- Patrol Points (FRD v2.1 s13). Competitions with named teams, scoring categories,
+-- comment-required score submissions (multi-team, approvable, no self-approval) and
+-- a derived tie-aware leaderboard. Optional module, off by default.
+CREATE TABLE IF NOT EXISTS pp_competitions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  description TEXT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','open','paused','completed','archived')),
+  approval_mode TEXT NOT NULL DEFAULT 'immediate' CHECK(approval_mode IN ('immediate','approval')),
+  visibility TEXT NOT NULL DEFAULT 'leaders' CHECK(visibility IN ('leaders','parents')),
+  osm_section_id TEXT, section_name TEXT,
+  created_by INTEGER NOT NULL REFERENCES users(id),
+  completed_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS pp_teams (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  competition_id INTEGER NOT NULL REFERENCES pp_competitions(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_pp_teams_comp ON pp_teams(competition_id);
+CREATE TABLE IF NOT EXISTS pp_categories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  competition_id INTEGER NOT NULL REFERENCES pp_competitions(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  points_type TEXT NOT NULL DEFAULT 'free' CHECK(points_type IN ('free','fixed')),
+  fixed_points INTEGER,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_pp_categories_comp ON pp_categories(competition_id);
+CREATE TABLE IF NOT EXISTS pp_submissions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  competition_id INTEGER NOT NULL REFERENCES pp_competitions(id) ON DELETE CASCADE,
+  category_id INTEGER NOT NULL REFERENCES pp_categories(id) ON DELETE CASCADE,
+  submitted_by INTEGER NOT NULL REFERENCES users(id),
+  comment TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'approved' CHECK(status IN ('pending','approved','rejected','returned')),
+  decided_by INTEGER REFERENCES users(id),
+  decided_at TEXT,
+  decision_comment TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_pp_submissions_comp ON pp_submissions(competition_id, status);
+CREATE TABLE IF NOT EXISTS pp_score_lines (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  submission_id INTEGER NOT NULL REFERENCES pp_submissions(id) ON DELETE CASCADE,
+  team_id INTEGER NOT NULL REFERENCES pp_teams(id) ON DELETE CASCADE,
+  points INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pp_score_lines_sub ON pp_score_lines(submission_id);
+CREATE INDEX IF NOT EXISTS idx_pp_score_lines_team ON pp_score_lines(team_id);
+
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(portal_role, account_status);
 CREATE INDEX IF NOT EXISTS idx_parent_links_parent ON parent_child_links(parent_user_id);
 CREATE INDEX IF NOT EXISTS idx_notices_status ON notices(status, audience, start_date);

@@ -48,6 +48,7 @@ function sidebarLinksForRole(me, cfg) {
   if (cfg && cfg.calendarEnabled) links.push({ href: 'calendar.html', label: 'Calendar' });
   if (cfg && cfg.attendanceEnabled) links.push({ href: 'attendance.html', label: 'Attendance' });
   if (cfg && cfg.activityFormsEnabled) links.push({ href: 'activity-forms.html', label: 'Activity forms' });
+  if (cfg && cfg.patrolPointsEnabled) links.push({ href: 'patrol-points.html', label: 'Patrol Points' });
   if (cfg && cfg.galleryEnabled) links.push({ href: 'leader-gallery.html', label: 'Photo gallery' });
   if (cfg && cfg.financeEnabled) links.push({ href: 'expenses.html', label: 'Expenses & mileage' });
   if (cfg && cfg.documentLibraryEnabled) links.push({ href: 'documents.html', label: 'Document library' });

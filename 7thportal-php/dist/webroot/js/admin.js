@@ -732,11 +732,20 @@ async function renderSettings() {
     </div>
     <div class="card">
       <h2>Activity Approval forms</h2>
-      <p class="muted">Digital Activity Approval form with a two-stage approval workflow (Section Lead &rarr; GLV): draft/resume, evidence uploads, request-more-info/reject, and a draft calendar entry on final approval. Self-approval is blocked; all steps audited. Ships off by default.</p>
+      <p class="muted">Digital Activity Approval form with a GLV-only approval workflow: draft/resume, conditional evidence uploads, request-more-info/reject, and a draft calendar entry on approval. Self-approval is blocked; all steps audited. Ships off by default.</p>
       <form id="activity-settings-form">
         <div class="field"><label style="font-weight:400;"><input type="checkbox" id="act-forms-enabled" ${settings.activityFormsEnabled ? 'checked' : ''}> Enable Activity Approval forms</label></div>
         <button class="btn btn-primary" type="submit">Save</button>
         <span id="activity-settings-saved"></span>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Patrol Points</h2>
+      <p class="muted">Run competitions across programmes, meetings and camps: named teams, reusable scoring categories, comment-required score submissions (approve/reject/return, no self-approval) and a live tie-aware leaderboard. Completed competitions lock. Ships off by default.</p>
+      <form id="patrol-points-settings-form">
+        <div class="field"><label style="font-weight:400;"><input type="checkbox" id="patrol-points-enabled" ${settings.patrolPointsEnabled ? 'checked' : ''}> Enable Patrol Points</label></div>
+        <button class="btn btn-primary" type="submit">Save</button>
+        <span id="patrol-points-settings-saved"></span>
       </form>
     </div>
   `;
@@ -798,6 +807,11 @@ async function renderSettings() {
     e.preventDefault();
     await Api.put('/api/admin/settings', { activityFormsEnabled: document.getElementById('act-forms-enabled').checked });
     document.getElementById('activity-settings-saved').textContent = 'Saved.';
+  });
+  document.getElementById('patrol-points-settings-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    await Api.put('/api/admin/settings', { patrolPointsEnabled: document.getElementById('patrol-points-enabled').checked });
+    document.getElementById('patrol-points-settings-saved').textContent = 'Saved.';
   });
   document.getElementById('settings-form').addEventListener('submit', async e => {
     e.preventDefault();

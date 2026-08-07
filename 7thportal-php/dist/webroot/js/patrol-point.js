@@ -1,0 +1,204 @@
+// Patrol Points - single competition: lifecycle, teams, categories, scoring,
+// approvals and the live leaderboard.
+let C, TEAMS, CATS, SUBS, BOARD, ACT, META, ID;
+const SKEY = { draft: 'suspended', open: 'active', paused: 'pending_approval', completed: 'active', archived: 'deleted' };
+const SUB_SKEY = { pending: 'pending_approval', approved: 'active', rejected: 'deleted', returned: 'suspended' };
+const esc = s => escapeHtml(s == null ? '' : String(s));
+
+(async () => {
+  const me = await requireUserNav();
+  if (!me) return;
+  ID = new URLSearchParams(location.search).get('id');
+  document.getElementById('pp-head').innerHTML = '<a class="btn btn-secondary" href="patrol-points.html">Back</a>';
+  if (!ID) { document.getElementById('content').innerHTML = '<div class="alert alert-error">No competition specified.</div>'; return; }
+  load();
+})();
+
+async function load() {
+  const box = document.getElementById('content');
+  let d;
+  try { d = await Api.get(`/api/patrol-points/competitions/${ID}`); }
+  catch (e) { box.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; return; }
+  C = d.competition; TEAMS = d.teams; CATS = d.categories; SUBS = d.submissions; BOARD = d.leaderboard; ACT = d.myActions; META = d.meta;
+  document.getElementById('pp-title').textContent = C.name;
+  document.getElementById('pp-head').innerHTML = lifecycleButtons() + '<a class="btn btn-secondary" href="patrol-points.html">Back</a>';
+  const editable = ACT.canManage && ['draft', 'open', 'paused'].includes(C.status);
+  box.innerHTML = summaryCard() + leaderboardCard() + (ACT.canSubmit ? submitCard() : '')
+    + (editable ? teamsCard() + categoriesCard() : '') + submissionsCard();
+  wire();
+}
+
+function lifecycleButtons() {
+  if (!ACT.canManage) return '';
+  const label = { open: C.status === 'paused' ? 'Resume' : 'Open', paused: 'Pause', completed: 'Complete', archived: 'Archive' };
+  const btns = (META.transitions[C.status] || []).map(t =>
+    `<button class="btn btn-secondary pp-status" data-to="${t}">${label[t] || t}</button>`).join('');
+  const del = C.status === 'draft' ? '<button class="btn btn-secondary" id="pp-delete">Delete</button>' : '';
+  return btns + del;
+}
+
+function summaryCard() {
+  return `<div class="card">
+    <div class="cap-head"><h2 style="margin:0">${esc(C.name)}</h2>
+      <span class="badge" data-status="${SKEY[C.status] || 'suspended'}">${esc(C.statusLabel)}</span></div>
+    ${C.description ? `<p>${esc(C.description)}</p>` : ''}
+    <p class="muted">Scoring approval: ${esc(C.approvalModeLabel)}${C.completedAt ? ' · Completed ' + formatDate(C.completedAt) : ''}</p>
+    <div id="pp-msg"></div></div>`;
+}
+
+function leaderboardCard() {
+  const rows = BOARD.length ? BOARD.map(r => `<tr>
+      <td data-label="Position"><strong>${r.position}</strong></td>
+      <td data-label="Team" class="rcard-title">${esc(r.teamName)}</td>
+      <td data-label="Total"><strong>${r.total}</strong></td>
+    </tr>`).join('') : '<tr><td colspan="3" class="muted">No teams yet.</td></tr>';
+  return `<div class="card card-accent accent-yellow"><h2>Leaderboard</h2>
+    <table class="data-table rcards"><thead><tr><th>Position</th><th>Team</th><th>Total points</th></tr></thead>
+    <tbody>${rows}</tbody></table>
+    <p class="field help">Totals reflect approved scores only; tied teams share a position.</p></div>`;
+}
+
+function teamsCard() {
+  const list = TEAMS.length ? TEAMS.map(t => `<tr>
+      <td><input class="pp-team-name" data-id="${t.id}" value="${esc(t.name)}"></td>
+      <td style="text-align:right"><button class="btn btn-secondary btn-sm pp-team-del" data-id="${t.id}">Remove</button></td>
+    </tr>`).join('') : '<tr><td colspan="2" class="muted">No teams yet.</td></tr>';
+  return `<div class="card"><h2>Teams</h2>
+    <table class="data-table"><tbody>${list}</tbody></table>
+    <div class="cap-actions" style="margin-top:.6rem">
+      <input id="pp-team-new" placeholder="New team name">
+      <button class="btn btn-secondary" id="pp-team-add">Add team</button>
+    </div></div>`;
+}
+
+function categoriesCard() {
+  const list = CATS.length ? CATS.map(c => `<tr>
+      <td data-label="Category" class="rcard-title">${esc(c.name)}</td>
+      <td data-label="Type" class="muted">${esc(c.pointsTypeLabel)}${c.pointsType === 'fixed' ? ` (${c.fixedPoints})` : ''}</td>
+      <td style="text-align:right"><button class="btn btn-secondary btn-sm pp-cat-del" data-id="${c.id}">Remove</button></td>
+    </tr>`).join('') : '<tr><td colspan="3" class="muted">No categories yet.</td></tr>';
+  return `<div class="card"><h2>Scoring categories</h2>
+    <table class="data-table rcards"><tbody>${list}</tbody></table>
+    <div class="cap-actions" style="margin-top:.6rem;align-items:flex-end">
+      <div class="field" style="margin:0"><label>Name</label><input id="pp-cat-name" placeholder="e.g. Tidiest tent"></div>
+      <div class="field" style="margin:0"><label>Type</label><select id="pp-cat-type">
+        ${Object.entries(META.pointsTypes).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('')}
+      </select></div>
+      <div class="field" style="margin:0" id="pp-cat-fixed-wrap" hidden><label>Fixed points</label><input id="pp-cat-fixed" type="number" value="10" style="width:100px"></div>
+      <button class="btn btn-secondary" id="pp-cat-add">Add category</button>
+    </div></div>`;
+}
+
+function submitCard() {
+  if (!TEAMS.length || !CATS.length) return '';
+  return `<div class="card"><h2>Award points</h2>
+    <div class="field"><label>Category</label><select id="pp-s-cat">
+      ${CATS.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}
+    </select></div>
+    <div id="pp-s-teams"></div>
+    <div class="field"><label>Comment (required)</label><textarea id="pp-s-comment" rows="2" placeholder="Why these points were awarded"></textarea></div>
+    <button class="btn" id="pp-s-save">Submit scores</button>
+    <div id="pp-s-msg"></div></div>`;
+}
+
+function renderScoreInputs() {
+  const host = document.getElementById('pp-s-teams');
+  if (!host) return;
+  const cat = CATS.find(c => c.id === Number(document.getElementById('pp-s-cat').value));
+  const fixed = cat && cat.pointsType === 'fixed';
+  host.innerHTML = `<div class="af-sections">${TEAMS.map(t => fixed
+    ? `<label class="af-sec-opt"><input type="checkbox" class="pp-s-team" data-id="${t.id}"> ${esc(t.name)} <span class="muted">(+${cat.fixedPoints})</span></label>`
+    : `<label class="af-sec-opt" style="justify-content:space-between">${esc(t.name)} <input type="number" class="pp-s-team" data-id="${t.id}" style="width:90px" placeholder="pts"></label>`
+  ).join('')}</div>`;
+}
+
+function submissionsCard() {
+  if (!SUBS.length) return '<div class="card"><h2>Score history</h2><p class="muted">No scores submitted yet.</p></div>';
+  const canDecide = ACT.canManage && ['open', 'paused'].includes(C.status);
+  const rows = SUBS.map(s => {
+    const lines = s.lines.map(l => `${esc(l.teamName)}: ${l.points >= 0 ? '+' : ''}${l.points}`).join(' · ');
+    const mine = s.submittedById === ACT.userId;
+    const decide = (s.status === 'pending' && canDecide && !mine) ? `
+      <div class="cap-actions" style="margin-top:.4rem">
+        <input class="pp-d-comment" data-id="${s.id}" placeholder="Comment (needed to reject/return)" style="flex:1;min-width:180px">
+        <button class="btn btn-sm pp-approve" data-id="${s.id}">Approve</button>
+        <button class="btn btn-secondary btn-sm pp-return" data-id="${s.id}">Return</button>
+        <button class="btn btn-secondary btn-sm pp-reject" data-id="${s.id}">Reject</button>
+      </div>` : (s.status === 'pending' && mine ? '<p class="field help">Awaiting another leader\'s approval (you can\'t approve your own).</p>' : '');
+    return `<div style="padding:.5rem 0;border-bottom:1px solid var(--border)">
+      <div class="cap-head"><strong>${esc(s.categoryName)}</strong>
+        <span class="badge" data-status="${SUB_SKEY[s.status]}">${esc(s.status)}</span></div>
+      <div>${lines}</div>
+      <div class="muted" style="font-size:.85rem">“${esc(s.comment)}” — ${esc(s.submittedBy)}${s.decidedBy ? ` · ${s.status} by ${esc(s.decidedBy)}` : ''}${s.decisionComment ? ` — ${esc(s.decisionComment)}` : ''}</div>
+      ${decide}</div>`;
+  }).join('');
+  return `<div class="card"><h2>Score history</h2>${rows}</div>`;
+}
+
+function wire() {
+  const on = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
+  const msg = (t, err) => { const m = document.getElementById('pp-msg'); if (m) m.innerHTML = `<div class="alert alert-${err ? 'error' : 'success'}">${escapeHtml(t)}</div>`; };
+
+  document.querySelectorAll('.pp-status').forEach(b => b.addEventListener('click', async () => {
+    try { await Api.post(`/api/patrol-points/competitions/${ID}/status`, { status: b.dataset.to }); load(); }
+    catch (e) { msg(e.message, true); }
+  }));
+  on('pp-delete', async () => { if (!confirm('Delete this draft competition?')) return; try { await Api.delete(`/api/patrol-points/competitions/${ID}`); location.href = 'patrol-points.html'; } catch (e) { msg(e.message, true); } });
+
+  // Teams
+  on('pp-team-add', async () => {
+    const name = document.getElementById('pp-team-new').value.trim();
+    if (!name) return;
+    try { await Api.post(`/api/patrol-points/competitions/${ID}/teams`, { name }); load(); } catch (e) { msg(e.message, true); }
+  });
+  document.querySelectorAll('.pp-team-del').forEach(b => b.addEventListener('click', async () => {
+    try { await Api.delete(`/api/patrol-points/competitions/${ID}/teams/${b.dataset.id}`); load(); } catch (e) { msg(e.message, true); }
+  }));
+  document.querySelectorAll('.pp-team-name').forEach(inp => inp.addEventListener('change', async () => {
+    try { await Api.patch(`/api/patrol-points/competitions/${ID}/teams/${inp.dataset.id}`, { name: inp.value.trim() }); load(); } catch (e) { msg(e.message, true); }
+  }));
+
+  // Categories
+  const catType = document.getElementById('pp-cat-type');
+  if (catType) catType.addEventListener('change', () => { document.getElementById('pp-cat-fixed-wrap').hidden = catType.value !== 'fixed'; });
+  on('pp-cat-add', async () => {
+    const name = document.getElementById('pp-cat-name').value.trim();
+    if (!name) return;
+    const body = { name, pointsType: catType.value };
+    if (catType.value === 'fixed') body.fixedPoints = Number(document.getElementById('pp-cat-fixed').value);
+    try { await Api.post(`/api/patrol-points/competitions/${ID}/categories`, body); load(); } catch (e) { msg(e.message, true); }
+  });
+  document.querySelectorAll('.pp-cat-del').forEach(b => b.addEventListener('click', async () => {
+    try { await Api.delete(`/api/patrol-points/competitions/${ID}/categories/${b.dataset.id}`); load(); } catch (e) { msg(e.message, true); }
+  }));
+
+  // Scoring
+  const catSel = document.getElementById('pp-s-cat');
+  if (catSel) { catSel.addEventListener('change', renderScoreInputs); renderScoreInputs(); }
+  on('pp-s-save', async () => {
+    const smsg = document.getElementById('pp-s-msg');
+    const lines = [];
+    document.querySelectorAll('.pp-s-team').forEach(el => {
+      if (el.type === 'checkbox') { if (el.checked) lines.push({ teamId: Number(el.dataset.id), points: 0 }); }
+      else if (el.value.trim() !== '') lines.push({ teamId: Number(el.dataset.id), points: Number(el.value) });
+    });
+    const comment = document.getElementById('pp-s-comment').value.trim();
+    if (!lines.length) { smsg.innerHTML = '<div class="alert alert-error">Score at least one team.</div>'; return; }
+    if (!comment) { smsg.innerHTML = '<div class="alert alert-error">A comment is required.</div>'; return; }
+    try {
+      const r = await Api.post(`/api/patrol-points/competitions/${ID}/submissions`, { categoryId: Number(catSel.value), comment, lines });
+      smsg.innerHTML = `<div class="alert alert-success">${r.status === 'pending' ? 'Submitted for approval.' : 'Scores recorded.'}</div>`;
+      load();
+    } catch (e) { smsg.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
+
+  // Approvals
+  const decide = (cls, action) => document.querySelectorAll(cls).forEach(b => b.addEventListener('click', async () => {
+    const comment = (document.querySelector(`.pp-d-comment[data-id="${b.dataset.id}"]`) || {}).value || '';
+    try { await Api.post(`/api/patrol-points/competitions/${ID}/submissions/${b.dataset.id}/${action}`, { comment }); load(); }
+    catch (e) { msg(e.message, true); }
+  }));
+  decide('.pp-approve', 'approve');
+  decide('.pp-reject', 'reject');
+  decide('.pp-return', 'return');
+}

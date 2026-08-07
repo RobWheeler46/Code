@@ -302,6 +302,7 @@ $router->get('/api/admin/settings', function ($params) {
         'calendarEnabled' => ($map['calendar_enabled'] ?? null) === 'true',
         'attendanceEnabled' => ($map['attendance_enabled'] ?? null) === 'true',
         'activityFormsEnabled' => ($map['activity_forms_enabled'] ?? null) === 'true',
+        'patrolPointsEnabled' => ($map['patrol_points_enabled'] ?? null) === 'true',
     ]);
 });
 
@@ -332,6 +333,7 @@ $router->put('/api/admin/settings', function ($params) {
     if (array_key_exists('calendarEnabled', $body)) $upsert('calendar_enabled', $body['calendarEnabled'] ? 'true' : 'false');
     if (array_key_exists('attendanceEnabled', $body)) $upsert('attendance_enabled', $body['attendanceEnabled'] ? 'true' : 'false');
     if (array_key_exists('activityFormsEnabled', $body)) $upsert('activity_forms_enabled', $body['activityFormsEnabled'] ? 'true' : 'false');
+    if (array_key_exists('patrolPointsEnabled', $body)) $upsert('patrol_points_enabled', $body['patrolPointsEnabled'] ? 'true' : 'false');
 
     logAudit(['userId' => $user['id'], 'action' => array_key_exists('galleryEnabled', $body) ? 'admin_toggle_gallery' : (array_key_exists('financeEnabled', $body) ? 'admin_toggle_finance' : 'admin_update_settings'), 'ipAddress' => clientIp(), 'details' => $body]);
     jsonResponse(['ok' => true]);
