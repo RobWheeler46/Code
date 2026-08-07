@@ -16,6 +16,9 @@
 const PP_STATUSES = ['draft' => 'Draft', 'open' => 'Open', 'paused' => 'Paused', 'completed' => 'Completed', 'archived' => 'Archived'];
 const PP_APPROVAL_MODES = ['immediate' => 'Immediate (scores count at once)', 'approval' => 'Requires approval'];
 const PP_POINTS_TYPES = ['free' => 'Free entry', 'fixed' => 'Fixed value'];
+// Quick Score defaults (FRD v2.4 s13.7) when a category has no custom config.
+const PP_DEFAULT_REASONS = ['Great teamwork', 'Won challenge', 'Excellent effort', 'Bonus', 'Deduction', 'Other'];
+const PP_DEFAULT_BUTTONS = [1, 5, 10, -5];
 // Operational leaders who may run competitions (mirrors Activity Approval's group).
 const PP_MANAGER_ROLES = ['section_leader', 'assistant_leader', 'group_leadership', 'admin'];
 
@@ -102,11 +105,33 @@ function ppSectionsForUser(array $user): array
 }
 function serializePpCategory(array $c): array
 {
+    $buttons = !empty($c['point_buttons']) ? (json_decode($c['point_buttons'], true) ?: null) : null;
+    if (!$buttons) $buttons = $c['points_type'] === 'fixed' ? [(int) $c['fixed_points']] : PP_DEFAULT_BUTTONS;
+    $reasons = !empty($c['reason_presets']) ? (json_decode($c['reason_presets'], true) ?: null) : null;
+    if (!$reasons) $reasons = PP_DEFAULT_REASONS;
     return [
         'id' => (int) $c['id'], 'name' => $c['name'], 'pointsType' => $c['points_type'],
         'pointsTypeLabel' => PP_POINTS_TYPES[$c['points_type']] ?? $c['points_type'],
         'fixedPoints' => $c['fixed_points'] !== null ? (int) $c['fixed_points'] : null,
+        'freeEntry' => $c['points_type'] === 'free',
+        'pointButtons' => array_values(array_map('intval', $buttons)),
+        'reasonPresets' => array_values(array_map('strval', $reasons)),
     ];
+}
+// Parse Quick Score config from a request body into JSON columns (null = defaults).
+function ppParseButtons($v): ?string
+{
+    if (!is_array($v)) return null;
+    $nums = [];
+    foreach ($v as $n) { if (is_numeric($n)) $nums[] = (int) $n; }
+    return $nums ? json_encode(array_values(array_unique($nums))) : null;
+}
+function ppParseReasons($v): ?string
+{
+    if (!is_array($v)) return null;
+    $out = [];
+    foreach ($v as $s) { $s = trim((string) $s); if ($s !== '') $out[] = $s; }
+    return $out ? json_encode(array_values(array_slice($out, 0, 12))) : null;
 }
 function serializePpSubmission(array $s, array $lines, array $teamNames, array $catNames, array $userNames): array
 {

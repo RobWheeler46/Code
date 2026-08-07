@@ -248,6 +248,19 @@ textarea { min-height: 5rem; resize: vertical; }
 .pp-chip select { font: inherit; font-size: 0.78rem; padding: 0.1rem 0.2rem; border: 1px solid var(--border); border-radius: 5px; background: var(--card); }
 .pp-chip-x { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 0.2rem; }
 .pp-chip-x:hover { color: var(--red); }
+/* Quick Score one-screen surface */
+.pp-qs-group { margin-bottom: 1rem; }
+.pp-qs-label { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.6rem; }
+.pp-qs-multi { text-transform: none; letter-spacing: 0; font-weight: 400; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 0.3rem; }
+.pp-qs-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.pp-qs-chip { font: inherit; font-size: 1rem; min-height: 46px; min-width: 52px; padding: 0.5rem 0.9rem; border: 1.5px solid var(--border); border-radius: 10px; background: var(--card); color: var(--text); cursor: pointer; }
+.pp-qs-chip:hover { border-color: var(--purple); }
+.pp-qs-chip.selected { background: var(--purple); border-color: var(--purple); color: #fff; font-weight: 600; }
+.pp-qs-num { font: inherit; min-height: 46px; width: 110px; padding: 0.5rem 0.6rem; border: 1.5px solid var(--border); border-radius: 10px; }
+.pp-qs-note { font: inherit; width: 100%; margin-top: 0.5rem; padding: 0.5rem 0.6rem; border: 1px solid var(--border); border-radius: 8px; }
+.pp-qs-submit { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-top: 0.5rem; border-top: 1px solid var(--border); padding-top: 0.8rem; }
+.pp-qs-submit .btn { font-size: 1.05rem; padding: 0.6rem 1.4rem; }
+.pp-qs-recent { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.9rem; }
 .data-table th, .data-table td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .data-table th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 .data-table input { padding: 0.3rem 0.4rem; border: 1px solid var(--border); border-radius: 5px; font: inherit; }

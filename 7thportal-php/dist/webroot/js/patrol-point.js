@@ -22,7 +22,7 @@ async function load() {
   catch (e) { box.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; return; }
   C = d.competition; TEAMS = d.teams; CATS = d.categories; PARTS = d.participants || []; SUBS = d.submissions; BOARD = d.leaderboard; ACT = d.myActions; META = d.meta;
   document.getElementById('pp-title').textContent = C.name;
-  document.getElementById('pp-head').innerHTML = lifecycleButtons() + '<a class="btn btn-secondary" href="patrol-points.html">Back</a>';
+  document.getElementById('pp-head').innerHTML = (ACT.canSubmit ? `<a class="btn" href="patrol-score.html?id=${ID}">Quick Score</a>` : '') + lifecycleButtons() + '<a class="btn btn-secondary" href="patrol-points.html">Back</a>';
   const editable = ACT.canManage && ['draft', 'open', 'paused'].includes(C.status);
   box.innerHTML = summaryCard() + leaderboardCard() + (ACT.canSubmit ? submitCard() : '')
     + ((editable || TEAMS.length) ? teamsCard(!editable) : '')
@@ -128,7 +128,10 @@ async function loadRoster() {
 
 function categoriesCard() {
   const list = CATS.length ? CATS.map(c => `<tr>
-      <td data-label="Category" class="rcard-title">${esc(c.name)}</td>
+      <td data-label="Category" class="rcard-title">${esc(c.name)}<br>
+        <span class="muted" style="font-size:.8rem">Quick Score buttons: ${(c.pointButtons || []).map(n => (n >= 0 ? '+' : '') + n).join(' ')} · reasons: ${(c.reasonPresets || []).length}
+        <button class="btn-link pp-cat-cfg" data-id="${c.id}" style="background:none;border:0;color:var(--purple);cursor:pointer;padding:0">edit</button></span>
+        <div class="pp-cat-cfg-slot" data-id="${c.id}"></div></td>
       <td data-label="Type" class="muted">${esc(c.pointsTypeLabel)}${c.pointsType === 'fixed' ? ` (${c.fixedPoints})` : ''}</td>
       <td style="text-align:right"><button class="btn btn-secondary btn-sm pp-cat-del" data-id="${c.id}">Remove</button></td>
     </tr>`).join('') : '<tr><td colspan="3" class="muted">No categories yet.</td></tr>';
@@ -327,6 +330,21 @@ function wire() {
   });
   document.querySelectorAll('.pp-cat-del').forEach(b => b.addEventListener('click', async () => {
     try { await Api.delete(`/api/patrol-points/competitions/${ID}/categories/${b.dataset.id}`); load(); } catch (e) { msg(e.message, true); }
+  }));
+  document.querySelectorAll('.pp-cat-cfg').forEach(b => b.addEventListener('click', () => {
+    const c = CATS.find(x => x.id === Number(b.dataset.id));
+    const slot = document.querySelector(`.pp-cat-cfg-slot[data-id="${b.dataset.id}"]`);
+    if (!c || !slot) return;
+    if (slot.innerHTML) { slot.innerHTML = ''; return; }
+    slot.innerHTML = `<div style="margin:.4rem 0;padding:.5rem;background:var(--bg);border-radius:8px">
+      <div class="field" style="margin:0 0 .4rem"><label>Point buttons (comma-separated)</label><input class="pp-cfg-btns" value="${esc((c.pointButtons || []).join(', '))}"></div>
+      <div class="field" style="margin:0 0 .4rem"><label>Reason presets (comma-separated)</label><input class="pp-cfg-reasons" value="${esc((c.reasonPresets || []).join(', '))}"></div>
+      <button class="btn btn-secondary btn-sm pp-cfg-save">Save</button></div>`;
+    slot.querySelector('.pp-cfg-save').addEventListener('click', async () => {
+      const pointButtons = slot.querySelector('.pp-cfg-btns').value.split(',').map(s => s.trim()).filter(s => s !== '' && !isNaN(Number(s))).map(Number);
+      const reasonPresets = slot.querySelector('.pp-cfg-reasons').value.split(',').map(s => s.trim()).filter(Boolean);
+      try { await Api.patch(`/api/patrol-points/competitions/${ID}/categories/${c.id}`, { pointButtons, reasonPresets }); load(); } catch (e) { msg(e.message, true); }
+    });
   }));
 
   // Scoring

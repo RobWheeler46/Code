@@ -321,8 +321,20 @@ $router->post('/api/patrol-points/competitions/:id/categories', function ($param
         $fixed = (int) $b['fixedPoints'];
     }
     $next = (int) dbGet('SELECT COALESCE(MAX(sort_order), 0) + 1 AS n FROM pp_categories WHERE competition_id = ?', [$c['id']])['n'];
-    dbRun('INSERT INTO pp_categories (competition_id, name, points_type, fixed_points, sort_order) VALUES (?, ?, ?, ?, ?)', [$c['id'], $name, $type, $fixed, $next]);
+    dbRun('INSERT INTO pp_categories (competition_id, name, points_type, fixed_points, point_buttons, reason_presets, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)', [$c['id'], $name, $type, $fixed, ppParseButtons($b['pointButtons'] ?? null), ppParseReasons($b['reasonPresets'] ?? null), $next]);
     jsonResponse(['ok' => true], 201);
+});
+// Update a category's Quick Score config (point buttons + reason presets).
+$router->patch('/api/patrol-points/competitions/:id/categories/:cid', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requirePatrolPointsEnabled();
+    $c = ppRequireEditableComp($user, $params['id']);
+    $cat = dbGet('SELECT * FROM pp_categories WHERE id = ? AND competition_id = ?', [(int) $params['cid'], $c['id']]);
+    if (!$cat) jsonResponse(['error' => 'Category not found.'], 404);
+    $b = requestBody();
+    dbRun('UPDATE pp_categories SET point_buttons = ?, reason_presets = ? WHERE id = ?', [ppParseButtons($b['pointButtons'] ?? null), ppParseReasons($b['reasonPresets'] ?? null), $cat['id']]);
+    jsonResponse(['ok' => true]);
 });
 $router->delete('/api/patrol-points/competitions/:id/categories/:cid', function ($params) {
     $user = requireAuth();

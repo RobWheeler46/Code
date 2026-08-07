@@ -772,6 +772,8 @@ CREATE TABLE IF NOT EXISTS pp_categories (
   name TEXT NOT NULL,
   points_type TEXT NOT NULL DEFAULT 'free' CHECK(points_type IN ('free','fixed')),
   fixed_points INTEGER,
+  point_buttons TEXT,
+  reason_presets TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -883,6 +885,13 @@ if ($ppSubsSql && !str_contains($ppSubsSql, 'revises_id')) {
     db()->exec('ALTER TABLE pp_submissions ADD COLUMN withdrawn INTEGER NOT NULL DEFAULT 0');
     db()->exec('ALTER TABLE pp_submissions ADD COLUMN revises_id INTEGER');
     db()->exec('ALTER TABLE pp_submissions ADD COLUMN superseded_by INTEGER');
+}
+// Migration: pp_categories gained Quick Score config - configurable point buttons
+// and reason presets (FRD v2.4 s13.7).
+$ppCatsSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='pp_categories'")['sql'] ?? '';
+if ($ppCatsSql && !str_contains($ppCatsSql, 'point_buttons')) {
+    db()->exec('ALTER TABLE pp_categories ADD COLUMN point_buttons TEXT');
+    db()->exec('ALTER TABLE pp_categories ADD COLUMN reason_presets TEXT');
 }
 // Migration: GLV-only workflow (glv-only-1.0) drops the Section Lead stage. Move
 // any in-flight forms still awaiting Section Lead approval into the GLV queue so
