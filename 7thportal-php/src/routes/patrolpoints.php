@@ -349,6 +349,11 @@ $router->post('/api/patrol-points/competitions/:id/submissions', function ($para
     $sid = (int) $res['lastInsertId'];
     foreach ($clean as $tid => $pts) dbRun('INSERT INTO pp_score_lines (submission_id, team_id, points) VALUES (?, ?, ?)', [$sid, $tid, $pts]);
     logAudit(['userId' => $user['id'], 'action' => 'pp_submission_create', 'entityType' => 'pp_submission', 'entityId' => (string) $sid, 'ipAddress' => clientIp(), 'details' => ['status' => $status]]);
+    // Notify approvers when the score needs approval (PP-NOT-001).
+    if ($status === 'pending') {
+        $who = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')) ?: 'A leader';
+        ppNotifyApprovers((int) $user['id'], 'Score to approve: ' . $c['name'], $who . ' submitted scores in "' . $cat['name'] . '" for approval.', 'patrol-point.html?id=' . $c['id']);
+    }
     jsonResponse(['ok' => true, 'status' => $status], 201);
 });
 
@@ -366,6 +371,10 @@ function ppDecide(string $action, string $newStatus, $params): void
     if (in_array($action, ['reject', 'return'], true) && !$comment) jsonResponse(['error' => 'A comment is required to reject or return a submission.'], 422);
     dbRun("UPDATE pp_submissions SET status = ?, decided_by = ?, decided_at = datetime('now'), decision_comment = ? WHERE id = ?", [$newStatus, $user['id'], $comment, $s['id']]);
     logAudit(['userId' => $user['id'], 'action' => 'pp_submission_' . $action, 'entityType' => 'pp_submission', 'entityId' => (string) $s['id'], 'ipAddress' => clientIp()]);
+    // Notify the submitter of the outcome (PP-NOT-002).
+    $compName = dbGet('SELECT name FROM pp_competitions WHERE id = ?', [$s['competition_id']])['name'] ?? 'a competition';
+    $outcome = ['approve' => 'approved', 'reject' => 'rejected', 'return' => 'returned for amendment'][$action] ?? $action;
+    notify((int) $s['submitted_by'], 'patrol_points', 'Score ' . $outcome, 'Your score submission in "' . $compName . '" was ' . $outcome . '.' . ($comment ? ' Comment: ' . $comment : ''), 'patrol-point.html?id=' . $s['competition_id']);
     jsonResponse(['ok' => true]);
 }
 $router->post('/api/patrol-points/competitions/:id/submissions/:sid/approve', fn($p) => ppDecide('approve', 'approved', $p));

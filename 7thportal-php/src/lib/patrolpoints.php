@@ -41,6 +41,17 @@ function ppCanApprove(array $user, array $submission): bool
     return ppCanManage($user);
 }
 
+// Notify eligible approvers (managers) of a pending submission, excluding the
+// submitter (who cannot approve their own). Honours per-user mute preferences.
+function ppNotifyApprovers(int $excludeUserId, string $title, ?string $body, string $link): void
+{
+    $ph = implode(',', array_fill(0, count(PP_MANAGER_ROLES), '?'));
+    foreach (dbAll("SELECT id FROM users WHERE account_status = 'active' AND portal_role IN ($ph)", PP_MANAGER_ROLES) as $u) {
+        if ((int) $u['id'] === $excludeUserId) continue;
+        notify((int) $u['id'], 'patrol_points', $title, $body, $link);
+    }
+}
+
 function ppCompetitionOr404($id): array
 {
     $c = dbGet('SELECT * FROM pp_competitions WHERE id = ?', [(int) $id]);

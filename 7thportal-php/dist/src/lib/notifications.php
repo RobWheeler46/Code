@@ -53,6 +53,7 @@ const NOTIFICATION_TYPES = [
     'gallery' => 'Photo album updates',
     'incident' => 'Incident and near-miss actions',
     'equipment' => 'Equipment checks due',
+    'patrol_points' => 'Patrol Points approvals',
     'admin' => 'Admin and sync alerts',
 ];
 
