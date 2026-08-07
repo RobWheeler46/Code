@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db');
-const { compareRoles, learningPreviewForRole } = require('../lib/gapAnalysis');
+const { compareRoles, compareBusinessRoles, learningPreviewForRole } = require('../lib/gapAnalysis');
 const { logUsageEvent } = require('../lib/helpers');
 const { computeReadiness, developmentPlanItems } = require('../lib/assessment');
 
@@ -225,6 +225,34 @@ router.post('/compare', (req, res) => {
   res.json({
     currentRole: { id: currentRole.id, title: currentRole.title, grade: currentRole.grade, sfiaVersion: versionName(currentRole) },
     aspirationalRole: { id: aspirationalRole.id, title: aspirationalRole.title, grade: aspirationalRole.grade, sfiaVersion: versionName(aspirationalRole) },
+    ...result
+  });
+});
+
+// FRD v0.35 §10: published business roles for the compare picker + Business-to-Business comparison.
+router.get('/business-roles', (req, res) => {
+  res.json(db.prepare(`
+    SELECT b.id, b.business_role_name, rp.title AS core_role_title
+    FROM business_role_profiles b JOIN role_profiles rp ON rp.id = b.core_role_profile_id
+    WHERE b.status = 'published' ORDER BY b.business_role_name
+  `).all());
+});
+
+router.post('/compare-business', (req, res) => {
+  const { currentBusinessRoleId, aspirationalBusinessRoleId } = req.body || {};
+  if (!currentBusinessRoleId || !aspirationalBusinessRoleId) return res.status(400).json({ error: 'A current and a target business role are both required.' });
+  if (String(currentBusinessRoleId) === String(aspirationalBusinessRoleId)) return res.status(400).json({ error: 'Select two different business roles to compare.' });
+  const q = `SELECT b.*, rp.grade, rp.sfia_version_id FROM business_role_profiles b JOIN role_profiles rp ON rp.id = b.core_role_profile_id WHERE b.id = ? AND b.status = 'published'`;
+  const cur = db.prepare(q).get(currentBusinessRoleId);
+  const asp = db.prepare(q).get(aspirationalBusinessRoleId);
+  if (!cur || !asp) return res.status(404).json({ error: 'One or both business roles could not be found.' });
+
+  const result = compareBusinessRoles(cur, asp);
+  const versionName = (id) => id ? (db.prepare(`SELECT version_name FROM sfia_versions WHERE id = ?`).get(id)?.version_name || null) : null;
+  res.json({
+    profileType: 'business',
+    currentRole: { id: cur.id, title: cur.business_role_name, grade: cur.grade, sfiaVersion: versionName(cur.sfia_version_id) },
+    aspirationalRole: { id: asp.id, title: asp.business_role_name, grade: asp.grade, sfiaVersion: versionName(asp.sfia_version_id) },
     ...result
   });
 });

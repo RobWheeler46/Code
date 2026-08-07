@@ -140,7 +140,7 @@ function gapDetail(d) {
       ${d.learningResources.length ? `<h4>Suggested learning</h4>${renderResourceList(formal)}${practical.length ? `<h4>Practical development</h4>${renderResourceList(practical)}` : ''}` : ''}
     ` : ''}
     <div class="gap-detail-actions actions-row" data-skill="${d.sfiaSkillId}" data-level="${d.aspirationalLevel ? d.aspirationalLevel.number : ''}">
-      ${isGap(d) && currentUser ? `<button class="btn btn-primary btn-sm" data-action="plan" type="button">${svgIcon('plan', { className: 'btn-icon' })} Add to plan</button>` : ''}
+      ${isGap(d) && currentUser && d.source !== 'skf' ? `<button class="btn btn-primary btn-sm" data-action="plan" type="button">${svgIcon('plan', { className: 'btn-icon' })} Add to plan</button>` : ''}
       ${currentUser ? `<a class="btn btn-secondary btn-sm" href="evidence.html?skill=${d.sfiaSkillId}">${svgIcon('evidence', { className: 'btn-icon' })} Add evidence</a>` : ''}
       <a class="btn btn-secondary btn-sm" href="coach.html">${svgIcon('coach', { className: 'btn-icon' })} Ask Coach</a>
     </div>
@@ -206,9 +206,12 @@ function bindDetailActions() {
 }
 
 async function startAssessment() {
-  if (!currentUser) { location.href = 'signin.html?next=' + encodeURIComponent('compare.html?current=' + comparison.currentRole.id + '&aspirational=' + comparison.aspirationalRole.id); return; }
+  if (!currentUser) { location.href = 'signin.html?next=compare.html'; return; }
   try {
-    const r = await Api.post('/api/user/assessments', { roleProfileId: comparison.aspirationalRole.id });
+    const body = comparison.profileType === 'business'
+      ? { businessRoleProfileId: comparison.aspirationalRole.id }
+      : { roleProfileId: comparison.aspirationalRole.id };
+    const r = await Api.post('/api/user/assessments', body);
     location.href = `assessment.html?id=${r.id}`;
   } catch (e) { alert(e.message); }
 }
@@ -256,6 +259,8 @@ function renderResults() {
       <p><span class="pill">Overall change: ${overallChange(summary)}</span> <span class="muted">Main shift: ${escapeHtml(mainShift(summary))}</span></p>
     </div>
 
+    ${comparison.businessContext ? `<div class="card"><h2>What is different because of the business context?</h2><p>${escapeHtml(comparison.businessContext)}</p></div>` : ''}
+
     ${top3.length ? `
     <div class="card">
       <h2>Top 3 differences</h2>
@@ -299,7 +304,7 @@ function renderResults() {
 }
 
 async function wireSaveButton() {
-  if (!currentUser) return;
+  if (!currentUser || comparison.profileType === 'business') return; // saved comparisons are core-role based
   const saveBtn = document.getElementById('save-comparison-btn');
   saveBtn.style.display = '';
   const cur = comparison.currentRole, asp = comparison.aspirationalRole;
@@ -320,30 +325,43 @@ async function wireSaveButton() {
 
 // ---- Setup ----
 
-async function loadRoleOptions() {
-  const roles = await Api.get('/api/roles');
+function currentPtype() { return (document.querySelector('input[name="ptype"]:checked') || {}).value || 'core'; }
+
+async function loadRoleOptions(ptype) {
   const currentSelect = document.getElementById('current-role');
   const aspirationalSelect = document.getElementById('aspirational-role');
-  const optionsHtml = roles.map(r => `<option value="${r.id}">${escapeHtml(r.title)}</option>`).join('');
-  currentSelect.insertAdjacentHTML('beforeend', optionsHtml);
-  aspirationalSelect.insertAdjacentHTML('beforeend', optionsHtml);
-  const params = new URLSearchParams(location.search);
-  if (params.get('current')) currentSelect.value = params.get('current');
-  if (params.get('aspirational')) aspirationalSelect.value = params.get('aspirational');
+  let optionsHtml;
+  if (ptype === 'business') {
+    const brs = await Api.get('/api/business-roles').catch(() => []);
+    optionsHtml = '<option value="">Select a business role...</option>' + brs.map(b => `<option value="${b.id}">${escapeHtml(b.business_role_name)} (${escapeHtml(b.core_role_title)})</option>`).join('');
+  } else {
+    const roles = await Api.get('/api/roles');
+    optionsHtml = '<option value="">Select a role...</option>' + roles.map(r => `<option value="${r.id}">${escapeHtml(r.title)}</option>`).join('');
+  }
+  currentSelect.innerHTML = optionsHtml;
+  aspirationalSelect.innerHTML = optionsHtml;
+  if (ptype !== 'business') {
+    const params = new URLSearchParams(location.search);
+    if (params.get('current')) currentSelect.value = params.get('current');
+    if (params.get('aspirational')) aspirationalSelect.value = params.get('aspirational');
+  }
 }
 
 async function runComparison() {
   const alertBox = document.getElementById('compare-alert');
   const resultsBox = document.getElementById('results');
   alertBox.innerHTML = '';
-  const currentRoleId = document.getElementById('current-role').value;
-  const aspirationalRoleId = document.getElementById('aspirational-role').value;
-  if (!currentRoleId || !aspirationalRoleId) {
-    alertBox.innerHTML = '<div class="alert alert-info">Select a current role and a target role to compare.</div>';
+  const ptype = currentPtype();
+  const currentId = document.getElementById('current-role').value;
+  const aspId = document.getElementById('aspirational-role').value;
+  if (!currentId || !aspId) {
+    alertBox.innerHTML = `<div class="alert alert-info">Select a current and a target ${ptype === 'business' ? 'business role' : 'role'} to compare.</div>`;
     return;
   }
   try {
-    comparison = await Api.post('/api/compare', { currentRoleId, aspirationalRoleId });
+    comparison = ptype === 'business'
+      ? await Api.post('/api/compare-business', { currentBusinessRoleId: currentId, aspirationalBusinessRoleId: aspId })
+      : await Api.post('/api/compare', { currentRoleId: currentId, aspirationalRoleId: aspId });
   } catch (e) {
     alertBox.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`;
     resultsBox.innerHTML = '';
@@ -357,7 +375,11 @@ async function runComparison() {
 document.addEventListener('DOMContentLoaded', async () => {
   renderPublicNav();
   currentUser = await getMe();
-  await loadRoleOptions();
+  await loadRoleOptions('core');
+  document.querySelectorAll('input[name="ptype"]').forEach(r => r.addEventListener('change', () => {
+    document.getElementById('results').innerHTML = '';
+    loadRoleOptions(currentPtype());
+  }));
   document.getElementById('compare-btn').addEventListener('click', runComparison);
   const params = new URLSearchParams(location.search);
   if (params.get('current') && params.get('aspirational')) runComparison();

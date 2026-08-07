@@ -178,4 +178,69 @@ function learningPreviewForRole(role, skills, limit = 4) {
   return preview;
 }
 
-module.exports = { compareRoles, loadRoleSkills, learningResourcesForSkill, learningPreviewForRole, gapSeverity };
+// FRD v0.35 §10: Business-to-Business comparison. Reuses the SFIA comparison of the two core roles and
+// adds a Skills & Knowledge Framework item comparison. Details use the same shape as compareRoles (tagged
+// with a `source` of 'sfia' or 'skf') so the compare UI renders them together.
+function businessRoleItemsList(brpId) {
+  return db.prepare(`
+    SELECT bri.framework_item_id, bri.level_number, fi.technology_or_capability, fi.family,
+      (SELECT expectation FROM framework_item_levels fl WHERE fl.framework_item_id = bri.framework_item_id AND fl.level_number = bri.level_number) AS expectation
+    FROM business_role_framework_items bri
+    JOIN framework_items fi ON fi.id = bri.framework_item_id
+    WHERE bri.business_role_profile_id = ?
+  `).all(brpId);
+}
+
+function compareBusinessRoles(currentBR, aspBR) {
+  const currentCore = db.prepare(`SELECT * FROM role_profiles WHERE id = ?`).get(currentBR.core_role_profile_id);
+  const aspCore = db.prepare(`SELECT * FROM role_profiles WHERE id = ?`).get(aspBR.core_role_profile_id);
+  const sfia = compareRoles(currentCore, aspCore);
+  const sfiaDetails = sfia.details.map(d => ({ ...d, source: 'sfia' }));
+
+  const curItems = businessRoleItemsList(currentBR.id);
+  const aspItems = businessRoleItemsList(aspBR.id);
+  const curByItem = new Map(curItems.map(i => [i.framework_item_id, i]));
+  const aspByItem = new Map(aspItems.map(i => [i.framework_item_id, i]));
+
+  const skfDetails = [];
+  for (const a of aspItems) {
+    const c = curByItem.get(a.framework_item_id);
+    let gapStatus, levelDiff = null;
+    if (!c) gapStatus = 'new_skill_required';
+    else { levelDiff = a.level_number - c.level_number; gapStatus = levelDiff <= 0 ? 'no_gap' : 'level_uplift'; }
+    skfDetails.push({
+      source: 'skf', sfiaSkillId: null,
+      skillCode: a.technology_or_capability, skillName: a.technology_or_capability, categoryName: a.family,
+      currentLevel: c ? { number: c.level_number, name: 'Level ' + c.level_number, skillLevelDescription: c.expectation } : null,
+      aspirationalLevel: { number: a.level_number, name: 'Level ' + a.level_number, skillLevelDescription: a.expectation },
+      levelDiff, gapStatus, gapSeverity: gapStatus === 'new_skill_required' ? 'New skill required' : gapSeverity(levelDiff), learningResources: []
+    });
+  }
+  for (const c of curItems) {
+    if (aspByItem.has(c.framework_item_id)) continue;
+    skfDetails.push({
+      source: 'skf', sfiaSkillId: null,
+      skillCode: c.technology_or_capability, skillName: c.technology_or_capability, categoryName: c.family,
+      currentLevel: { number: c.level_number, name: 'Level ' + c.level_number, skillLevelDescription: c.expectation }, aspirationalLevel: null,
+      levelDiff: null, gapStatus: 'current_role_strength', gapSeverity: 'Not applicable', learningResources: []
+    });
+  }
+
+  const details = [...sfiaDetails, ...skfDetails];
+  const summary = {
+    totalGaps: details.filter(d => d.gapStatus === 'new_skill_required' || d.gapStatus === 'level_uplift').length,
+    newSkillsRequired: details.filter(d => d.gapStatus === 'new_skill_required').length,
+    levelUpliftRequired: details.filter(d => d.gapStatus === 'level_uplift').length,
+    alignedSkills: details.filter(d => d.gapStatus === 'no_gap').length,
+    currentRoleStrengths: details.filter(d => d.gapStatus === 'current_role_strength').length
+  };
+  const newSkf = skfDetails.filter(d => d.gapStatus === 'new_skill_required').length;
+  const upliftSkf = skfDetails.filter(d => d.gapStatus === 'level_uplift').length;
+  const businessContext = currentCore.id === aspCore.id
+    ? `Both roles share the same core role (${aspCore.title}), so the SFIA baseline is identical. The difference is the business-specific Skills & Knowledge items: ${newSkf} new item${newSkf === 1 ? '' : 's'} and ${upliftSkf} at a higher level for ${aspBR.business_role_name}.`
+    : `These business roles are built on different core roles (${currentCore.title} vs ${aspCore.title}), so both the SFIA baseline and the Skills & Knowledge items differ.`;
+
+  return { summary, details, businessContext, coreVersionId: aspCore.sfia_version_id };
+}
+
+module.exports = { compareRoles, compareBusinessRoles, loadRoleSkills, learningResourcesForSkill, learningPreviewForRole, gapSeverity };

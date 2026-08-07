@@ -10,16 +10,23 @@
   <header id="app-nav" class="app-nav"></header>
   <div class="container">
     <div class="card">
-      <h1>Compare two role profiles</h1>
-      <p class="muted">Select your current role and an aspirational role to see the SFIA skill and level gap between them.</p>
+      <h1>Compare two roles</h1>
+      <p class="muted">See the skill and level gap between a current and a target role. <strong>Core roles</strong> compare SFIA skills; <strong>business roles</strong> also compare Skills &amp; Knowledge Framework items.</p>
       <div id="compare-alert"></div>
+      <div class="field">
+        <label>Profile type</label>
+        <div class="assess-type-toggle" id="compare-ptype">
+          <label class="assess-type"><input type="radio" name="ptype" value="core" checked> Core roles (SFIA)</label>
+          <label class="assess-type"><input type="radio" name="ptype" value="business"> Business roles (SFIA + Skills &amp; Knowledge)</label>
+        </div>
+      </div>
       <div class="grid cols-2">
         <div class="field">
           <label for="current-role">Current role</label>
           <select id="current-role"><option value="">Select a role...</option></select>
         </div>
         <div class="field">
-          <label for="aspirational-role">Aspirational role</label>
+          <label for="aspirational-role">Target role</label>
           <select id="aspirational-role"><option value="">Select a role...</option></select>
         </div>
       </div>
