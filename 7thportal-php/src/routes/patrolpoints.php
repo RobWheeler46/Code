@@ -66,11 +66,18 @@ $router->get('/api/patrol-points/competitions/:id', function ($params) {
     $submissions = array_map(fn($s) => serializePpSubmission($s, $linesBySub[(int) $s['id']] ?? [], $teamNames, $catNames, $userNames), $subs);
 
     $participants = array_map('serializePpParticipant', dbAll('SELECT * FROM pp_participants WHERE competition_id = ? ORDER BY display_name', [$c['id']]));
+    $catsById = []; foreach ($cats as $ct) $catsById[(int) $ct['id']] = $ct;
+    $activities = [];
+    foreach (dbAll('SELECT * FROM pp_activities WHERE competition_id = ? ORDER BY sort_order, name', [$c['id']]) as $a) {
+        $cr = $catsById[(int) $a['category_id']] ?? null;
+        if ($cr) $activities[] = serializePpActivity($a, $cr, (bool) $c['allow_deductions']);
+    }
 
     jsonResponse([
         'competition' => serializePpCompetition($c, true),
         'teams' => array_map('serializePpTeam', $teams),
         'categories' => array_map(fn($x) => serializePpCategory($x, (bool) $c['allow_deductions']), $cats),
+        'activities' => $activities,
         'participants' => $participants,
         'submissions' => $submissions,
         'leaderboard' => ppLeaderboard((int) $c['id']),
@@ -348,6 +355,59 @@ $router->delete('/api/patrol-points/competitions/:id/categories/:cid', function 
         jsonResponse(['error' => 'This category already has submissions and cannot be removed.'], 409);
     }
     dbRun('DELETE FROM pp_categories WHERE id = ? AND competition_id = ?', [(int) $params['cid'], $c['id']]);
+    jsonResponse(['ok' => true]);
+});
+
+// ── Activity / station profiles (FRD v2.4 s13.11) ────────────────────────────────
+// Validate an optional team_scope against the competition's teams.
+function ppCleanTeamScope(array $c, $scope): ?string
+{
+    if (!is_array($scope) || !$scope) return null;
+    $valid = [];
+    foreach (dbAll('SELECT id FROM pp_teams WHERE competition_id = ?', [$c['id']]) as $t) $valid[(int) $t['id']] = true;
+    $ids = array_values(array_filter(array_map('intval', $scope), fn($id) => isset($valid[$id])));
+    return $ids ? json_encode($ids) : null;
+}
+$router->post('/api/patrol-points/competitions/:id/activities', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requirePatrolPointsEnabled();
+    $c = ppRequireEditableComp($user, $params['id']);
+    $b = requestBody();
+    $name = trim((string) ($b['name'] ?? ''));
+    if ($name === '') jsonResponse(['error' => 'An activity name is required.'], 422);
+    $cat = dbGet('SELECT id FROM pp_categories WHERE id = ? AND competition_id = ?', [(int) ($b['categoryId'] ?? 0), $c['id']]);
+    if (!$cat) jsonResponse(['error' => 'Choose a scoring category for the activity.'], 422);
+    $next = (int) dbGet('SELECT COALESCE(MAX(sort_order), 0) + 1 AS n FROM pp_activities WHERE competition_id = ?', [$c['id']])['n'];
+    dbRun('INSERT INTO pp_activities (competition_id, category_id, name, point_buttons, reason_presets, team_scope, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [$c['id'], $cat['id'], $name, ppParseButtons($b['pointButtons'] ?? null), ppParseReasons($b['reasonPresets'] ?? null), ppCleanTeamScope($c, $b['teamScope'] ?? null), $next]);
+    jsonResponse(['ok' => true], 201);
+});
+$router->patch('/api/patrol-points/competitions/:id/activities/:aid', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requirePatrolPointsEnabled();
+    $c = ppRequireEditableComp($user, $params['id']);
+    $a = dbGet('SELECT * FROM pp_activities WHERE id = ? AND competition_id = ?', [(int) $params['aid'], $c['id']]);
+    if (!$a) jsonResponse(['error' => 'Activity not found.'], 404);
+    $b = requestBody();
+    $name = array_key_exists('name', $b) ? (trim((string) $b['name']) ?: $a['name']) : $a['name'];
+    $catId = $a['category_id'];
+    if (array_key_exists('categoryId', $b)) {
+        $cat = dbGet('SELECT id FROM pp_categories WHERE id = ? AND competition_id = ?', [(int) $b['categoryId'], $c['id']]);
+        if (!$cat) jsonResponse(['error' => 'Choose a valid scoring category.'], 422);
+        $catId = $cat['id'];
+    }
+    dbRun('UPDATE pp_activities SET name = ?, category_id = ?, point_buttons = ?, reason_presets = ?, team_scope = ? WHERE id = ?',
+        [$name, $catId, ppParseButtons($b['pointButtons'] ?? null), ppParseReasons($b['reasonPresets'] ?? null), ppCleanTeamScope($c, $b['teamScope'] ?? null), $a['id']]);
+    jsonResponse(['ok' => true]);
+});
+$router->delete('/api/patrol-points/competitions/:id/activities/:aid', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requirePatrolPointsEnabled();
+    $c = ppRequireEditableComp($user, $params['id']);
+    dbRun('DELETE FROM pp_activities WHERE id = ? AND competition_id = ?', [(int) $params['aid'], $c['id']]);
     jsonResponse(['ok' => true]);
 });
 

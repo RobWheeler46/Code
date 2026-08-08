@@ -123,6 +123,31 @@ function serializePpCategory(array $c, bool $allowDeductions = true): array
         'reasonPresets' => array_values(array_map('strval', $reasons)),
     ];
 }
+// An activity/station profile: a category plus its own Quick Score buttons/reasons
+// and optional team scope. Falls back to the category's config where unset.
+function serializePpActivity(array $a, array $cat, bool $allowDeductions): array
+{
+    $catSer = serializePpCategory($cat, $allowDeductions);
+    $buttons = !empty($a['point_buttons']) ? (json_decode($a['point_buttons'], true) ?: null) : null;
+    if ($buttons) {
+        $buttons = array_map('intval', $buttons);
+        if (!$allowDeductions) $buttons = array_values(array_filter($buttons, fn($n) => $n >= 0));
+    } else {
+        $buttons = $catSer['pointButtons'];
+    }
+    $reasons = !empty($a['reason_presets']) ? (json_decode($a['reason_presets'], true) ?: null) : null;
+    if (!$reasons) $reasons = $catSer['reasonPresets'];
+    $scope = !empty($a['team_scope']) ? (json_decode($a['team_scope'], true) ?: null) : null;
+    return [
+        'id' => (int) $a['id'], 'name' => $a['name'],
+        'categoryId' => $catSer['id'], 'categoryName' => $catSer['name'],
+        'pointsType' => $catSer['pointsType'], 'freeEntry' => $catSer['freeEntry'], 'fixedPoints' => $catSer['fixedPoints'],
+        'pointButtons' => array_values(array_map('intval', $buttons)),
+        'reasonPresets' => array_values(array_map('strval', $reasons)),
+        'teamScope' => $scope ? array_values(array_map('intval', $scope)) : null,
+    ];
+}
+
 // Parse Quick Score config from a request body into JSON columns (null = defaults).
 function ppParseButtons($v): ?string
 {

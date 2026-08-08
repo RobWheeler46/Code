@@ -820,6 +820,22 @@ CREATE TABLE IF NOT EXISTS pp_participants (
 CREATE INDEX IF NOT EXISTS idx_pp_participants_comp ON pp_participants(competition_id);
 CREATE INDEX IF NOT EXISTS idx_pp_participants_team ON pp_participants(team_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_pp_participants_person ON pp_participants(competition_id, person_ref) WHERE person_ref IS NOT NULL;
+-- Activity/station profiles: a reusable scoring definition bound to a category,
+-- with its own Quick Score buttons/reasons and an optional team scope. Quick Score
+-- can launch straight into a profile; per-activity QR guest links point at one
+-- (FRD v2.4 s13.11). team_scope is a JSON array of team ids (null = all teams).
+CREATE TABLE IF NOT EXISTS pp_activities (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  competition_id INTEGER NOT NULL REFERENCES pp_competitions(id) ON DELETE CASCADE,
+  category_id INTEGER NOT NULL REFERENCES pp_categories(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  point_buttons TEXT,
+  reason_presets TEXT,
+  team_scope TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_pp_activities_comp ON pp_activities(competition_id);
 
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(portal_role, account_status);
 CREATE INDEX IF NOT EXISTS idx_parent_links_parent ON parent_child_links(parent_user_id);

@@ -1,6 +1,6 @@
 // Patrol Points - single competition: lifecycle, teams, categories, scoring,
 // approvals and the live leaderboard.
-let C, TEAMS, CATS, PARTS, SUBS, BOARD, ACT, META, ID;
+let C, TEAMS, CATS, ACTIVITIES, PARTS, SUBS, BOARD, ACT, META, ID;
 const SKEY = { draft: 'suspended', open: 'active', paused: 'pending_approval', completed: 'active', archived: 'deleted' };
 const SUB_SKEY = { pending: 'pending_approval', approved: 'active', rejected: 'deleted', returned: 'suspended', withdrawn: 'deleted', superseded: 'suspended' };
 const SUB_LABEL = { pending: 'pending', approved: 'approved', rejected: 'rejected', returned: 'returned', withdrawn: 'withdrawn', superseded: 'superseded' };
@@ -20,13 +20,13 @@ async function load() {
   let d;
   try { d = await Api.get(`/api/patrol-points/competitions/${ID}`); }
   catch (e) { box.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; return; }
-  C = d.competition; TEAMS = d.teams; CATS = d.categories; PARTS = d.participants || []; SUBS = d.submissions; BOARD = d.leaderboard; ACT = d.myActions; META = d.meta;
+  C = d.competition; TEAMS = d.teams; CATS = d.categories; ACTIVITIES = d.activities || []; PARTS = d.participants || []; SUBS = d.submissions; BOARD = d.leaderboard; ACT = d.myActions; META = d.meta;
   document.getElementById('pp-title').textContent = C.name;
   document.getElementById('pp-head').innerHTML = (ACT.canSubmit ? `<a class="btn" href="patrol-score.html?id=${ID}">Quick Score</a>` : '') + lifecycleButtons() + '<a class="btn btn-secondary" href="patrol-points.html">Back</a>';
   const editable = ACT.canManage && ['draft', 'open', 'paused'].includes(C.status);
   box.innerHTML = summaryCard() + leaderboardCard() + (ACT.canSubmit ? submitCard() : '')
     + ((editable || TEAMS.length) ? teamsCard(!editable) : '')
-    + (editable ? membersCard() + categoriesCard() : '') + submissionsCard()
+    + (editable ? membersCard() + categoriesCard() + activitiesCard() : '') + submissionsCard()
     + (ACT.canManage ? reportsCard() : '');
   wire();
 }
@@ -148,6 +148,36 @@ function categoriesCard() {
       <div class="field" style="margin:0" id="pp-cat-fixed-wrap" hidden><label>Fixed points</label><input id="pp-cat-fixed" type="number" value="10" style="width:100px"></div>
       <button class="btn btn-secondary" id="pp-cat-add">Add category</button>
     </div></div>`;
+}
+
+function activitiesCard() {
+  if (!CATS.length) return '';
+  const teamNames = id => (TEAMS.find(t => t.id === id) || {}).name || '?';
+  const rows = ACTIVITIES.length ? ACTIVITIES.map(a => `<tr>
+      <td data-label="Activity" class="rcard-title">${esc(a.name)}<br>
+        <span class="muted" style="font-size:.8rem">${esc(a.categoryName)} · buttons ${(a.pointButtons || []).map(n => (n >= 0 ? '+' : '') + n).join(' ')} · teams ${a.teamScope ? a.teamScope.map(teamNames).map(esc).join(', ') : 'all'}
+        <button class="btn-link pp-act-cfg" data-id="${a.id}" style="background:none;border:0;color:var(--purple);cursor:pointer;padding:0">edit</button></span>
+        <div class="pp-act-cfg-slot" data-id="${a.id}"></div></td>
+      <td style="text-align:right">${ACT.canSubmit ? `<a class="btn btn-sm" href="patrol-score.html?id=${ID}&activity=${a.id}">Score</a> ` : ''}<button class="btn btn-secondary btn-sm pp-act-del" data-id="${a.id}">Remove</button></td>
+    </tr>`).join('') : '<tr><td colspan="2" class="muted">No activity profiles yet.</td></tr>';
+  const catOpts = CATS.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  return `<div class="card"><h2>Activity profiles</h2>
+    <p class="field help" style="margin-top:0">Reusable scoring stations (e.g. Archery, Camp Inspection). Quick Score can launch straight into one.</p>
+    <table class="data-table rcards"><tbody>${rows}</tbody></table>
+    <div class="cap-actions" style="margin-top:.6rem;align-items:flex-end">
+      <div class="field" style="margin:0"><label>Name</label><input id="pp-act-name" placeholder="e.g. Archery"></div>
+      <div class="field" style="margin:0"><label>Category</label><select id="pp-act-cat">${catOpts}</select></div>
+      <button class="btn btn-secondary" id="pp-act-add">Add activity</button>
+    </div></div>`;
+}
+
+function activityEditor(a) {
+  const teamChecks = TEAMS.map(t => `<label class="af-sec-opt"><input type="checkbox" class="pp-act-team" data-id="${t.id}"${a.teamScope && a.teamScope.includes(t.id) ? ' checked' : ''}> ${esc(t.name)}</label>`).join('');
+  return `<div style="margin:.4rem 0;padding:.5rem;background:var(--bg);border-radius:8px">
+    <div class="field" style="margin:0 0 .4rem"><label>Point buttons (comma-separated, blank = category default)</label><input class="pp-act-btns" value="${esc((a.pointButtons || []).join(', '))}"></div>
+    <div class="field" style="margin:0 0 .4rem"><label>Reason presets (comma-separated, blank = category default)</label><input class="pp-act-reasons" value="${esc((a.reasonPresets || []).join(', '))}"></div>
+    <div class="field" style="margin:0 0 .4rem"><label>Teams (none ticked = all)</label><div class="af-sections">${teamChecks}</div></div>
+    <button class="btn btn-secondary btn-sm pp-act-save" data-id="${a.id}">Save</button></div>`;
 }
 
 function submitCard() {
@@ -351,6 +381,29 @@ function wire() {
       const pointButtons = slot.querySelector('.pp-cfg-btns').value.split(',').map(s => s.trim()).filter(s => s !== '' && !isNaN(Number(s))).map(Number);
       const reasonPresets = slot.querySelector('.pp-cfg-reasons').value.split(',').map(s => s.trim()).filter(Boolean);
       try { await Api.patch(`/api/patrol-points/competitions/${ID}/categories/${c.id}`, { pointButtons, reasonPresets }); load(); } catch (e) { msg(e.message, true); }
+    });
+  }));
+
+  // Activity profiles
+  on('pp-act-add', async () => {
+    const name = document.getElementById('pp-act-name').value.trim();
+    if (!name) return;
+    try { await Api.post(`/api/patrol-points/competitions/${ID}/activities`, { name, categoryId: Number(document.getElementById('pp-act-cat').value) }); load(); } catch (e) { msg(e.message, true); }
+  });
+  document.querySelectorAll('.pp-act-del').forEach(b => b.addEventListener('click', async () => {
+    try { await Api.delete(`/api/patrol-points/competitions/${ID}/activities/${b.dataset.id}`); load(); } catch (e) { msg(e.message, true); }
+  }));
+  document.querySelectorAll('.pp-act-cfg').forEach(b => b.addEventListener('click', () => {
+    const a = ACTIVITIES.find(x => x.id === Number(b.dataset.id));
+    const slot = document.querySelector(`.pp-act-cfg-slot[data-id="${b.dataset.id}"]`);
+    if (!a || !slot) return;
+    if (slot.innerHTML) { slot.innerHTML = ''; return; }
+    slot.innerHTML = activityEditor(a);
+    slot.querySelector('.pp-act-save').addEventListener('click', async () => {
+      const pointButtons = slot.querySelector('.pp-act-btns').value.split(',').map(s => s.trim()).filter(s => s !== '' && !isNaN(Number(s))).map(Number);
+      const reasonPresets = slot.querySelector('.pp-act-reasons').value.split(',').map(s => s.trim()).filter(Boolean);
+      const teamScope = Array.from(slot.querySelectorAll('.pp-act-team:checked')).map(el => Number(el.dataset.id));
+      try { await Api.patch(`/api/patrol-points/competitions/${ID}/activities/${a.id}`, { pointButtons, reasonPresets, teamScope }); load(); } catch (e) { msg(e.message, true); }
     });
   }));
 
