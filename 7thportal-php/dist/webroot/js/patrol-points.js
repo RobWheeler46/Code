@@ -43,6 +43,8 @@ function toggleCreate(meta) {
     <div class="field"><label>Scoring approval</label><select id="pp-c-mode">
       ${Object.entries(meta.approvalModes).map(([k, v]) => `<option value="${k}">${escapeHtml(v)}</option>`).join('')}
     </select></div>
+    <div class="field"><label style="font-weight:400"><input type="checkbox" id="pp-c-deduct"> Allow deductions (negative points)</label>
+      <span class="field help">Off by default to keep scoring positive; enable deliberately where deductions are governed.</span></div>
     <div class="cap-actions"><button class="btn" id="pp-c-save">Create</button><button class="btn btn-secondary" id="pp-c-cancel">Cancel</button></div>
     <div id="pp-c-msg"></div></div>`;
   document.getElementById('pp-c-cancel').addEventListener('click', () => host.innerHTML = '');
@@ -52,6 +54,7 @@ function toggleCreate(meta) {
     try {
       const c = await Api.post('/api/patrol-points/competitions', {
         name, description: document.getElementById('pp-c-desc').value, approvalMode: document.getElementById('pp-c-mode').value,
+        allowDeductions: document.getElementById('pp-c-deduct').checked,
       });
       location.href = 'patrol-point.html?id=' + c.id;
     } catch (e) { document.getElementById('pp-c-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }

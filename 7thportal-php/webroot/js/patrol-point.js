@@ -46,6 +46,9 @@ function summaryCard() {
       <span class="badge" data-status="${SKEY[C.status] || 'suspended'}">${esc(C.statusLabel)}</span></div>
     ${C.description ? `<p>${esc(C.description)}</p>` : ''}
     <p class="muted">Scoring approval: ${esc(C.approvalModeLabel)}${C.completedAt ? ' · Completed ' + formatDate(C.completedAt) : ''}</p>
+    ${ACT.canManage && ['draft', 'open', 'paused'].includes(C.status)
+      ? `<div class="field" style="margin:0"><label style="font-weight:400"><input type="checkbox" id="pp-deduct"${C.allowDeductions ? ' checked' : ''}> Allow deductions (negative points)</label></div>`
+      : `<p class="muted">Deductions: ${C.allowDeductions ? 'allowed' : 'off'}</p>`}
     <div id="pp-msg"></div></div>`;
 }
 
@@ -280,6 +283,10 @@ function wire() {
     catch (e) { msg(e.message, true); }
   }));
   on('pp-delete', async () => { if (!confirm('Delete this draft competition?')) return; try { await Api.delete(`/api/patrol-points/competitions/${ID}`); location.href = 'patrol-points.html'; } catch (e) { msg(e.message, true); } });
+  const deduct = document.getElementById('pp-deduct');
+  if (deduct) deduct.addEventListener('change', async () => {
+    try { await Api.patch(`/api/patrol-points/competitions/${ID}`, { allowDeductions: deduct.checked }); load(); } catch (e) { msg(e.message, true); }
+  });
 
   // Teams
   on('pp-team-add', async () => {

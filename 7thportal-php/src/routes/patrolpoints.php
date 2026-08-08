@@ -36,9 +36,9 @@ $router->post('/api/patrol-points/competitions', function ($params) {
     if ($name === '') jsonResponse(['error' => 'A competition name is required.'], 422);
     $mode = in_array($b['approvalMode'] ?? '', ['immediate', 'approval'], true) ? $b['approvalMode'] : 'immediate';
     $res = dbRun(
-        "INSERT INTO pp_competitions (name, description, approval_mode, visibility, osm_section_id, section_name, created_by)
-         VALUES (?, ?, ?, 'leaders', ?, ?, ?)",
-        [$name, trim((string) ($b['description'] ?? '')) ?: null, $mode, $b['sectionId'] ?? null, trim((string) ($b['sectionName'] ?? '')) ?: null, $user['id']]
+        "INSERT INTO pp_competitions (name, description, approval_mode, visibility, allow_deductions, osm_section_id, section_name, created_by)
+         VALUES (?, ?, ?, 'leaders', ?, ?, ?, ?)",
+        [$name, trim((string) ($b['description'] ?? '')) ?: null, $mode, !empty($b['allowDeductions']) ? 1 : 0, $b['sectionId'] ?? null, trim((string) ($b['sectionName'] ?? '')) ?: null, $user['id']]
     );
     $id = (int) $res['lastInsertId'];
     logAudit(['userId' => $user['id'], 'action' => 'pp_competition_create', 'entityType' => 'pp_competition', 'entityId' => (string) $id, 'ipAddress' => clientIp()]);
@@ -70,7 +70,7 @@ $router->get('/api/patrol-points/competitions/:id', function ($params) {
     jsonResponse([
         'competition' => serializePpCompetition($c, true),
         'teams' => array_map('serializePpTeam', $teams),
-        'categories' => array_map('serializePpCategory', $cats),
+        'categories' => array_map(fn($x) => serializePpCategory($x, (bool) $c['allow_deductions']), $cats),
         'participants' => $participants,
         'submissions' => $submissions,
         'leaderboard' => ppLeaderboard((int) $c['id']),
@@ -96,7 +96,8 @@ $router->patch('/api/patrol-points/competitions/:id', function ($params) {
     $name = array_key_exists('name', $b) ? (trim((string) $b['name']) ?: $c['name']) : $c['name'];
     $desc = array_key_exists('description', $b) ? (trim((string) $b['description']) ?: null) : $c['description'];
     $mode = in_array($b['approvalMode'] ?? $c['approval_mode'], ['immediate', 'approval'], true) ? ($b['approvalMode'] ?? $c['approval_mode']) : $c['approval_mode'];
-    dbRun("UPDATE pp_competitions SET name = ?, description = ?, approval_mode = ?, updated_at = datetime('now') WHERE id = ?", [$name, $desc, $mode, $c['id']]);
+    $allowDed = array_key_exists('allowDeductions', $b) ? (!empty($b['allowDeductions']) ? 1 : 0) : (int) $c['allow_deductions'];
+    dbRun("UPDATE pp_competitions SET name = ?, description = ?, approval_mode = ?, allow_deductions = ?, updated_at = datetime('now') WHERE id = ?", [$name, $desc, $mode, $allowDed, $c['id']]);
     jsonResponse(serializePpCompetition(ppCompetitionOr404($c['id']), true));
 });
 
@@ -145,17 +146,19 @@ function ppRequireEditableComp(array $user, $id): array
 
 // Validate/resolve submitted score lines against a category (fixed categories use
 // the fixed value). Returns [teamId => points]; sends a 422 and exits on error.
-function ppCleanLines(array $cat, int $compId, $lines): array
+function ppCleanLines(array $cat, array $comp, $lines): array
 {
     $lines = is_array($lines) ? $lines : [];
+    $allowDeductions = !empty($comp['allow_deductions']);
     $validTeams = [];
-    foreach (dbAll('SELECT id FROM pp_teams WHERE competition_id = ?', [$compId]) as $t) $validTeams[(int) $t['id']] = true;
+    foreach (dbAll('SELECT id FROM pp_teams WHERE competition_id = ?', [$comp['id']]) as $t) $validTeams[(int) $t['id']] = true;
     $clean = [];
     foreach ($lines as $ln) {
         $tid = (int) ($ln['teamId'] ?? 0);
         if (!isset($validTeams[$tid])) continue;
         $pts = $cat['points_type'] === 'fixed' ? (int) $cat['fixed_points'] : (is_numeric($ln['points'] ?? null) ? (int) $ln['points'] : null);
         if ($pts === null) jsonResponse(['error' => 'Enter a points value for each selected team.'], 422);
+        if ($pts < 0 && !$allowDeductions) jsonResponse(['error' => 'Deductions are turned off for this competition.'], 422);
         $clean[$tid] = $pts;
     }
     if (!$clean) jsonResponse(['error' => 'Select at least one team to score.'], 422);
@@ -361,7 +364,7 @@ $router->post('/api/patrol-points/competitions/:id/submissions', function ($para
     if ($comment === '') jsonResponse(['error' => 'A comment is required for every score submission.'], 422);
     $cat = dbGet('SELECT * FROM pp_categories WHERE id = ? AND competition_id = ?', [(int) ($b['categoryId'] ?? 0), $c['id']]);
     if (!$cat) jsonResponse(['error' => 'Choose a valid scoring category.'], 422);
-    $clean = ppCleanLines($cat, (int) $c['id'], $b['lines'] ?? []);
+    $clean = ppCleanLines($cat, $c, $b['lines'] ?? []);
 
     $status = $c['approval_mode'] === 'approval' ? 'pending' : 'approved';
     $res = dbRun('INSERT INTO pp_submissions (competition_id, category_id, submitted_by, comment, status) VALUES (?, ?, ?, ?, ?)', [$c['id'], $cat['id'], $user['id'], $comment, $status]);
@@ -434,7 +437,7 @@ $router->patch('/api/patrol-points/competitions/:id/submissions/:sid', function 
     $comment = trim((string) ($b['comment'] ?? ''));
     if ($comment === '') jsonResponse(['error' => 'A comment is required.'], 422);
     $cat = dbGet('SELECT * FROM pp_categories WHERE id = ?', [$s['category_id']]);
-    $clean = ppCleanLines($cat, (int) $c['id'], $b['lines'] ?? []);
+    $clean = ppCleanLines($cat, $c, $b['lines'] ?? []);
     dbRun('DELETE FROM pp_score_lines WHERE submission_id = ?', [$s['id']]);
     foreach ($clean as $tid => $pts) dbRun('INSERT INTO pp_score_lines (submission_id, team_id, points) VALUES (?, ?, ?)', [$s['id'], $tid, $pts]);
     // Amending sends it back to the approver (or keeps it pending) for a fresh decision.
@@ -554,7 +557,7 @@ $router->post('/api/patrol-points/competitions/:id/submissions/:sid/revise', fun
     $comment = trim((string) ($b['comment'] ?? ''));
     if ($comment === '') jsonResponse(['error' => 'A comment explaining the correction is required.'], 422);
     $cat = dbGet('SELECT * FROM pp_categories WHERE id = ?', [$orig['category_id']]);
-    $clean = ppCleanLines($cat, (int) $c['id'], $b['lines'] ?? []);
+    $clean = ppCleanLines($cat, $c, $b['lines'] ?? []);
     // Corrections always require approval, regardless of the competition mode (PP-APR-007).
     $res = dbRun("INSERT INTO pp_submissions (competition_id, category_id, submitted_by, comment, status, revises_id) VALUES (?, ?, ?, ?, 'pending', ?)", [$c['id'], $orig['category_id'], $user['id'], $comment, $orig['id']]);
     $sid = (int) $res['lastInsertId'];

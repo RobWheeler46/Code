@@ -18,7 +18,8 @@ const PP_APPROVAL_MODES = ['immediate' => 'Immediate (scores count at once)', 'a
 const PP_POINTS_TYPES = ['free' => 'Free entry', 'fixed' => 'Fixed value'];
 // Quick Score defaults (FRD v2.4 s13.7) when a category has no custom config.
 const PP_DEFAULT_REASONS = ['Great teamwork', 'Won challenge', 'Excellent effort', 'Bonus', 'Deduction', 'Other'];
-const PP_DEFAULT_BUTTONS = [1, 5, 10, -5];
+// Positive-only by default; deductions are opt-in per competition (Module Design).
+const PP_DEFAULT_BUTTONS = [1, 5, 10];
 // Operational leaders who may run competitions (mirrors Activity Approval's group).
 const PP_MANAGER_ROLES = ['section_leader', 'assistant_leader', 'group_leadership', 'admin'];
 
@@ -79,6 +80,7 @@ function serializePpCompetition(array $c, bool $full = false): array
     }
     return array_merge($base, [
         'description' => $c['description'], 'visibility' => $c['visibility'],
+        'allowDeductions' => (bool) ($c['allow_deductions'] ?? 0),
         'osmSectionId' => $c['osm_section_id'], 'createdBy' => (int) $c['created_by'],
         'completedAt' => $c['completed_at'], 'createdAt' => $c['created_at'],
     ]);
@@ -103,10 +105,13 @@ function ppSectionsForUser(array $user): array
     }
     return $out;
 }
-function serializePpCategory(array $c): array
+function serializePpCategory(array $c, bool $allowDeductions = true): array
 {
     $buttons = !empty($c['point_buttons']) ? (json_decode($c['point_buttons'], true) ?: null) : null;
     if (!$buttons) $buttons = $c['points_type'] === 'fixed' ? [(int) $c['fixed_points']] : PP_DEFAULT_BUTTONS;
+    $buttons = array_map('intval', $buttons);
+    // Hide negative quick buttons unless the competition permits deductions.
+    if (!$allowDeductions) $buttons = array_values(array_filter($buttons, fn($n) => $n >= 0));
     $reasons = !empty($c['reason_presets']) ? (json_decode($c['reason_presets'], true) ?: null) : null;
     if (!$reasons) $reasons = PP_DEFAULT_REASONS;
     return [

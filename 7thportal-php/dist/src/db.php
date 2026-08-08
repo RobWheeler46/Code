@@ -752,6 +752,7 @@ CREATE TABLE IF NOT EXISTS pp_competitions (
   status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','open','paused','completed','archived')),
   approval_mode TEXT NOT NULL DEFAULT 'immediate' CHECK(approval_mode IN ('immediate','approval')),
   visibility TEXT NOT NULL DEFAULT 'leaders' CHECK(visibility IN ('leaders','parents')),
+  allow_deductions INTEGER NOT NULL DEFAULT 0,
   osm_section_id TEXT, section_name TEXT,
   created_by INTEGER NOT NULL REFERENCES users(id),
   completed_at TEXT,
@@ -892,6 +893,12 @@ $ppCatsSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='p
 if ($ppCatsSql && !str_contains($ppCatsSql, 'point_buttons')) {
     db()->exec('ALTER TABLE pp_categories ADD COLUMN point_buttons TEXT');
     db()->exec('ALTER TABLE pp_categories ADD COLUMN reason_presets TEXT');
+}
+// Migration: pp_competitions gained allow_deductions (Module Design: negative
+// points disabled by default unless deliberately enabled and governed).
+$ppCompsSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='pp_competitions'")['sql'] ?? '';
+if ($ppCompsSql && !str_contains($ppCompsSql, 'allow_deductions')) {
+    db()->exec('ALTER TABLE pp_competitions ADD COLUMN allow_deductions INTEGER NOT NULL DEFAULT 0');
 }
 // Migration: GLV-only workflow (glv-only-1.0) drops the Section Lead stage. Move
 // any in-flight forms still awaiting Section Lead approval into the GLV queue so
