@@ -67,10 +67,20 @@ $router->get('/api/patrol-points/competitions/:id', function ($params) {
 
     $participants = array_map('serializePpParticipant', dbAll('SELECT * FROM pp_participants WHERE competition_id = ? ORDER BY display_name', [$c['id']]));
     $catsById = []; foreach ($cats as $ct) $catsById[(int) $ct['id']] = $ct;
+    $activityRows = dbAll('SELECT * FROM pp_activities WHERE competition_id = ? ORDER BY sort_order, name', [$c['id']]);
     $activities = [];
-    foreach (dbAll('SELECT * FROM pp_activities WHERE competition_id = ? ORDER BY sort_order, name', [$c['id']]) as $a) {
+    $actById = [];
+    foreach ($activityRows as $a) {
+        $actById[(int) $a['id']] = $a;
         $cr = $catsById[(int) $a['category_id']] ?? null;
         if ($cr) $activities[] = serializePpActivity($a, $cr, (bool) $c['allow_deductions']);
+    }
+    // Guest links (managers only, and only surfaced when guest entry is enabled).
+    $guestLinks = [];
+    if (ppCanManage($user) && ppGuestEnabled()) {
+        foreach (dbAll('SELECT * FROM pp_guest_links WHERE competition_id = ? ORDER BY id DESC', [$c['id']]) as $gl) {
+            $guestLinks[] = serializeGuestLink($gl, $actById[(int) $gl['activity_id']] ?? null);
+        }
     }
 
     jsonResponse([
@@ -78,6 +88,7 @@ $router->get('/api/patrol-points/competitions/:id', function ($params) {
         'teams' => array_map('serializePpTeam', $teams),
         'categories' => array_map(fn($x) => serializePpCategory($x, (bool) $c['allow_deductions']), $cats),
         'activities' => $activities,
+        'guestLinks' => $guestLinks,
         'participants' => $participants,
         'submissions' => $submissions,
         'leaderboard' => ppLeaderboard((int) $c['id']),
@@ -87,7 +98,7 @@ $router->get('/api/patrol-points/competitions/:id', function ($params) {
             'isCreator' => (int) $c['created_by'] === (int) $user['id'],
             'userId' => (int) $user['id'],
         ],
-        'meta' => ['statuses' => PP_STATUSES, 'approvalModes' => PP_APPROVAL_MODES, 'pointsTypes' => PP_POINTS_TYPES, 'transitions' => PP_TRANSITIONS, 'sections' => ppSectionsForUser($user)],
+        'meta' => ['statuses' => PP_STATUSES, 'approvalModes' => PP_APPROVAL_MODES, 'pointsTypes' => PP_POINTS_TYPES, 'transitions' => PP_TRANSITIONS, 'sections' => ppSectionsForUser($user), 'guestEnabled' => ppGuestEnabled()],
     ]);
 });
 
@@ -409,6 +420,107 @@ $router->delete('/api/patrol-points/competitions/:id/activities/:aid', function 
     $c = ppRequireEditableComp($user, $params['id']);
     dbRun('DELETE FROM pp_activities WHERE id = ? AND competition_id = ?', [(int) $params['aid'], $c['id']]);
     jsonResponse(['ok' => true]);
+});
+
+// ── Guest Quick Entry links (managers; FRD v2.4 s13.8) ───────────────────────────
+$router->post('/api/patrol-points/competitions/:id/guest-links', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requirePatrolPointsEnabled();
+    if (!ppCanManage($user)) jsonResponse(['error' => 'Your role cannot create guest links.'], 403);
+    if (!ppGuestEnabled()) jsonResponse(['error' => 'Guest Quick Entry is disabled for the group.'], 403);
+    $c = ppCompetitionOr404($params['id']);
+    if ($c['approval_mode'] !== 'approval') jsonResponse(['error' => 'Guest entry needs the competition in approval mode, so every guest score is reviewed.'], 409);
+    if (in_array($c['status'], ['completed', 'archived'], true)) jsonResponse(['error' => 'This competition can no longer be changed.'], 409);
+    $b = requestBody();
+    $act = dbGet('SELECT * FROM pp_activities WHERE id = ? AND competition_id = ?', [(int) ($b['activityId'] ?? 0), $c['id']]);
+    if (!$act) jsonResponse(['error' => 'Choose an activity profile for the guest link.'], 422);
+    $pinHash = null;
+    if (!empty($b['pin'])) { $pin = preg_replace('/\D/', '', (string) $b['pin']); if (strlen($pin) >= 4) $pinHash = password_hash($pin, PASSWORD_DEFAULT); }
+    $expires = null;
+    if (!empty($b['expiresInDays']) && is_numeric($b['expiresInDays'])) { $d = max(1, min(120, (int) $b['expiresInDays'])); $expires = gmdate('Y-m-d H:i:s', time() + $d * 86400); }
+    $token = bin2hex(random_bytes(24));
+    $res = dbRun('INSERT INTO pp_guest_links (competition_id, activity_id, token, label, pin_hash, expires_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [$c['id'], $act['id'], $token, trim((string) ($b['label'] ?? '')) ?: null, $pinHash, $expires, $user['id']]);
+    logAudit(['userId' => $user['id'], 'action' => 'pp_guest_link_create', 'entityType' => 'pp_guest_link', 'entityId' => (string) $res['lastInsertId'], 'ipAddress' => clientIp(), 'details' => ['activity' => (int) $act['id']]]);
+    jsonResponse(serializeGuestLink(dbGet('SELECT * FROM pp_guest_links WHERE id = ?', [(int) $res['lastInsertId']]), $act), 201);
+});
+$router->post('/api/patrol-points/competitions/:id/guest-links/:lid/revoke', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requirePatrolPointsEnabled();
+    if (!ppCanManage($user)) jsonResponse(['error' => 'Your role cannot manage guest links.'], 403);
+    $link = dbGet('SELECT * FROM pp_guest_links WHERE id = ? AND competition_id = ?', [(int) $params['lid'], (int) $params['id']]);
+    if (!$link) jsonResponse(['error' => 'Guest link not found.'], 404);
+    dbRun("UPDATE pp_guest_links SET status = 'revoked' WHERE id = ?", [$link['id']]);
+    logAudit(['userId' => $user['id'], 'action' => 'pp_guest_link_revoke', 'entityType' => 'pp_guest_link', 'entityId' => (string) $link['id'], 'ipAddress' => clientIp()]);
+    jsonResponse(['ok' => true]);
+});
+
+// ── Public guest scoring (NO LOGIN). Everything is validated server-side against
+// the link's activity profile; guest scores are always pending. ──────────────────
+function ppGuestResolve(string $token): array
+{
+    if (!patrolPointsEnabled() || !ppGuestEnabled()) jsonResponse(['error' => 'Guest entry is not available.'], 404);
+    $link = dbGet('SELECT * FROM pp_guest_links WHERE token = ?', [$token]);
+    if (!$link || !ppGuestLinkActive($link)) jsonResponse(['error' => 'This guest link is not active.'], 410);
+    $c = dbGet('SELECT * FROM pp_competitions WHERE id = ?', [$link['competition_id']]);
+    if (!$c || $c['status'] !== 'open' || $c['approval_mode'] !== 'approval') jsonResponse(['error' => 'This competition is not accepting guest scores right now.'], 409);
+    $a = dbGet('SELECT * FROM pp_activities WHERE id = ?', [$link['activity_id']]);
+    if (!$a) jsonResponse(['error' => 'This guest link is no longer valid.'], 410);
+    $prof = serializePpActivity($a, dbGet('SELECT * FROM pp_categories WHERE id = ?', [$a['category_id']]), (bool) $c['allow_deductions']);
+    return [$link, $c, $a, $prof];
+}
+function ppGuestTeams(array $c, array $prof): array
+{
+    if ($prof['teamScope']) {
+        $ph = implode(',', array_fill(0, count($prof['teamScope']), '?'));
+        return dbAll("SELECT id, name FROM pp_teams WHERE competition_id = ? AND id IN ($ph) ORDER BY sort_order, name", array_merge([$c['id']], $prof['teamScope']));
+    }
+    return dbAll('SELECT id, name FROM pp_teams WHERE competition_id = ? ORDER BY sort_order, name', [$c['id']]);
+}
+// Minimal, safe scope for the guest screen. No young-person or member data.
+$router->get('/api/guest/patrol/:token', function ($params) {
+    [$link, $c, $a, $prof] = ppGuestResolve($params['token']);
+    jsonResponse([
+        'competition' => $c['name'], 'activity' => $a['name'], 'pinRequired' => !empty($link['pin_hash']),
+        'teams' => array_map(fn($t) => ['id' => (int) $t['id'], 'name' => $t['name']], ppGuestTeams($c, $prof)),
+        'pointButtons' => $prof['pointButtons'], 'reasonPresets' => $prof['reasonPresets'],
+    ]);
+});
+$router->post('/api/guest/patrol/:token/submit', function ($params) {
+    [$link, $c, $a, $prof] = ppGuestResolve($params['token']);
+    $b = requestBody();
+    if (!empty($link['pin_hash'])) {
+        $pin = preg_replace('/\D/', '', (string) ($b['pin'] ?? ''));
+        if ($pin === '' || !password_verify($pin, $link['pin_hash'])) jsonResponse(['error' => 'Incorrect PIN.'], 403);
+    }
+    $scorer = mb_substr(trim((string) ($b['scorerName'] ?? '')), 0, 60);
+    if ($scorer === '') jsonResponse(['error' => 'Enter your name.'], 422);
+    $allowed = array_map(fn($t) => (int) $t['id'], ppGuestTeams($c, $prof));
+    $teamId = (int) ($b['teamId'] ?? 0);
+    if (!in_array($teamId, $allowed, true)) jsonResponse(['error' => 'Choose a valid team.'], 422);
+    $points = is_numeric($b['points'] ?? null) ? (int) $b['points'] : null;
+    if ($points === null || !in_array($points, $prof['pointButtons'], true)) jsonResponse(['error' => 'Choose a valid points value.'], 422);
+    $reason = mb_substr(trim((string) ($b['reason'] ?? '')), 0, 200);
+    if ($reason === '') jsonResponse(['error' => 'Choose a reason.'], 422);
+    // Rate limit: at most 30 guest scores per link per minute.
+    if ((int) dbGet("SELECT COUNT(*) n FROM pp_submissions WHERE guest_link_id = ? AND created_at >= datetime('now','-60 seconds')", [$link['id']])['n'] >= 30) {
+        jsonResponse(['error' => 'Too many submissions just now — please wait a moment.'], 429);
+    }
+    // Duplicate within 15s -> idempotent success (double-tap / retry safe).
+    $dup = dbGet("SELECT s.id FROM pp_submissions s JOIN pp_score_lines l ON l.submission_id = s.id
+        WHERE s.guest_link_id = ? AND s.guest_name = ? AND l.team_id = ? AND l.points = ? AND s.comment = ? AND s.created_at >= datetime('now','-15 seconds') LIMIT 1",
+        [$link['id'], $scorer, $teamId, $points, $reason]);
+    if ($dup) jsonResponse(['ok' => true, 'status' => 'pending', 'duplicate' => true], 200);
+    $gid = ppGuestUserId();
+    $res = dbRun("INSERT INTO pp_submissions (competition_id, category_id, submitted_by, comment, status, guest_link_id, guest_name) VALUES (?, ?, ?, ?, 'pending', ?, ?)",
+        [$c['id'], $a['category_id'], $gid, $reason, $link['id'], $scorer]);
+    $sid = (int) $res['lastInsertId'];
+    dbRun('INSERT INTO pp_score_lines (submission_id, team_id, points) VALUES (?, ?, ?)', [$sid, $teamId, $points]);
+    logAudit(['userId' => $gid, 'action' => 'pp_guest_submit', 'entityType' => 'pp_submission', 'entityId' => (string) $sid, 'ipAddress' => clientIp(), 'details' => ['link' => (int) $link['id'], 'scorer' => $scorer]]);
+    ppNotifyApprovers($gid, 'Guest score to approve: ' . $c['name'], $scorer . ' (guest) submitted a score in "' . $a['name'] . '".', 'patrol-point.html?id=' . $c['id']);
+    jsonResponse(['ok' => true, 'status' => 'pending'], 201);
 });
 
 // ── Score submissions ───────────────────────────────────────────────────────────

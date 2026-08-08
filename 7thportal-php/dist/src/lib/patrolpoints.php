@@ -167,11 +167,13 @@ function serializePpSubmission(array $s, array $lines, array $teamNames, array $
 {
     // Display status folds the withdraw flag and supersession over the stored status.
     $status = !empty($s['withdrawn']) ? 'withdrawn' : (!empty($s['superseded_by']) ? 'superseded' : $s['status']);
+    $isGuest = !empty($s['guest_link_id']);
     return [
         'id' => (int) $s['id'], 'categoryId' => (int) $s['category_id'], 'categoryName' => $catNames[(int) $s['category_id']] ?? '—',
         'comment' => $s['comment'], 'status' => $status,
         'isRevision' => $s['revises_id'] !== null, 'revisesId' => $s['revises_id'] !== null ? (int) $s['revises_id'] : null,
-        'submittedBy' => $userNames[(int) $s['submitted_by']] ?? 'Leader', 'submittedById' => (int) $s['submitted_by'],
+        'isGuest' => $isGuest, 'guestName' => $isGuest ? ($s['guest_name'] ?? 'Guest') : null,
+        'submittedBy' => $isGuest ? ('Guest Quick Entry: ' . ($s['guest_name'] ?? 'guest')) : ($userNames[(int) $s['submitted_by']] ?? 'Leader'), 'submittedById' => (int) $s['submitted_by'],
         'decidedBy' => $s['decided_by'] !== null ? ($userNames[(int) $s['decided_by']] ?? 'Leader') : null,
         'decisionComment' => $s['decision_comment'], 'createdAt' => $s['created_at'],
         'lines' => array_map(fn($l) => ['teamId' => (int) $l['team_id'], 'teamName' => $teamNames[(int) $l['team_id']] ?? '—', 'points' => (int) $l['points']], $lines),
@@ -205,6 +207,44 @@ function ppLeaderboard(int $competitionId): array
         $row['position'] = $pos;
     }
     return $board;
+}
+
+// ── Guest Quick Entry (FRD v2.4 s13.8) ──────────────────────────────────────────
+// Global on/off for no-login guest scoring (admin governed, default off).
+function ppGuestEnabled(): bool
+{
+    $row = dbGet("SELECT value FROM settings WHERE key = 'pp_guest_enabled'");
+    return ($row['value'] ?? null) === 'true';
+}
+// A single non-login service user that owns guest submissions, so no real leader
+// is treated as their submitter (keeps no-self-approval correct for all approvers).
+function ppGuestUserId(): int
+{
+    $u = dbGet("SELECT id FROM users WHERE auth_type = 'local' AND email = 'guest.quickentry@patrolpoints.local'");
+    if ($u) return (int) $u['id'];
+    $r = dbRun("INSERT INTO users (auth_type, email, first_name, last_name, portal_role, account_status) VALUES ('local', 'guest.quickentry@patrolpoints.local', 'Guest', 'Quick Entry', 'parent', 'suspended')");
+    return (int) $r['lastInsertId'];
+}
+function ppGuestUrl(string $token): string
+{
+    $scheme = (($_SERVER['HTTPS'] ?? '') === 'on' || ($_SERVER['SERVER_PORT'] ?? '') == 443) ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    return $scheme . '://' . $host . '/patrol-guest.html?t=' . $token;
+}
+function ppGuestLinkActive(array $link): bool
+{
+    if ($link['status'] !== 'active') return false;
+    if (!empty($link['expires_at']) && strtotime($link['expires_at']) < time()) return false;
+    return true;
+}
+function serializeGuestLink(array $link, ?array $activity): array
+{
+    return [
+        'id' => (int) $link['id'], 'label' => $link['label'], 'activityId' => (int) $link['activity_id'],
+        'activityName' => $activity['name'] ?? '—', 'status' => $link['status'],
+        'active' => ppGuestLinkActive($link), 'pinRequired' => !empty($link['pin_hash']),
+        'expiresAt' => $link['expires_at'], 'url' => ppGuestUrl($link['token']),
+    ];
 }
 
 // ── Action Centre: pending submissions awaiting a (non-conflicted) approver ──────

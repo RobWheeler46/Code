@@ -836,6 +836,22 @@ CREATE TABLE IF NOT EXISTS pp_activities (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_pp_activities_comp ON pp_activities(competition_id);
+-- Guest Quick Entry links (FRD v2.4 s13.8): a high-entropy, revocable token that
+-- lets an un-logged-in helper submit PENDING-ONLY scores for one activity profile.
+-- Optional PIN and expiry; scope is enforced server-side from the activity.
+CREATE TABLE IF NOT EXISTS pp_guest_links (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  competition_id INTEGER NOT NULL REFERENCES pp_competitions(id) ON DELETE CASCADE,
+  activity_id INTEGER NOT NULL REFERENCES pp_activities(id) ON DELETE CASCADE,
+  token TEXT NOT NULL UNIQUE,
+  label TEXT,
+  pin_hash TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','revoked')),
+  expires_at TEXT,
+  created_by INTEGER NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_pp_guest_links_comp ON pp_guest_links(competition_id);
 
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(portal_role, account_status);
 CREATE INDEX IF NOT EXISTS idx_parent_links_parent ON parent_child_links(parent_user_id);
@@ -915,6 +931,12 @@ if ($ppCatsSql && !str_contains($ppCatsSql, 'point_buttons')) {
 $ppCompsSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='pp_competitions'")['sql'] ?? '';
 if ($ppCompsSql && !str_contains($ppCompsSql, 'allow_deductions')) {
     db()->exec('ALTER TABLE pp_competitions ADD COLUMN allow_deductions INTEGER NOT NULL DEFAULT 0');
+}
+// Migration: pp_submissions gained guest attribution (FRD v2.4 s13.8) - guest
+// scores are owned by a service user but carry the link id and unverified name.
+if ($ppSubsSql && !str_contains($ppSubsSql, 'guest_link_id')) {
+    db()->exec('ALTER TABLE pp_submissions ADD COLUMN guest_link_id INTEGER');
+    db()->exec('ALTER TABLE pp_submissions ADD COLUMN guest_name TEXT');
 }
 // Migration: GLV-only workflow (glv-only-1.0) drops the Section Lead stage. Move
 // any in-flight forms still awaiting Section Lead approval into the GLV queue so

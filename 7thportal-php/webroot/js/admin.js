@@ -744,6 +744,8 @@ async function renderSettings() {
       <p class="muted">Run competitions across programmes, meetings and camps: named teams, reusable scoring categories, comment-required score submissions (approve/reject/return, no self-approval) and a live tie-aware leaderboard. Completed competitions lock. Ships off by default.</p>
       <form id="patrol-points-settings-form">
         <div class="field"><label style="font-weight:400;"><input type="checkbox" id="patrol-points-enabled" ${settings.patrolPointsEnabled ? 'checked' : ''}> Enable Patrol Points</label></div>
+        <div class="field"><label style="font-weight:400;"><input type="checkbox" id="pp-guest-enabled" ${settings.ppGuestEnabled ? 'checked' : ''}> Allow Guest Quick Entry (no-login QR links for camp activities)</label>
+          <span class="field help">Guests can only submit scores that require approval; no child data is shown. Leave off unless needed.</span></div>
         <button class="btn btn-primary" type="submit">Save</button>
         <span id="patrol-points-settings-saved"></span>
       </form>
@@ -810,7 +812,7 @@ async function renderSettings() {
   });
   document.getElementById('patrol-points-settings-form').addEventListener('submit', async e => {
     e.preventDefault();
-    await Api.put('/api/admin/settings', { patrolPointsEnabled: document.getElementById('patrol-points-enabled').checked });
+    await Api.put('/api/admin/settings', { patrolPointsEnabled: document.getElementById('patrol-points-enabled').checked, ppGuestEnabled: document.getElementById('pp-guest-enabled').checked });
     document.getElementById('patrol-points-settings-saved').textContent = 'Saved.';
   });
   document.getElementById('settings-form').addEventListener('submit', async e => {

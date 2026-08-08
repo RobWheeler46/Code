@@ -303,6 +303,7 @@ $router->get('/api/admin/settings', function ($params) {
         'attendanceEnabled' => ($map['attendance_enabled'] ?? null) === 'true',
         'activityFormsEnabled' => ($map['activity_forms_enabled'] ?? null) === 'true',
         'patrolPointsEnabled' => ($map['patrol_points_enabled'] ?? null) === 'true',
+        'ppGuestEnabled' => ($map['pp_guest_enabled'] ?? null) === 'true',
     ]);
 });
 
@@ -334,6 +335,7 @@ $router->put('/api/admin/settings', function ($params) {
     if (array_key_exists('attendanceEnabled', $body)) $upsert('attendance_enabled', $body['attendanceEnabled'] ? 'true' : 'false');
     if (array_key_exists('activityFormsEnabled', $body)) $upsert('activity_forms_enabled', $body['activityFormsEnabled'] ? 'true' : 'false');
     if (array_key_exists('patrolPointsEnabled', $body)) $upsert('patrol_points_enabled', $body['patrolPointsEnabled'] ? 'true' : 'false');
+    if (array_key_exists('ppGuestEnabled', $body)) $upsert('pp_guest_enabled', $body['ppGuestEnabled'] ? 'true' : 'false');
 
     logAudit(['userId' => $user['id'], 'action' => array_key_exists('galleryEnabled', $body) ? 'admin_toggle_gallery' : (array_key_exists('financeEnabled', $body) ? 'admin_toggle_finance' : 'admin_update_settings'), 'ipAddress' => clientIp(), 'details' => $body]);
     jsonResponse(['ok' => true]);

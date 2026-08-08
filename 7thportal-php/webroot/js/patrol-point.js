@@ -1,6 +1,6 @@
 // Patrol Points - single competition: lifecycle, teams, categories, scoring,
 // approvals and the live leaderboard.
-let C, TEAMS, CATS, ACTIVITIES, PARTS, SUBS, BOARD, ACT, META, ID;
+let C, TEAMS, CATS, ACTIVITIES, GUESTLINKS, PARTS, SUBS, BOARD, ACT, META, ID;
 const SKEY = { draft: 'suspended', open: 'active', paused: 'pending_approval', completed: 'active', archived: 'deleted' };
 const SUB_SKEY = { pending: 'pending_approval', approved: 'active', rejected: 'deleted', returned: 'suspended', withdrawn: 'deleted', superseded: 'suspended' };
 const SUB_LABEL = { pending: 'pending', approved: 'approved', rejected: 'rejected', returned: 'returned', withdrawn: 'withdrawn', superseded: 'superseded' };
@@ -20,13 +20,13 @@ async function load() {
   let d;
   try { d = await Api.get(`/api/patrol-points/competitions/${ID}`); }
   catch (e) { box.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; return; }
-  C = d.competition; TEAMS = d.teams; CATS = d.categories; ACTIVITIES = d.activities || []; PARTS = d.participants || []; SUBS = d.submissions; BOARD = d.leaderboard; ACT = d.myActions; META = d.meta;
+  C = d.competition; TEAMS = d.teams; CATS = d.categories; ACTIVITIES = d.activities || []; GUESTLINKS = d.guestLinks || []; PARTS = d.participants || []; SUBS = d.submissions; BOARD = d.leaderboard; ACT = d.myActions; META = d.meta;
   document.getElementById('pp-title').textContent = C.name;
   document.getElementById('pp-head').innerHTML = (ACT.canSubmit ? `<a class="btn" href="patrol-score.html?id=${ID}">Quick Score</a>` : '') + lifecycleButtons() + '<a class="btn btn-secondary" href="patrol-points.html">Back</a>';
   const editable = ACT.canManage && ['draft', 'open', 'paused'].includes(C.status);
   box.innerHTML = summaryCard() + leaderboardCard() + (ACT.canSubmit ? submitCard() : '')
     + ((editable || TEAMS.length) ? teamsCard(!editable) : '')
-    + (editable ? membersCard() + categoriesCard() + activitiesCard() : '') + submissionsCard()
+    + (editable ? membersCard() + categoriesCard() + activitiesCard() + guestCard() : '') + submissionsCard()
     + (ACT.canManage ? reportsCard() : '');
   wire();
 }
@@ -178,6 +178,33 @@ function activityEditor(a) {
     <div class="field" style="margin:0 0 .4rem"><label>Reason presets (comma-separated, blank = category default)</label><input class="pp-act-reasons" value="${esc((a.reasonPresets || []).join(', '))}"></div>
     <div class="field" style="margin:0 0 .4rem"><label>Teams (none ticked = all)</label><div class="af-sections">${teamChecks}</div></div>
     <button class="btn btn-secondary btn-sm pp-act-save" data-id="${a.id}">Save</button></div>`;
+}
+
+function guestCard() {
+  if (!META.guestEnabled) return '';
+  if (C.approvalMode !== 'approval') {
+    return `<div class="card"><h2>Guest QR entry</h2><p class="muted">Guest scoring needs this competition in <strong>approval</strong> mode, so every guest score is reviewed before it counts. Turn on "Requires approval" to enable it.</p></div>`;
+  }
+  if (!ACTIVITIES.length) {
+    return `<div class="card"><h2>Guest QR entry</h2><p class="muted">Create an activity profile above first — a guest link points at one activity/station.</p></div>`;
+  }
+  const rows = GUESTLINKS.length ? GUESTLINKS.map(g => `<tr>
+      <td data-label="Station" class="rcard-title">${esc(g.label || g.activityName)}<br>
+        <span class="muted" style="font-size:.8rem">${esc(g.activityName)}${g.pinRequired ? ' · PIN' : ''}${g.expiresAt ? ' · expires ' + formatDate(g.expiresAt) : ''} · <span data-status="${g.active ? 'active' : 'deleted'}" class="badge">${g.active ? 'active' : g.status}</span></span>
+        ${g.active ? `<div style="margin-top:.3rem"><input class="pp-gl-url" readonly value="${esc(g.url)}" style="width:100%;max-width:420px;font-size:.8rem"> <button class="btn btn-secondary btn-sm pp-gl-copy" data-url="${esc(g.url)}">Copy link</button></div>` : ''}</td>
+      <td style="text-align:right">${g.active ? `<button class="btn btn-secondary btn-sm pp-gl-revoke" data-id="${g.id}">Revoke</button>` : ''}</td>
+    </tr>`).join('') : '<tr><td colspan="2" class="muted">No guest links yet.</td></tr>';
+  const actOpts = ACTIVITIES.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('');
+  return `<div class="card"><h2>Guest QR entry</h2>
+    <p class="field help" style="margin-top:0">No-login links for helpers at a station. Guest scores are always <strong>pending approval</strong> and show no young-person data. Share the link (or turn it into a QR) at the activity.</p>
+    <table class="data-table rcards"><tbody>${rows}</tbody></table>
+    <div class="cap-actions" style="margin-top:.6rem;align-items:flex-end">
+      <div class="field" style="margin:0"><label>Activity</label><select id="pp-gl-act">${actOpts}</select></div>
+      <div class="field" style="margin:0"><label>Label (optional)</label><input id="pp-gl-label" placeholder="e.g. Archery station"></div>
+      <div class="field" style="margin:0"><label>PIN (optional)</label><input id="pp-gl-pin" inputmode="numeric" placeholder="4+ digits" style="width:110px"></div>
+      <div class="field" style="margin:0"><label>Expires (days)</label><input id="pp-gl-exp" type="number" min="1" max="120" placeholder="none" style="width:100px"></div>
+      <button class="btn btn-secondary" id="pp-gl-add">Create link</button>
+    </div><div id="pp-gl-msg"></div></div>`;
 }
 
 function submitCard() {
@@ -405,6 +432,22 @@ function wire() {
       const teamScope = Array.from(slot.querySelectorAll('.pp-act-team:checked')).map(el => Number(el.dataset.id));
       try { await Api.patch(`/api/patrol-points/competitions/${ID}/activities/${a.id}`, { pointButtons, reasonPresets, teamScope }); load(); } catch (e) { msg(e.message, true); }
     });
+  }));
+
+  // Guest QR links
+  on('pp-gl-add', async () => {
+    const gmsg = document.getElementById('pp-gl-msg');
+    const body = { activityId: Number(document.getElementById('pp-gl-act').value), label: document.getElementById('pp-gl-label').value, pin: document.getElementById('pp-gl-pin').value, expiresInDays: document.getElementById('pp-gl-exp').value };
+    try { await Api.post(`/api/patrol-points/competitions/${ID}/guest-links`, body); load(); }
+    catch (e) { gmsg.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
+  document.querySelectorAll('.pp-gl-revoke').forEach(b => b.addEventListener('click', async () => {
+    if (!confirm('Revoke this guest link? Anyone using it will lose access immediately.')) return;
+    try { await Api.post(`/api/patrol-points/competitions/${ID}/guest-links/${b.dataset.id}/revoke`, {}); load(); } catch (e) { msg(e.message, true); }
+  }));
+  document.querySelectorAll('.pp-gl-copy').forEach(b => b.addEventListener('click', () => {
+    navigator.clipboard?.writeText(b.dataset.url); b.textContent = 'Copied';
+    setTimeout(() => { b.textContent = 'Copy link'; }, 1500);
   }));
 
   // Scoring
