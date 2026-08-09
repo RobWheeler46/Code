@@ -178,5 +178,56 @@ async function requireUserNav(pageView) {
     renderMobileDrawer(me, cfg, pillLabel);
   }
   renderSidebar(me, cfg);
+  renderFeedbackWidget(cfg);
   return me;
+}
+
+// A floating "Feedback" button + modal, shown only in demo mode (OSM not
+// connected), so UAT testers can leave feedback from any page (DEMO-FB).
+function renderFeedbackWidget(cfg) {
+  if (!cfg || !cfg.demoModeAllowed || document.getElementById('demo-fb-btn')) return;
+  const device = window.matchMedia('(max-width: 767px)').matches ? 'mobile' : (window.matchMedia('(max-width: 1024px)').matches ? 'tablet' : 'desktop');
+  const btn = document.createElement('button');
+  btn.id = 'demo-fb-btn';
+  btn.className = 'demo-fb-btn';
+  btn.textContent = 'Feedback';
+  document.body.appendChild(btn);
+  btn.addEventListener('click', () => {
+    if (document.getElementById('demo-fb-modal')) return;
+    const page = location.pathname.split('/').pop() || 'index.html';
+    const wrap = document.createElement('div');
+    wrap.id = 'demo-fb-modal';
+    wrap.className = 'modal-backdrop';
+    wrap.innerHTML = `<div class="modal-box">
+      <h2 style="margin-top:0">Demo feedback</h2>
+      <p class="muted" style="margin-top:-.3rem">On <strong>${escapeHtml(page)}</strong> · this is a demo, so anything here is fine to share.</p>
+      <div class="field"><label>Type</label><select id="demo-fb-cat">
+        <option value="feedback">Feedback</option><option value="defect">Defect</option><option value="question">Question</option><option value="enhancement">Enhancement idea</option>
+      </select></div>
+      <div class="field"><label>Rating</label><select id="demo-fb-rating">
+        <option value="">No rating</option><option value="5">5 — great</option><option value="4">4</option><option value="3">3 — ok</option><option value="2">2</option><option value="1">1 — poor</option>
+      </select></div>
+      <div class="field"><label>Comment</label><textarea id="demo-fb-comment" rows="3" placeholder="What worked, what didn't, or an idea"></textarea></div>
+      <div id="demo-fb-msg"></div>
+      <div class="cap-actions"><button class="btn" id="demo-fb-send">Send</button><button class="btn btn-secondary" id="demo-fb-cancel">Cancel</button></div>
+    </div>`;
+    document.body.appendChild(wrap);
+    const close = () => wrap.remove();
+    wrap.addEventListener('click', e => { if (e.target === wrap) close(); });
+    document.getElementById('demo-fb-cancel').addEventListener('click', close);
+    document.getElementById('demo-fb-send').addEventListener('click', async () => {
+      const comment = document.getElementById('demo-fb-comment').value.trim();
+      const msg = document.getElementById('demo-fb-msg');
+      if (!comment) { msg.innerHTML = '<div class="alert alert-error">Please add a comment.</div>'; return; }
+      try {
+        await Api.post('/api/feedback', {
+          page, device, comment,
+          category: document.getElementById('demo-fb-cat').value,
+          rating: document.getElementById('demo-fb-rating').value || undefined,
+        });
+        wrap.querySelector('.modal-box').innerHTML = '<h2 style="margin-top:0">Thank you!</h2><p>Your feedback has been recorded.</p><div class="cap-actions"><button class="btn" id="demo-fb-done">Close</button></div>';
+        document.getElementById('demo-fb-done').addEventListener('click', close);
+      } catch (e) { msg.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+    });
+  });
 }

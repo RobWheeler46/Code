@@ -852,6 +852,19 @@ CREATE TABLE IF NOT EXISTS pp_guest_links (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_pp_guest_links_comp ON pp_guest_links(competition_id);
+-- Demo/UAT feedback (Test Environment pack DEMO-FB): testers leave feedback from
+-- any page in demo mode - persona, page, device, rating, category and comment.
+CREATE TABLE IF NOT EXISTS demo_feedback (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER REFERENCES users(id),
+  persona TEXT,
+  page TEXT,
+  device TEXT,
+  rating INTEGER,
+  category TEXT,
+  comment TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(portal_role, account_status);
 CREATE INDEX IF NOT EXISTS idx_parent_links_parent ON parent_child_links(parent_user_id);

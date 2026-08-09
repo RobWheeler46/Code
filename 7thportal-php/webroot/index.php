@@ -122,6 +122,7 @@ require_once __DIR__ . '/../src/routes/calendar.php';
 require_once __DIR__ . '/../src/routes/attendance.php';
 require_once __DIR__ . '/../src/routes/activity.php';
 require_once __DIR__ . '/../src/routes/patrolpoints.php';
+require_once __DIR__ . '/../src/routes/feedback.php';
 
 // NFR-007: never expose technical error details to end users - the response
 // body stays generic, but the server-side log (error_log + data/login-debug.log

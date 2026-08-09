@@ -751,7 +751,14 @@ async function renderSettings() {
         <span id="patrol-points-settings-saved"></span>
       </form>
     </div>
+    <div class="card">
+      <h2>Demo feedback</h2>
+      <p class="muted">Feedback left by testers from the on-page "Feedback" button while the portal is in demo mode.</p>
+      <div id="demo-fb-list"><p class="muted">Loading&hellip;</p></div>
+      <div class="cap-actions" style="margin-top:.6rem"><a class="btn btn-secondary" href="/api/admin/feedback/export.csv">Export feedback (CSV)</a></div>
+    </div>
   `;
+  loadDemoFeedback();
   document.getElementById('gallery-settings-form').addEventListener('submit', async e => {
     e.preventDefault();
     await Api.put('/api/admin/settings', {
@@ -816,6 +823,21 @@ async function renderSettings() {
     await Api.put('/api/admin/settings', { patrolPointsEnabled: document.getElementById('patrol-points-enabled').checked, ppGuestEnabled: document.getElementById('pp-guest-enabled').checked });
     document.getElementById('patrol-points-settings-saved').textContent = 'Saved.';
   });
+  async function loadDemoFeedback() {
+    const host = document.getElementById('demo-fb-list');
+    if (!host) return;
+    let d;
+    try { d = await Api.get('/api/admin/feedback'); } catch (e) { host.innerHTML = ''; return; }
+    if (!d.feedback.length) { host.innerHTML = '<p class="muted">No feedback yet.</p>'; return; }
+    host.innerHTML = `<table class="data-table rcards"><thead><tr><th>When</th><th>Persona</th><th>Type</th><th>Rating</th><th>Comment</th></tr></thead>
+      <tbody>${d.feedback.map(f => `<tr>
+        <td data-label="When" class="muted">${formatDateTime(f.createdAt)}</td>
+        <td data-label="Persona">${escapeHtml(f.persona || '')}</td>
+        <td data-label="Type"><span class="badge" data-status="${f.category === 'defect' ? 'deleted' : (f.category === 'enhancement' ? 'pending_approval' : 'active')}">${escapeHtml(f.categoryLabel)}</span></td>
+        <td data-label="Rating">${f.rating ? f.rating + '/5' : '—'}</td>
+        <td data-label="Comment" class="rcard-title">${escapeHtml(f.comment)}<br><span class="muted" style="font-size:.8rem">${escapeHtml(f.page || '')}${f.device ? ' · ' + escapeHtml(f.device) : ''}</span></td>
+      </tr>`).join('')}</tbody></table>`;
+  }
   document.getElementById('settings-form').addEventListener('submit', async e => {
     e.preventDefault();
     await Api.put('/api/admin/settings', {

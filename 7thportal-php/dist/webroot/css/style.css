@@ -261,6 +261,9 @@ textarea { min-height: 5rem; resize: vertical; }
 .pp-qs-submit { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-top: 0.5rem; border-top: 1px solid var(--border); padding-top: 0.8rem; }
 .pp-qs-submit .btn { font-size: 1.05rem; padding: 0.6rem 1.4rem; }
 .pp-qs-recent { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.9rem; }
+/* Demo feedback floating button */
+.demo-fb-btn { position: fixed; right: 1rem; bottom: 1rem; z-index: 90; background: var(--purple); color: #fff; border: 0; border-radius: var(--radius-pill); padding: 0.65rem 1.1rem; font: inherit; font-weight: 600; box-shadow: 0 2px 10px rgba(0,0,0,0.2); cursor: pointer; }
+.demo-fb-btn:hover { background: var(--purple-dark); }
 .data-table th, .data-table td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .data-table th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 .data-table input { padding: 0.3rem 0.4rem; border: 1px solid var(--border); border-radius: 5px; font: inherit; }
