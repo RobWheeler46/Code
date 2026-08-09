@@ -173,6 +173,7 @@ function serializePpSubmission(array $s, array $lines, array $teamNames, array $
         'comment' => $s['comment'], 'status' => $status,
         'isRevision' => $s['revises_id'] !== null, 'revisesId' => $s['revises_id'] !== null ? (int) $s['revises_id'] : null,
         'isGuest' => $isGuest, 'guestName' => $isGuest ? ($s['guest_name'] ?? 'Guest') : null,
+        'guestLinkId' => $isGuest ? (int) $s['guest_link_id'] : null,
         'submittedBy' => $isGuest ? ('Guest Quick Entry: ' . ($s['guest_name'] ?? 'guest')) : ($userNames[(int) $s['submitted_by']] ?? 'Leader'), 'submittedById' => (int) $s['submitted_by'],
         'decidedBy' => $s['decided_by'] !== null ? ($userNames[(int) $s['decided_by']] ?? 'Leader') : null,
         'decisionComment' => $s['decision_comment'], 'createdAt' => $s['created_at'],

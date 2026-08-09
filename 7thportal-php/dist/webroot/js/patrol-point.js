@@ -280,6 +280,19 @@ function reportsCard() {
     : '<tr><td colspan="2" class="muted">No approved scores yet.</td></tr>';
   const chips = Object.entries(counts).map(([k, v]) => `${SUB_LABEL[k] || k}: ${v}`).join(' · ');
   const base = `/api/patrol-points/competitions/${ID}/export`;
+
+  // Usage (RP-01): source split + per guest-station submission counts by outcome.
+  const guestSubs = SUBS.filter(s => s.isGuest);
+  const leaderCount = SUBS.length - guestSubs.length;
+  const linkLabel = id => { const g = (GUESTLINKS || []).find(x => x.id === id); return g ? (g.label || g.activityName) : ('Guest link #' + id); };
+  const byLink = {};
+  guestSubs.forEach(s => { (byLink[s.guestLinkId] = byLink[s.guestLinkId] || { total: 0 }); byLink[s.guestLinkId].total++; byLink[s.guestLinkId][s.status] = (byLink[s.guestLinkId][s.status] || 0) + 1; });
+  const stationRows = Object.keys(byLink).length
+    ? Object.entries(byLink).map(([id, c]) => `<tr><td data-label="Station" class="rcard-title">${esc(linkLabel(Number(id)))}</td>
+        <td data-label="Submitted">${c.total}</td>
+        <td data-label="Outcomes" class="muted">${['pending', 'approved', 'rejected', 'returned', 'superseded'].filter(k => c[k]).map(k => `${k}: ${c[k]}`).join(' · ') || '—'}</td></tr>`).join('')
+    : '<tr><td colspan="3" class="muted">No guest submissions yet.</td></tr>';
+
   return `<div class="card"><h2>Reports</h2>
     <div class="cap-stats">
       <div class="card" style="margin:0"><div class="muted">Points awarded</div><div class="cap-big">${awarded}</div></div>
@@ -288,10 +301,14 @@ function reportsCard() {
     <h3 style="font-size:1rem;margin:.6rem 0 .3rem">Effective points by category</h3>
     <table class="data-table rcards"><thead><tr><th>Category</th><th>Effective points</th></tr></thead><tbody>${catRows}</tbody></table>
     <p class="muted" style="margin-top:.5rem">Submissions — ${chips || '—'}</p>
+    <h3 style="font-size:1rem;margin:.8rem 0 .3rem">Usage</h3>
+    <p class="muted">Entered by leaders: ${leaderCount} · by guests: ${guestSubs.length}</p>
+    <table class="data-table rcards"><thead><tr><th>Guest station</th><th>Submitted</th><th>Outcomes</th></tr></thead><tbody>${stationRows}</tbody></table>
     <div class="cap-actions" style="margin-top:.6rem">
       <a class="btn btn-secondary" href="${base}/results.csv">Final results (CSV)</a>
       <a class="btn btn-secondary" href="${base}/points.csv">Points history (CSV)</a>
       <a class="btn btn-secondary" href="${base}/approvals.csv">Approval activity (CSV)</a>
+      <a class="btn btn-secondary" href="${base}/usage.csv">Usage (CSV)</a>
     </div></div>`;
 }
 

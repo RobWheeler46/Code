@@ -737,6 +737,32 @@ $router->get('/api/patrol-points/competitions/:id/export/approvals.csv', functio
     ppSendCsv('patrol-points-' . $c['id'] . '-approvals', ppCsv($rows));
 });
 
+// Usage (RP-01): submission + outcome counts per guest station (no security telemetry).
+$router->get('/api/patrol-points/competitions/:id/export/usage.csv', function ($params) {
+    $user = requireAuth();
+    $c = ppRequireReport($user, $params['id']);
+    $labels = [];
+    foreach (dbAll('SELECT g.id, g.label, a.name AS activity FROM pp_guest_links g LEFT JOIN pp_activities a ON a.id = g.activity_id WHERE g.competition_id = ?', [$c['id']]) as $g) {
+        $labels[(int) $g['id']] = $g['label'] ?: ($g['activity'] ?? ('Guest link #' . $g['id']));
+    }
+    $stations = [];
+    $leader = 0; $guest = 0;
+    foreach (dbAll('SELECT * FROM pp_submissions WHERE competition_id = ?', [$c['id']]) as $s) {
+        if (empty($s['guest_link_id'])) { $leader++; continue; }
+        $guest++;
+        $lid = (int) $s['guest_link_id'];
+        $stations[$lid] = $stations[$lid] ?? ['total' => 0, 'pending' => 0, 'approved' => 0, 'rejected' => 0, 'returned' => 0, 'superseded' => 0, 'withdrawn' => 0];
+        $stations[$lid]['total']++;
+        $stations[$lid][ppSubDisplayStatus($s)]++;
+    }
+    $rows = [['Source', 'Count'], ['Leader-entered', $leader], ['Guest-entered', $guest], [], ['Guest station', 'Submitted', 'Pending', 'Approved', 'Rejected', 'Returned', 'Superseded', 'Withdrawn']];
+    foreach ($stations as $lid => $st) {
+        $rows[] = [$labels[$lid] ?? ('Guest link #' . $lid), $st['total'], $st['pending'], $st['approved'], $st['rejected'], $st['returned'], $st['superseded'], $st['withdrawn']];
+    }
+    logAudit(['userId' => $user['id'], 'action' => 'pp_export_usage', 'entityType' => 'pp_competition', 'entityId' => (string) $c['id'], 'ipAddress' => clientIp()]);
+    ppSendCsv('patrol-points-' . $c['id'] . '-usage', ppCsv($rows));
+});
+
 $router->post('/api/patrol-points/competitions/:id/submissions/:sid/revise', function ($params) {
     $user = requireAuth();
     requireLeader($user);
