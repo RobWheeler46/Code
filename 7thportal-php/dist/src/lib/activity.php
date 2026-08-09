@@ -198,6 +198,25 @@ function activityDeleteFileOnDisk(string $key, string $ext): void
     if (is_file($p)) unlink($p);
 }
 
+// Retention (FRD v2.1 s12.2): rejected Activity Approval forms are kept for a
+// window (default ~6 months) then removed, taking their private uploads and
+// events with them - anonymised deletion, the safeguarding-driven default.
+// Audit-log entries about them fall under the separate audit retention setting.
+function pruneRejectedActivityForms(): void
+{
+    $row = dbGet("SELECT value FROM settings WHERE key = 'activity_rejected_retention_days'");
+    $days = (int) ($row['value'] ?? 180);
+    if ($days <= 0) return;
+    foreach (dbAll("SELECT id FROM activity_forms WHERE status = 'rejected' AND updated_at < datetime('now', ?)", ["-$days days"]) as $f) {
+        foreach (dbAll('SELECT storage_key, ext FROM activity_form_files WHERE form_id = ?', [$f['id']]) as $file) {
+            activityDeleteFileOnDisk($file['storage_key'], $file['ext']);
+        }
+        dbRun('DELETE FROM activity_form_files WHERE form_id = ?', [$f['id']]);
+        dbRun('DELETE FROM activity_form_events WHERE form_id = ?', [$f['id']]);
+        dbRun('DELETE FROM activity_forms WHERE id = ?', [$f['id']]);
+    }
+}
+
 // Action Centre (FR-ACT): forms to finish/resubmit for the submitter, and forms
 // awaiting a decision for approvers.
 function activityActionItems(array $user): array

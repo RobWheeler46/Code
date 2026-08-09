@@ -627,6 +627,7 @@ async function renderSettings() {
         <div class="grid cols-2">
           <div class="field"><label>Inactive session timeout (minutes)</label><input type="number" id="s-timeout" min="5" value="${settings.sessionTimeoutMinutes}"></div>
           <div class="field"><label>Audit log retention (days)</label><input type="number" id="s-retention" min="30" value="${settings.auditRetentionDays}"></div>
+          <div class="field"><label>Rejected activity form retention (days)</label><input type="number" id="s-act-reject" min="0" value="${settings.activityRejectedRetentionDays}"></div>
         </div>
         <p class="help">Session timeout changes take effect after the server restarts.</p>
         <button class="btn btn-primary" type="submit">Save</button>
@@ -820,6 +821,7 @@ async function renderSettings() {
     await Api.put('/api/admin/settings', {
       sessionTimeoutMinutes: Number(document.getElementById('s-timeout').value),
       auditRetentionDays: Number(document.getElementById('s-retention').value),
+      activityRejectedRetentionDays: Number(document.getElementById('s-act-reject').value),
     });
     document.getElementById('settings-saved').textContent = 'Saved.';
   });

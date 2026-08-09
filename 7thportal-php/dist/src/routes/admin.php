@@ -286,6 +286,7 @@ $router->get('/api/admin/settings', function ($params) {
     jsonResponse([
         'sessionTimeoutMinutes' => (int) ($map['session_timeout_minutes'] ?? 720),
         'auditRetentionDays' => (int) ($map['audit_retention_days'] ?? 365),
+        'activityRejectedRetentionDays' => (int) ($map['activity_rejected_retention_days'] ?? 180),
         'visibleSectionIds' => !empty($map['visible_sections']) ? json_decode($map['visible_sections'], true) : null,
         'galleryEnabled' => ($map['gallery_enabled'] ?? null) === 'true',
         'galleryWatermarkDefault' => ($map['gallery_watermark_default'] ?? null) === 'true',
@@ -315,6 +316,7 @@ $router->put('/api/admin/settings', function ($params) {
 
     if (!empty($body['sessionTimeoutMinutes'])) $upsert('session_timeout_minutes', (string) $body['sessionTimeoutMinutes']);
     if (!empty($body['auditRetentionDays'])) $upsert('audit_retention_days', (string) $body['auditRetentionDays']);
+    if (isset($body['activityRejectedRetentionDays'])) $upsert('activity_rejected_retention_days', (string) max(0, (int) $body['activityRejectedRetentionDays']));
     if (array_key_exists('visibleSectionIds', $body)) $upsert('visible_sections', $body['visibleSectionIds'] === null ? '' : json_encode($body['visibleSectionIds']));
     if (array_key_exists('galleryEnabled', $body)) $upsert('gallery_enabled', $body['galleryEnabled'] ? 'true' : 'false');
     if (array_key_exists('galleryWatermarkDefault', $body)) $upsert('gallery_watermark_default', $body['galleryWatermarkDefault'] ? 'true' : 'false');

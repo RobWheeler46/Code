@@ -63,6 +63,7 @@ require_once __DIR__ . '/../src/lib/actions.php';
 pruneAuditLog();
 pruneArchivedAlbums();
 pruneOldClaims();
+pruneRejectedActivityForms();
 if ((dbGet('SELECT COUNT(*) AS n FROM notices')['n'] ?? 0) === 0) {
     dbRun("INSERT INTO notices (title, body, audience, start_date, status)
            VALUES ('Welcome to 7thPortal', 'This is your new 7th Swindon Scout Group portal. Head to OSM for anything this site cannot show yet.', 'all', date('now'), 'published')");
