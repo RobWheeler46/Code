@@ -36,6 +36,7 @@ function sidebarLinksForRole(me, cfg) {
     links.push({ href: 'action-centre.html', label: 'Action Centre' });
     if (cfg && cfg.eventHubEnabled) links.push({ href: 'events.html', label: 'Events & camps' });
     if (cfg && cfg.calendarEnabled) links.push({ href: 'calendar.html', label: 'Calendar' });
+    if (cfg && cfg.patrolPointsEnabled) links.push({ href: 'patrol-leaderboard.html', label: 'Patrol Points' });
     if (cfg && cfg.galleryEnabled) links.push({ href: 'gallery.html', label: 'Photo gallery' });
     links.push({ href: 'notices.html', label: 'Notices' });
     links.push({ href: 'notifications.html', label: 'Notifications' });

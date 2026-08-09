@@ -25,6 +25,28 @@ $router->get('/api/patrol-points/competitions', function ($params) {
     ]);
 });
 
+// ── Parent-safe leaderboards (FRD v2.4: parents see standings only) ──────────────
+// Any authenticated user; returns only parent-visible competitions and only
+// position/team/total - never reasons, comments, submitters or young-person names.
+$router->get('/api/patrol-points/parent/leaderboards', function ($params) {
+    $user = requireAuth();
+    requirePatrolPointsEnabled();
+    $isLeader = isLeaderRole($user['portal_role']);
+    $out = [];
+    foreach (dbAll("SELECT * FROM pp_competitions WHERE visibility = 'parents' AND status IN ('open','paused','completed') ORDER BY (status = 'completed'), updated_at DESC") as $c) {
+        // Section scope: group-wide, or the parent has a child in the section (leaders always allowed).
+        if (!empty($c['osm_section_id']) && !$isLeader) {
+            if (!dbGet('SELECT 1 FROM parent_child_links WHERE parent_user_id = ? AND osm_section_id = ? LIMIT 1', [$user['id'], $c['osm_section_id']])) continue;
+        }
+        $out[] = [
+            'id' => (int) $c['id'], 'name' => $c['name'], 'sectionName' => $c['section_name'],
+            'status' => $c['status'], 'statusLabel' => PP_STATUSES[$c['status']] ?? $c['status'],
+            'leaderboard' => ppLeaderboard((int) $c['id']),
+        ];
+    }
+    jsonResponse(['competitions' => $out]);
+});
+
 // ── Create ──────────────────────────────────────────────────────────────────────
 $router->post('/api/patrol-points/competitions', function ($params) {
     $user = requireAuth();
@@ -115,7 +137,8 @@ $router->patch('/api/patrol-points/competitions/:id', function ($params) {
     $desc = array_key_exists('description', $b) ? (trim((string) $b['description']) ?: null) : $c['description'];
     $mode = in_array($b['approvalMode'] ?? $c['approval_mode'], ['immediate', 'approval'], true) ? ($b['approvalMode'] ?? $c['approval_mode']) : $c['approval_mode'];
     $allowDed = array_key_exists('allowDeductions', $b) ? (!empty($b['allowDeductions']) ? 1 : 0) : (int) $c['allow_deductions'];
-    dbRun("UPDATE pp_competitions SET name = ?, description = ?, approval_mode = ?, allow_deductions = ?, updated_at = datetime('now') WHERE id = ?", [$name, $desc, $mode, $allowDed, $c['id']]);
+    $visibility = array_key_exists('visibility', $b) ? (in_array($b['visibility'], ['leaders', 'parents'], true) ? $b['visibility'] : $c['visibility']) : $c['visibility'];
+    dbRun("UPDATE pp_competitions SET name = ?, description = ?, approval_mode = ?, allow_deductions = ?, visibility = ?, updated_at = datetime('now') WHERE id = ?", [$name, $desc, $mode, $allowDed, $visibility, $c['id']]);
     jsonResponse(serializePpCompetition(ppCompetitionOr404($c['id']), true));
 });
 

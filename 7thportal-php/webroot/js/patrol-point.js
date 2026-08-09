@@ -49,6 +49,9 @@ function summaryCard() {
     ${ACT.canManage && ['draft', 'open', 'paused'].includes(C.status)
       ? `<div class="field" style="margin:0"><label style="font-weight:400"><input type="checkbox" id="pp-deduct"${C.allowDeductions ? ' checked' : ''}> Allow deductions (negative points)</label></div>`
       : `<p class="muted">Deductions: ${C.allowDeductions ? 'allowed' : 'off'}</p>`}
+    ${ACT.canManage && C.status !== 'archived'
+      ? `<div class="field" style="margin:.3rem 0 0"><label style="font-weight:400"><input type="checkbox" id="pp-parents"${C.visibility === 'parents' ? ' checked' : ''}> Show leaderboard to parents (standings only)</label></div>`
+      : ''}
     <div id="pp-msg"></div></div>`;
 }
 
@@ -343,6 +346,10 @@ function wire() {
   const deduct = document.getElementById('pp-deduct');
   if (deduct) deduct.addEventListener('change', async () => {
     try { await Api.patch(`/api/patrol-points/competitions/${ID}`, { allowDeductions: deduct.checked }); load(); } catch (e) { msg(e.message, true); }
+  });
+  const parents = document.getElementById('pp-parents');
+  if (parents) parents.addEventListener('change', async () => {
+    try { await Api.patch(`/api/patrol-points/competitions/${ID}`, { visibility: parents.checked ? 'parents' : 'leaders' }); load(); } catch (e) { msg(e.message, true); }
   });
 
   // Teams
