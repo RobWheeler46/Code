@@ -6,6 +6,7 @@ const PERSONAS = [
   { as: 'leader', name: 'Section Leader', role: 'section_leader', desc: 'Section people, attendance, programme, activity forms, expenses, QM bookings and Patrol Points.' },
   { as: 'assistantleader', name: 'Assistant Leader', role: 'assistant_leader', desc: 'Operational leader access without group-leadership approvals.' },
   { as: 'grouplead', name: 'Group Leadership (GLV)', role: 'group_leadership', desc: 'GLV approvals: activity forms and Patrol Points sign-off, plus leader tools.' },
+  { as: 'quartermaster', name: 'Quartermaster', role: 'quartermaster', desc: 'Owns the equipment register: approve bookings, catalogue, inspections, bulk import and labels. Not a GLV.' },
   { as: 'treasurer', name: 'Treasurer', role: 'treasurer', desc: 'Expenses, mileage, the payment queue and the finance dashboard.' },
   { as: 'chair', name: 'Chair', role: 'chair', desc: 'Senior leadership: governance dashboard and approvals.' },
   { as: 'trustee', name: 'Trustee Viewer', role: 'trustee_viewer', desc: 'Read-only trustee governance dashboard, finance summaries and risk indicators.' },

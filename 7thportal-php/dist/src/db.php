@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS users (
   first_name TEXT NOT NULL,
   last_name TEXT NOT NULL,
   phone TEXT,
-  portal_role TEXT NOT NULL CHECK(portal_role IN ('parent','section_leader','assistant_leader','group_leadership','trustee_viewer','treasurer','chair','admin')),
+  portal_role TEXT NOT NULL CHECK(portal_role IN ('parent','section_leader','assistant_leader','group_leadership','quartermaster','trustee_viewer','treasurer','chair','admin')),
   account_status TEXT NOT NULL DEFAULT 'active' CHECK(account_status IN ('active','suspended','deleted')),
   osm_roles_json TEXT,
   osm_access_token TEXT,
@@ -1020,7 +1020,7 @@ if ($usersTableSql && !str_contains($usersTableSql, "'treasurer'")) {
       password_hash TEXT,
       first_name TEXT NOT NULL,
       last_name TEXT NOT NULL,
-      portal_role TEXT NOT NULL CHECK(portal_role IN ('parent','section_leader','assistant_leader','group_leadership','trustee_viewer','treasurer','chair','admin')),
+      portal_role TEXT NOT NULL CHECK(portal_role IN ('parent','section_leader','assistant_leader','group_leadership','quartermaster','trustee_viewer','treasurer','chair','admin')),
       account_status TEXT NOT NULL DEFAULT 'active' CHECK(account_status IN ('active','suspended','deleted')),
       osm_roles_json TEXT,
       osm_access_token TEXT,
@@ -1032,6 +1032,49 @@ if ($usersTableSql && !str_contains($usersTableSql, "'treasurer'")) {
       last_login_at TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    SQL);
+    db()->exec('INSERT INTO users_new SELECT * FROM users');
+    db()->exec('DROP TABLE users');
+    db()->exec('ALTER TABLE users_new RENAME TO users');
+    db()->exec('CREATE INDEX IF NOT EXISTS idx_users_role ON users(portal_role, account_status)');
+    db()->exec('COMMIT');
+    db()->exec('PRAGMA foreign_keys = ON');
+}
+
+// Migration: widen users.portal_role to include 'quartermaster' - a dedicated
+// equipment-manager role, so the Group can appoint a Quartermaster who is not on
+// the Group Leadership Team (see isQuartermasterRole). Rebuilds only when the
+// live constraint still lacks it; a no-op on fresh installs. This runs AFTER the
+// osm_terms_json/phone ALTERs above, so users_new mirrors the full current column
+// set (21 columns) and the SELECT * copy lines up column-for-column.
+$usersQmSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'")['sql'] ?? '';
+if ($usersQmSql && !str_contains($usersQmSql, "'quartermaster'")) {
+    db()->exec('PRAGMA foreign_keys = OFF');
+    db()->exec('BEGIN TRANSACTION');
+    db()->exec(<<<'SQL'
+    CREATE TABLE users_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      auth_type TEXT NOT NULL CHECK(auth_type IN ('osm','local')),
+      osm_user_id TEXT UNIQUE,
+      email TEXT UNIQUE,
+      password_hash TEXT,
+      first_name TEXT NOT NULL,
+      last_name TEXT NOT NULL,
+      portal_role TEXT NOT NULL CHECK(portal_role IN ('parent','section_leader','assistant_leader','group_leadership','quartermaster','trustee_viewer','treasurer','chair','admin')),
+      account_status TEXT NOT NULL DEFAULT 'active' CHECK(account_status IN ('active','suspended','deleted')),
+      osm_roles_json TEXT,
+      osm_access_token TEXT,
+      osm_refresh_token TEXT,
+      osm_token_expires_at TEXT,
+      is_osm_service_account INTEGER NOT NULL DEFAULT 0,
+      invite_token TEXT,
+      invite_expires_at TEXT,
+      last_login_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      osm_terms_json TEXT,
+      phone TEXT
     )
     SQL);
     db()->exec('INSERT INTO users_new SELECT * FROM users');

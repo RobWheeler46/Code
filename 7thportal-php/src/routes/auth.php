@@ -168,7 +168,7 @@ $router->get('/auth/osm/callback', function ($params) {
 // the app with fake data before OSM credentials are configured.
 $router->get('/auth/demo/login', function ($params) {
     if (!osmDemoModeAllowed()) { http_response_code(403); echo 'Demo mode is disabled on this server.'; exit; }
-    $as = in_array(queryParam('as'), ['parent', 'leader', 'leaderparent', 'assistantleader', 'grouplead', 'admin', 'treasurer', 'chair', 'trustee'], true) ? queryParam('as') : 'parent';
+    $as = in_array(queryParam('as'), ['parent', 'leader', 'leaderparent', 'assistantleader', 'grouplead', 'quartermaster', 'admin', 'treasurer', 'chair', 'trustee'], true) ? queryParam('as') : 'parent';
 
     // The System Administrator persona is kept out of the tester UI so UAT users
     // can't reach system settings. When DEMO_ADMIN_KEY is set, admin demo login
@@ -200,6 +200,7 @@ $router->get('/auth/demo/login', function ($params) {
             'chair' => 'chair',
             'trustee' => 'trustee_viewer',
             'grouplead' => 'group_leadership',
+            'quartermaster' => 'quartermaster',
             'assistantleader' => 'assistant_leader',
             default => 'section_leader',
         };

@@ -5,12 +5,13 @@ const ROLE_LABELS = [
     'section_leader' => 'Section Leader',
     'assistant_leader' => 'Assistant Leader or Section Volunteer',
     'group_leadership' => 'Group Leadership Team',
+    'quartermaster' => 'Quartermaster',
     'trustee_viewer' => 'Trustee Viewer',
     'treasurer' => 'Treasurer',
     'chair' => 'Chair',
     'admin' => 'Portal Administrator',
 ];
-const LEADER_ROLES = ['section_leader', 'assistant_leader', 'group_leadership', 'trustee_viewer', 'treasurer', 'chair', 'admin'];
+const LEADER_ROLES = ['section_leader', 'assistant_leader', 'group_leadership', 'quartermaster', 'trustee_viewer', 'treasurer', 'chair', 'admin'];
 
 function roleLabel(string $role): string { return ROLE_LABELS[$role] ?? $role; }
 function isLeaderRole(string $role): bool { return in_array($role, LEADER_ROLES, true); }
@@ -38,11 +39,11 @@ function isChairRole(string $role): bool { return in_array($role, ['chair', 'adm
 // Who may view the read-only Trustee Board finance dashboard.
 function isTrusteeDashboardRole(string $role): bool { return in_array($role, ['trustee_viewer', 'chair', 'treasurer', 'admin'], true); }
 
-// Quartermaster Booking (FRD FR-QM). Like finance's approver model, QM authority
-// is layered onto the existing roles rather than adding a new OSM role: the Group
-// Leadership Team and admins act as Quartermasters (approve/substitute/handover/
-// return), while any leader may raise a request. Trustee viewers get counts only.
-function isQuartermasterRole(string $role): bool { return in_array($role, ['group_leadership', 'admin'], true); }
+// Quartermaster Booking (FRD FR-QM). QM authority (approve/substitute/handover/
+// return, manage the catalogue, inspections & imports) sits with the dedicated
+// Quartermaster role, plus the Group Leadership Team and admins who oversee it.
+// Any other leader may raise a request; trustee viewers get counts only.
+function isQuartermasterRole(string $role): bool { return in_array($role, ['quartermaster', 'group_leadership', 'admin'], true); }
 
 // "Now" in milliseconds, matching the millisecond-epoch strings stored in
 // osm_token_expires_at (kept the same unit as the Node version for parity).

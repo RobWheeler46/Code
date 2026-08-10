@@ -761,7 +761,7 @@ function osmDemoStartupForRole(string $role): array
     ];
     $lastNames = [
         'admin' => 'Administrator', 'grouplead' => 'Group Lead', 'assistantleader' => 'Assistant Leader',
-        'treasurer' => 'Treasurer', 'chair' => 'Chair', 'trustee' => 'Trustee', 'leaderparent' => 'Leader-Parent',
+        'quartermaster' => 'Quartermaster', 'treasurer' => 'Treasurer', 'chair' => 'Chair', 'trustee' => 'Trustee', 'leaderparent' => 'Leader-Parent',
     ];
     return ['data' => ['globals' => [
         'user_id' => 'demo-osm-user',
