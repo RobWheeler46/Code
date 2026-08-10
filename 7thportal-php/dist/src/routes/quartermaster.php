@@ -66,8 +66,8 @@ $router->get('/api/qm/catalogue', function ($params) {
     $returnAt = qmNormalizeDateTime(queryParam('returnAt'), true);
     $excludeBooking = queryParam('excludeBookingId') ? (int) queryParam('excludeBookingId') : null;
 
-    // Items that are retired, missing or under repair are not offered for booking.
-    $where = ["status NOT IN ('retired','missing','under_repair')"]; $args = [];
+    // Items that are retired, missing, under repair or maintenance-locked are not offered.
+    $where = ["status NOT IN ('retired','missing','under_repair')", 'maintenance_locked = 0']; $args = [];
     if (($q = queryParam('q'))) { $where[] = '(name LIKE ? OR location LIKE ?)'; $args[] = "%$q%"; $args[] = "%$q%"; }
     if (($c = queryParam('category')) && array_key_exists($c, EQUIPMENT_CATEGORIES)) { $where[] = 'category = ?'; $args[] = $c; }
     $assets = dbAll('SELECT * FROM equipment_assets WHERE ' . implode(' AND ', $where) . ' ORDER BY name', $args);

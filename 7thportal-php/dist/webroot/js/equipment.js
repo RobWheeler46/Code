@@ -41,9 +41,9 @@ async function loadEquipment() {
             <td>${escapeHtml(EQ_META.categories[a.category] || a.category)}</td>
             <td class="muted">${escapeHtml(a.location || '&mdash;')}</td>
             <td>${escapeHtml(EQ_META.conditions[a.condition] || a.condition)}</td>
-            <td><span class="badge" data-status="${a.status === 'available' ? 'active' : (a.status === 'retired' ? 'archived' : 'pending_approval')}">${escapeHtml(EQ_META.statuses[a.status] || a.status)}</span></td>
+            <td><span class="badge" data-status="${a.status === 'available' ? 'active' : (a.status === 'retired' ? 'archived' : 'pending_approval')}">${escapeHtml(EQ_META.statuses[a.status] || a.status)}</span>${a.maintenanceLocked ? ' <span class="badge" data-status="deleted">Locked</span>' : ''}</td>
             <td>${nextCheckLabel(a)}</td>
-            <td><button class="btn btn-secondary btn-sm eq-edit" data-id="${a.id}">Edit</button></td>
+            <td style="white-space:nowrap"><button class="btn btn-secondary btn-sm eq-inspect" data-id="${a.id}">Inspect</button> <button class="btn btn-secondary btn-sm eq-edit" data-id="${a.id}">Edit</button></td>
           </tr>`).join('')}</tbody>
       </table>` : '<div class="empty-state">No assets match. Add your first asset to get started.</div>'}
     </div>`;
@@ -53,6 +53,53 @@ async function loadEquipment() {
   document.getElementById('eq-cat').addEventListener('change', e => { eqFilters.category = e.target.value; loadEquipment(); });
   document.getElementById('eq-status').addEventListener('change', e => { eqFilters.status = e.target.value; loadEquipment(); });
   document.querySelectorAll('.eq-edit').forEach(b => b.addEventListener('click', () => openAssetForm(data.assets.find(a => a.id == b.dataset.id))));
+  document.querySelectorAll('.eq-inspect').forEach(b => b.addEventListener('click', () => openInspectForm(b.dataset.id)));
+}
+
+// Record inspection modal: the six outcomes drive condition/lock/repair/retire,
+// with the asset's inspection history shown below (QM Maintenance & Inspection).
+async function openInspectForm(assetId) {
+  let d;
+  try { d = await Api.get(`/api/equipment/${assetId}`); } catch (e) { alert(e.message); return; }
+  const a = d.asset;
+  const sel = (map, v) => Object.entries(map).map(([k, l]) => `<option value="${k}"${k === v ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('');
+  const openRepairs = d.repairs.filter(r => r.status === 'open');
+  const history = d.inspections.slice(0, 8).map(r => `<div style="padding:.3rem 0;border-bottom:1px solid var(--border);font-size:.85rem">
+      <strong>${escapeHtml(r.outcomeLabel)}</strong>${r.locked ? ' <span class="badge" data-status="deleted">locked</span>' : ''} <span class="muted">· ${escapeHtml(r.by)} · ${formatDateTime(r.at)}</span>
+      ${r.note ? `<br><span class="muted">${escapeHtml(r.note)}</span>` : ''}</div>`).join('') || '<p class="muted">No inspections recorded yet.</p>';
+  const existing = document.getElementById('eq-insp-modal'); if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'eq-insp-modal'; modal.className = 'modal-backdrop';
+  modal.innerHTML = `<div class="modal-box"><h2>Inspect: ${escapeHtml(a.name)}</h2>
+    ${a.maintenanceLocked ? '<div class="alert alert-warning">Maintenance-locked — not available for booking. A Pass returns it to service.</div>' : ''}
+    ${openRepairs.length ? `<div class="alert alert-warning">Open repair: ${escapeHtml(openRepairs[0].description || '')}</div>` : ''}
+    <div id="eq-insp-msg"></div>
+    <div class="field"><label>Outcome</label><select id="ei-outcome">${sel(d.meta.outcomes, 'pass')}</select></div>
+    <div class="field"><label>Condition</label><select id="ei-cond">${sel(d.meta.conditions, a.condition)}</select></div>
+    <div class="field" id="ei-next-wrap"><label>Next inspection date</label><input id="ei-next" type="date" value="${a.nextInspectionDate || ''}"></div>
+    <div class="field" id="ei-lock-wrap" hidden><label style="font-weight:400"><input type="checkbox" id="ei-lock"> Lock the item until it can be inspected</label></div>
+    <div class="field"><label>Note</label><textarea id="ei-note" rows="2" placeholder="Findings, advisory, or repair details"></textarea></div>
+    <div class="cap-actions"><button class="btn" id="ei-save">Record inspection</button><button class="btn btn-secondary" id="ei-cancel">Cancel</button></div>
+    <h3 style="font-size:1rem;margin:1rem 0 .3rem">Inspection history</h3>${history}
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.getElementById('ei-cancel').addEventListener('click', () => modal.remove());
+  const outcome = document.getElementById('ei-outcome');
+  const syncFields = () => {
+    document.getElementById('ei-next-wrap').hidden = !['pass', 'advisory'].includes(outcome.value);
+    document.getElementById('ei-lock-wrap').hidden = outcome.value !== 'unable';
+  };
+  outcome.addEventListener('change', syncFields); syncFields();
+  document.getElementById('ei-save').addEventListener('click', async () => {
+    const body = {
+      outcome: outcome.value, condition: document.getElementById('ei-cond').value,
+      nextInspectionDate: document.getElementById('ei-next').value, note: document.getElementById('ei-note').value.trim(),
+      lock: document.getElementById('ei-lock').checked,
+    };
+    try { await Api.post(`/api/equipment/${assetId}/inspections`, body); modal.remove(); loadEquipment(); }
+    catch (e) { document.getElementById('eq-insp-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
 }
 
 function optionList(map, selected, allLabel) {

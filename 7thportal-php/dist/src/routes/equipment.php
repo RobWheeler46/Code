@@ -87,7 +87,32 @@ $router->get('/api/equipment/:id', function ($params) {
     requireEquipmentEnabled();
     $a = dbGet('SELECT * FROM equipment_assets WHERE id = ?', [$params['id']]);
     if (!$a) jsonResponse(['error' => 'Asset not found.'], 404);
-    jsonResponse(serializeAsset($a));
+    $userNames = [];
+    foreach (dbAll('SELECT id, first_name, last_name FROM users') as $u) $userNames[(int) $u['id']] = trim($u['first_name'] . ' ' . $u['last_name']);
+    jsonResponse([
+        'asset' => serializeAsset($a),
+        'inspections' => array_map(fn($r) => serializeInspection($r, $userNames), dbAll('SELECT * FROM equipment_inspections WHERE asset_id = ? ORDER BY id DESC', [$a['id']])),
+        'repairs' => array_map(fn($r) => serializeRepair($r, $userNames), dbAll("SELECT * FROM equipment_repairs WHERE asset_id = ? ORDER BY (status='resolved'), id DESC", [$a['id']])),
+        'meta' => ['outcomes' => EQUIPMENT_INSPECTION_OUTCOMES, 'conditions' => EQUIPMENT_CONDITIONS],
+    ]);
+});
+
+// Record an inspection: applies the outcome (condition/lock/repair/retire) and
+// logs it to the asset history (QM Maintenance & Inspection Workflow).
+$router->post('/api/equipment/:id/inspections', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireEquipmentEnabled();
+    $a = dbGet('SELECT * FROM equipment_assets WHERE id = ?', [$params['id']]);
+    if (!$a) jsonResponse(['error' => 'Asset not found.'], 404);
+    $b = requestBody();
+    $outcome = $b['outcome'] ?? '';
+    if (!array_key_exists($outcome, EQUIPMENT_INSPECTION_OUTCOMES)) jsonResponse(['error' => 'Choose an inspection outcome.'], 422);
+    if (in_array($outcome, ['fail', 'repair', 'unable'], true) && trim((string) ($b['note'] ?? '')) === '') {
+        jsonResponse(['error' => 'A note is required for this outcome.'], 422);
+    }
+    $asset = equipmentApplyInspection($a, $outcome, $b, (int) $user['id']);
+    jsonResponse(serializeAsset($asset));
 });
 
 $router->patch('/api/equipment/:id', function ($params) {

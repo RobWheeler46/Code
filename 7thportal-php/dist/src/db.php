@@ -554,10 +554,37 @@ CREATE TABLE IF NOT EXISTS equipment_assets (
   replacement_due_date TEXT,
   loan_due_date TEXT,
   last_checked_date TEXT,
+  maintenance_locked INTEGER NOT NULL DEFAULT 0,
   created_by INTEGER REFERENCES users(id),
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+-- Equipment inspection history + repair tasks (QM Maintenance & Inspection
+-- Workflow). Each inspection records an outcome that drives condition, lock and
+-- retirement; a maintenance lock blocks booking until a return-to-service pass.
+CREATE TABLE IF NOT EXISTS equipment_inspections (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  asset_id INTEGER NOT NULL REFERENCES equipment_assets(id) ON DELETE CASCADE,
+  outcome TEXT NOT NULL,
+  condition_set TEXT,
+  next_inspection_date TEXT,
+  note TEXT,
+  locked INTEGER NOT NULL DEFAULT 0,
+  inspected_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_equipment_inspections_asset ON equipment_inspections(asset_id);
+CREATE TABLE IF NOT EXISTS equipment_repairs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  asset_id INTEGER NOT NULL REFERENCES equipment_assets(id) ON DELETE CASCADE,
+  description TEXT,
+  status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','resolved')),
+  opened_by INTEGER REFERENCES users(id),
+  opened_at TEXT NOT NULL DEFAULT (datetime('now')),
+  resolved_by INTEGER REFERENCES users(id),
+  resolved_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_equipment_repairs_asset ON equipment_repairs(asset_id, status);
 CREATE INDEX IF NOT EXISTS idx_equipment_status ON equipment_assets(status, category);
 
 -- Quartermaster Booking (FRD FR-QM / backlog LATER-005). Builds on the equipment
@@ -944,6 +971,11 @@ if ($ppCatsSql && !str_contains($ppCatsSql, 'point_buttons')) {
 $ppCompsSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='pp_competitions'")['sql'] ?? '';
 if ($ppCompsSql && !str_contains($ppCompsSql, 'allow_deductions')) {
     db()->exec('ALTER TABLE pp_competitions ADD COLUMN allow_deductions INTEGER NOT NULL DEFAULT 0');
+}
+// Migration: equipment_assets gained a maintenance lock (QM inspection workflow).
+$eqSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='equipment_assets'")['sql'] ?? '';
+if ($eqSql && !str_contains($eqSql, 'maintenance_locked')) {
+    db()->exec('ALTER TABLE equipment_assets ADD COLUMN maintenance_locked INTEGER NOT NULL DEFAULT 0');
 }
 // Migration: pp_submissions gained guest attribution (FRD v2.4 s13.8) - guest
 // scores are owned by a service user but carry the link id and unverified name.
