@@ -22,6 +22,19 @@ function requireEquipmentEnabled(): void
     if (!equipmentRegisterEnabled()) jsonResponse(['error' => 'The equipment register is not enabled.'], 404);
 }
 
+// Resolve a spreadsheet cell to an enum key: matches a key or a label
+// (case-insensitive), else the default. Used by the CSV import.
+function equipmentEnumFromInput($value, array $map, string $default): string
+{
+    $v = strtolower(trim((string) $value));
+    if ($v === '') return $default;
+    if (array_key_exists($v, $map)) return $v;
+    foreach ($map as $k => $label) {
+        if (strtolower($label) === $v) return $k;
+    }
+    return $default;
+}
+
 function serializeAsset(array $a): array
 {
     return [

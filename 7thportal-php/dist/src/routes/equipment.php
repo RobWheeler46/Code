@@ -81,6 +81,96 @@ $router->post('/api/equipment', function ($params) {
     jsonResponse(serializeAsset(dbGet('SELECT * FROM equipment_assets WHERE id = ?', [$result['lastInsertId']])), 201);
 });
 
+// A ready-to-fill CSV template for bulk import (one asset per row).
+$router->get('/api/equipment/import-template.csv', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireEquipmentEnabled();
+    $header = ['Name', 'Category', 'Quantity', 'Condition', 'Status', 'Owner', 'Location', 'Section', 'Value', 'Purchase date', 'Next inspection date', 'Replacement due date', 'Notes'];
+    $example = ['3-person tent', 'camping', '4', 'good', 'available', 'Quartermaster', 'Store room, shelf B', '', '120', '', '2027-05-01', '', 'Blue bags'];
+    $out = fopen('php://temp', 'r+');
+    fputcsv($out, $header);
+    fputcsv($out, $example);
+    rewind($out);
+    $csv = stream_get_contents($out);
+    fclose($out);
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="7thportal-equipment-import-template.csv"');
+    echo "\xEF\xBB\xBF" . $csv;
+    exit;
+});
+
+// Bulk import assets from CSV text. dryRun previews the result without writing.
+$router->post('/api/equipment/import', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireEquipmentEnabled();
+    $b = requestBody();
+    $csv = trim((string) ($b['csv'] ?? ''));
+    $dryRun = !empty($b['dryRun']);
+    if ($csv === '') jsonResponse(['error' => 'No CSV content was provided.'], 422);
+    $lines = preg_split('/\r\n|\r|\n/', $csv);
+    $rows = array_values(array_filter(array_map('str_getcsv', $lines), fn($r) => count(array_filter($r, fn($c) => trim((string) $c) !== '')) > 0));
+    if (count($rows) < 2) jsonResponse(['error' => 'The CSV needs a header row and at least one data row.'], 422);
+
+    // Map header names (case-insensitive, with common aliases) to column indexes.
+    $aliases = [
+        'name' => ['name', 'asset name', 'item', 'equipment', 'asset'],
+        'category' => ['category'], 'quantity' => ['quantity', 'qty'],
+        'condition' => ['condition'], 'status' => ['status'],
+        'owner' => ['owner', 'owner name', 'responsible'], 'location' => ['location', 'storage location', 'storage'],
+        'section' => ['section', 'section name'], 'value' => ['value', 'value (£)', 'cost'],
+        'purchaseDate' => ['purchase date', 'purchased'], 'nextInspectionDate' => ['next inspection date', 'next inspection', 'next check'],
+        'replacementDueDate' => ['replacement due date', 'replacement due'], 'notes' => ['notes', 'note'],
+    ];
+    $header = array_map(fn($h) => strtolower(trim((string) $h)), array_shift($rows));
+    $col = [];
+    foreach ($aliases as $field => $names) {
+        foreach ($names as $n) { $i = array_search($n, $header, true); if ($i !== false) { $col[$field] = $i; break; } }
+    }
+    if (!isset($col['name'])) jsonResponse(['error' => 'The CSV needs a "Name" column.'], 422);
+
+    $cell = fn($row, $field) => isset($col[$field]) ? trim((string) ($row[$col[$field]] ?? '')) : '';
+    $ready = []; $errors = [];
+    foreach ($rows as $n => $row) {
+        $rowNo = $n + 2; // 1-based + header
+        $name = $cell($row, 'name');
+        if ($name === '') { $errors[] = ['row' => $rowNo, 'error' => 'Missing name']; continue; }
+        $ready[] = [
+            'row' => $rowNo,
+            'fields' => [
+                'name' => $name,
+                'category' => equipmentEnumFromInput($cell($row, 'category'), EQUIPMENT_CATEGORIES, 'general'),
+                'quantity' => max(0, (int) ($cell($row, 'quantity') ?: 1)),
+                'condition' => equipmentEnumFromInput($cell($row, 'condition'), EQUIPMENT_CONDITIONS, 'good'),
+                'status' => equipmentEnumFromInput($cell($row, 'status'), EQUIPMENT_STATUSES, 'available'),
+                'owner_name' => $cell($row, 'owner') ?: null,
+                'location' => $cell($row, 'location') ?: null,
+                'section_name' => $cell($row, 'section') ?: null,
+                'value' => is_numeric($cell($row, 'value')) ? (float) $cell($row, 'value') : null,
+                'purchase_date' => $cell($row, 'purchaseDate') ?: null,
+                'next_inspection_date' => $cell($row, 'nextInspectionDate') ?: null,
+                'replacement_due_date' => $cell($row, 'replacementDueDate') ?: null,
+                'notes' => $cell($row, 'notes') ?: null,
+            ],
+        ];
+    }
+
+    if ($dryRun) {
+        jsonResponse(['dryRun' => true, 'readyCount' => count($ready), 'errors' => $errors, 'preview' => array_map(fn($r) => ['row' => $r['row'], 'name' => $r['fields']['name'], 'category' => $r['fields']['category'], 'quantity' => $r['fields']['quantity']], array_slice($ready, 0, 10))]);
+    }
+
+    $imported = 0;
+    foreach ($ready as $r) {
+        $f = $r['fields'];
+        $cols = array_keys($f);
+        dbRun('INSERT INTO equipment_assets (' . implode(',', $cols) . ', created_by) VALUES (' . implode(',', array_fill(0, count($cols), '?')) . ', ?)', [...array_values($f), $user['id']]);
+        $imported++;
+    }
+    logAudit(['userId' => $user['id'], 'action' => 'equipment_import', 'entityType' => 'equipment', 'ipAddress' => clientIp(), 'details' => ['imported' => $imported, 'skipped' => count($errors)]]);
+    jsonResponse(['ok' => true, 'imported' => $imported, 'skipped' => count($errors), 'errors' => $errors]);
+});
+
 $router->get('/api/equipment/:id', function ($params) {
     $user = requireAuth();
     requireLeader($user);

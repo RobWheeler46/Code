@@ -5,8 +5,55 @@ const eqFilters = { q: '', category: '', status: '' };
   const me = await requireUserNav();
   if (!me) return;
   document.getElementById('add-asset').addEventListener('click', () => openAssetForm(null));
+  document.getElementById('import-assets').addEventListener('click', openImportModal);
   loadEquipment();
 })();
+
+// Bulk import from a CSV: shows a dry-run preview (ready count + skipped rows)
+// before applying (QM Equipment Register Import).
+function openImportModal() {
+  const existing = document.getElementById('eq-import-modal'); if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'eq-import-modal'; modal.className = 'modal-backdrop';
+  modal.innerHTML = `<div class="modal-box"><h2>Import equipment</h2>
+    <p class="muted">Upload a CSV with one asset per row. <a href="/api/equipment/import-template.csv">Download the template</a> — if your data is in a spreadsheet, save it as CSV first.</p>
+    <div class="field"><input type="file" id="eq-import-file" accept=".csv,text/csv"></div>
+    <div id="eq-import-preview"></div>
+    <div class="cap-actions"><button class="btn" id="eq-import-apply" disabled>Import</button><button class="btn btn-secondary" id="eq-import-cancel">Cancel</button></div>
+    <div id="eq-import-msg"></div></div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.getElementById('eq-import-cancel').addEventListener('click', () => modal.remove());
+
+  let csvText = '';
+  document.getElementById('eq-import-file').addEventListener('change', e => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      csvText = String(reader.result);
+      try {
+        const d = await Api.post('/api/equipment/import', { csv: csvText, dryRun: true });
+        const errs = d.errors.length ? `<div class="alert alert-warning">${d.errors.length} row(s) will be skipped: ${d.errors.slice(0, 5).map(x => `row ${x.row} (${escapeHtml(x.error)})`).join(', ')}${d.errors.length > 5 ? '…' : ''}</div>` : '';
+        const rows = d.preview.map(p => `<tr><td>${escapeHtml(p.name)}</td><td class="muted">${escapeHtml(p.category)}</td><td>${p.quantity}</td></tr>`).join('');
+        document.getElementById('eq-import-preview').innerHTML = `<div class="alert alert-success">${d.readyCount} asset(s) ready to import.</div>${errs}
+          ${rows ? `<table class="data-table"><thead><tr><th>Name</th><th>Category</th><th>Qty</th></tr></thead><tbody>${rows}</tbody></table>${d.readyCount > 10 ? '<p class="muted">Showing the first 10.</p>' : ''}` : ''}`;
+        const apply = document.getElementById('eq-import-apply');
+        apply.disabled = d.readyCount === 0;
+        apply.textContent = `Import ${d.readyCount} asset${d.readyCount === 1 ? '' : 's'}`;
+      } catch (err) { document.getElementById('eq-import-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`; }
+    };
+    reader.readAsText(file);
+  });
+  document.getElementById('eq-import-apply').addEventListener('click', async () => {
+    if (!csvText) return;
+    try {
+      const r = await Api.post('/api/equipment/import', { csv: csvText });
+      const msg = document.getElementById('eq-import-msg');
+      msg.innerHTML = `<div class="alert alert-success">Imported ${r.imported} asset(s)${r.skipped ? `, skipped ${r.skipped}` : ''}.</div>`;
+      setTimeout(() => { modal.remove(); loadEquipment(); }, 900);
+    } catch (err) { document.getElementById('eq-import-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`; }
+  });
+}
 
 async function loadEquipment() {
   const box = document.getElementById('content');
