@@ -759,10 +759,14 @@ function osmDemoStartupForRole(string $role): array
     $roles = $role === 'parent' ? [] : [
         ['sectionid' => 's101', 'sectionname' => 'Cubs', 'section' => 'cubs', 'userid' => 'demo-osm-user'],
     ];
+    $lastNames = [
+        'admin' => 'Administrator', 'grouplead' => 'Group Lead', 'assistantleader' => 'Assistant Leader',
+        'treasurer' => 'Treasurer', 'chair' => 'Chair', 'trustee' => 'Trustee', 'leaderparent' => 'Leader-Parent',
+    ];
     return ['data' => ['globals' => [
         'user_id' => 'demo-osm-user',
         'firstname' => 'Demo',
-        'lastname' => $role === 'admin' ? 'Administrator' : 'Leader',
+        'lastname' => $lastNames[$role] ?? 'Leader',
         'roles' => $roles,
         'terms' => ['s101' => [OSM_DEMO_TERM], 's102' => [OSM_DEMO_TERM]],
     ]]];

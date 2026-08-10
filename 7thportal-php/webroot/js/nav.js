@@ -16,9 +16,18 @@ function renderPublicNav() {
   `;
 }
 
-async function renderDemoBanner(cfg) {
-  if (cfg && !cfg.osmConfigured) {
-    const el = document.createElement('div');
+function renderDemoBanner(cfg, me) {
+  if (!cfg || document.querySelector('.demo-banner')) return;
+  const el = document.createElement('div');
+  if (cfg.demoModeAllowed) {
+    // Prominent, unmistakable banner for the demo/test environment, naming the
+    // current persona and offering a one-click persona switch (DEMO-AUTH-003/004).
+    const who = me ? ` — you are <strong>${escapeHtml(me.firstName)} ${escapeHtml(me.lastName)}</strong> (${escapeHtml(me.roleLabel || me.role || '')})` : '';
+    el.className = 'demo-banner demo-banner-strong';
+    el.innerHTML = `<span class="demo-badge">DEMO</span> Test environment — synthetic sample data, not connected to OSM, email or calendar${who}. <a href="demo.html">Switch persona</a>`;
+    document.body.prepend(el);
+    document.body.classList.add('has-demo-banner');
+  } else if (!cfg.osmConfigured) {
     el.className = 'demo-banner';
     el.innerHTML = `Demo Mode &mdash; OSM is not connected yet, so you are seeing sample data. <a href="index.html#demo">Learn more</a>`;
     document.body.prepend(el);
@@ -151,7 +160,7 @@ async function requireUserNav(pageView) {
     try { await Api.post('/api/context', { view: pageView }); me.activeView = pageView; } catch (e) { /* non-fatal */ }
   }
   try { cfg = await Api.get('/api/config'); } catch (e) { /* best effort */ }
-  renderDemoBanner(cfg);
+  renderDemoBanner(cfg, me);
   const activeView = me.activeView || (me.role === 'parent' ? 'parent' : 'leader');
   const pillLabel = me.dualRole ? (activeView === 'parent' ? 'Parent view' : 'Leader view') : me.roleLabel;
   const target = document.getElementById('app-nav');

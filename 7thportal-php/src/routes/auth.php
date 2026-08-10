@@ -168,7 +168,7 @@ $router->get('/auth/osm/callback', function ($params) {
 // the app with fake data before OSM credentials are configured.
 $router->get('/auth/demo/login', function ($params) {
     if (!osmDemoModeAllowed()) { http_response_code(403); echo 'Demo mode is disabled on this server.'; exit; }
-    $as = in_array(queryParam('as'), ['parent', 'leader', 'leaderparent', 'admin', 'treasurer', 'chair', 'trustee'], true) ? queryParam('as') : 'parent';
+    $as = in_array(queryParam('as'), ['parent', 'leader', 'leaderparent', 'assistantleader', 'grouplead', 'admin', 'treasurer', 'chair', 'trustee'], true) ? queryParam('as') : 'parent';
 
     if ($as === 'parent') {
         $user = dbGet("SELECT * FROM users WHERE email = 'demo.parent@example.com'");
@@ -187,6 +187,8 @@ $router->get('/auth/demo/login', function ($params) {
             'treasurer' => 'treasurer',
             'chair' => 'chair',
             'trustee' => 'trustee_viewer',
+            'grouplead' => 'group_leadership',
+            'assistantleader' => 'assistant_leader',
             default => 'section_leader',
         };
         $user = dbGet('SELECT * FROM users WHERE osm_user_id = ?', [$osmUserId]);

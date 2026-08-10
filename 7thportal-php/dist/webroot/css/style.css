@@ -67,6 +67,20 @@ a { color: var(--purple); }
   background: var(--amber); color: #fff; text-align: center; padding: 0.4rem 1rem; font-size: 0.85rem;
 }
 .demo-banner a { color: #fff; text-decoration: underline; }
+/* Prominent, sticky demo/test banner with a warning stripe (DEMO-AUTH-003) */
+.demo-banner-strong {
+  position: sticky; top: 0; z-index: 200; font-size: 0.9rem; font-weight: 600; padding: 0.55rem 1rem;
+  color: #1b1533; text-align: center;
+  background: repeating-linear-gradient(45deg, var(--yellow), var(--yellow) 14px, #ffd84d 14px, #ffd84d 28px);
+  border-bottom: 2px solid var(--amber);
+}
+.demo-banner-strong a { color: var(--purple-dark); text-decoration: underline; font-weight: 700; }
+.demo-badge {
+  display: inline-block; background: var(--purple); color: #fff; border-radius: 5px;
+  padding: 0.05rem 0.45rem; margin-right: 0.4rem; font-weight: 800; letter-spacing: 0.06em; font-size: 0.78rem;
+}
+.demo-persona { text-decoration: none; color: inherit; transition: border-color 0.15s; }
+.demo-persona:hover { border-color: var(--purple); }
 
 /* ── Layout: left sidebar + main content ────────────────────────────── */
 .app-layout { display: flex; align-items: flex-start; max-width: 1280px; margin: 0 auto; }
