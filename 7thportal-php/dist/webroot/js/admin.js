@@ -757,8 +757,14 @@ async function renderSettings() {
       <div id="demo-fb-list"><p class="muted">Loading&hellip;</p></div>
       <div class="cap-actions" style="margin-top:.6rem"><a class="btn btn-secondary" href="/api/admin/feedback/export.csv">Export feedback (CSV)</a></div>
     </div>
+    <div class="card" id="demo-reset-card" hidden>
+      <h2>Demo data</h2>
+      <p class="muted">Reset the demo/test environment to a known baseline — clears module data (competitions, forms, events, expenses, gallery, bookings, notices, etc.) and re-seeds a starter set. User accounts, settings, audit log and feedback are kept.</p>
+      <div class="cap-actions"><button class="btn btn-secondary" id="demo-reset-btn">Reset demo data to baseline</button><span id="demo-reset-msg"></span></div>
+    </div>
   `;
   loadDemoFeedback();
+  wireDemoReset();
   document.getElementById('gallery-settings-form').addEventListener('submit', async e => {
     e.preventDefault();
     await Api.put('/api/admin/settings', {
@@ -823,6 +829,18 @@ async function renderSettings() {
     await Api.put('/api/admin/settings', { patrolPointsEnabled: document.getElementById('patrol-points-enabled').checked, ppGuestEnabled: document.getElementById('pp-guest-enabled').checked });
     document.getElementById('patrol-points-settings-saved').textContent = 'Saved.';
   });
+  async function wireDemoReset() {
+    let cfg; try { cfg = await Api.get('/api/config'); } catch (e) { return; }
+    if (!cfg || !cfg.demoModeAllowed) return; // demo/test environments only
+    const card = document.getElementById('demo-reset-card');
+    if (card) card.hidden = false;
+    document.getElementById('demo-reset-btn')?.addEventListener('click', async () => {
+      if (!confirm('Reset ALL demo data to the baseline? This clears competitions, forms, events, expenses, gallery, bookings and notices, then re-seeds a starter set. Accounts and feedback are kept.')) return;
+      const msg = document.getElementById('demo-reset-msg');
+      try { const r = await Api.post('/api/admin/demo/reset', {}); msg.innerHTML = `<span class="muted" style="margin-left:.5rem">Reset done (${r.clearedTables} tables cleared). Reload to see the baseline.</span>`; }
+      catch (e) { msg.innerHTML = `<span class="alert alert-error">${escapeHtml(e.message)}</span>`; }
+    });
+  }
   async function loadDemoFeedback() {
     const host = document.getElementById('demo-fb-list');
     if (!host) return;

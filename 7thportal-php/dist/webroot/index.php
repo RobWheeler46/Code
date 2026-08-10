@@ -56,6 +56,7 @@ require_once __DIR__ . '/../src/lib/calendar.php';
 require_once __DIR__ . '/../src/lib/attendance.php';
 require_once __DIR__ . '/../src/lib/activity.php';
 require_once __DIR__ . '/../src/lib/patrolpoints.php';
+require_once __DIR__ . '/../src/lib/demoseed.php';
 require_once __DIR__ . '/../src/lib/actions.php';
 
 // Idempotent maintenance, mirrors the one-off boot tasks in the Node

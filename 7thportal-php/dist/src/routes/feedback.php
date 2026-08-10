@@ -36,6 +36,16 @@ $router->get('/api/admin/feedback', function ($params) {
     ]);
 });
 
+// Admin: reset all demo data to the known baseline (demo mode only).
+$router->post('/api/admin/demo/reset', function ($params) {
+    $user = requireAuth();
+    requireAdmin($user);
+    if (!osmDemoModeAllowed()) jsonResponse(['error' => 'Demo reset is only available in the demo/test environment.'], 403);
+    $r = demoResetToBaseline((int) $user['id']);
+    logAudit(['userId' => $user['id'], 'action' => 'demo_reset', 'ipAddress' => clientIp(), 'details' => $r]);
+    jsonResponse(['ok' => true, 'clearedTables' => $r['clearedTables']]);
+});
+
 // Admin: export feedback to CSV.
 $router->get('/api/admin/feedback/export.csv', function ($params) {
     $user = requireAuth();
