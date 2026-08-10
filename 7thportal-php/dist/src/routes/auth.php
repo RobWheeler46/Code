@@ -170,6 +170,18 @@ $router->get('/auth/demo/login', function ($params) {
     if (!osmDemoModeAllowed()) { http_response_code(403); echo 'Demo mode is disabled on this server.'; exit; }
     $as = in_array(queryParam('as'), ['parent', 'leader', 'leaderparent', 'assistantleader', 'grouplead', 'admin', 'treasurer', 'chair', 'trustee'], true) ? queryParam('as') : 'parent';
 
+    // The System Administrator persona is kept out of the tester UI so UAT users
+    // can't reach system settings. When DEMO_ADMIN_KEY is set, admin demo login
+    // additionally requires ?key=<that> - so only whoever holds the key can use it.
+    if ($as === 'admin') {
+        $adminKey = env('DEMO_ADMIN_KEY');
+        if ($adminKey !== null && $adminKey !== '' && queryParam('key') !== $adminKey) {
+            http_response_code(403);
+            echo 'The demo administrator persona is restricted on this environment.';
+            exit;
+        }
+    }
+
     if ($as === 'parent') {
         $user = dbGet("SELECT * FROM users WHERE email = 'demo.parent@example.com'");
         if (!$user) {

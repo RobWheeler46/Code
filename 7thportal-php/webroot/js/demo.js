@@ -9,8 +9,10 @@ const PERSONAS = [
   { as: 'treasurer', name: 'Treasurer', role: 'treasurer', desc: 'Expenses, mileage, the payment queue and the finance dashboard.' },
   { as: 'chair', name: 'Chair', role: 'chair', desc: 'Senior leadership: governance dashboard and approvals.' },
   { as: 'trustee', name: 'Trustee Viewer', role: 'trustee_viewer', desc: 'Read-only trustee governance dashboard, finance summaries and risk indicators.' },
-  { as: 'admin', name: 'System Administrator', role: 'admin', desc: 'Configure modules, users, section capacity, audit log and demo feedback.' },
 ];
+// Note: the System Administrator persona is deliberately not listed here - it is
+// reached only via its direct demo URL (optionally key-protected), so testers
+// can't change system settings during a workshop.
 
 (async () => {
   const box = document.getElementById('content');
