@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Equipment register - 7thPortal</title>
+<title>Equipment labels - 7thPortal</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -12,17 +12,17 @@
   <aside id="app-sidebar" class="app-sidebar"></aside>
   <main class="app-main">
   <div class="container">
-    <div class="cap-head">
-      <h1 style="margin:0">Equipment &amp; asset register</h1>
-      <span class="cap-actions"><a class="btn btn-secondary" href="equipment-labels.html">Print labels</a><button class="btn btn-secondary" id="import-assets">Import</button><button class="btn" id="add-asset">Add asset</button></span>
+    <div class="cap-head" id="eq-labels-toolbar">
+      <h1 style="margin:0">Equipment labels</h1>
+      <span class="cap-actions"><button class="btn" id="eq-print">Print</button><a class="btn btn-secondary" href="equipment.html">Back</a></span>
     </div>
-    <p class="muted">What the Group owns, where it's stored, who's responsible and when it needs checking.</p>
     <div id="content"><p class="muted">Loading&hellip;</p></div>
   </div>
   </main>
   </div>
   <script src="js/api.js"></script>
   <script src="js/nav.js"></script>
-  <script src="js/equipment.js"></script>
+  <script src="js/barcode.js"></script>
+  <script src="js/equipment-labels.js"></script>
 </body>
 </html>

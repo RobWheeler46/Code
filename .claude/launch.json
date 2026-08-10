@@ -36,6 +36,12 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["7thportal-node/src/server.js"],
       "port": 8050
+    },
+    {
+      "name": "7thportal-php",
+      "runtimeExecutable": "php",
+      "runtimeArgs": ["-S", "localhost:8040", "-t", "7thportal-php/webroot", "7thportal-php/webroot/index.php"],
+      "port": 8040
     }
   ]
 }

@@ -2,26 +2,27 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Section - 7thPortal</title>
+<title>Equipment labels - 7thPortal</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="css/style.css?v=202608102122">
 </head>
 <body>
   <header id="app-nav" class="app-nav"></header>
-
   <div class="app-layout">
   <aside id="app-sidebar" class="app-sidebar"></aside>
   <main class="app-main">
   <div class="container">
-    <p><a href="leader-dashboard.html">&larr; Back to your sections</a></p>
-    <h1 id="section-title">Section members</h1>
+    <div class="cap-head" id="eq-labels-toolbar">
+      <h1 style="margin:0">Equipment labels</h1>
+      <span class="cap-actions"><button class="btn" id="eq-print">Print</button><a class="btn btn-secondary" href="equipment.html">Back</a></span>
+    </div>
     <div id="content"><p class="muted">Loading&hellip;</p></div>
   </div>
   </main>
   </div>
-
   <script src="js/api.js?v=202608102122"></script>
   <script src="js/nav.js?v=202608102122"></script>
-  <script src="js/section.js?v=202608102122"></script>
+  <script src="js/barcode.js?v=202608102122"></script>
+  <script src="js/equipment-labels.js?v=202608102122"></script>
 </body>
 </html>
