@@ -965,7 +965,9 @@ if ($secCapSql && !str_contains($secCapSql, 'active_count')) {
 // predates them.
 $acctSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='expense_accounts'")['sql'] ?? '';
 if ($acctSql && !str_contains($acctSql, 'approval_group_id')) {
-    db()->exec('ALTER TABLE expense_accounts ADD COLUMN approval_group_id INTEGER REFERENCES finance_approval_groups(id)');
+    // Plain INTEGER (no inline REFERENCES): some SQLite builds reject an
+    // ADD COLUMN that carries a foreign-key clause. The link is enforced in code.
+    db()->exec('ALTER TABLE expense_accounts ADD COLUMN approval_group_id INTEGER');
     db()->exec('ALTER TABLE expense_accounts ADD COLUMN claimant_selects_approver INTEGER NOT NULL DEFAULT 0');
     db()->exec("ALTER TABLE expense_accounts ADD COLUMN approver_selection_level TEXT NOT NULL DEFAULT 'account'");
 }
@@ -974,8 +976,9 @@ if ($acctSql && !str_contains($acctSql, 'approval_group_id')) {
 // immutable submission snapshot (FRD s28 stage 2). Add if an older table predates.
 $eciSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='expense_claim_items'")['sql'] ?? '';
 if ($eciSql && !str_contains($eciSql, 'selected_approver_user_id')) {
-    db()->exec('ALTER TABLE expense_claim_items ADD COLUMN selected_approver_user_id INTEGER REFERENCES users(id)');
-    db()->exec('ALTER TABLE expense_claim_items ADD COLUMN selected_approver_group_id INTEGER REFERENCES finance_approval_groups(id)');
+    // Plain INTEGER (no inline REFERENCES) - see the account migration above.
+    db()->exec('ALTER TABLE expense_claim_items ADD COLUMN selected_approver_user_id INTEGER');
+    db()->exec('ALTER TABLE expense_claim_items ADD COLUMN selected_approver_group_id INTEGER');
     db()->exec('ALTER TABLE expense_claim_items ADD COLUMN selected_approver_snapshot_json TEXT');
 }
 
@@ -1041,58 +1044,22 @@ if (dbGet("SELECT 1 FROM activity_forms WHERE status = 'awaiting_section' OR mor
 // no-op if it doesn't exist.
 db()->exec('DROP TABLE IF EXISTS claims');
 
-// Migration: widen users.portal_role to include 'treasurer' and 'chair' (added
-// for the Expenses/Mileage/Treasurer/Trustee finance module - see
-// 7thportal-php/DECISIONS-finance-module.md). SQLite can't ALTER a CHECK
-// constraint in place, so this rebuilds the table only if the narrower,
-// pre-finance-module constraint is still there - a no-op on fresh installs,
-// where the CREATE TABLE above already has the widened list.
+// Migration: widen users.portal_role to the current role set (adds 'treasurer'/
+// 'chair' for the finance module and 'quartermaster' for the equipment role).
+// SQLite can't ALTER a CHECK constraint in place, so the table is rebuilt when the
+// live constraint still lacks the newest role ('quartermaster') - which also covers
+// any older DB that predates 'treasurer', bringing it fully up to date in one step.
+// A no-op on fresh installs, where the CREATE TABLE above already has the full list.
+//
+// The row copy lists columns EXPLICITLY (the intersection of the target schema and
+// whatever columns the live table actually has) rather than using SELECT *, so a
+// server whose users table drifted in column set or order can't break the copy and
+// no data is silently shifted into the wrong column.
 $usersTableSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'")['sql'] ?? '';
-if ($usersTableSql && !str_contains($usersTableSql, "'treasurer'")) {
-    // PRAGMA foreign_keys is a no-op inside a transaction, and SQLite refuses
-    // to DROP a table other tables still hold a foreign key against while
-    // it's ON - so this has to be toggled off before BEGIN, not inside it.
-    db()->exec('PRAGMA foreign_keys = OFF');
-    db()->exec('BEGIN TRANSACTION');
-    db()->exec(<<<'SQL'
-    CREATE TABLE users_new (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      auth_type TEXT NOT NULL CHECK(auth_type IN ('osm','local')),
-      osm_user_id TEXT UNIQUE,
-      email TEXT UNIQUE,
-      password_hash TEXT,
-      first_name TEXT NOT NULL,
-      last_name TEXT NOT NULL,
-      portal_role TEXT NOT NULL CHECK(portal_role IN ('parent','section_leader','assistant_leader','group_leadership','quartermaster','trustee_viewer','treasurer','chair','admin')),
-      account_status TEXT NOT NULL DEFAULT 'active' CHECK(account_status IN ('active','suspended','deleted')),
-      osm_roles_json TEXT,
-      osm_access_token TEXT,
-      osm_refresh_token TEXT,
-      osm_token_expires_at TEXT,
-      is_osm_service_account INTEGER NOT NULL DEFAULT 0,
-      invite_token TEXT,
-      invite_expires_at TEXT,
-      last_login_at TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-    SQL);
-    db()->exec('INSERT INTO users_new SELECT * FROM users');
-    db()->exec('DROP TABLE users');
-    db()->exec('ALTER TABLE users_new RENAME TO users');
-    db()->exec('CREATE INDEX IF NOT EXISTS idx_users_role ON users(portal_role, account_status)');
-    db()->exec('COMMIT');
-    db()->exec('PRAGMA foreign_keys = ON');
-}
-
-// Migration: widen users.portal_role to include 'quartermaster' - a dedicated
-// equipment-manager role, so the Group can appoint a Quartermaster who is not on
-// the Group Leadership Team (see isQuartermasterRole). Rebuilds only when the
-// live constraint still lacks it; a no-op on fresh installs. This runs AFTER the
-// osm_terms_json/phone ALTERs above, so users_new mirrors the full current column
-// set (21 columns) and the SELECT * copy lines up column-for-column.
-$usersQmSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'")['sql'] ?? '';
-if ($usersQmSql && !str_contains($usersQmSql, "'quartermaster'")) {
+if ($usersTableSql && !str_contains($usersTableSql, "'quartermaster'")) {
+    // PRAGMA foreign_keys is a no-op inside a transaction, and SQLite refuses to
+    // DROP a table other tables still hold a foreign key against while it's ON - so
+    // this has to be toggled off before BEGIN, not inside it.
     db()->exec('PRAGMA foreign_keys = OFF');
     db()->exec('BEGIN TRANSACTION');
     db()->exec(<<<'SQL'
@@ -1120,7 +1087,12 @@ if ($usersQmSql && !str_contains($usersQmSql, "'quartermaster'")) {
       phone TEXT
     )
     SQL);
-    db()->exec('INSERT INTO users_new SELECT * FROM users');
+    // Copy only the columns both tables share, in the target order.
+    $targetCols = ['id', 'auth_type', 'osm_user_id', 'email', 'password_hash', 'first_name', 'last_name', 'portal_role', 'account_status', 'osm_roles_json', 'osm_access_token', 'osm_refresh_token', 'osm_token_expires_at', 'is_osm_service_account', 'invite_token', 'invite_expires_at', 'last_login_at', 'created_at', 'updated_at', 'osm_terms_json', 'phone'];
+    $liveCols = array_column(dbAll('PRAGMA table_info(users)'), 'name');
+    $shared = array_values(array_intersect($targetCols, $liveCols));
+    $colList = implode(', ', $shared);
+    db()->exec("INSERT INTO users_new ($colList) SELECT $colList FROM users");
     db()->exec('DROP TABLE users');
     db()->exec('ALTER TABLE users_new RENAME TO users');
     db()->exec('CREATE INDEX IF NOT EXISTS idx_users_role ON users(portal_role, account_status)');

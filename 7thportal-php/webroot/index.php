@@ -26,7 +26,28 @@ $isProd = env('APP_ENV') === 'production';
 error_reporting(E_ALL);
 ini_set('display_errors', $isProd ? '0' : '1');
 
-require_once __DIR__ . '/../src/db.php';
+// db.php runs the schema migrations at load, before any route logic. A failure
+// here (e.g. a migration tripping on an unexpected DB state) would otherwise be an
+// uncaught fatal that the host often replaces with its own blank 500 page, hiding
+// the cause. Catch it: always log the detail, and in development surface the real
+// message with a 200 status so it is readable in the browser even when the host
+// swallows 500 bodies. Production still fails closed with a generic message.
+try {
+    require_once __DIR__ . '/../src/db.php';
+} catch (Throwable $e) {
+    error_log('[bootstrap] migration/db init failed: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+    if (!$isProd) {
+        http_response_code(200);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo "BOOTSTRAP / MIGRATION ERROR (shown because APP_ENV is not production)\n\n";
+        echo $e->getMessage() . "\n\nin " . $e->getFile() . ':' . $e->getLine() . "\n\n" . $e->getTraceAsString() . "\n";
+        exit;
+    }
+    http_response_code(500);
+    header('Content-Type: application/json');
+    echo json_encode(['error' => 'The site is temporarily unavailable. Please try again shortly.']);
+    exit;
+}
 require_once __DIR__ . '/../src/http.php';
 
 if (loginDebugEnabled() && preg_match('#^/(auth|api/auth|api/me|login\.html)#', $uri)) {
