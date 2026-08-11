@@ -227,6 +227,23 @@ function loadItemWithClaim(int $itemId): ?array
     return dbGet(itemWithClaimQuery() . ' WHERE eci.id = ?', [$itemId]);
 }
 
+// Tell the claimant what happened to one of their claim items - an in-app
+// notification that also rolls into the weekly digest (FR-NOT). Skips when the
+// person acting is the claimant, so nobody is pinged about their own action.
+function notifyClaimant(int $claimId, int $actorUserId, string $title, string $body): void
+{
+    $claim = dbGet('SELECT claimant_user_id FROM expense_claims WHERE id = ?', [$claimId]);
+    if (!$claim || (int) $claim['claimant_user_id'] === $actorUserId) return;
+    notify((int) $claim['claimant_user_id'], 'expense_claim', $title, $body, 'expenses.html');
+}
+
+// A claim item's human reference for notification bodies, e.g. "item 2 (Tent)
+// on claim CLM-2026-0003". $item must carry item_number/title/claim_number.
+function claimItemRef(array $item): string
+{
+    return 'item ' . (int) $item['item_number'] . ' (' . trim((string) $item['title']) . ') on claim ' . $item['claim_number'];
+}
+
 function serializeItem(array $item): array
 {
     $account = dbGet('SELECT * FROM expense_accounts WHERE id = ?', [$item['account_id']]);

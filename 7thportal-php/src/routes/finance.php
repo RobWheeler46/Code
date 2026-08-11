@@ -366,6 +366,9 @@ $router->post('/api/finance/items/:itemId/approve', function ($params) {
     dbRun("UPDATE expense_claim_items SET status = ?, approved_by = ?, approved_at = datetime('now'), updated_at = datetime('now') WHERE id = ?", [$newStatus, $user['id'], $item['id']]);
     recalculateClaimStatus((int) $item['claim_id']);
     logAudit(['userId' => $user['id'], 'action' => 'finance_approve_item', 'entityType' => 'expense_claim_item', 'entityId' => (string) $item['id'], 'ipAddress' => clientIp()]);
+    if ($newStatus === 'approved') {
+        notifyClaimant((int) $item['claim_id'], (int) $user['id'], 'Expense claim approved', 'Your ' . claimItemRef($item) . ' has been approved.');
+    }
     itemActionResponse((int) $item['id']);
 });
 
@@ -379,6 +382,7 @@ $router->post('/api/finance/items/:itemId/second-approve', function ($params) {
     dbRun("UPDATE expense_claim_items SET status = 'approved', second_approved_by = ?, second_approved_at = datetime('now'), updated_at = datetime('now') WHERE id = ?", [$user['id'], $item['id']]);
     recalculateClaimStatus((int) $item['claim_id']);
     logAudit(['userId' => $user['id'], 'action' => 'finance_second_approve_item', 'entityType' => 'expense_claim_item', 'entityId' => (string) $item['id'], 'ipAddress' => clientIp()]);
+    notifyClaimant((int) $item['claim_id'], (int) $user['id'], 'Expense claim approved', 'Your ' . claimItemRef($item) . ' has completed approval.');
     itemActionResponse((int) $item['id']);
 });
 
@@ -394,6 +398,7 @@ $router->post('/api/finance/items/:itemId/reject', function ($params) {
     dbRun("UPDATE expense_claim_items SET status = 'rejected', rejected_by = ?, rejected_at = datetime('now'), rejection_reason = ?, updated_at = datetime('now') WHERE id = ?", [$user['id'], $body['reason'], $item['id']]);
     recalculateClaimStatus((int) $item['claim_id']);
     logAudit(['userId' => $user['id'], 'action' => 'finance_reject_item', 'entityType' => 'expense_claim_item', 'entityId' => (string) $item['id'], 'ipAddress' => clientIp(), 'details' => ['reason' => $body['reason']]]);
+    notifyClaimant((int) $item['claim_id'], (int) $user['id'], 'Expense claim item rejected', 'Your ' . claimItemRef($item) . ' was not approved. Reason: ' . $body['reason']);
     itemActionResponse((int) $item['id']);
 });
 
@@ -409,6 +414,7 @@ $router->post('/api/finance/items/:itemId/request-info', function ($params) {
     dbRun("UPDATE expense_claim_items SET status = 'more_info_requested', more_info_requested_by = ?, more_info_requested_at = datetime('now'), more_info_note = ?, updated_at = datetime('now') WHERE id = ?", [$user['id'], $body['note'], $item['id']]);
     recalculateClaimStatus((int) $item['claim_id']);
     logAudit(['userId' => $user['id'], 'action' => 'finance_request_info', 'entityType' => 'expense_claim_item', 'entityId' => (string) $item['id'], 'ipAddress' => clientIp()]);
+    notifyClaimant((int) $item['claim_id'], (int) $user['id'], 'More information needed on your claim', 'Your ' . claimItemRef($item) . ' needs more information: ' . $body['note']);
     itemActionResponse((int) $item['id']);
 });
 
@@ -451,13 +457,21 @@ $router->post('/api/treasurer/payment-batches', function ($params) {
         'INSERT INTO expense_payment_batches (batch_reference, created_by_user_id, payment_date, bank_reference) VALUES (?, ?, ?, ?)',
         ['PAY-' . date('Y') . '-' . str_pad((string) ((int) (dbGet('SELECT COALESCE(MAX(id),0) AS n FROM expense_payment_batches')['n']) + 1), 4, '0', STR_PAD_LEFT), $user['id'], $body['paymentDate'], $body['bankReference']]
     );
-    $claimIds = [];
+    $paidByClaim = []; // claimId => ['count' => int, 'total' => float]
     foreach ($items as $item) {
-        dbRun('INSERT INTO expense_payment_items (payment_batch_id, claim_item_id, paid_amount) VALUES (?, ?, ?)', [$batch['lastInsertId'], $item['id'], $item['approved_amount'] ?? $item['claimed_amount']]);
+        $paid = (float) ($item['approved_amount'] ?? $item['claimed_amount']);
+        dbRun('INSERT INTO expense_payment_items (payment_batch_id, claim_item_id, paid_amount) VALUES (?, ?, ?)', [$batch['lastInsertId'], $item['id'], $paid]);
         dbRun("UPDATE expense_claim_items SET status = 'paid', paid_at = datetime('now'), updated_at = datetime('now') WHERE id = ?", [$item['id']]);
-        $claimIds[(int) $item['claim_id']] = true;
+        $cid = (int) $item['claim_id'];
+        $paidByClaim[$cid] = ['count' => ($paidByClaim[$cid]['count'] ?? 0) + 1, 'total' => ($paidByClaim[$cid]['total'] ?? 0) + $paid];
     }
-    foreach (array_keys($claimIds) as $claimId) { recalculateClaimStatus($claimId); }
+    foreach (array_keys($paidByClaim) as $claimId) { recalculateClaimStatus($claimId); }
+    // One "payment sent" notification per claim (not per item, to avoid a burst).
+    foreach ($paidByClaim as $claimId => $agg) {
+        $cn = dbGet('SELECT claim_number FROM expense_claims WHERE id = ?', [$claimId]);
+        notifyClaimant($claimId, (int) $user['id'], 'Expense payment sent',
+            'Payment of £' . number_format($agg['total'], 2) . ' for ' . $agg['count'] . ' item' . ($agg['count'] === 1 ? '' : 's') . ' on claim ' . ($cn['claim_number'] ?? '') . ' has been sent (' . $body['paymentDate'] . ', reference ' . $body['bankReference'] . ').');
+    }
     logAudit(['userId' => $user['id'], 'action' => 'finance_create_payment_batch', 'entityType' => 'expense_payment_batch', 'entityId' => (string) $batch['lastInsertId'], 'ipAddress' => clientIp(), 'details' => ['itemCount' => count($items), 'bankReference' => $body['bankReference']]]);
     jsonResponse(['ok' => true, 'batchId' => $batch['lastInsertId']]);
 });
