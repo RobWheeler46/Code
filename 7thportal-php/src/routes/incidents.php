@@ -92,7 +92,18 @@ $router->post('/api/incidents', function ($params) {
         [...array_values($f), $user['id']]
     );
     logAudit(['userId' => $user['id'], 'action' => 'incident_create', 'entityType' => 'incident', 'entityId' => (string) $result['lastInsertId'], 'ipAddress' => clientIp(), 'details' => ['type' => $f['record_type'], 'sensitivity' => $f['sensitivity']]]);
-    jsonResponse(serializeIncident(dbGet('SELECT * FROM incidents WHERE id = ?', [$result['lastInsertId']])), 201);
+    $created = dbGet('SELECT * FROM incidents WHERE id = ?', [$result['lastInsertId']]);
+    // Tell the assignee they own a follow-up (skip if the reporter assigned it to
+    // themselves), and alert GLV/admin oversight when the record is restricted.
+    if (!empty($f['assigned_to']) && (int) $f['assigned_to'] !== (int) $user['id']) {
+        notify((int) $f['assigned_to'], 'incident', 'Incident follow-up assigned to you', incidentNotifyBody($created, 'You have been assigned an incident follow-up'), 'incidents.html');
+    }
+    if ($f['sensitivity'] === 'restricted') {
+        $exclude = [(int) $user['id']];
+        if (!empty($f['assigned_to'])) $exclude[] = (int) $f['assigned_to'];
+        notifyRestrictedIncidentOversight($created, $exclude);
+    }
+    jsonResponse(serializeIncident($created), 201);
 });
 
 $router->get('/api/incidents/:id', function ($params) {
@@ -119,7 +130,17 @@ $router->patch('/api/incidents/:id', function ($params) {
     dbRun("UPDATE incidents SET $set, updated_at = datetime('now') WHERE id = ?", [...array_values($f), $inc['id']]);
     $closed = $f['status'] === 'closed' && $inc['status'] !== 'closed';
     logAudit(['userId' => $user['id'], 'action' => $closed ? 'incident_close' : 'incident_update', 'entityType' => 'incident', 'entityId' => (string) $inc['id'], 'ipAddress' => clientIp()]);
-    jsonResponse(array_merge(serializeIncident(dbGet('SELECT * FROM incidents WHERE id = ?', [$inc['id']])), ['canEdit' => true]));
+    $updated = dbGet('SELECT * FROM incidents WHERE id = ?', [$inc['id']]);
+    // Notify a newly-assigned leader, and the reporter when their record is closed.
+    $prevAssignee = $inc['assigned_to'] !== null ? (int) $inc['assigned_to'] : null;
+    $newAssignee = $f['assigned_to'] !== null ? (int) $f['assigned_to'] : null;
+    if ($newAssignee && $newAssignee !== $prevAssignee && $newAssignee !== (int) $user['id']) {
+        notify($newAssignee, 'incident', 'Incident follow-up assigned to you', incidentNotifyBody($updated, 'You have been assigned an incident follow-up'), 'incidents.html');
+    }
+    if ($closed && !empty($inc['reported_by']) && (int) $inc['reported_by'] !== (int) $user['id']) {
+        notify((int) $inc['reported_by'], 'incident', 'Incident closed', incidentNotifyBody($updated, 'An incident you reported has been closed'), 'incidents.html');
+    }
+    jsonResponse(array_merge(serializeIncident($updated), ['canEdit' => true]));
 });
 
 // Aggregate CSV export (admin/GLV only) - counts/status fields, no sensitive

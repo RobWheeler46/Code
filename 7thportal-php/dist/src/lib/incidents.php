@@ -72,6 +72,32 @@ function serializeIncident(array $i, bool $full = true): array
     ]);
 }
 
+// A notification body for an incident that never leaks restricted free-text
+// (FR-INC-008): the type label is always safe, but the free-text summary is only
+// included for standard records. $lead is the human sentence, e.g. "You have been
+// assigned an incident follow-up".
+function incidentNotifyBody(array $inc, string $lead): string
+{
+    $type = INCIDENT_TYPES[$inc['record_type']] ?? 'incident';
+    if (($inc['sensitivity'] ?? 'standard') === 'restricted') {
+        return $lead . ' (' . $type . ', restricted record). Open the incident log for details.';
+    }
+    return $lead . ' (' . $type . '): ' . $inc['summary'];
+}
+
+// Alert those who oversee restricted records (GLV + admins) that one was logged,
+// excluding the people already notified directly (reporter, assignee). Body stays
+// neutral - no summary - since some recipients see these only as counts elsewhere.
+function notifyRestrictedIncidentOversight(array $inc, array $excludeUserIds): void
+{
+    $type = INCIDENT_TYPES[$inc['record_type']] ?? 'incident';
+    foreach (dbAll("SELECT id FROM users WHERE account_status = 'active' AND portal_role IN ('group_leadership','admin')") as $u) {
+        if (in_array((int) $u['id'], $excludeUserIds, true)) continue;
+        notify((int) $u['id'], 'incident', 'Restricted incident logged',
+            'A restricted incident record (' . $type . ') has been logged and needs oversight. Open the incident log for details.', 'incidents.html');
+    }
+}
+
 // Overdue assigned incident actions for the Action Centre (FR-INC "Incident action
 // due"). Admin/GLV see all overdue; others see only the ones assigned to them.
 function incidentActionItems(array $user): array
