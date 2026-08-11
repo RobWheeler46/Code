@@ -155,6 +155,13 @@ function renderItem(item) {
           <div class="field"><label>Account</label><select id="i-account-${item.id}" ${editable ? '' : 'disabled'}>${accountOptions}</select></div>
         </div>
         <div class="grid cols-2">
+          <div class="field" id="i-approver-wrap-${item.id}" style="display:none">
+            <label>Approver</label>
+            <select id="i-approver-${item.id}" ${editable ? '' : 'disabled'}></select>
+            <p class="help" id="i-approver-hint-${item.id}"></p>
+          </div>
+        </div>
+        <div class="grid cols-2">
           <div class="field"><label>Category</label><select id="i-category-${item.id}" ${editable ? '' : 'disabled'}>${categoryOptions}</select></div>
           <div class="field"><label>${item.itemType === 'mileage' ? 'Journey date' : 'Purchase date'}</label><input type="date" id="i-date-${item.id}" value="${item.expenseDate || ''}" ${editable ? '' : 'disabled'}></div>
         </div>
@@ -247,10 +254,39 @@ function renderTreasurerActions(item) {
   return `<div class="actions-row"><button class="btn btn-success btn-sm" data-ready="${item.id}">Mark ready for payment</button></div>`;
 }
 
+// Populate the per-account Approver field (FRD s28). Hidden unless the selected
+// account requires the claimant to nominate an approver; the list excludes the
+// claimant, and changing the account reloads it (keepSelectedId null clears it).
+async function refreshApproverField(item, accountId, keepSelectedId) {
+  const wrap = document.getElementById(`i-approver-wrap-${item.id}`);
+  const sel = document.getElementById(`i-approver-${item.id}`);
+  const hint = document.getElementById(`i-approver-hint-${item.id}`);
+  if (!wrap || !sel) return;
+  const acc = ACCOUNTS.find(a => a.id === Number(accountId));
+  if (!acc || !acc.claimantSelectsApprover) { wrap.style.display = 'none'; sel.innerHTML = ''; return; }
+  try {
+    const data = await Api.get(`/api/finance/accounts/${accountId}/approvers`);
+    sel.innerHTML = ['<option value="">(choose an approver)</option>']
+      .concat(data.approvers.map(a => `<option value="${a.id}" ${a.id === keepSelectedId ? 'selected' : ''}>${escapeHtml(a.name)} (${escapeHtml(a.roleLabel)})</option>`)).join('');
+    // Preserve a previously-nominated approver who is no longer in the group.
+    if (keepSelectedId && !data.approvers.some(a => a.id === keepSelectedId) && item.selectedApprover) {
+      sel.insertAdjacentHTML('afterbegin', `<option value="${item.selectedApprover.id}" selected>${escapeHtml(item.selectedApprover.name)} (nominated)</option>`);
+    }
+    hint.textContent = data.approvers.length
+      ? `Select one approver from ${data.groupName || 'the account approver group'}. You cannot approve your own claim.`
+      : 'No eligible approvers are set up for this account yet — ask a Finance Admin.';
+    wrap.style.display = '';
+  } catch (err) { wrap.style.display = 'none'; }
+}
+
 function wireItem(claim, item) {
   const errorBox = document.getElementById(`item-error-${item.id}`);
   const form = document.getElementById(`item-form-${item.id}`);
+  // Show/refresh the nominated-approver field for the current account.
+  refreshApproverField(item, item.account ? item.account.id : null, item.selectedApprover ? item.selectedApprover.id : null);
   if (item.myActions && item.myActions.canEdit) {
+    const accountSel = document.getElementById(`i-account-${item.id}`);
+    if (accountSel) accountSel.addEventListener('change', () => refreshApproverField(item, accountSel.value, null));
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
@@ -260,6 +296,11 @@ function wireItem(claim, item) {
           categoryId: document.getElementById(`i-category-${item.id}`).value || null,
           expenseDate: document.getElementById(`i-date-${item.id}`).value,
         };
+        const approverWrap = document.getElementById(`i-approver-wrap-${item.id}`);
+        if (approverWrap && approverWrap.style.display !== 'none') {
+          const v = document.getElementById(`i-approver-${item.id}`).value;
+          body.selectedApproverUserId = v ? Number(v) : null;
+        }
         if (item.itemType === 'receipt') {
           body.claimedAmount = Number(document.getElementById(`i-amount-${item.id}`).value);
           body.receiptExceptionReason = document.getElementById(`i-exception-${item.id}`).value;

@@ -266,6 +266,9 @@ CREATE TABLE IF NOT EXISTS expense_claim_items (
   ready_for_payment_by INTEGER REFERENCES users(id),
   ready_for_payment_at TEXT,
   paid_at TEXT,
+  selected_approver_user_id INTEGER REFERENCES users(id),
+  selected_approver_group_id INTEGER REFERENCES finance_approval_groups(id),
+  selected_approver_snapshot_json TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -965,6 +968,15 @@ if ($acctSql && !str_contains($acctSql, 'approval_group_id')) {
     db()->exec('ALTER TABLE expense_accounts ADD COLUMN approval_group_id INTEGER REFERENCES finance_approval_groups(id)');
     db()->exec('ALTER TABLE expense_accounts ADD COLUMN claimant_selects_approver INTEGER NOT NULL DEFAULT 0');
     db()->exec("ALTER TABLE expense_accounts ADD COLUMN approver_selection_level TEXT NOT NULL DEFAULT 'account'");
+}
+
+// Migration: expense_claim_items gained the claimant-nominated approver + its
+// immutable submission snapshot (FRD s28 stage 2). Add if an older table predates.
+$eciSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='expense_claim_items'")['sql'] ?? '';
+if ($eciSql && !str_contains($eciSql, 'selected_approver_user_id')) {
+    db()->exec('ALTER TABLE expense_claim_items ADD COLUMN selected_approver_user_id INTEGER REFERENCES users(id)');
+    db()->exec('ALTER TABLE expense_claim_items ADD COLUMN selected_approver_group_id INTEGER REFERENCES finance_approval_groups(id)');
+    db()->exec('ALTER TABLE expense_claim_items ADD COLUMN selected_approver_snapshot_json TEXT');
 }
 
 // Migration: activity_forms gained conditional-insurance flags (improved-flow

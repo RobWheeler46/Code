@@ -27,6 +27,23 @@ $router->get('/api/finance/accounts', function ($params) {
     jsonResponse(array_map('serializeAccount', dbAll('SELECT * FROM expense_accounts WHERE active = 1 ORDER BY name')));
 });
 
+// Eligible approvers a claimant may nominate for an account (FRD s28). Returns the
+// active group members minus the claimant, and whether selection is required for
+// this account, so the claim form can drive the Account -> Approver cascade.
+$router->get('/api/finance/accounts/:id/approvers', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireFinanceEnabled();
+    $account = dbGet('SELECT * FROM expense_accounts WHERE id = ? AND active = 1', [$params['id']]);
+    if (!$account) jsonResponse(['error' => 'Account not found.'], 404);
+    jsonResponse([
+        'accountId' => (int) $account['id'],
+        'selectionRequired' => (bool) ($account['claimant_selects_approver'] ?? 0),
+        'groupName' => $account['approval_group_id'] ? (dbGet('SELECT name FROM finance_approval_groups WHERE id = ?', [$account['approval_group_id']])['name'] ?? null) : null,
+        'approvers' => financeEligibleApprovers($account, (int) $user['id']),
+    ]);
+});
+
 $router->get('/api/finance/categories', function ($params) {
     requireLeader(requireAuth());
     requireFinanceEnabled();
@@ -148,13 +165,22 @@ $router->post('/api/finance/claims/:claimId/items', function ($params) {
     if (!$account) jsonResponse(['error' => 'Choose a valid account.'], 400);
     if (empty($body['title'])) jsonResponse(['error' => 'An item title is required.'], 400);
 
+    // Optional nominated approver (FRD s28). Validate against the chosen account's
+    // group now; final enforcement + snapshot happens at submission.
+    $selectedApprover = null;
+    if (!empty($body['selectedApproverUserId'])) {
+        $sa = (int) $body['selectedApproverUserId'];
+        if (!financeIsEligibleApprover($account, $sa, (int) $user['id'])) jsonResponse(['error' => 'That approver is not an eligible member of this account\'s approval group.'], 400);
+        $selectedApprover = $sa;
+    }
     $itemNumber = (int) (dbGet('SELECT COALESCE(MAX(item_number), 0) AS n FROM expense_claim_items WHERE claim_id = ?', [$claim['id']])['n']) + 1;
     $result = dbRun(
-        'INSERT INTO expense_claim_items (claim_id, item_number, item_type, title, account_id, category_id, expense_date, claimed_amount)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO expense_claim_items (claim_id, item_number, item_type, title, account_id, category_id, expense_date, claimed_amount, selected_approver_user_id, selected_approver_group_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
             $claim['id'], $itemNumber, $itemType, $body['title'], $account['id'], $body['categoryId'] ?? null,
             $body['expenseDate'] ?? null, $itemType === 'receipt' ? (float) ($body['claimedAmount'] ?? 0) : null,
+            $selectedApprover, $selectedApprover ? ($account['approval_group_id'] ?: null) : null,
         ]
     );
     $itemId = $result['lastInsertId'];
@@ -190,9 +216,27 @@ $router->patch('/api/finance/claims/:claimId/items/:itemId', function ($params) 
     $account = array_key_exists('accountId', $body) ? dbGet('SELECT * FROM expense_accounts WHERE id = ? AND active = 1', [$body['accountId']]) : null;
     if (array_key_exists('accountId', $body) && !$account) jsonResponse(['error' => 'Choose a valid account.'], 400);
 
+    // Nominated approver (FRD s28): changing the account clears any prior selection
+    // (FR-FIN-NA-005); an explicit selection is validated against the effective account.
+    $effectiveAccount = $account ?: dbGet('SELECT * FROM expense_accounts WHERE id = ?', [$item['account_id']]);
+    $accountChanged = $account && (int) $account['id'] !== (int) $item['account_id'];
+    $newApprover = $accountChanged ? null : ($item['selected_approver_user_id'] ?: null);
+    if (array_key_exists('selectedApproverUserId', $body)) {
+        if (empty($body['selectedApproverUserId'])) {
+            $newApprover = null;
+        } else {
+            $sa = (int) $body['selectedApproverUserId'];
+            if (!$effectiveAccount || !financeIsEligibleApprover($effectiveAccount, $sa, (int) $user['id'])) {
+                jsonResponse(['error' => 'That approver is not an eligible member of this account\'s approval group.'], 400);
+            }
+            $newApprover = $sa;
+        }
+    }
+    $newApproverGroup = $newApprover && $effectiveAccount ? ($effectiveAccount['approval_group_id'] ?: null) : null;
+
     dbRun(
         "UPDATE expense_claim_items SET title = ?, account_id = ?, category_id = ?, expense_date = ?, claimed_amount = ?,
-         receipt_exception_reason = ?, updated_at = datetime('now') WHERE id = ?",
+         receipt_exception_reason = ?, selected_approver_user_id = ?, selected_approver_group_id = ?, updated_at = datetime('now') WHERE id = ?",
         [
             $body['title'] ?? $item['title'],
             $account ? $account['id'] : $item['account_id'],
@@ -200,6 +244,7 @@ $router->patch('/api/finance/claims/:claimId/items/:itemId', function ($params) 
             $body['expenseDate'] ?? $item['expense_date'],
             $item['item_type'] === 'receipt' && array_key_exists('claimedAmount', $body) ? (float) $body['claimedAmount'] : $item['claimed_amount'],
             array_key_exists('receiptExceptionReason', $body) ? $body['receiptExceptionReason'] : $item['receipt_exception_reason'],
+            $newApprover, $newApproverGroup,
             $item['id'],
         ]
     );
@@ -322,6 +367,18 @@ $router->post('/api/finance/claims/:id/submit', function ($params) {
                 jsonResponse(['error' => "Accept the mileage declaration for \"{$item['title']}\" before submitting (FRD 11.1)."], 400);
             }
         }
+        // Nominated-approver accounts require a valid selection before submission
+        // (FR-FIN-NA-003). No eligible approver at all -> block clearly (edge case).
+        $acct = dbGet('SELECT * FROM expense_accounts WHERE id = ?', [$item['account_id']]);
+        if ($acct && !empty($acct['claimant_selects_approver'])) {
+            if (count(financeEligibleApprovers($acct, (int) $user['id'])) === 0) {
+                jsonResponse(['error' => "No eligible approver is available for the account on \"{$item['title']}\" - ask a Finance Admin to add approvers to its group."], 400);
+            }
+            $sa = $item['selected_approver_user_id'] ? (int) $item['selected_approver_user_id'] : 0;
+            if (!$sa || !financeIsEligibleApprover($acct, $sa, (int) $user['id'])) {
+                jsonResponse(['error' => "Choose an eligible approver for \"{$item['title']}\" before submitting."], 400);
+            }
+        }
     }
 
     foreach ($submittable as $item) {
@@ -331,6 +388,15 @@ $router->post('/api/finance/claims/:id/submit', function ($params) {
              more_info_requested_by = NULL, more_info_requested_at = NULL, more_info_note = NULL, updated_at = datetime('now') WHERE id = ?",
             [$secondApprovalRequired ? 1 : 0, $item['id']]
         );
+        // Freeze the routing snapshot at submission (FR-FIN-NA-008) so audit history
+        // stays stable even if group membership changes later.
+        if (!empty($item['selected_approver_user_id'])) {
+            $acct = dbGet('SELECT * FROM expense_accounts WHERE id = ?', [$item['account_id']]);
+            if ($acct) {
+                dbRun('UPDATE expense_claim_items SET selected_approver_group_id = ?, selected_approver_snapshot_json = ? WHERE id = ?',
+                    [$acct['approval_group_id'] ?: null, json_encode(financeApproverSnapshot($acct, (int) $item['selected_approver_user_id'])), $item['id']]);
+            }
+        }
     }
     dbRun("UPDATE expense_claims SET submitted_at = COALESCE(submitted_at, datetime('now')) WHERE id = ?", [$claim['id']]);
     recalculateClaimStatus((int) $claim['id']);

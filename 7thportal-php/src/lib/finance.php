@@ -330,6 +330,13 @@ function serializeItem(array $item): array
         'moreInfoNote' => $item['more_info_note'],
         'readyForPaymentAt' => $item['ready_for_payment_at'],
         'paidAt' => $item['paid_at'],
+        'selectedApprover' => !empty($item['selected_approver_user_id'])
+            ? (function () use ($item) {
+                $u = dbGet('SELECT id, first_name, last_name FROM users WHERE id = ?', [$item['selected_approver_user_id']]);
+                return $u ? ['id' => (int) $u['id'], 'name' => $u['first_name'] . ' ' . $u['last_name']] : null;
+            })()
+            : null,
+        'selectedApproverSnapshot' => !empty($item['selected_approver_snapshot_json']) ? json_decode($item['selected_approver_snapshot_json'], true) : null,
         'createdAt' => $item['created_at'],
         'updatedAt' => $item['updated_at'],
     ];
@@ -431,9 +438,45 @@ function isAccountApprover(array $user, array $account): bool
 function canActOnItemApproval(array $user, array $item): bool
 {
     if ((int) $user['id'] === (int) $item['claim_claimant_user_id']) return false;
+    if (isAdminRole($user['portal_role'])) return true;
+    // A claimant-nominated item routes to exactly the selected approver
+    // (FR-FIN-NA-003/007); the legacy account approver/deputy no longer applies.
+    if (!empty($item['selected_approver_user_id'])) {
+        return (int) $item['selected_approver_user_id'] === (int) $user['id'];
+    }
     $account = dbGet('SELECT * FROM expense_accounts WHERE id = ?', [$item['account_id']]);
     if (!$account) return false;
-    return isAccountApprover($user, $account) || isAdminRole($user['portal_role']);
+    return isAccountApprover($user, $account);
+}
+
+// Is $userId a currently-valid nominated approver for $account? Active member of
+// the account's approval group, and not the claimant (FR-FIN-NA-002/004).
+function financeIsEligibleApprover(array $account, int $userId, int $claimantUserId): bool
+{
+    if ($userId === $claimantUserId || empty($account['approval_group_id'])) return false;
+    foreach (financeGroupMembers((int) $account['approval_group_id']) as $u) {
+        if ((int) $u['id'] === $userId) return true;
+    }
+    return false;
+}
+
+// Immutable submission snapshot of a nominated approver (FR-FIN-NA-008): who was
+// chosen, from which group/account, and that they were eligible at submit time.
+function financeApproverSnapshot(array $account, int $approverUserId): array
+{
+    $u = dbGet('SELECT first_name, last_name, portal_role FROM users WHERE id = ?', [$approverUserId]);
+    $g = !empty($account['approval_group_id']) ? dbGet('SELECT name FROM finance_approval_groups WHERE id = ?', [$account['approval_group_id']]) : null;
+    return [
+        'approverUserId' => $approverUserId,
+        'approverName' => $u ? trim($u['first_name'] . ' ' . $u['last_name']) : null,
+        'approverRole' => $u ? roleLabel($u['portal_role']) : null,
+        'groupId' => !empty($account['approval_group_id']) ? (int) $account['approval_group_id'] : null,
+        'groupName' => $g['name'] ?? null,
+        'accountId' => (int) $account['id'],
+        'accountName' => $account['name'],
+        'eligibleAtSubmission' => true,
+        'snapshotAt' => gmdate('Y-m-d H:i:s'),
+    ];
 }
 
 function canActOnSecondApproval(array $user, array $item): bool
