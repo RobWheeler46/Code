@@ -100,6 +100,44 @@ $router->get('/api/equipment/import-template.csv', function ($params) {
     exit;
 });
 
+// Export the whole register as CSV (stock-take / insurance schedule / backup).
+// Honours the same q/category/status filters as the list, so a filtered view can
+// be exported too. Columns are import-compatible - the extra read-only columns
+// (Asset code, Last checked, Loan due, Maintenance locked) are simply ignored on
+// re-import, so a file exported here round-trips back through the importer.
+$router->get('/api/equipment/export.csv', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireEquipmentEnabled();
+    $where = []; $args = [];
+    if (($q = queryParam('q'))) { $where[] = '(name LIKE ? OR location LIKE ? OR owner_name LIKE ?)'; $args[] = "%$q%"; $args[] = "%$q%"; $args[] = "%$q%"; }
+    if (($c = queryParam('category')) && array_key_exists($c, EQUIPMENT_CATEGORIES)) { $where[] = 'category = ?'; $args[] = $c; }
+    if (($s = queryParam('status')) && array_key_exists($s, EQUIPMENT_STATUSES)) { $where[] = 'status = ?'; $args[] = $s; }
+    $sql = 'SELECT * FROM equipment_assets' . ($where ? ' WHERE ' . implode(' AND ', $where) : '') . ' ORDER BY name';
+
+    $out = fopen('php://temp', 'r+');
+    fputcsv($out, ['Asset code', 'Name', 'Category', 'Quantity', 'Condition', 'Status', 'Owner', 'Location', 'Section', 'Value', 'Purchase date', 'Next inspection date', 'Replacement due date', 'Last checked date', 'Loan due date', 'Maintenance locked', 'Notes']);
+    foreach (dbAll($sql, $args) as $a) {
+        fputcsv($out, [
+            'EQP-' . str_pad((string) $a['id'], 4, '0', STR_PAD_LEFT),
+            $a['name'], $a['category'], (int) $a['quantity'], $a['condition'], $a['status'],
+            $a['owner_name'], $a['location'], $a['section_name'],
+            $a['value'] !== null ? (float) $a['value'] : '',
+            $a['purchase_date'], $a['next_inspection_date'], $a['replacement_due_date'],
+            $a['last_checked_date'], $a['loan_due_date'],
+            !empty($a['maintenance_locked']) ? 'yes' : 'no', $a['notes'],
+        ]);
+    }
+    rewind($out);
+    $csv = stream_get_contents($out);
+    fclose($out);
+    logAudit(['userId' => $user['id'], 'action' => 'equipment_export', 'entityType' => 'equipment', 'ipAddress' => clientIp()]);
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="7thportal-equipment-register-' . gmdate('Y-m-d') . '.csv"');
+    echo "\xEF\xBB\xBF" . $csv;
+    exit;
+});
+
 // Bulk import assets from CSV text. dryRun previews the result without writing.
 $router->post('/api/equipment/import', function ($params) {
     $user = requireAuth();
