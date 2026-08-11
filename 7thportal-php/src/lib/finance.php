@@ -193,6 +193,8 @@ function serializeAccount(array $account): array
 {
     $approver = $account['approver_user_id'] ? dbGet('SELECT id, first_name, last_name FROM users WHERE id = ?', [$account['approver_user_id']]) : null;
     $deputy = $account['deputy_approver_user_id'] ? dbGet('SELECT id, first_name, last_name FROM users WHERE id = ?', [$account['deputy_approver_user_id']]) : null;
+    $groupId = $account['approval_group_id'] ?? null;
+    $group = $groupId ? dbGet('SELECT * FROM finance_approval_groups WHERE id = ?', [$groupId]) : null;
     return [
         'id' => (int) $account['id'],
         'name' => $account['name'],
@@ -200,7 +202,51 @@ function serializeAccount(array $account): array
         'active' => (bool) $account['active'],
         'approver' => $approver ? ['id' => (int) $approver['id'], 'name' => $approver['first_name'] . ' ' . $approver['last_name']] : null,
         'deputyApprover' => $deputy ? ['id' => (int) $deputy['id'], 'name' => $deputy['first_name'] . ' ' . $deputy['last_name']] : null,
+        'approvalGroupId' => $groupId ? (int) $groupId : null,
+        'approvalGroupName' => $group ? $group['name'] : null,
+        'claimantSelectsApprover' => (bool) ($account['claimant_selects_approver'] ?? 0),
+        'approverSelectionLevel' => $account['approver_selection_level'] ?? 'account',
     ];
+}
+
+// Active members of a finance approval group, as lightweight user rows.
+function financeGroupMembers(int $groupId): array
+{
+    return dbAll(
+        "SELECT u.id, u.first_name, u.last_name, u.portal_role
+         FROM finance_approval_group_members m JOIN users u ON u.id = m.user_id
+         WHERE m.group_id = ? AND u.account_status = 'active'
+         ORDER BY u.first_name, u.last_name",
+        [$groupId]
+    );
+}
+
+function serializeApprovalGroup(array $g): array
+{
+    return [
+        'id' => (int) $g['id'],
+        'name' => $g['name'],
+        'active' => (bool) $g['active'],
+        'members' => array_map(
+            fn($u) => ['id' => (int) $u['id'], 'name' => $u['first_name'] . ' ' . $u['last_name'], 'roleLabel' => roleLabel($u['portal_role'])],
+            financeGroupMembers((int) $g['id'])
+        ),
+    ];
+}
+
+// Eligible approvers a claimant may nominate for an account (FRD FR-FIN-NA-002/004):
+// active members of the account's approval group, excluding the claimant (no
+// self-approval). Returns [] when the account has no group configured.
+function financeEligibleApprovers(array $account, int $claimantUserId): array
+{
+    $groupId = $account['approval_group_id'] ?? null;
+    if (!$groupId) return [];
+    $out = [];
+    foreach (financeGroupMembers((int) $groupId) as $u) {
+        if ((int) $u['id'] === $claimantUserId) continue;
+        $out[] = ['id' => (int) $u['id'], 'name' => $u['first_name'] . ' ' . $u['last_name'], 'roleLabel' => roleLabel($u['portal_role'])];
+    }
+    return $out;
 }
 
 function serializeCategory(array $category): array

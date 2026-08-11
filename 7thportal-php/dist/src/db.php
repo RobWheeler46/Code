@@ -153,12 +153,32 @@ CREATE TABLE IF NOT EXISTS gallery_photos (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- A named pool of eligible approvers for a finance account (FRD s28). An account
+-- may link to one group; at claim time the claimant nominates one member of that
+-- group as the approver. Kept separate from the account's legacy single
+-- approver/deputy so accounts without a group fall back to the old behaviour.
+CREATE TABLE IF NOT EXISTS finance_approval_groups (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS finance_approval_group_members (
+  group_id INTEGER NOT NULL REFERENCES finance_approval_groups(id),
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  PRIMARY KEY (group_id, user_id)
+);
+
 CREATE TABLE IF NOT EXISTS expense_accounts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
   code TEXT,
   approver_user_id INTEGER REFERENCES users(id),
   deputy_approver_user_id INTEGER REFERENCES users(id),
+  approval_group_id INTEGER REFERENCES finance_approval_groups(id),
+  claimant_selects_approver INTEGER NOT NULL DEFAULT 0,
+  approver_selection_level TEXT NOT NULL DEFAULT 'account',
   active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -934,6 +954,17 @@ if ($usersTermsSql && !str_contains($usersTermsSql, 'phone')) {
 $secCapSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='section_capacity'")['sql'] ?? '';
 if ($secCapSql && !str_contains($secCapSql, 'active_count')) {
     db()->exec('ALTER TABLE section_capacity ADD COLUMN active_count INTEGER');
+}
+
+// Migration: expense_accounts gained a link to a finance approval group plus the
+// nominated-approver config flags (FRD s28). Accounts without a group keep the
+// legacy single approver/deputy behaviour. Add the columns if an older table
+// predates them.
+$acctSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='expense_accounts'")['sql'] ?? '';
+if ($acctSql && !str_contains($acctSql, 'approval_group_id')) {
+    db()->exec('ALTER TABLE expense_accounts ADD COLUMN approval_group_id INTEGER REFERENCES finance_approval_groups(id)');
+    db()->exec('ALTER TABLE expense_accounts ADD COLUMN claimant_selects_approver INTEGER NOT NULL DEFAULT 0');
+    db()->exec("ALTER TABLE expense_accounts ADD COLUMN approver_selection_level TEXT NOT NULL DEFAULT 'account'");
 }
 
 // Migration: activity_forms gained conditional-insurance flags (improved-flow

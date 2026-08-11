@@ -909,23 +909,53 @@ async function renderGallery() {
 async function renderFinance() {
   const box = document.getElementById('tab-content');
   box.innerHTML = '<p class="muted">Loading&hellip;</p>';
-  const [accounts, candidates, categories, rates] = await Promise.all([
+  const [accounts, candidates, categories, rates, groups] = await Promise.all([
     Api.get('/api/admin/finance/accounts'),
     Api.get('/api/admin/finance/approver-candidates'),
     Api.get('/api/admin/finance/categories'),
     Api.get('/api/admin/finance/mileage-rates'),
+    Api.get('/api/admin/finance/approval-groups'),
   ]);
   const candidateOptions = (selectedId) => `<option value="">(none)</option>` + candidates.map(c => `<option value="${c.id}" ${c.id === selectedId ? 'selected' : ''}>${escapeHtml(c.name)} (${escapeHtml(c.roleLabel)})</option>`).join('');
+  const groupOptions = (selectedId) => `<option value="">(none - use approver/deputy)</option>` + groups.map(g => `<option value="${g.id}" ${g.id === selectedId ? 'selected' : ''}>${escapeHtml(g.name)}${g.active ? '' : ' (inactive)'}</option>`).join('');
 
   box.innerHTML = `
     <div class="card">
+      <h2>Approval groups</h2>
+      <p class="muted">A named pool of eligible approvers (e.g. "Camp Account Approvers"). Link a group to an account below, then the claimant nominates one member of the group as the approver when they raise a claim (FRD s28).</p>
+      <form id="group-form" class="inline-form">
+        <input type="text" id="g-name" required placeholder="e.g. Camp Account Approvers">
+        <button class="btn btn-primary" type="submit">Add group</button>
+      </form>
+      <div id="group-error"></div>
+      ${groups.length === 0 ? '<p class="muted">No approval groups yet.</p>' : groups.map(g => `
+        <div class="approval-group" data-group-card="${g.id}">
+          <div class="cap-head">
+            <strong>${escapeHtml(g.name)}${g.active ? '' : ' <span class="badge" data-status="inactive">inactive</span>'}</strong>
+            <span class="cap-actions">
+              <button class="btn btn-secondary btn-sm" data-group-toggle="${g.id}" data-active="${g.active ? 1 : 0}">${g.active ? 'Deactivate' : 'Activate'}</button>
+              <button class="btn btn-danger btn-sm" data-group-delete="${g.id}">Delete</button>
+            </span>
+          </div>
+          <div class="chips">${g.members.length === 0 ? '<span class="muted">No members yet.</span>' : g.members.map(m => `<span class="chip">${escapeHtml(m.name)}<button class="chip-x" data-group-remove="${g.id}" data-user="${m.id}" title="Remove">&times;</button></span>`).join('')}</div>
+          <div class="inline-form">
+            <select data-group-add-select="${g.id}"><option value="">Add a member&hellip;</option>${candidates.filter(c => !g.members.some(m => m.id === c.id)).map(c => `<option value="${c.id}">${escapeHtml(c.name)} (${escapeHtml(c.roleLabel)})</option>`).join('')}</select>
+            <button class="btn btn-secondary btn-sm" data-group-add="${g.id}">Add</button>
+          </div>
+        </div>`).join('')}
+    </div>
+    <div class="card">
       <h2>Add an expense account</h2>
-      <p class="muted">One row per budget account (e.g. Cubs, Scouts, Group). Claims route to whichever leader/admin user is set as the approver here.</p>
+      <p class="muted">One row per budget account (e.g. Cubs, Scouts, Group). Either set a single approver/deputy, or link an <strong>approval group</strong> and tick "Claimant selects approver" so the claimant nominates one named approver from that group when raising a claim.</p>
       <form id="account-form">
         <div class="grid cols-3">
           <div class="field"><label>Name</label><input type="text" id="a-name" required placeholder="e.g. Cubs"></div>
           <div class="field"><label>Approver</label><select id="a-approver">${candidateOptions(null)}</select></div>
           <div class="field"><label>Deputy approver</label><select id="a-deputy">${candidateOptions(null)}</select></div>
+        </div>
+        <div class="grid cols-3">
+          <div class="field"><label>Approval group</label><select id="a-group">${groupOptions(null)}</select></div>
+          <div class="field"><label>Claimant selects approver</label><label class="check"><input type="checkbox" id="a-claimant-selects"> Nominate from the group</label></div>
         </div>
         <div id="account-error"></div>
         <button class="btn btn-primary" type="submit">Add account</button>
@@ -934,12 +964,14 @@ async function renderFinance() {
     <div class="card">
       <h2>Accounts</h2>
       ${accounts.length === 0 ? '<p class="muted">No accounts yet.</p>' : `
-      <table><thead><tr><th>Name</th><th>Approver</th><th>Deputy</th><th>Active</th><th></th></tr></thead>
+      <table><thead><tr><th>Name</th><th>Approver</th><th>Deputy</th><th>Approval group</th><th>Claimant selects</th><th>Active</th><th></th></tr></thead>
       <tbody>${accounts.map(a => `
         <tr>
           <td>${escapeHtml(a.name)}</td>
           <td><select data-acc-approver="${a.id}">${candidateOptions(a.approver ? a.approver.id : null)}</select></td>
           <td><select data-acc-deputy="${a.id}">${candidateOptions(a.deputyApprover ? a.deputyApprover.id : null)}</select></td>
+          <td><select data-acc-group="${a.id}">${groupOptions(a.approvalGroupId)}</select></td>
+          <td><input type="checkbox" data-acc-claimant="${a.id}" ${a.claimantSelectsApprover ? 'checked' : ''}></td>
           <td><input type="checkbox" data-acc-active="${a.id}" ${a.active ? 'checked' : ''}></td>
           <td><button class="btn btn-secondary btn-sm" data-acc-save="${a.id}">Save</button></td>
         </tr>`).join('')}</tbody></table>`}
@@ -997,6 +1029,8 @@ async function renderFinance() {
         name: document.getElementById('a-name').value,
         approverUserId: document.getElementById('a-approver').value || null,
         deputyApproverUserId: document.getElementById('a-deputy').value || null,
+        approvalGroupId: document.getElementById('a-group').value || null,
+        claimantSelectsApprover: document.getElementById('a-claimant-selects').checked,
       });
       renderFinance();
     } catch (err) {
@@ -1009,12 +1043,41 @@ async function renderFinance() {
       await Api.patch(`/api/admin/finance/accounts/${id}`, {
         approverUserId: document.querySelector(`[data-acc-approver="${id}"]`).value || null,
         deputyApproverUserId: document.querySelector(`[data-acc-deputy="${id}"]`).value || null,
+        approvalGroupId: document.querySelector(`[data-acc-group="${id}"]`).value || null,
+        claimantSelectsApprover: document.querySelector(`[data-acc-claimant="${id}"]`).checked,
         active: document.querySelector(`[data-acc-active="${id}"]`).checked,
       });
       renderFinance();
     } catch (err) {
       document.getElementById('accounts-error').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
     }
+  }));
+
+  // Approval groups: create, toggle active, delete, add/remove members.
+  document.getElementById('group-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    try {
+      await Api.post('/api/admin/finance/approval-groups', { name: document.getElementById('g-name').value });
+      renderFinance();
+    } catch (err) {
+      document.getElementById('group-error').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+    }
+  });
+  const groupErr = (err) => { document.getElementById('group-error').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`; };
+  document.querySelectorAll('[data-group-toggle]').forEach(btn => btn.addEventListener('click', async () => {
+    try { await Api.patch(`/api/admin/finance/approval-groups/${btn.dataset.groupToggle}`, { active: btn.dataset.active !== '1' }); renderFinance(); } catch (err) { groupErr(err); }
+  }));
+  document.querySelectorAll('[data-group-delete]').forEach(btn => btn.addEventListener('click', async () => {
+    try { await Api.delete(`/api/admin/finance/approval-groups/${btn.dataset.groupDelete}`); renderFinance(); } catch (err) { groupErr(err); }
+  }));
+  document.querySelectorAll('[data-group-add]').forEach(btn => btn.addEventListener('click', async () => {
+    const id = btn.dataset.groupAdd;
+    const userId = document.querySelector(`[data-group-add-select="${id}"]`).value;
+    if (!userId) return;
+    try { await Api.post(`/api/admin/finance/approval-groups/${id}/members`, { userId: Number(userId) }); renderFinance(); } catch (err) { groupErr(err); }
+  }));
+  document.querySelectorAll('[data-group-remove]').forEach(btn => btn.addEventListener('click', async () => {
+    try { await Api.delete(`/api/admin/finance/approval-groups/${btn.dataset.groupRemove}/members/${btn.dataset.user}`); renderFinance(); } catch (err) { groupErr(err); }
   }));
 
   document.getElementById('category-form').addEventListener('submit', async e => {

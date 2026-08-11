@@ -588,9 +588,10 @@ $router->post('/api/admin/finance/accounts', function ($params) {
     requireAdmin($admin);
     $body = requestBody();
     if (empty($body['name'])) jsonResponse(['error' => 'An account name is required.'], 400);
+    $level = in_array($body['approverSelectionLevel'] ?? null, ['claim', 'account', 'item'], true) ? $body['approverSelectionLevel'] : 'account';
     $result = dbRun(
-        'INSERT INTO expense_accounts (name, code, approver_user_id, deputy_approver_user_id) VALUES (?, ?, ?, ?)',
-        [$body['name'], $body['code'] ?? null, $body['approverUserId'] ?? null, $body['deputyApproverUserId'] ?? null]
+        'INSERT INTO expense_accounts (name, code, approver_user_id, deputy_approver_user_id, approval_group_id, claimant_selects_approver, approver_selection_level) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [$body['name'], $body['code'] ?? null, $body['approverUserId'] ?? null, $body['deputyApproverUserId'] ?? null, $body['approvalGroupId'] ?? null, !empty($body['claimantSelectsApprover']) ? 1 : 0, $level]
     );
     logAudit(['userId' => $admin['id'], 'action' => 'admin_create_finance_account', 'entityType' => 'expense_account', 'entityId' => (string) $result['lastInsertId'], 'ipAddress' => clientIp()]);
     jsonResponse(serializeAccount(dbGet('SELECT * FROM expense_accounts WHERE id = ?', [$result['lastInsertId']])));
@@ -602,13 +603,19 @@ $router->patch('/api/admin/finance/accounts/:id', function ($params) {
     $account = dbGet('SELECT * FROM expense_accounts WHERE id = ?', [$params['id']]);
     if (!$account) jsonResponse(['error' => 'Account not found.'], 404);
     $body = requestBody();
+    $level = array_key_exists('approverSelectionLevel', $body)
+        ? (in_array($body['approverSelectionLevel'], ['claim', 'account', 'item'], true) ? $body['approverSelectionLevel'] : ($account['approver_selection_level'] ?? 'account'))
+        : ($account['approver_selection_level'] ?? 'account');
     dbRun(
-        "UPDATE expense_accounts SET name = ?, code = ?, approver_user_id = ?, deputy_approver_user_id = ?, active = ?, updated_at = datetime('now') WHERE id = ?",
+        "UPDATE expense_accounts SET name = ?, code = ?, approver_user_id = ?, deputy_approver_user_id = ?, approval_group_id = ?, claimant_selects_approver = ?, approver_selection_level = ?, active = ?, updated_at = datetime('now') WHERE id = ?",
         [
             $body['name'] ?? $account['name'],
             array_key_exists('code', $body) ? $body['code'] : $account['code'],
             array_key_exists('approverUserId', $body) ? $body['approverUserId'] : $account['approver_user_id'],
             array_key_exists('deputyApproverUserId', $body) ? $body['deputyApproverUserId'] : $account['deputy_approver_user_id'],
+            array_key_exists('approvalGroupId', $body) ? ($body['approvalGroupId'] ?: null) : ($account['approval_group_id'] ?? null),
+            array_key_exists('claimantSelectsApprover', $body) ? (!empty($body['claimantSelectsApprover']) ? 1 : 0) : ($account['claimant_selects_approver'] ?? 0),
+            $level,
             array_key_exists('active', $body) ? ($body['active'] ? 1 : 0) : $account['active'],
             $account['id'],
         ]
@@ -627,6 +634,78 @@ $router->delete('/api/admin/finance/accounts/:id', function ($params) {
     dbRun('DELETE FROM expense_accounts WHERE id = ?', [$account['id']]);
     logAudit(['userId' => $admin['id'], 'action' => 'admin_delete_finance_account', 'entityType' => 'expense_account', 'entityId' => (string) $account['id'], 'ipAddress' => clientIp()]);
     jsonResponse(['ok' => true]);
+});
+
+// ── Finance approval groups (FRD s28 config foundation) ──────────────────────
+
+$router->get('/api/admin/finance/approval-groups', function ($params) {
+    requireAdmin(requireAuth());
+    jsonResponse(array_map('serializeApprovalGroup', dbAll('SELECT * FROM finance_approval_groups ORDER BY name')));
+});
+
+$router->post('/api/admin/finance/approval-groups', function ($params) {
+    $admin = requireAuth();
+    requireAdmin($admin);
+    $body = requestBody();
+    if (empty(trim((string) ($body['name'] ?? '')))) jsonResponse(['error' => 'A group name is required.'], 400);
+    $result = dbRun('INSERT INTO finance_approval_groups (name) VALUES (?)', [trim($body['name'])]);
+    logAudit(['userId' => $admin['id'], 'action' => 'admin_create_approval_group', 'entityType' => 'finance_approval_group', 'entityId' => (string) $result['lastInsertId'], 'ipAddress' => clientIp()]);
+    jsonResponse(serializeApprovalGroup(dbGet('SELECT * FROM finance_approval_groups WHERE id = ?', [$result['lastInsertId']])), 201);
+});
+
+$router->patch('/api/admin/finance/approval-groups/:id', function ($params) {
+    $admin = requireAuth();
+    requireAdmin($admin);
+    $group = dbGet('SELECT * FROM finance_approval_groups WHERE id = ?', [$params['id']]);
+    if (!$group) jsonResponse(['error' => 'Group not found.'], 404);
+    $body = requestBody();
+    dbRun(
+        "UPDATE finance_approval_groups SET name = ?, active = ?, updated_at = datetime('now') WHERE id = ?",
+        [
+            array_key_exists('name', $body) && trim((string) $body['name']) !== '' ? trim($body['name']) : $group['name'],
+            array_key_exists('active', $body) ? ($body['active'] ? 1 : 0) : $group['active'],
+            $group['id'],
+        ]
+    );
+    logAudit(['userId' => $admin['id'], 'action' => 'admin_update_approval_group', 'entityType' => 'finance_approval_group', 'entityId' => (string) $group['id'], 'ipAddress' => clientIp()]);
+    jsonResponse(serializeApprovalGroup(dbGet('SELECT * FROM finance_approval_groups WHERE id = ?', [$group['id']])));
+});
+
+$router->delete('/api/admin/finance/approval-groups/:id', function ($params) {
+    $admin = requireAuth();
+    requireAdmin($admin);
+    $group = dbGet('SELECT * FROM finance_approval_groups WHERE id = ?', [$params['id']]);
+    if (!$group) jsonResponse(['error' => 'Group not found.'], 404);
+    $linked = dbGet('SELECT 1 AS x FROM expense_accounts WHERE approval_group_id = ?', [$group['id']]);
+    if ($linked) jsonResponse(['error' => 'This group is linked to an account - unlink it there first, or deactivate the group.'], 400);
+    dbRun('DELETE FROM finance_approval_group_members WHERE group_id = ?', [$group['id']]);
+    dbRun('DELETE FROM finance_approval_groups WHERE id = ?', [$group['id']]);
+    logAudit(['userId' => $admin['id'], 'action' => 'admin_delete_approval_group', 'entityType' => 'finance_approval_group', 'entityId' => (string) $group['id'], 'ipAddress' => clientIp()]);
+    jsonResponse(['ok' => true]);
+});
+
+$router->post('/api/admin/finance/approval-groups/:id/members', function ($params) {
+    $admin = requireAuth();
+    requireAdmin($admin);
+    $group = dbGet('SELECT * FROM finance_approval_groups WHERE id = ?', [$params['id']]);
+    if (!$group) jsonResponse(['error' => 'Group not found.'], 404);
+    $body = requestBody();
+    $userId = (int) ($body['userId'] ?? 0);
+    $u = $userId ? dbGet("SELECT id FROM users WHERE id = ? AND portal_role != 'parent' AND account_status = 'active'", [$userId]) : null;
+    if (!$u) jsonResponse(['error' => 'Pick an active leader/admin to add.'], 400);
+    dbRun('INSERT OR IGNORE INTO finance_approval_group_members (group_id, user_id) VALUES (?, ?)', [$group['id'], $userId]);
+    logAudit(['userId' => $admin['id'], 'action' => 'admin_add_approval_group_member', 'entityType' => 'finance_approval_group', 'entityId' => (string) $group['id'], 'ipAddress' => clientIp(), 'details' => ['userId' => $userId]]);
+    jsonResponse(serializeApprovalGroup(dbGet('SELECT * FROM finance_approval_groups WHERE id = ?', [$group['id']])));
+});
+
+$router->delete('/api/admin/finance/approval-groups/:id/members/:userId', function ($params) {
+    $admin = requireAuth();
+    requireAdmin($admin);
+    $group = dbGet('SELECT * FROM finance_approval_groups WHERE id = ?', [$params['id']]);
+    if (!$group) jsonResponse(['error' => 'Group not found.'], 404);
+    dbRun('DELETE FROM finance_approval_group_members WHERE group_id = ? AND user_id = ?', [$group['id'], (int) $params['userId']]);
+    logAudit(['userId' => $admin['id'], 'action' => 'admin_remove_approval_group_member', 'entityType' => 'finance_approval_group', 'entityId' => (string) $group['id'], 'ipAddress' => clientIp(), 'details' => ['userId' => (int) $params['userId']]]);
+    jsonResponse(serializeApprovalGroup(dbGet('SELECT * FROM finance_approval_groups WHERE id = ?', [$group['id']])));
 });
 
 $router->get('/api/admin/finance/categories', function ($params) {
