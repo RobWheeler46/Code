@@ -82,6 +82,7 @@ $router->get('/api/qm/catalogue', function ($params) {
             'owned' => $owned, 'reserved' => $reserved,
             'available' => max(0, $owned - $reserved),
             'windowKnown' => (bool) ($collectAt && $returnAt),
+            'restricted' => (bool) ($a['restricted'] ?? 0),
         ];
     }, $assets);
 
@@ -206,10 +207,12 @@ $router->post('/api/qm/bookings/:id/items', function ($params) {
     if ($itemName === '') jsonResponse(['error' => 'An item name is required.'], 400);
     $qty = max(1, (int) ($body['requestedQty'] ?? 1));
     $sort = (int) (dbGet('SELECT COALESCE(MAX(sort_order), 0) AS m FROM qm_booking_items WHERE booking_id = ?', [$b['id']])['m']) + 1;
+    $permit = !empty($body['permitConfirmed']) ? 1 : 0;
+    $responsible = trim((string) ($body['responsibleAdult'] ?? '')) ?: null;
 
     $result = dbRun(
-        'INSERT INTO qm_booking_items (booking_id, equipment_asset_id, item_name, requested_qty, sort_order) VALUES (?, ?, ?, ?, ?)',
-        [$b['id'], $assetId, $itemName, $qty, $sort]
+        'INSERT INTO qm_booking_items (booking_id, equipment_asset_id, item_name, requested_qty, sort_order, permit_confirmed, responsible_adult) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [$b['id'], $assetId, $itemName, $qty, $sort, $permit, $responsible]
     );
     qmTouch((int) $b['id']);
     logAudit(['userId' => $user['id'], 'action' => 'qm_item_add', 'entityType' => 'qm_booking', 'entityId' => (string) $b['id'], 'ipAddress' => clientIp(), 'details' => ['item' => $itemName, 'qty' => $qty]]);
@@ -229,7 +232,9 @@ $router->patch('/api/qm/bookings/:id/items/:itemId', function ($params) {
     $body = requestBody();
     $name = array_key_exists('itemName', $body) ? (trim((string) $body['itemName']) ?: $item['item_name']) : $item['item_name'];
     $qty = array_key_exists('requestedQty', $body) ? max(1, (int) $body['requestedQty']) : (int) $item['requested_qty'];
-    dbRun('UPDATE qm_booking_items SET item_name = ?, requested_qty = ? WHERE id = ?', [$name, $qty, $item['id']]);
+    $permit = array_key_exists('permitConfirmed', $body) ? (!empty($body['permitConfirmed']) ? 1 : 0) : (int) ($item['permit_confirmed'] ?? 0);
+    $responsible = array_key_exists('responsibleAdult', $body) ? (trim((string) $body['responsibleAdult']) ?: null) : ($item['responsible_adult'] ?? null);
+    dbRun('UPDATE qm_booking_items SET item_name = ?, requested_qty = ?, permit_confirmed = ?, responsible_adult = ? WHERE id = ?', [$name, $qty, $permit, $responsible, $item['id']]);
     qmTouch((int) $b['id']);
     jsonResponse(serializeQmBookingItem(dbGet('SELECT * FROM qm_booking_items WHERE id = ?', [$item['id']])));
 });
@@ -260,6 +265,13 @@ $router->post('/api/qm/bookings/:id/submit', function ($params) {
     if (!$b['collect_at'] || !$b['return_at']) jsonResponse(['error' => 'A collection date and a return date are required before submitting.'], 400);
     if ($b['return_at'] <= $b['collect_at']) jsonResponse(['error' => 'The return date must be after the collection date.'], 400);
     if (count(qmBookingItems((int) $b['id'])) === 0) jsonResponse(['error' => 'Add at least one item before submitting.'], 400);
+    // Restricted-equipment gate (FR-QM-ADV-008): controlled kit needs a permit
+    // confirmation + named responsible adult before the request can be submitted.
+    foreach (dbAll('SELECT * FROM qm_booking_items WHERE booking_id = ?', [$b['id']]) as $it) {
+        if (!qmLineRestrictionSatisfied($it)) {
+            jsonResponse(['error' => "\"{$it['item_name']}\" is controlled equipment - tick the permit/qualification confirmation and name a responsible adult before submitting."], 400);
+        }
+    }
 
     dbRun("UPDATE qm_bookings SET status = 'submitted', submitted_at = datetime('now'), updated_at = datetime('now') WHERE id = ?", [$b['id']]);
     logAudit(['userId' => $user['id'], 'action' => 'qm_booking_submit', 'entityType' => 'qm_booking', 'entityId' => (string) $b['id'], 'ipAddress' => clientIp()]);
@@ -281,6 +293,11 @@ $router->post('/api/qm/bookings/:id/items/:itemId/decide', function ($params) {
     $body = requestBody();
     $decision = $body['decision'] ?? '';
     if (!in_array($decision, ['approve', 'reject', 'substitute', 'more_info'], true)) jsonResponse(['error' => 'Invalid decision.'], 400);
+    // A restricted line can't be approved/substituted until its permit + responsible
+    // adult are recorded (FR-QM-ADV-008); rejecting or asking for more info is fine.
+    if (in_array($decision, ['approve', 'substitute'], true) && !qmLineRestrictionSatisfied($item)) {
+        jsonResponse(['error' => 'This is controlled equipment - it cannot be approved until the requester confirms the permit/qualification and names a responsible adult.'], 400);
+    }
     $notes = array_key_exists('qmNotes', $body) ? (trim((string) $body['qmNotes']) ?: null) : $item['qm_notes'];
 
     $approvedQty = null; $lineStatus = 'requested'; $substituteAssetId = null; $substituteName = null;

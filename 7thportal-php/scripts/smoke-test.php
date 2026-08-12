@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -32,7 +32,7 @@ function useDb(string $file): void { putenv('SEVENTHPORTAL_DB=' . $file); }
 function boot(): void { require dirname(__DIR__) . '/src/db.php'; }
 function loadLibs(): void
 {
-    foreach (['helpers', 'notifications', 'finance', 'incidents', 'patrolpoints', 'events', 'equipment', 'actions'] as $lib) {
+    foreach (['helpers', 'notifications', 'finance', 'incidents', 'patrolpoints', 'events', 'equipment', 'actions', 'quartermaster'] as $lib) {
         require_once dirname(__DIR__) . '/src/lib/' . $lib . '.php';
     }
 }
@@ -168,6 +168,27 @@ function scenario_logic_equipment(): void
     check('equipment: low-stock consumable raises a QM task', $has('at or below reorder level'));
     check('equipment: unknown-location item raises a QM task', $has('unconfirmed storage location'));
     check('equipment: no spurious tasks for a normal asset', count($acts) === 2, count($acts) . ' tasks');
+}
+
+// QM restricted-booking gate: a restricted line isn't cleared for approval until
+// its permit is confirmed and a responsible adult is named (FR-QM-ADV-008).
+function scenario_logic_qm_restricted(): void
+{
+    useDb(tmpDb('qm')); boot(); loadLibs();
+    $bow = dbRun("INSERT INTO equipment_assets (name, restricted, restricted_category) VALUES ('Bow', 1, 'archery')")['lastInsertId'];
+    $tent = dbRun("INSERT INTO equipment_assets (name) VALUES ('Tent')")['lastInsertId'];
+    // a restricted line with no permit/responsible -> not satisfied
+    $line1 = ['equipment_asset_id' => $bow, 'permit_confirmed' => 0, 'responsible_adult' => null];
+    check('qm: restricted line without permit is NOT cleared', qmLineRestrictionSatisfied($line1) === false);
+    // permit confirmed + responsible named -> satisfied
+    $line2 = ['equipment_asset_id' => $bow, 'permit_confirmed' => 1, 'responsible_adult' => 'A. Leader'];
+    check('qm: restricted line with permit + responsible IS cleared', qmLineRestrictionSatisfied($line2) === true);
+    // permit but no responsible adult -> still not cleared
+    $line3 = ['equipment_asset_id' => $bow, 'permit_confirmed' => 1, 'responsible_adult' => ''];
+    check('qm: permit alone (no responsible adult) is NOT cleared', qmLineRestrictionSatisfied($line3) === false);
+    // a non-restricted line is always cleared
+    $line4 = ['equipment_asset_id' => $tent, 'permit_confirmed' => 0, 'responsible_adult' => null];
+    check('qm: non-restricted line needs no permit', qmLineRestrictionSatisfied($line4) === true);
 }
 
 // ── child runner: run one scenario, print machine-readable results ────────────

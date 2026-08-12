@@ -148,6 +148,7 @@ function serializeQmBooking(array $b, bool $full = false): array
 
 function serializeQmBookingItem(array $i): array
 {
+    [$restricted, $restrictedCategory] = qmLineRestriction($i);
     return [
         'id' => (int) $i['id'],
         'bookingId' => (int) $i['booking_id'],
@@ -163,7 +164,30 @@ function serializeQmBookingItem(array $i): array
         'issueCondition' => $i['issue_condition'],
         'returnCondition' => $i['return_condition'],
         'damageNotes' => $i['damage_notes'],
+        // Restricted-equipment gate (FR-QM-ADV-008): a register-linked restricted
+        // item needs a permit confirmation + named responsible adult before approval.
+        'restricted' => $restricted,
+        'restrictedCategory' => $restrictedCategory,
+        'permitConfirmed' => (bool) ($i['permit_confirmed'] ?? 0),
+        'responsibleAdult' => $i['responsible_adult'] ?? null,
     ];
+}
+
+// Is a booking line a register-linked restricted item? Returns [bool, ?category].
+function qmLineRestriction(array $item): array
+{
+    if ($item['equipment_asset_id'] === null) return [false, null];
+    $a = dbGet('SELECT restricted, restricted_category FROM equipment_assets WHERE id = ?', [$item['equipment_asset_id']]);
+    return $a ? [(bool) $a['restricted'], $a['restricted_category']] : [false, null];
+}
+
+// A restricted line is only cleared for approval once the permit is confirmed and
+// a responsible adult is named (FR-QM-ADV-008).
+function qmLineRestrictionSatisfied(array $item): bool
+{
+    [$restricted] = qmLineRestriction($item);
+    if (!$restricted) return true;
+    return !empty($item['permit_confirmed']) && trim((string) ($item['responsible_adult'] ?? '')) !== '';
 }
 
 // Action Centre items (FR-QM-015/016): pending requests for QMs, overdue returns for

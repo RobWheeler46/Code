@@ -201,7 +201,7 @@ function renderItemsTable(b, items, opts) {
       const decided = i.lineStatus !== 'requested';
       const lineKey = { approved: 'active', rejected: 'deleted', substituted: 'pending_approval', more_info: 'suspended', requested: 'archived' }[i.lineStatus] || 'archived';
       return `<tr>
-        <td><strong>${escapeHtml(i.itemName)}</strong>${i.substituteName ? ` <span class="muted">&rarr; ${escapeHtml(i.substituteName)}</span>` : ''}${i.qmNotes ? `<br><span class="muted">${escapeHtml(i.qmNotes)}</span>` : ''}${i.damageNotes ? `<br><span class="badge" data-status="deleted">Damage: ${escapeHtml(i.damageNotes)}</span>` : ''}</td>
+        <td><strong>${escapeHtml(i.itemName)}</strong>${i.substituteName ? ` <span class="muted">&rarr; ${escapeHtml(i.substituteName)}</span>` : ''}${i.restricted ? ` <span class="badge" data-status="suspended">Restricted</span>` : ''}${i.qmNotes ? `<br><span class="muted">${escapeHtml(i.qmNotes)}</span>` : ''}${i.damageNotes ? `<br><span class="badge" data-status="deleted">Damage: ${escapeHtml(i.damageNotes)}</span>` : ''}${i.restricted ? `<br><span class="muted" style="font-size:.82rem">Permit: ${i.permitConfirmed ? '<span class="badge" data-status="active">confirmed</span>' : '<span class="badge" data-status="deleted">not confirmed</span>'}${i.responsibleAdult ? ' · Responsible: ' + escapeHtml(i.responsibleAdult) : ' · <span class="badge" data-status="deleted">no responsible adult</span>'}</span>` : ''}</td>
         <td>${i.requestedQty}</td>
         <td>${decided ? `<span class="badge" data-status="${lineKey}">${escapeHtml(i.lineStatusLabel)}</span>` : '<span class="muted">Pending</span>'}
           ${opts.reviewing ? `<div class="cap-actions" style="margin-top:.4rem;gap:.3rem;flex-wrap:wrap">
@@ -287,16 +287,31 @@ async function addItem(b) {
   const cat = await loadCatalogue(b);
   const field = (label, html) => `<div class="field"><label>${label}</label>${html}</div>`;
   const modal = openModal('Add item', `
-    ${field('Item from the register', `<select id="qi-asset"><option value="">&mdash; free-text item &mdash;</option>${cat.map(a => `<option value="${a.id}" data-name="${escapeHtml(a.name)}">${escapeHtml(a.name)}${a.windowKnown ? ` (${a.available} free)` : ''}</option>`).join('')}</select>`)}
+    ${field('Item from the register', `<select id="qi-asset"><option value="">&mdash; free-text item &mdash;</option>${cat.map(a => `<option value="${a.id}" data-name="${escapeHtml(a.name)}" data-restricted="${a.restricted ? 1 : 0}">${escapeHtml(a.name)}${a.restricted ? ' [restricted]' : ''}${a.windowKnown ? ` (${a.available} free)` : ''}</option>`).join('')}</select>`)}
     ${field('Or type an item name', `<input id="qi-name" placeholder="Only needed for a free-text item">`)}
     ${field('Quantity', `<input id="qi-qty" type="number" min="1" value="1" style="width:100px">`)}
+    <div id="qi-permit-wrap" style="display:none;border:1px solid var(--amber);border-radius:var(--radius);padding:.6rem .8rem;margin:.5rem 0">
+      <p class="muted" style="margin:0 0 .4rem">This is <strong>controlled equipment</strong>. A Quartermaster can only approve it once the permit/qualification is confirmed and a responsible adult is named (FR-QM-ADV-008).</p>
+      <label class="check"><input type="checkbox" id="qi-permit"> I confirm the required permit/qualification is held for this activity</label>
+      ${field('Named responsible adult', `<input id="qi-responsible" placeholder="Full name of the responsible adult">`)}
+    </div>
     <div class="modal-actions" style="display:flex;gap:.5rem;margin-top:1rem"><button class="btn" id="qi-save">Add</button><button class="btn btn-secondary" id="qi-cancel">Cancel</button></div>`);
+  const permitWrap = document.getElementById('qi-permit-wrap');
+  document.getElementById('qi-asset').addEventListener('change', (e) => {
+    const opt = e.target.selectedOptions[0];
+    permitWrap.style.display = opt && opt.dataset.restricted === '1' ? '' : 'none';
+  });
   document.getElementById('qi-cancel').addEventListener('click', closeModal);
   document.getElementById('qi-save').addEventListener('click', async () => {
     const assetSel = document.getElementById('qi-asset');
     const assetId = assetSel.value || null;
     const name = document.getElementById('qi-name').value.trim() || (assetId ? assetSel.selectedOptions[0].dataset.name : '');
-    try { await Api.post(`/api/qm/bookings/${b.id}/items`, { assetId, itemName: name, requestedQty: document.getElementById('qi-qty').value }); closeModal(); route(); }
+    const payload = { assetId, itemName: name, requestedQty: document.getElementById('qi-qty').value };
+    if (permitWrap.style.display !== 'none') {
+      payload.permitConfirmed = document.getElementById('qi-permit').checked;
+      payload.responsibleAdult = document.getElementById('qi-responsible').value.trim();
+    }
+    try { await Api.post(`/api/qm/bookings/${b.id}/items`, payload); closeModal(); route(); }
     catch (e) { modalError(e.message); }
   });
 }
@@ -306,10 +321,20 @@ async function editItem(b, item) {
   const modal = openModal('Edit item', `
     ${field('Item name', `<input id="qie-name" value="${escapeHtml(item.itemName)}">`)}
     ${field('Quantity', `<input id="qie-qty" type="number" min="1" value="${item.requestedQty}" style="width:100px">`)}
+    ${item.restricted ? `<div style="border:1px solid var(--amber);border-radius:var(--radius);padding:.6rem .8rem;margin:.5rem 0">
+      <p class="muted" style="margin:0 0 .4rem"><strong>Controlled equipment</strong> — required before a Quartermaster can approve it.</p>
+      <label class="check"><input type="checkbox" id="qie-permit" ${item.permitConfirmed ? 'checked' : ''}> Permit/qualification is held for this activity</label>
+      ${field('Named responsible adult', `<input id="qie-responsible" value="${escapeHtml(item.responsibleAdult || '')}" placeholder="Full name">`)}
+    </div>` : ''}
     <div class="modal-actions" style="display:flex;gap:.5rem;margin-top:1rem"><button class="btn" id="qie-save">Save</button><button class="btn btn-secondary" id="qie-cancel">Cancel</button></div>`);
   document.getElementById('qie-cancel').addEventListener('click', closeModal);
   document.getElementById('qie-save').addEventListener('click', async () => {
-    try { await Api.patch(`/api/qm/bookings/${b.id}/items/${item.id}`, { itemName: document.getElementById('qie-name').value.trim(), requestedQty: document.getElementById('qie-qty').value }); closeModal(); route(); }
+    const payload = { itemName: document.getElementById('qie-name').value.trim(), requestedQty: document.getElementById('qie-qty').value };
+    if (item.restricted) {
+      payload.permitConfirmed = document.getElementById('qie-permit').checked;
+      payload.responsibleAdult = document.getElementById('qie-responsible').value.trim();
+    }
+    try { await Api.patch(`/api/qm/bookings/${b.id}/items/${item.id}`, payload); closeModal(); route(); }
     catch (e) { modalError(e.message); }
   });
 }

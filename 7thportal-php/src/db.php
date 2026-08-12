@@ -684,6 +684,8 @@ CREATE TABLE IF NOT EXISTS qm_booking_items (
   issue_condition TEXT,
   return_condition TEXT,
   damage_notes TEXT,
+  permit_confirmed INTEGER NOT NULL DEFAULT 0,
+  responsible_adult TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -1074,6 +1076,14 @@ if ($eqSql && !str_contains($eqSql, 'item_type')) {
     db()->exec('ALTER TABLE equipment_assets ADD COLUMN warranty_expiry TEXT');
     db()->exec('ALTER TABLE equipment_assets ADD COLUMN serial_number TEXT');
     db()->exec('ALTER TABLE equipment_assets ADD COLUMN insurance_relevant INTEGER NOT NULL DEFAULT 0');
+}
+// Migration: restricted-equipment booking gate (FRD FR-QM-ADV-008) - a booking
+// line for controlled kit carries a permit/qualification confirmation and a named
+// responsible adult. Add the columns if an older table predates them.
+$qmiSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='qm_booking_items'")['sql'] ?? '';
+if ($qmiSql && !str_contains($qmiSql, 'permit_confirmed')) {
+    db()->exec('ALTER TABLE qm_booking_items ADD COLUMN permit_confirmed INTEGER NOT NULL DEFAULT 0');
+    db()->exec('ALTER TABLE qm_booking_items ADD COLUMN responsible_adult TEXT');
 }
 // Migration: pp_submissions gained guest attribution (FRD v2.4 s13.8) - guest
 // scores are owned by a service user but carry the link id and unverified name.
