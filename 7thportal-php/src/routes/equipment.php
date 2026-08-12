@@ -20,6 +20,22 @@ function equipmentFieldsFromBody(array $body, array $existing = []): array
     if (array_key_exists('value', $body)) $value = ($body['value'] === '' || $body['value'] === null) ? null : (float) $body['value'];
     elseif (isset($existing['value'])) $value = $existing['value'] === null ? null : (float) $existing['value'];
 
+    // Optional enum: the body value if it's an allowed key, empty clears to null,
+    // otherwise keep existing. Used for fields that may legitimately be unset.
+    $nenum = function ($bodyKey, $existingKey, array $allowed) use ($body, $existing) {
+        if (array_key_exists($bodyKey, $body)) {
+            $v = $body[$bodyKey];
+            if ($v === '' || $v === null) return null;
+            return array_key_exists($v, $allowed) ? $v : ($existing[$existingKey] ?? null);
+        }
+        return $existing[$existingKey] ?? null;
+    };
+    $intOrNull = function ($bodyKey, $existingKey) use ($body, $existing) {
+        if (array_key_exists($bodyKey, $body)) return ($body[$bodyKey] === '' || $body[$bodyKey] === null) ? null : (int) $body[$bodyKey];
+        return isset($existing[$existingKey]) && $existing[$existingKey] !== null ? (int) $existing[$existingKey] : null;
+    };
+    $bool = fn($bodyKey, $existingKey) => array_key_exists($bodyKey, $body) ? (!empty($body[$bodyKey]) ? 1 : 0) : (int) ($existing[$existingKey] ?? 0);
+
     return [
         'name' => trim((string) ($body['name'] ?? $existing['name'] ?? '')),
         'category' => $enum('category', 'category', EQUIPMENT_CATEGORIES, 'general'),
@@ -38,6 +54,22 @@ function equipmentFieldsFromBody(array $body, array $existing = []): array
         'replacement_due_date' => $val('replacementDueDate', 'replacement_due_date'),
         'loan_due_date' => $val('loanDueDate', 'loan_due_date'),
         'last_checked_date' => $val('lastCheckedDate', 'last_checked_date'),
+        // QM Advanced Controls richer inventory model.
+        'item_type' => $enum('itemType', 'item_type', EQUIPMENT_ITEM_TYPES, 'asset'),
+        'parent_kit_id' => $intOrNull('parentKitId', 'parent_kit_id'),
+        'restricted' => $bool('restricted', 'restricted'),
+        'restricted_category' => $nenum('restrictedCategory', 'restricted_category', EQUIPMENT_RESTRICTED_CATEGORIES),
+        'storage_area' => $val('storageArea', 'storage_area'),
+        'location_code' => $val('locationCode', 'location_code'),
+        'location_confidence' => $nenum('locationConfidence', 'location_confidence', EQUIPMENT_LOCATION_CONFIDENCE),
+        'stock_level' => $intOrNull('stockLevel', 'stock_level'),
+        'reorder_threshold' => $intOrNull('reorderThreshold', 'reorder_threshold'),
+        'issue_unit' => $val('issueUnit', 'issue_unit'),
+        'replacement_value' => array_key_exists('replacementValue', $body) ? (($body['replacementValue'] === '' || $body['replacementValue'] === null) ? null : (float) $body['replacementValue']) : (isset($existing['replacement_value']) && $existing['replacement_value'] !== null ? (float) $existing['replacement_value'] : null),
+        'supplier' => $val('supplier', 'supplier'),
+        'warranty_expiry' => $val('warrantyExpiry', 'warranty_expiry'),
+        'serial_number' => $val('serialNumber', 'serial_number'),
+        'insurance_relevant' => $bool('insuranceRelevant', 'insurance_relevant'),
     ];
 }
 
@@ -61,8 +93,11 @@ $router->get('/api/equipment', function ($params) {
             'checksDue' => (int) dbGet("SELECT COUNT(*) AS n FROM equipment_assets WHERE status != 'retired' AND next_inspection_date IS NOT NULL AND next_inspection_date <= ?", [$in30])['n'],
             'replacementRisk' => (int) dbGet("SELECT COUNT(*) AS n FROM equipment_assets WHERE status != 'retired' AND (condition IN ('poor','unserviceable') OR (replacement_due_date IS NOT NULL AND replacement_due_date < ?))", [$today])['n'],
             'onLoan' => (int) dbGet("SELECT COUNT(*) AS n FROM equipment_assets WHERE status = 'loaned'")['n'],
+            'lowStock' => (int) dbGet("SELECT COUNT(*) AS n FROM equipment_assets WHERE item_type = 'consumable' AND stock_level IS NOT NULL AND reorder_threshold IS NOT NULL AND stock_level <= reorder_threshold")['n'],
+            'restricted' => (int) dbGet("SELECT COUNT(*) AS n FROM equipment_assets WHERE restricted = 1 AND status != 'retired'")['n'],
         ],
-        'meta' => ['categories' => EQUIPMENT_CATEGORIES, 'conditions' => EQUIPMENT_CONDITIONS, 'statuses' => EQUIPMENT_STATUSES],
+        'meta' => ['categories' => EQUIPMENT_CATEGORIES, 'conditions' => EQUIPMENT_CONDITIONS, 'statuses' => EQUIPMENT_STATUSES,
+            'itemTypes' => EQUIPMENT_ITEM_TYPES, 'restrictedCategories' => EQUIPMENT_RESTRICTED_CATEGORIES, 'locationConfidence' => EQUIPMENT_LOCATION_CONFIDENCE],
     ]);
 });
 

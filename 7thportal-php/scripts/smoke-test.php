@@ -53,6 +53,8 @@ function scenario_migrate_fresh(): void
     check('fresh: claim items have nominated-approver cols', in_array('selected_approver_user_id', $eciCols, true) && in_array('approver_assignment_reason', $eciCols, true));
     $acctCols = array_column(dbAll('PRAGMA table_info(expense_accounts)'), 'name');
     check('fresh: accounts have approval_group_id', in_array('approval_group_id', $acctCols, true));
+    $eqCols = array_column(dbAll('PRAGMA table_info(equipment_assets)'), 'name');
+    check('fresh: equipment has QM-advanced cols', in_array('item_type', $eqCols, true) && in_array('reorder_threshold', $eqCols, true));
 }
 
 // Drifted server DB: an OLD users table (pre-quartermaster constraint, reordered

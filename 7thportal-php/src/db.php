@@ -585,6 +585,22 @@ CREATE TABLE IF NOT EXISTS equipment_assets (
   loan_due_date TEXT,
   last_checked_date TEXT,
   maintenance_locked INTEGER NOT NULL DEFAULT 0,
+  -- QM Advanced Controls (FRD FR-QM-ADV/INV): richer inventory model
+  item_type TEXT NOT NULL DEFAULT 'asset' CHECK(item_type IN ('asset','kit','kit_component','consumable')),
+  parent_kit_id INTEGER,
+  restricted INTEGER NOT NULL DEFAULT 0,
+  restricted_category TEXT,
+  storage_area TEXT,
+  location_code TEXT,
+  location_confidence TEXT,
+  stock_level INTEGER,
+  reorder_threshold INTEGER,
+  issue_unit TEXT,
+  replacement_value REAL,
+  supplier TEXT,
+  warranty_expiry TEXT,
+  serial_number TEXT,
+  insurance_relevant INTEGER NOT NULL DEFAULT 0,
   created_by INTEGER REFERENCES users(id),
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -1039,6 +1055,25 @@ if ($ppCompsSql && !str_contains($ppCompsSql, 'allow_deductions')) {
 $eqSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='equipment_assets'")['sql'] ?? '';
 if ($eqSql && !str_contains($eqSql, 'maintenance_locked')) {
     db()->exec('ALTER TABLE equipment_assets ADD COLUMN maintenance_locked INTEGER NOT NULL DEFAULT 0');
+}
+// Migration: QM Advanced Controls richer inventory model (FRD FR-QM-ADV/INV).
+// Add the columns if an older equipment_assets table predates them.
+if ($eqSql && !str_contains($eqSql, 'item_type')) {
+    db()->exec("ALTER TABLE equipment_assets ADD COLUMN item_type TEXT NOT NULL DEFAULT 'asset'");
+    db()->exec('ALTER TABLE equipment_assets ADD COLUMN parent_kit_id INTEGER');
+    db()->exec('ALTER TABLE equipment_assets ADD COLUMN restricted INTEGER NOT NULL DEFAULT 0');
+    db()->exec('ALTER TABLE equipment_assets ADD COLUMN restricted_category TEXT');
+    db()->exec('ALTER TABLE equipment_assets ADD COLUMN storage_area TEXT');
+    db()->exec('ALTER TABLE equipment_assets ADD COLUMN location_code TEXT');
+    db()->exec('ALTER TABLE equipment_assets ADD COLUMN location_confidence TEXT');
+    db()->exec('ALTER TABLE equipment_assets ADD COLUMN stock_level INTEGER');
+    db()->exec('ALTER TABLE equipment_assets ADD COLUMN reorder_threshold INTEGER');
+    db()->exec('ALTER TABLE equipment_assets ADD COLUMN issue_unit TEXT');
+    db()->exec('ALTER TABLE equipment_assets ADD COLUMN replacement_value REAL');
+    db()->exec('ALTER TABLE equipment_assets ADD COLUMN supplier TEXT');
+    db()->exec('ALTER TABLE equipment_assets ADD COLUMN warranty_expiry TEXT');
+    db()->exec('ALTER TABLE equipment_assets ADD COLUMN serial_number TEXT');
+    db()->exec('ALTER TABLE equipment_assets ADD COLUMN insurance_relevant INTEGER NOT NULL DEFAULT 0');
 }
 // Migration: pp_submissions gained guest attribution (FRD v2.4 s13.8) - guest
 // scores are owned by a service user but carry the link id and unverified name.

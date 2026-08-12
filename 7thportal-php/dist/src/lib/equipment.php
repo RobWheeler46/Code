@@ -4,6 +4,14 @@
 const EQUIPMENT_CATEGORIES = ['camping' => 'Camping equipment', 'activity' => 'Activity kit', 'safety' => 'Safety equipment', 'general' => 'General equipment'];
 const EQUIPMENT_CONDITIONS = ['new' => 'New', 'good' => 'Good', 'fair' => 'Fair', 'poor' => 'Poor', 'unserviceable' => 'Unserviceable'];
 const EQUIPMENT_STATUSES = ['available' => 'Available', 'allocated' => 'Allocated', 'loaned' => 'Loaned', 'under_repair' => 'Under repair', 'retired' => 'Retired', 'missing' => 'Missing'];
+// QM Advanced Controls (FRD FR-QM-ADV-001 / INV): an item is a single asset, a kit
+// (container with expected components), a component of a kit, or a consumable
+// (stock-tracked with a reorder threshold).
+const EQUIPMENT_ITEM_TYPES = ['asset' => 'Asset', 'kit' => 'Kit', 'kit_component' => 'Kit component', 'consumable' => 'Consumable'];
+// Controlled/restricted equipment categories (FR-QM-INV-009 / ADV-008): booking
+// these requires a permit/qualification confirmation and a named responsible adult.
+const EQUIPMENT_RESTRICTED_CATEGORIES = ['archery' => 'Archery', 'shooting' => 'Shooting', 'bladed' => 'Bladed tools (knife/axe/saw/tomahawk)', 'gas' => 'Gas / stoves', 'fire' => 'Fire / pyrotechnics', 'climbing' => 'Climbing / heights', 'chemical' => 'Chemical / fuel', 'other' => 'Other controlled'];
+const EQUIPMENT_LOCATION_CONFIDENCE = ['confirmed' => 'Confirmed', 'probable' => 'Probable', 'unknown' => 'Unknown'];
 // Inspection outcomes (QM Maintenance & Inspection Workflow s3). Each drives a
 // defined system action when an inspection is recorded.
 const EQUIPMENT_INSPECTION_OUTCOMES = [
@@ -44,7 +52,25 @@ function serializeAsset(array $a): array
         'linkedEvent' => $a['linked_event'], 'purchaseDate' => $a['purchase_date'], 'value' => $a['value'] !== null ? (float) $a['value'] : null,
         'notes' => $a['notes'], 'nextInspectionDate' => $a['next_inspection_date'], 'replacementDueDate' => $a['replacement_due_date'],
         'loanDueDate' => $a['loan_due_date'], 'lastCheckedDate' => $a['last_checked_date'],
-        'maintenanceLocked' => (bool) ($a['maintenance_locked'] ?? 0), 'updatedAt' => $a['updated_at'],
+        'maintenanceLocked' => (bool) ($a['maintenance_locked'] ?? 0),
+        // QM Advanced Controls richer inventory model.
+        'itemType' => $a['item_type'] ?? 'asset',
+        'parentKitId' => isset($a['parent_kit_id']) && $a['parent_kit_id'] !== null ? (int) $a['parent_kit_id'] : null,
+        'restricted' => (bool) ($a['restricted'] ?? 0),
+        'restrictedCategory' => $a['restricted_category'] ?? null,
+        'storageArea' => $a['storage_area'] ?? null,
+        'locationCode' => $a['location_code'] ?? null,
+        'locationConfidence' => $a['location_confidence'] ?? null,
+        'stockLevel' => isset($a['stock_level']) && $a['stock_level'] !== null ? (int) $a['stock_level'] : null,
+        'reorderThreshold' => isset($a['reorder_threshold']) && $a['reorder_threshold'] !== null ? (int) $a['reorder_threshold'] : null,
+        'issueUnit' => $a['issue_unit'] ?? null,
+        'belowReorder' => ($a['item_type'] ?? 'asset') === 'consumable' && $a['stock_level'] !== null && $a['reorder_threshold'] !== null && (int) $a['stock_level'] <= (int) $a['reorder_threshold'],
+        'replacementValue' => isset($a['replacement_value']) && $a['replacement_value'] !== null ? (float) $a['replacement_value'] : null,
+        'supplier' => $a['supplier'] ?? null,
+        'warrantyExpiry' => $a['warranty_expiry'] ?? null,
+        'serialNumber' => $a['serial_number'] ?? null,
+        'insuranceRelevant' => (bool) ($a['insurance_relevant'] ?? 0),
+        'updatedAt' => $a['updated_at'],
     ];
 }
 function serializeInspection(array $r, array $userNames): array

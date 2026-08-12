@@ -73,6 +73,8 @@ async function loadEquipment() {
       <div class="card"><div class="muted">Checks due (30 days)</div><div class="cap-big">${s.checksDue}</div></div>
       <div class="card"><div class="muted">Replacement risk</div><div class="cap-big">${s.replacementRisk}</div></div>
       <div class="card"><div class="muted">On loan</div><div class="cap-big">${s.onLoan}</div></div>
+      <div class="card"><div class="muted">Low stock</div><div class="cap-big">${s.lowStock ?? 0}</div></div>
+      <div class="card"><div class="muted">Restricted</div><div class="cap-big">${s.restricted ?? 0}</div></div>
     </div>
     <div class="card">
       <div class="cap-actions" style="margin-bottom:.8rem">
@@ -84,7 +86,7 @@ async function loadEquipment() {
         <thead><tr><th>Asset</th><th>Category</th><th>Location</th><th>Condition</th><th>Status</th><th>Next check</th><th></th></tr></thead>
         <tbody>${data.assets.map(a => `
           <tr>
-            <td><strong>${escapeHtml(a.name)}</strong>${a.quantity > 1 ? ` <span class="muted">&times;${a.quantity}</span>` : ''}</td>
+            <td><strong>${escapeHtml(a.name)}</strong>${a.quantity > 1 ? ` <span class="muted">&times;${a.quantity}</span>` : ''}${a.itemType && a.itemType !== 'asset' ? ` <span class="muted">· ${escapeHtml((EQ_META.itemTypes && EQ_META.itemTypes[a.itemType]) || a.itemType)}</span>` : ''}${a.restricted ? ' <span class="badge" data-status="suspended">Restricted</span>' : ''}${a.belowReorder ? ' <span class="badge" data-status="deleted">Low stock</span>' : ''}</td>
             <td>${escapeHtml(EQ_META.categories[a.category] || a.category)}</td>
             <td class="muted">${escapeHtml(a.location || '&mdash;')}</td>
             <td>${escapeHtml(EQ_META.conditions[a.condition] || a.condition)}</td>
@@ -197,6 +199,37 @@ function openAssetForm(asset) {
       ${field('Value (£)', `<input id="ef-value" type="number" min="0" step="0.01" value="${a.value ?? ''}" style="width:120px">`)}
     </div>
     ${field('Notes', `<textarea id="ef-notes" rows="2">${escapeHtml(a.notes || '')}</textarea>`)}
+    <details class="eq-advanced"${(a.itemType && a.itemType !== 'asset') || a.restricted || a.stockLevel != null || a.serialNumber || a.storageArea ? ' open' : ''}>
+      <summary>Advanced — type, restricted gear, stock &amp; identity</summary>
+      <div class="cap-actions">
+        ${field('Item type', `<select id="ef-itemtype">${sel(EQ_META.itemTypes || { asset: 'Asset' }, a.itemType || 'asset')}</select>`)}
+        ${field('Restricted / controlled', `<label class="check"><input type="checkbox" id="ef-restricted" ${a.restricted ? 'checked' : ''}> Requires a permit</label>`)}
+      </div>
+      <div class="field" id="ef-restricted-cat-wrap" style="${a.restricted ? '' : 'display:none'}">
+        <label>Restricted category</label><select id="ef-restricted-cat"><option value="">&mdash;</option>${sel(EQ_META.restrictedCategories || {}, a.restrictedCategory || '')}</select>
+      </div>
+      <div id="ef-stock-wrap" style="${a.itemType === 'consumable' ? '' : 'display:none'}">
+        <div class="cap-actions">
+          ${field('Stock level', `<input id="ef-stock" type="number" min="0" value="${a.stockLevel ?? ''}" style="width:110px">`)}
+          ${field('Reorder at', `<input id="ef-reorder" type="number" min="0" value="${a.reorderThreshold ?? ''}" style="width:110px">`)}
+          ${field('Issue unit', `<input id="ef-issueunit" value="${escapeHtml(a.issueUnit || '')}" placeholder="e.g. box, litre" style="width:150px">`)}
+        </div>
+      </div>
+      <div class="cap-actions">
+        ${field('Storage area', `<input id="ef-storagearea" value="${escapeHtml(a.storageArea || '')}" placeholder="e.g. Container A">`)}
+        ${field('Location code', `<input id="ef-loccode" value="${escapeHtml(a.locationCode || '')}" placeholder="e.g. A-3-2" style="width:130px">`)}
+        ${field('Confidence', `<select id="ef-locconf"><option value="">&mdash;</option>${sel(EQ_META.locationConfidence || {}, a.locationConfidence || '')}</select>`)}
+      </div>
+      <div class="cap-actions">
+        ${field('Serial number', `<input id="ef-serial" value="${escapeHtml(a.serialNumber || '')}">`)}
+        ${field('Supplier', `<input id="ef-supplier" value="${escapeHtml(a.supplier || '')}">`)}
+      </div>
+      <div class="cap-actions">
+        ${field('Warranty expiry', `<input id="ef-warranty" type="date" value="${a.warrantyExpiry || ''}">`)}
+        ${field('Replacement value (£)', `<input id="ef-repval" type="number" min="0" step="0.01" value="${a.replacementValue ?? ''}" style="width:140px">`)}
+      </div>
+      ${field('&nbsp;', `<label class="check"><input type="checkbox" id="ef-insurance" ${a.insuranceRelevant ? 'checked' : ''}> Insurance-relevant item</label>`)}
+    </details>
     <div class="modal-actions" style="display:flex;gap:.5rem;margin-top:1rem;align-items:center">
       <button class="btn" id="ef-save">${isEdit ? 'Save changes' : 'Add asset'}</button>
       <button class="btn btn-secondary" id="ef-cancel">Cancel</button>
@@ -205,6 +238,12 @@ function openAssetForm(asset) {
   document.body.appendChild(modal);
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
   document.getElementById('ef-cancel').addEventListener('click', () => modal.remove());
+  // Consumable stock fields only apply to consumables; restricted category only
+  // when the item is marked restricted.
+  const itypeSel = document.getElementById('ef-itemtype');
+  itypeSel.addEventListener('change', () => { document.getElementById('ef-stock-wrap').style.display = itypeSel.value === 'consumable' ? '' : 'none'; });
+  const restrChk = document.getElementById('ef-restricted');
+  restrChk.addEventListener('change', () => { document.getElementById('ef-restricted-cat-wrap').style.display = restrChk.checked ? '' : 'none'; });
 
   document.getElementById('ef-save').addEventListener('click', async () => {
     const payload = {
@@ -222,6 +261,20 @@ function openAssetForm(asset) {
       loanDueDate: document.getElementById('ef-loan').value,
       value: document.getElementById('ef-value').value,
       notes: document.getElementById('ef-notes').value.trim(),
+      itemType: document.getElementById('ef-itemtype').value,
+      restricted: document.getElementById('ef-restricted').checked,
+      restrictedCategory: document.getElementById('ef-restricted-cat').value,
+      storageArea: document.getElementById('ef-storagearea').value.trim(),
+      locationCode: document.getElementById('ef-loccode').value.trim(),
+      locationConfidence: document.getElementById('ef-locconf').value,
+      stockLevel: document.getElementById('ef-stock').value,
+      reorderThreshold: document.getElementById('ef-reorder').value,
+      issueUnit: document.getElementById('ef-issueunit').value.trim(),
+      serialNumber: document.getElementById('ef-serial').value.trim(),
+      supplier: document.getElementById('ef-supplier').value.trim(),
+      warrantyExpiry: document.getElementById('ef-warranty').value,
+      replacementValue: document.getElementById('ef-repval').value,
+      insuranceRelevant: document.getElementById('ef-insurance').checked,
     };
     if (!payload.name) { document.getElementById('eq-form-msg').innerHTML = '<div class="alert alert-error">A name is required.</div>'; return; }
     try {
