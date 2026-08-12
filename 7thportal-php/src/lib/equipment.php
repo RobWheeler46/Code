@@ -177,5 +177,15 @@ function equipmentActionItems(): array
     foreach (dbAll("SELECT a.id, a.name FROM equipment_repairs r JOIN equipment_assets a ON a.id = r.asset_id WHERE r.status = 'open' GROUP BY a.id, a.name") as $a) {
         $items[] = actionItem('eqp-repair-' . $a['id'], 'High', 'Equipment', 'Repair open (locked): ' . $a['name'], 'Quartermaster', 'Open', 'equipment.html');
     }
+    // QM Advanced Controls (FR-QM-ADV-019): replenishment + location review, as
+    // single aggregate tasks so a big register doesn't flood the Action Centre.
+    $lowStock = (int) dbGet("SELECT COUNT(*) AS n FROM equipment_assets WHERE item_type = 'consumable' AND stock_level IS NOT NULL AND reorder_threshold IS NOT NULL AND stock_level <= reorder_threshold")['n'];
+    if ($lowStock > 0) {
+        $items[] = actionItem('eqp-lowstock', 'Medium', 'Equipment', $lowStock . ' consumable' . ($lowStock === 1 ? '' : 's') . ' at or below reorder level', 'Quartermaster', 'Open', 'equipment.html');
+    }
+    $unknownLoc = (int) dbGet("SELECT COUNT(*) AS n FROM equipment_assets WHERE status != 'retired' AND location_confidence = 'unknown'")['n'];
+    if ($unknownLoc > 0) {
+        $items[] = actionItem('eqp-unknownloc', 'Low', 'Equipment', $unknownLoc . ' item' . ($unknownLoc === 1 ? '' : 's') . ' with an unconfirmed storage location', 'Quartermaster', 'Open', 'equipment.html');
+    }
     return $items;
 }

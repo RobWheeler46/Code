@@ -75,6 +75,7 @@ async function loadEquipment() {
       <div class="card"><div class="muted">On loan</div><div class="cap-big">${s.onLoan}</div></div>
       <div class="card"><div class="muted">Low stock</div><div class="cap-big">${s.lowStock ?? 0}</div></div>
       <div class="card"><div class="muted">Restricted</div><div class="cap-big">${s.restricted ?? 0}</div></div>
+      <div class="card"><div class="muted">Unknown location</div><div class="cap-big">${s.unknownLocation ?? 0}</div></div>
     </div>
     <div class="card">
       <div class="cap-actions" style="margin-bottom:.8rem">

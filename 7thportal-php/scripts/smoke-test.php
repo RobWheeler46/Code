@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -32,7 +32,7 @@ function useDb(string $file): void { putenv('SEVENTHPORTAL_DB=' . $file); }
 function boot(): void { require dirname(__DIR__) . '/src/db.php'; }
 function loadLibs(): void
 {
-    foreach (['helpers', 'notifications', 'finance', 'incidents', 'patrolpoints', 'events'] as $lib) {
+    foreach (['helpers', 'notifications', 'finance', 'incidents', 'patrolpoints', 'events', 'equipment', 'actions'] as $lib) {
         require_once dirname(__DIR__) . '/src/lib/' . $lib . '.php';
     }
 }
@@ -153,6 +153,21 @@ function scenario_logic_events(): void
     $n2 = (int) dbGet("SELECT COUNT(*) c FROM notifications WHERE user_id = ? AND type='event_hub'", [$p2])['c'];
     check('events: section parent is notified on publish', $n1 === 1);
     check('events: parent in a different section is not notified', $n2 === 0);
+}
+
+// Equipment (QM Advanced): low-stock + unknown-location surface as QM tasks.
+function scenario_logic_equipment(): void
+{
+    useDb(tmpDb('eq')); boot(); loadLibs();
+    dbRun("INSERT INTO settings (key,value) VALUES ('equipment_register_enabled','true') ON CONFLICT(key) DO UPDATE SET value='true'");
+    dbRun("INSERT INTO equipment_assets (name, item_type, stock_level, reorder_threshold) VALUES ('Batteries', 'consumable', 2, 5)");
+    dbRun("INSERT INTO equipment_assets (name, location_confidence) VALUES ('Mystery box', 'unknown')");
+    dbRun("INSERT INTO equipment_assets (name) VALUES ('Well-known tent')"); // should NOT flag
+    $acts = equipmentActionItems();
+    $has = fn($needle) => (bool) array_filter($acts, fn($a) => str_contains($a['action'] ?? '', $needle));
+    check('equipment: low-stock consumable raises a QM task', $has('at or below reorder level'));
+    check('equipment: unknown-location item raises a QM task', $has('unconfirmed storage location'));
+    check('equipment: no spurious tasks for a normal asset', count($acts) === 2, count($acts) . ' tasks');
 }
 
 // ── child runner: run one scenario, print machine-readable results ────────────
