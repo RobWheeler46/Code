@@ -53,6 +53,20 @@ function buildActionCentre(array $user): array
             }
             $moreInfo = (int) dbGet("SELECT COUNT(*) AS n FROM expense_claim_items i JOIN expense_claims c ON c.id = i.claim_id WHERE c.claimant_user_id = ? AND i.status = 'more_info_requested'", [$uid])['n'];
             if ($moreInfo > 0) $items[] = actionItem('claim-moreinfo', 'High', 'Expenses', $moreInfo . ' claim item' . ($moreInfo === 1 ? '' : 's') . ' need more information', 'You', 'Open', 'expenses.html');
+            // First approval waiting on this user: their nominated items, or (legacy)
+            // items on accounts where they are the approver/deputy - never their own.
+            $awaitingMine = (int) dbGet(
+                "SELECT COUNT(*) AS n FROM expense_claim_items eci JOIN expense_claims ec ON ec.id = eci.claim_id
+                 WHERE eci.status = 'submitted' AND ec.claimant_user_id != ?
+                   AND ( eci.selected_approver_user_id = ?
+                      OR (eci.selected_approver_user_id IS NULL AND eci.account_id IN (SELECT id FROM expense_accounts WHERE approver_user_id = ? OR deputy_approver_user_id = ?)) )",
+                [$uid, $uid, $uid, $uid]
+            )['n'];
+            if ($awaitingMine > 0) $items[] = actionItem('claims-approve', 'High', 'Expenses', $awaitingMine . ' claim item' . ($awaitingMine === 1 ? '' : 's') . ' awaiting your approval', 'You', 'Open', 'expenses.html');
+            if (isTreasurerRole($role) || isChairRole($role)) {
+                $second = (int) dbGet("SELECT COUNT(*) AS n FROM expense_claim_items eci JOIN expense_claims ec ON ec.id = eci.claim_id WHERE eci.status = 'pending_second_approval' AND ec.claimant_user_id != ?", [$uid])['n'];
+                if ($second > 0) $items[] = actionItem('claims-second', 'High', 'Expenses', $second . ' claim item' . ($second === 1 ? '' : 's') . ' awaiting your second approval', 'You', 'Open', 'expenses.html');
+            }
             if (isTreasurerRole($role)) {
                 $payable = (int) dbGet("SELECT COUNT(*) AS n FROM expense_claim_items WHERE status IN ('approved','ready_for_payment')")['n'];
                 if ($payable > 0) $items[] = actionItem('claims-pay', 'High', 'Expenses', $payable . ' approved claim item' . ($payable === 1 ? '' : 's') . ' to pay', 'Treasurer', 'Open', 'treasurer.html');

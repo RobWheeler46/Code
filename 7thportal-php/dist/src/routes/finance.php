@@ -381,6 +381,7 @@ $router->post('/api/finance/claims/:id/submit', function ($params) {
         }
     }
 
+    $approverItemCounts = []; // first-stage approver user id => items awaiting them
     foreach ($submittable as $item) {
         $secondApprovalRequired = itemNeedsSecondApproval((float) $item['claimed_amount']);
         dbRun(
@@ -388,15 +389,25 @@ $router->post('/api/finance/claims/:id/submit', function ($params) {
              more_info_requested_by = NULL, more_info_requested_at = NULL, more_info_note = NULL, updated_at = datetime('now') WHERE id = ?",
             [$secondApprovalRequired ? 1 : 0, $item['id']]
         );
+        $acct = dbGet('SELECT * FROM expense_accounts WHERE id = ?', [$item['account_id']]);
         // Freeze the routing snapshot at submission (FR-FIN-NA-008) so audit history
         // stays stable even if group membership changes later.
-        if (!empty($item['selected_approver_user_id'])) {
-            $acct = dbGet('SELECT * FROM expense_accounts WHERE id = ?', [$item['account_id']]);
-            if ($acct) {
-                dbRun('UPDATE expense_claim_items SET selected_approver_group_id = ?, selected_approver_snapshot_json = ?, approver_assigned_by_user_id = ?, approver_assignment_reason = ? WHERE id = ?',
-                    [$acct['approval_group_id'] ?: null, json_encode(financeApproverSnapshot($acct, (int) $item['selected_approver_user_id'])), (int) $user['id'], 'claimant_selection', $item['id']]);
-            }
+        if (!empty($item['selected_approver_user_id']) && $acct) {
+            dbRun('UPDATE expense_claim_items SET selected_approver_group_id = ?, selected_approver_snapshot_json = ?, approver_assigned_by_user_id = ?, approver_assignment_reason = ? WHERE id = ?',
+                [$acct['approval_group_id'] ?: null, json_encode(financeApproverSnapshot($acct, (int) $item['selected_approver_user_id'])), (int) $user['id'], 'claimant_selection', $item['id']]);
         }
+        // Work out who owns this item's first approval, so they can be told.
+        $approverIds = !empty($item['selected_approver_user_id'])
+            ? [(int) $item['selected_approver_user_id']]
+            : array_filter([(int) ($acct['approver_user_id'] ?? 0), (int) ($acct['deputy_approver_user_id'] ?? 0)]);
+        foreach ($approverIds as $aid) {
+            if ($aid && $aid !== (int) $user['id']) $approverItemCounts[$aid] = ($approverItemCounts[$aid] ?? 0) + 1;
+        }
+    }
+    // Tell each first-stage approver they have something waiting (one per approver).
+    foreach ($approverItemCounts as $aid => $count) {
+        notify($aid, 'expense_claim', 'Expense approval needed',
+            'Claim ' . $claim['claim_number'] . ' has ' . $count . ' item' . ($count === 1 ? '' : 's') . ' awaiting your approval.', 'expenses.html');
     }
     dbRun("UPDATE expense_claims SET submitted_at = COALESCE(submitted_at, datetime('now')) WHERE id = ?", [$claim['id']]);
     recalculateClaimStatus((int) $claim['id']);
@@ -487,6 +498,13 @@ $router->post('/api/finance/items/:itemId/approve', function ($params) {
     logAudit(['userId' => $user['id'], 'action' => 'finance_approve_item', 'entityType' => 'expense_claim_item', 'entityId' => (string) $item['id'], 'ipAddress' => clientIp()]);
     if ($newStatus === 'approved') {
         notifyClaimant((int) $item['claim_id'], (int) $user['id'], 'Expense claim approved', 'Your ' . claimItemRef($item) . ' has been approved.');
+    } else {
+        // Passed first approval but over the tier-2 threshold: alert the second
+        // approvers (Treasurer/Chair) who must sign it off, excluding the claimant.
+        foreach (dbAll("SELECT id FROM users WHERE account_status = 'active' AND portal_role IN ('treasurer','chair')") as $u) {
+            if ((int) $u['id'] === (int) $item['claim_claimant_user_id']) continue;
+            notify((int) $u['id'], 'expense_claim', 'Second approval needed', claimItemRef($item) . ' has passed first approval and needs a Treasurer or Chair second approval.', 'expenses.html');
+        }
     }
     itemActionResponse((int) $item['id']);
 });
