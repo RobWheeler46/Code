@@ -55,6 +55,22 @@ function eventHubVisibleToParent(array $user, array $hub): bool
     return (bool) dbGet('SELECT 1 FROM parent_child_links WHERE parent_user_id = ? AND osm_section_id = ? LIMIT 1', [$user['id'], $hub['osm_section_id']]);
 }
 
+// Tell the parents who can see a hub that it has just been published, so they
+// aren't relying on stumbling across it. Section-scoped hubs notify parents with a
+// child in that section; a group-wide hub notifies all linked parents. Best-effort
+// (deduped by parent); also feeds the weekly digest.
+function eventHubNotifyPublished(array $hub): void
+{
+    $rows = !empty($hub['osm_section_id'])
+        ? dbAll('SELECT DISTINCT parent_user_id AS uid FROM parent_child_links WHERE osm_section_id = ?', [$hub['osm_section_id']])
+        : dbAll('SELECT DISTINCT parent_user_id AS uid FROM parent_child_links');
+    $title = $hub['title'] ?: 'An event';
+    $when = !empty($hub['start_date']) ? ' (' . $hub['start_date'] . ')' : '';
+    foreach ($rows as $r) {
+        notify((int) $r['uid'], 'event_hub', 'New event published', $title . $when . ' has been published.', 'event-hub.html?id=' . $hub['id']);
+    }
+}
+
 // Setup readiness (FR-EVT-HUB-007): six tasks, returned as complete/total + RAG.
 function eventHubReadiness(array $hub): array
 {

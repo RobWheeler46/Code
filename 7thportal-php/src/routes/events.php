@@ -57,6 +57,10 @@ $router->post('/api/events', function ($params) {
     $cols = array_keys($f);
     $result = dbRun('INSERT INTO event_hubs (' . implode(',', $cols) . ', created_by) VALUES (' . implode(',', array_fill(0, count($cols), '?')) . ', ?)', [...array_values($f), $user['id']]);
     logAudit(['userId' => $user['id'], 'action' => 'event_hub_create', 'entityType' => 'event_hub', 'entityId' => (string) $result['lastInsertId'], 'ipAddress' => clientIp(), 'details' => ['title' => $f['title']]]);
+    // Rare, but a hub created directly as published should still notify parents.
+    if (($f['status'] ?? 'draft') === 'published') {
+        eventHubNotifyPublished(dbGet('SELECT * FROM event_hubs WHERE id = ?', [$result['lastInsertId']]));
+    }
     jsonResponse(serializeHub(dbGet('SELECT * FROM event_hubs WHERE id = ?', [$result['lastInsertId']]), true), 201);
 });
 
@@ -101,6 +105,10 @@ $router->patch('/api/events/:id', function ($params) {
     $set = implode(', ', array_map(fn($c) => "$c = ?", array_keys($f)));
     dbRun("UPDATE event_hubs SET $set, updated_at = datetime('now') WHERE id = ?", [...array_values($f), $hub['id']]);
     logAudit(['userId' => $user['id'], 'action' => $f['status'] !== $hub['status'] ? 'event_hub_status_change' : 'event_hub_update', 'entityType' => 'event_hub', 'entityId' => (string) $hub['id'], 'ipAddress' => clientIp()]);
+    // Notify parents on the draft -> published transition (FR-EVT-HUB).
+    if ($f['status'] === 'published' && $hub['status'] !== 'published') {
+        eventHubNotifyPublished(dbGet('SELECT * FROM event_hubs WHERE id = ?', [$hub['id']]));
+    }
     jsonResponse(serializeHub(dbGet('SELECT * FROM event_hubs WHERE id = ?', [$hub['id']]), true));
 });
 

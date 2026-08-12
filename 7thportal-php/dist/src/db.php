@@ -2,10 +2,15 @@
 // PDO/SQLite port of the Node version's src/db.js - same schema, same file
 // name, so the two apps' data files are interchangeable if ever needed.
 
-$dataDir = __DIR__ . '/../data';
+// The DB file defaults to data/7thportal.db, but SEVENTHPORTAL_DB can point it
+// elsewhere (a throwaway file for the smoke-test harness, or a staging DB) without
+// touching the real data. Read straight from the environment so it works however
+// early db.php is required.
+$dbFile = getenv('SEVENTHPORTAL_DB') ?: (__DIR__ . '/../data/7thportal.db');
+$dataDir = dirname($dbFile);
 if (!is_dir($dataDir)) mkdir($dataDir, 0775, true);
 
-$GLOBALS['__db'] = new PDO('sqlite:' . $dataDir . '/7thportal.db');
+$GLOBALS['__db'] = new PDO('sqlite:' . $dbFile);
 $GLOBALS['__db']->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 $GLOBALS['__db']->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 $GLOBALS['__db']->exec('PRAGMA journal_mode = WAL');

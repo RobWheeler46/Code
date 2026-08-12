@@ -57,6 +57,14 @@ The third argument makes `index.php` act as a router script: it serves real stat
 
 Demo Mode, role model, notices, admin backend and the photo gallery all behave identically to the Node version - see its README for the full feature list and FRD traceability. Every workflow was re-verified against this PHP version directly (auth, dashboards, child/section views, notices, admin user/parent management, and the complete photo gallery pipeline including a real image upload, resize, EXIF-strip check, submit/approve/reject/unpublish, and parent viewing).
 
+## Smoke tests
+
+```
+php scripts/smoke-test.php
+```
+
+A dependency-free harness (no Composer/PHPUnit, matching the toolchain). Each scenario runs in its own PHP process against a **throwaway SQLite DB** (via the `SEVENTHPORTAL_DB` env override), so it never touches `data/7thportal.db`. It exits non-zero if anything fails - run it before building a deploy package. Covers the two things most likely to break a release: **migrations** (a fresh install, and a deliberately *drifted* server DB - the exact shape that caused a production 500) and **core business-logic invariants** (finance nominated-approver routing, HMRC mileage tiering, incident-privacy redaction, event-publish notifications). Add a case by writing a `scenario_<name>()` function and listing it in `SCENARIOS`.
+
 ## Debugging login issues
 
 Both login flows (`/auth/osm/login` → `/auth/osm/callback` and `/api/auth/local-login`) log every step server-side - never to the browser, which still only ever shows the existing safe, generic error messages (NFR-007). Two places to look, both controlled by `LOGIN_DEBUG` in `.env` (on by default, set to `false` once things are working):

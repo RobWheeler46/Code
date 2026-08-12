@@ -10,8 +10,8 @@
 // returned submission; approved scores are corrected via a revision that keeps
 // the original effective until the revision is approved. Leader workspace only.
 // Still deferred: per-submission membership snapshots, selectable/ranged point
-// types, per-category approval rules, draft (unsubmitted) submissions, parent
-// leaderboard, evidence attachments. See README follow-ups.
+// types, per-category approval rules, draft (unsubmitted) submissions, evidence
+// attachments. See README follow-ups.
 
 const PP_STATUSES = ['draft' => 'Draft', 'open' => 'Open', 'paused' => 'Paused', 'completed' => 'Completed', 'archived' => 'Archived'];
 const PP_APPROVAL_MODES = ['immediate' => 'Immediate (scores count at once)', 'approval' => 'Requires approval'];
