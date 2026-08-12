@@ -253,12 +253,83 @@ $router->get('/api/equipment/:id', function ($params) {
     if (!$a) jsonResponse(['error' => 'Asset not found.'], 404);
     $userNames = [];
     foreach (dbAll('SELECT id, first_name, last_name FROM users') as $u) $userNames[(int) $u['id']] = trim($u['first_name'] . ' ' . $u['last_name']);
+    $isKit = ($a['item_type'] ?? 'asset') === 'kit';
     jsonResponse([
         'asset' => serializeAsset($a),
         'inspections' => array_map(fn($r) => serializeInspection($r, $userNames), dbAll('SELECT * FROM equipment_inspections WHERE asset_id = ? ORDER BY id DESC', [$a['id']])),
         'repairs' => array_map(fn($r) => serializeRepair($r, $userNames), dbAll("SELECT * FROM equipment_repairs WHERE asset_id = ? ORDER BY (status='resolved'), id DESC", [$a['id']])),
-        'meta' => ['outcomes' => EQUIPMENT_INSPECTION_OUTCOMES, 'conditions' => EQUIPMENT_CONDITIONS],
+        'isKit' => $isKit,
+        'kitComponents' => $isKit ? array_map('serializeKitComponent', kitComponentsFor((int) $a['id'])) : [],
+        'kitChecks' => $isKit ? array_map(fn($r) => serializeKitCheck($r, $userNames), dbAll('SELECT * FROM equipment_kit_checks WHERE kit_asset_id = ? ORDER BY id DESC LIMIT 10', [$a['id']])) : [],
+        'meta' => ['outcomes' => EQUIPMENT_INSPECTION_OUTCOMES, 'conditions' => EQUIPMENT_CONDITIONS, 'kitCheckTypes' => EQUIPMENT_KIT_CHECK_TYPES, 'kitComponentStatuses' => EQUIPMENT_KIT_COMPONENT_STATUSES],
     ]);
+});
+
+// ── Kit contents checklist + completeness checks (FR-QM-ADV-002/003) ───────────
+
+function equipmentKitOr404(array $user, $id): array
+{
+    requireLeader($user);
+    requireEquipmentEnabled();
+    $a = dbGet('SELECT * FROM equipment_assets WHERE id = ?', [$id]);
+    if (!$a) jsonResponse(['error' => 'Asset not found.'], 404);
+    if (($a['item_type'] ?? 'asset') !== 'kit') jsonResponse(['error' => 'This item is not a kit. Set its type to "Kit" first.'], 400);
+    return $a;
+}
+
+$router->post('/api/equipment/:id/kit-components', function ($params) {
+    $user = requireAuth();
+    $a = equipmentKitOr404($user, $params['id']);
+    $b = requestBody();
+    $name = trim((string) ($b['name'] ?? ''));
+    if ($name === '') jsonResponse(['error' => 'A component name is required.'], 400);
+    $qty = max(1, (int) ($b['expectedQty'] ?? 1));
+    $sort = (int) (dbGet('SELECT COALESCE(MAX(sort_order),0) AS m FROM equipment_kit_components WHERE kit_asset_id = ?', [$a['id']])['m']) + 1;
+    dbRun('INSERT INTO equipment_kit_components (kit_asset_id, name, expected_qty, sort_order) VALUES (?, ?, ?, ?)', [$a['id'], $name, $qty, $sort]);
+    logAudit(['userId' => $user['id'], 'action' => 'equipment_kit_component_add', 'entityType' => 'equipment', 'entityId' => (string) $a['id'], 'ipAddress' => clientIp(), 'details' => ['name' => $name]]);
+    jsonResponse(array_map('serializeKitComponent', kitComponentsFor((int) $a['id'])));
+});
+
+$router->delete('/api/equipment/:id/kit-components/:cid', function ($params) {
+    $user = requireAuth();
+    $a = equipmentKitOr404($user, $params['id']);
+    dbRun('DELETE FROM equipment_kit_components WHERE id = ? AND kit_asset_id = ?', [$params['cid'], $a['id']]);
+    logAudit(['userId' => $user['id'], 'action' => 'equipment_kit_component_remove', 'entityType' => 'equipment', 'entityId' => (string) $a['id'], 'ipAddress' => clientIp(), 'details' => ['componentId' => (int) $params['cid']]]);
+    jsonResponse(array_map('serializeKitComponent', kitComponentsFor((int) $a['id'])));
+});
+
+// Record a completeness check: a per-component status list; the overall result is
+// derived (damaged/incomplete/complete). A damaged/incomplete check opens a repair
+// task and locks the kit, mirroring an inspection failure.
+$router->post('/api/equipment/:id/kit-checks', function ($params) {
+    $user = requireAuth();
+    $a = equipmentKitOr404($user, $params['id']);
+    $b = requestBody();
+    $type = array_key_exists($b['checkType'] ?? null, EQUIPMENT_KIT_CHECK_TYPES) ? $b['checkType'] : 'routine';
+    $components = kitComponentsFor((int) $a['id']);
+    if (!$components) jsonResponse(['error' => 'Add the expected contents before recording a check.'], 400);
+    $statusMap = is_array($b['statuses'] ?? null) ? $b['statuses'] : [];
+    $rows = []; $statuses = [];
+    foreach ($components as $c) {
+        $st = $statusMap[(string) $c['id']] ?? $statusMap[(int) $c['id']] ?? 'present';
+        if (!array_key_exists($st, EQUIPMENT_KIT_COMPONENT_STATUSES)) $st = 'present';
+        $rows[] = ['name' => $c['name'], 'status' => $st];
+        $statuses[] = $st;
+    }
+    $result = kitCheckResult($statuses);
+    $note = trim((string) ($b['note'] ?? '')) ?: null;
+    $bookingId = !empty($b['bookingId']) ? (int) $b['bookingId'] : null;
+    $checkId = dbRun('INSERT INTO equipment_kit_checks (kit_asset_id, check_type, result, note, booking_id, checked_by) VALUES (?, ?, ?, ?, ?, ?)', [$a['id'], $type, $result, $note, $bookingId, $user['id']])['lastInsertId'];
+    foreach ($rows as $r) {
+        dbRun('INSERT INTO equipment_kit_check_items (check_id, component_name, status) VALUES (?, ?, ?)', [$checkId, $r['name'], $r['status']]);
+    }
+    // An incomplete/damaged kit is locked and gets a repair task, like a failed inspection.
+    if ($result !== 'complete') {
+        dbRun("UPDATE equipment_assets SET maintenance_locked = 1, status = 'under_repair', updated_at = datetime('now') WHERE id = ?", [$a['id']]);
+        dbRun('INSERT INTO equipment_repairs (asset_id, description, opened_by) VALUES (?, ?, ?)', [$a['id'], 'Kit check: ' . $result . ($note ? ' - ' . $note : ''), $user['id']]);
+    }
+    logAudit(['userId' => $user['id'], 'action' => 'equipment_kit_check', 'entityType' => 'equipment', 'entityId' => (string) $a['id'], 'ipAddress' => clientIp(), 'details' => ['type' => $type, 'result' => $result]]);
+    jsonResponse(['result' => $result, 'checkId' => (int) $checkId]);
 });
 
 // Record an inspection: applies the outcome (condition/lock/repair/retire) and

@@ -93,7 +93,7 @@ async function loadEquipment() {
             <td>${escapeHtml(EQ_META.conditions[a.condition] || a.condition)}</td>
             <td><span class="badge" data-status="${a.status === 'available' ? 'active' : (a.status === 'retired' ? 'archived' : 'pending_approval')}">${escapeHtml(EQ_META.statuses[a.status] || a.status)}</span>${a.maintenanceLocked ? ' <span class="badge" data-status="deleted">Locked</span>' : ''}</td>
             <td>${nextCheckLabel(a)}</td>
-            <td style="white-space:nowrap"><button class="btn btn-secondary btn-sm eq-inspect" data-id="${a.id}">Inspect</button> <button class="btn btn-secondary btn-sm eq-edit" data-id="${a.id}">Edit</button></td>
+            <td style="white-space:nowrap">${a.itemType === 'kit' ? `<button class="btn btn-secondary btn-sm eq-kit" data-id="${a.id}">Kit</button> ` : ''}<button class="btn btn-secondary btn-sm eq-inspect" data-id="${a.id}">Inspect</button> <button class="btn btn-secondary btn-sm eq-edit" data-id="${a.id}">Edit</button></td>
           </tr>`).join('')}</tbody>
       </table>` : '<div class="empty-state">No assets match. Add your first asset to get started.</div>'}
     </div>`;
@@ -104,6 +104,7 @@ async function loadEquipment() {
   document.getElementById('eq-status').addEventListener('change', e => { eqFilters.status = e.target.value; loadEquipment(); });
   document.querySelectorAll('.eq-edit').forEach(b => b.addEventListener('click', () => openAssetForm(data.assets.find(a => a.id == b.dataset.id))));
   document.querySelectorAll('.eq-inspect').forEach(b => b.addEventListener('click', () => openInspectForm(b.dataset.id)));
+  document.querySelectorAll('.eq-kit').forEach(b => b.addEventListener('click', () => openKitModal(b.dataset.id)));
 }
 
 // Record inspection modal: the six outcomes drive condition/lock/repair/retire,
@@ -149,6 +150,71 @@ async function openInspectForm(assetId) {
     };
     try { await Api.post(`/api/equipment/${assetId}/inspections`, body); modal.remove(); loadEquipment(); }
     catch (e) { document.getElementById('eq-insp-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
+}
+
+// Kit modal: manage a kit's expected contents and record a pre-loan/post-return
+// completeness check (each component present/missing/damaged) (FR-QM-ADV-002/003).
+async function openKitModal(assetId) {
+  let d;
+  try { d = await Api.get(`/api/equipment/${assetId}`); } catch (e) { alert(e.message); return; }
+  const a = d.asset;
+  const opt = (map, v) => Object.entries(map).map(([k, l]) => `<option value="${k}"${k === v ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('');
+  const compRows = d.kitComponents.length
+    ? d.kitComponents.map(c => `<tr><td>${escapeHtml(c.name)}</td><td style="width:70px">&times;${c.expectedQty}</td>
+        <td style="width:150px"><select data-kc-status="${c.id}">${opt(d.meta.kitComponentStatuses, 'present')}</select></td>
+        <td style="width:60px"><button class="btn btn-secondary btn-sm kc-del" data-cid="${c.id}">&times;</button></td></tr>`).join('')
+    : '<tr><td colspan="4" class="muted">No expected contents yet — add the items this kit should hold.</td></tr>';
+  const history = d.kitChecks.length
+    ? d.kitChecks.map(k => `<div style="padding:.3rem 0;border-bottom:1px solid var(--border);font-size:.85rem">
+        <strong>${escapeHtml(k.checkTypeLabel)}</strong> <span class="badge" data-status="${k.result === 'complete' ? 'active' : 'deleted'}">${escapeHtml(k.result)}</span>
+        <span class="muted">· ${escapeHtml(k.by)} · ${formatDateTime(k.at)}</span>
+        ${k.items.filter(i => i.status !== 'present').length ? `<br><span class="muted">${k.items.filter(i => i.status !== 'present').map(i => escapeHtml(i.name) + ': ' + escapeHtml(i.statusLabel)).join(', ')}</span>` : ''}</div>`).join('')
+    : '<p class="muted">No checks recorded yet.</p>';
+  const existing = document.getElementById('eq-kit-modal'); if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'eq-kit-modal'; modal.className = 'modal-backdrop';
+  modal.innerHTML = `<div class="modal-box"><h2>Kit: ${escapeHtml(a.name)}</h2>
+    <div id="eq-kit-msg"></div>
+    <h3 style="font-size:1rem;margin:.6rem 0 .3rem">Expected contents</h3>
+    <table class="data-table"><tbody id="eq-kit-comps">${compRows}</tbody></table>
+    <div class="cap-actions" style="margin:.5rem 0">
+      <input id="kc-name" placeholder="Component name" style="min-width:180px">
+      <input id="kc-qty" type="number" min="1" value="1" style="width:80px" title="Expected quantity">
+      <button class="btn btn-secondary btn-sm" id="kc-add">Add content</button>
+    </div>
+    <h3 style="font-size:1rem;margin:1rem 0 .3rem">Record completeness check</h3>
+    <div class="cap-actions">
+      <div class="field"><label>Check type</label><select id="kk-type">${opt(d.meta.kitCheckTypes, 'pre_loan')}</select></div>
+      <div class="field" style="flex:1"><label>Note (optional)</label><input id="kk-note" placeholder="e.g. missing tent pegs replaced"></div>
+    </div>
+    <p class="muted" style="font-size:.82rem">Set each component's status above, then record. A missing/damaged result locks the kit and opens a repair.</p>
+    <div class="cap-actions"><button class="btn" id="kk-save"${d.kitComponents.length ? '' : ' disabled'}>Record check</button><button class="btn btn-secondary" id="eq-kit-cancel">Close</button></div>
+    <h3 style="font-size:1rem;margin:1rem 0 .3rem">Check history</h3>${history}
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.getElementById('eq-kit-cancel').addEventListener('click', () => { modal.remove(); loadEquipment(); });
+  const msg = document.getElementById('eq-kit-msg');
+  document.getElementById('kc-add').addEventListener('click', async () => {
+    const name = document.getElementById('kc-name').value.trim();
+    if (!name) return;
+    try { await Api.post(`/api/equipment/${assetId}/kit-components`, { name, expectedQty: document.getElementById('kc-qty').value }); openKitModal(assetId); }
+    catch (e) { msg.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
+  modal.querySelectorAll('.kc-del').forEach(btn => btn.addEventListener('click', async () => {
+    try { await Api.delete(`/api/equipment/${assetId}/kit-components/${btn.dataset.cid}`); openKitModal(assetId); }
+    catch (e) { msg.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  }));
+  const saveBtn = document.getElementById('kk-save');
+  if (saveBtn) saveBtn.addEventListener('click', async () => {
+    const statuses = {};
+    modal.querySelectorAll('[data-kc-status]').forEach(s => { statuses[s.dataset.kcStatus] = s.value; });
+    try {
+      const r = await Api.post(`/api/equipment/${assetId}/kit-checks`, { checkType: document.getElementById('kk-type').value, note: document.getElementById('kk-note').value.trim(), statuses });
+      msg.innerHTML = `<div class="alert ${r.result === 'complete' ? 'alert-success' : 'alert-warning'}">Check recorded: ${escapeHtml(r.result)}${r.result !== 'complete' ? ' — kit locked, repair opened.' : ''}</div>`;
+      setTimeout(() => openKitModal(assetId), 700);
+    } catch (e) { msg.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
   });
 }
 

@@ -90,6 +90,38 @@ function serializeRepair(array $r, array $userNames): array
     ];
 }
 
+// QM Advanced Controls kits (FR-QM-ADV-002/003).
+const EQUIPMENT_KIT_CHECK_TYPES = ['pre_loan' => 'Pre-loan', 'post_return' => 'Post-return', 'routine' => 'Routine'];
+const EQUIPMENT_KIT_COMPONENT_STATUSES = ['present' => 'Present', 'missing' => 'Missing', 'damaged' => 'Damaged'];
+
+// Overall result of a completeness check from its per-component statuses: any
+// damaged -> damaged; else any missing -> incomplete; else complete.
+function kitCheckResult(array $statuses): string
+{
+    if (in_array('damaged', $statuses, true)) return 'damaged';
+    if (in_array('missing', $statuses, true)) return 'incomplete';
+    return 'complete';
+}
+function kitComponentsFor(int $kitAssetId): array
+{
+    return dbAll('SELECT * FROM equipment_kit_components WHERE kit_asset_id = ? ORDER BY sort_order, id', [$kitAssetId]);
+}
+function serializeKitComponent(array $c): array
+{
+    return ['id' => (int) $c['id'], 'name' => $c['name'], 'expectedQty' => (int) $c['expected_qty']];
+}
+function serializeKitCheck(array $r, array $userNames): array
+{
+    $items = dbAll('SELECT * FROM equipment_kit_check_items WHERE check_id = ? ORDER BY id', [$r['id']]);
+    return [
+        'id' => (int) $r['id'],
+        'checkType' => $r['check_type'], 'checkTypeLabel' => EQUIPMENT_KIT_CHECK_TYPES[$r['check_type']] ?? $r['check_type'],
+        'result' => $r['result'], 'note' => $r['note'],
+        'by' => $userNames[(int) $r['checked_by']] ?? 'Leader', 'at' => $r['created_at'],
+        'items' => array_map(fn($i) => ['name' => $i['component_name'], 'status' => $i['status'], 'statusLabel' => EQUIPMENT_KIT_COMPONENT_STATUSES[$i['status']] ?? $i['status'], 'note' => $i['note']], $items),
+    ];
+}
+
 // Apply an inspection outcome to an asset: sets condition/status, the maintenance
 // lock, opens/resolves repair tasks, records the inspection in history, and alerts
 // the owners of active bookings that include a newly-locked asset.

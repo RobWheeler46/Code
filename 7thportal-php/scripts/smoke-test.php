@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_kit'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -168,6 +168,15 @@ function scenario_logic_equipment(): void
     check('equipment: low-stock consumable raises a QM task', $has('at or below reorder level'));
     check('equipment: unknown-location item raises a QM task', $has('unconfirmed storage location'));
     check('equipment: no spurious tasks for a normal asset', count($acts) === 2, count($acts) . ' tasks');
+}
+
+// QM kit completeness check: overall result derives from component statuses.
+function scenario_logic_kit(): void
+{
+    useDb(tmpDb('kit')); boot(); loadLibs();
+    check('kit: all present -> complete', kitCheckResult(['present', 'present']) === 'complete');
+    check('kit: a missing -> incomplete', kitCheckResult(['present', 'missing']) === 'incomplete');
+    check('kit: a damaged wins over missing -> damaged', kitCheckResult(['missing', 'damaged']) === 'damaged');
 }
 
 // QM restricted-booking gate: a restricted line isn't cleared for approval until

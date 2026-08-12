@@ -633,6 +633,38 @@ CREATE TABLE IF NOT EXISTS equipment_repairs (
 CREATE INDEX IF NOT EXISTS idx_equipment_repairs_asset ON equipment_repairs(asset_id, status);
 CREATE INDEX IF NOT EXISTS idx_equipment_status ON equipment_assets(status, category);
 
+-- QM Advanced Controls kits (FRD FR-QM-ADV-002/003, INV-010). A kit (an asset with
+-- item_type='kit') has an expected-contents checklist; a completeness check records
+-- the state of each expected component pre-loan or post-return.
+CREATE TABLE IF NOT EXISTS equipment_kit_components (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  kit_asset_id INTEGER NOT NULL REFERENCES equipment_assets(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  expected_qty INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_equipment_kit_components_kit ON equipment_kit_components(kit_asset_id);
+CREATE TABLE IF NOT EXISTS equipment_kit_checks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  kit_asset_id INTEGER NOT NULL REFERENCES equipment_assets(id) ON DELETE CASCADE,
+  check_type TEXT NOT NULL CHECK(check_type IN ('pre_loan','post_return','routine')),
+  result TEXT NOT NULL CHECK(result IN ('complete','incomplete','damaged')),
+  note TEXT,
+  booking_id INTEGER,
+  checked_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_equipment_kit_checks_kit ON equipment_kit_checks(kit_asset_id);
+CREATE TABLE IF NOT EXISTS equipment_kit_check_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  check_id INTEGER NOT NULL REFERENCES equipment_kit_checks(id) ON DELETE CASCADE,
+  component_name TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('present','missing','damaged')),
+  note TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_equipment_kit_check_items_check ON equipment_kit_check_items(check_id);
+
 -- Quartermaster Booking (FRD FR-QM / backlog LATER-005). Builds on the equipment
 -- register: leaders raise booking requests for stores items and Quartermasters
 -- (Group Leadership Team + admins) approve/substitute at item-line level, then run
