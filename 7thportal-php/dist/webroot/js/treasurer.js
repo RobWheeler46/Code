@@ -18,13 +18,38 @@ async function load() {
     content.innerHTML = '<div class="alert alert-warning">Expenses and mileage claims are not enabled yet. Turn this on in Admin Settings.</div>';
     return;
   }
-  const [payable, batches, rates] = await Promise.all([
+  const [payable, batches, rates, awaiting] = await Promise.all([
     Api.get('/api/treasurer/payable-items'), Api.get('/api/treasurer/payment-batches'), Api.get('/api/finance/mileage-rates'),
+    Api.get('/api/finance/oversight/awaiting'),
   ]);
   const approved = payable.filter(i => i.status === 'approved');
   const readyForPayment = payable.filter(i => i.status === 'ready_for_payment');
+  const REASSIGN_REASONS = { reassignment: 'Reassignment', overdue: 'Overdue', conflict: 'Conflict of interest', admin_correction: 'Admin correction' };
 
   content.innerHTML = `
+    ${awaiting.length === 0 ? '' : `
+    <div class="card">
+      <h2>Awaiting approval - oversight (${awaiting.length})</h2>
+      <p class="muted">Items waiting on their nominated approver. If an approver is unavailable, overdue or conflicted, reassign to another eligible member of the same account group (FRD s28).</p>
+      <table><thead><tr><th>Claimant</th><th>Claim</th><th>Item</th><th>Account</th><th>Waiting on</th><th>Waiting</th><th>Reassign to</th></tr></thead>
+      <tbody>${awaiting.map(i => `
+        <tr${i.overdue ? ' class="row-warn"' : ''}>
+          <td>${escapeHtml(i.claimant.name)}</td><td>${escapeHtml(i.claimNumber)}</td><td>${escapeHtml(i.title)}</td>
+          <td>${escapeHtml(i.account.name)}</td>
+          <td>${escapeHtml(i.selectedApprover ? i.selectedApprover.name : '(none)')}</td>
+          <td>${i.waitingDays} day${i.waitingDays === 1 ? '' : 's'}${i.overdue ? ' <span class="badge" data-status="suspended">overdue</span>' : ''}</td>
+          <td>
+            ${i.reassignCandidates.filter(c => !i.selectedApprover || c.id !== i.selectedApprover.id).length === 0
+              ? '<span class="muted">no other eligible member</span>'
+              : `<div class="inline-form">
+                  <select data-reassign-to="${i.id}">${i.reassignCandidates.filter(c => !i.selectedApprover || c.id !== i.selectedApprover.id).map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}</select>
+                  <select data-reassign-reason="${i.id}">${Object.entries(REASSIGN_REASONS).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
+                  <button class="btn btn-secondary btn-sm" data-reassign="${i.id}">Reassign</button>
+                </div>`}
+          </td>
+        </tr>`).join('')}</tbody></table>
+      <div id="reassign-error"></div>
+    </div>`}
     <div class="card">
       <h2>Approved - ready for your review (${approved.length})</h2>
       ${approved.length === 0 ? '<p class="muted">None right now.</p>' : `
@@ -82,6 +107,19 @@ async function load() {
   document.querySelectorAll('[data-ready]').forEach(btn => btn.addEventListener('click', async () => {
     try { await Api.post(`/api/finance/items/${btn.dataset.ready}/ready-for-payment`); load(); }
     catch (err) { document.getElementById('ready-error').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`; }
+  }));
+
+  document.querySelectorAll('[data-reassign]').forEach(btn => btn.addEventListener('click', async () => {
+    const id = btn.dataset.reassign;
+    try {
+      await Api.post(`/api/finance/items/${id}/reassign-approver`, {
+        approverUserId: Number(document.querySelector(`[data-reassign-to="${id}"]`).value),
+        reason: document.querySelector(`[data-reassign-reason="${id}"]`).value,
+      });
+      load();
+    } catch (err) {
+      document.getElementById('reassign-error').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+    }
   }));
 
   const batchForm = document.getElementById('batch-form');

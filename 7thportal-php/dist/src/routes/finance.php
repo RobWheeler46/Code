@@ -393,8 +393,8 @@ $router->post('/api/finance/claims/:id/submit', function ($params) {
         if (!empty($item['selected_approver_user_id'])) {
             $acct = dbGet('SELECT * FROM expense_accounts WHERE id = ?', [$item['account_id']]);
             if ($acct) {
-                dbRun('UPDATE expense_claim_items SET selected_approver_group_id = ?, selected_approver_snapshot_json = ? WHERE id = ?',
-                    [$acct['approval_group_id'] ?: null, json_encode(financeApproverSnapshot($acct, (int) $item['selected_approver_user_id'])), $item['id']]);
+                dbRun('UPDATE expense_claim_items SET selected_approver_group_id = ?, selected_approver_snapshot_json = ?, approver_assigned_by_user_id = ?, approver_assignment_reason = ? WHERE id = ?',
+                    [$acct['approval_group_id'] ?: null, json_encode(financeApproverSnapshot($acct, (int) $item['selected_approver_user_id'])), (int) $user['id'], 'claimant_selection', $item['id']]);
             }
         }
     }
@@ -414,6 +414,59 @@ $router->get('/api/finance/approvals', function ($params) {
     $all = array_merge(array_values($firstStage), array_values($secondStage));
     usort($all, fn($a, $b) => strcmp($a['submitted_at'] ?? '', $b['submitted_at'] ?? ''));
     jsonResponse(array_map('serializeItemWithClaimContext', $all));
+});
+
+// Oversight of nominated-approver items still awaiting first approval, for Finance
+// Admin / Treasurer reassignment (FRD s28.5, FR-FIN-NA-009). Shows who each item is
+// waiting on, how long, and the eligible members it could be reassigned to.
+$router->get('/api/finance/oversight/awaiting', function ($params) {
+    $user = requireAuth();
+    requireFinanceEnabled();
+    if (!isTreasurerRole($user['portal_role'])) jsonResponse(['error' => 'Finance Admin or Treasurer access required.'], 403);
+    $rows = dbAll(itemWithClaimQuery() . " WHERE eci.status = 'submitted' AND eci.selected_approver_user_id IS NOT NULL ORDER BY eci.submitted_at ASC");
+    $out = [];
+    foreach ($rows as $row) {
+        $account = dbGet('SELECT * FROM expense_accounts WHERE id = ?', [$row['account_id']]);
+        $waitingDays = $row['submitted_at'] ? (int) floor((time() - strtotime($row['submitted_at'])) / 86400) : 0;
+        $out[] = array_merge(serializeItemWithClaimContext($row), [
+            'waitingDays' => $waitingDays,
+            'overdue' => $waitingDays >= 7,
+            'reassignCandidates' => $account ? financeEligibleApprovers($account, (int) $row['claim_claimant_user_id']) : [],
+        ]);
+    }
+    jsonResponse($out);
+});
+
+// Reassign a nominated item to another eligible approver (FR-FIN-NA-009). The
+// original submission snapshot is preserved; only the active assignee changes.
+$router->post('/api/finance/items/:itemId/reassign-approver', function ($params) {
+    $user = requireAuth();
+    requireFinanceEnabled();
+    if (!isTreasurerRole($user['portal_role'])) jsonResponse(['error' => 'Finance Admin or Treasurer access required.'], 403);
+    $item = loadItemWithClaim((int) $params['itemId']);
+    if (!$item) jsonResponse(['error' => 'Item not found.'], 404);
+    if ($item['status'] !== 'submitted') jsonResponse(['error' => 'Only an item awaiting its first approval can be reassigned.'], 400);
+    if (empty($item['selected_approver_user_id'])) jsonResponse(['error' => 'This item does not use a nominated approver.'], 400);
+    $account = dbGet('SELECT * FROM expense_accounts WHERE id = ?', [$item['account_id']]);
+    if (!$account) jsonResponse(['error' => 'Account not found.'], 404);
+    $body = requestBody();
+    $newApprover = (int) ($body['approverUserId'] ?? 0);
+    if (!financeIsEligibleApprover($account, $newApprover, (int) $item['claim_claimant_user_id'])) {
+        jsonResponse(['error' => 'Choose another eligible member of this account\'s approval group.'], 400);
+    }
+    if ($newApprover === (int) $item['selected_approver_user_id']) jsonResponse(['error' => 'That approver is already assigned to this item.'], 400);
+    $reason = in_array($body['reason'] ?? null, ['reassignment', 'overdue', 'conflict', 'admin_correction'], true) ? $body['reason'] : 'reassignment';
+    $previous = (int) $item['selected_approver_user_id'];
+    dbRun(
+        "UPDATE expense_claim_items SET selected_approver_user_id = ?, approver_assigned_by_user_id = ?, approver_assignment_reason = ?, updated_at = datetime('now') WHERE id = ?",
+        [$newApprover, $user['id'], $reason, $item['id']]
+    );
+    logAudit(['userId' => $user['id'], 'action' => 'finance_reassign_approver', 'entityType' => 'expense_claim_item', 'entityId' => (string) $item['id'], 'ipAddress' => clientIp(),
+        'details' => ['approvalRouteSnapshot' => ['claim' => $item['claim_number'], 'account' => $account['name'], 'group' => $account['approval_group_id'], 'from' => $previous, 'to' => $newApprover, 'reason' => $reason]]]);
+    // Tell the new approver they now own this approval.
+    notify($newApprover, 'expense_claim', 'Expense approval assigned to you',
+        'You have been asked to approve ' . claimItemRef($item) . ' (reassigned by ' . trim($user['first_name'] . ' ' . $user['last_name']) . ').', 'expenses.html');
+    itemActionResponse((int) $item['id']);
 });
 
 function itemActionResponse(int $itemId): void

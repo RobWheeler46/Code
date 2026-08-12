@@ -269,6 +269,8 @@ CREATE TABLE IF NOT EXISTS expense_claim_items (
   selected_approver_user_id INTEGER REFERENCES users(id),
   selected_approver_group_id INTEGER REFERENCES finance_approval_groups(id),
   selected_approver_snapshot_json TEXT,
+  approver_assigned_by_user_id INTEGER REFERENCES users(id),
+  approver_assignment_reason TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -980,6 +982,16 @@ if ($eciSql && !str_contains($eciSql, 'selected_approver_user_id')) {
     db()->exec('ALTER TABLE expense_claim_items ADD COLUMN selected_approver_user_id INTEGER');
     db()->exec('ALTER TABLE expense_claim_items ADD COLUMN selected_approver_group_id INTEGER');
     db()->exec('ALTER TABLE expense_claim_items ADD COLUMN selected_approver_snapshot_json TEXT');
+}
+
+// Migration: reassignment metadata for the nominated approver (FRD s28 stage 3,
+// FR-FIN-NA-009) - who set the current assignee and why (claimant_selection,
+// reassignment, overdue, conflict, admin_correction). The original submission
+// snapshot above is never overwritten, so audit history stays stable.
+$eciSql2 = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='expense_claim_items'")['sql'] ?? '';
+if ($eciSql2 && !str_contains($eciSql2, 'approver_assigned_by_user_id')) {
+    db()->exec('ALTER TABLE expense_claim_items ADD COLUMN approver_assigned_by_user_id INTEGER');
+    db()->exec('ALTER TABLE expense_claim_items ADD COLUMN approver_assignment_reason TEXT');
 }
 
 // Migration: activity_forms gained conditional-insurance flags (improved-flow

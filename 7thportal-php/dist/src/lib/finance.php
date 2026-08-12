@@ -337,6 +337,8 @@ function serializeItem(array $item): array
             })()
             : null,
         'selectedApproverSnapshot' => !empty($item['selected_approver_snapshot_json']) ? json_decode($item['selected_approver_snapshot_json'], true) : null,
+        'approverAssignmentReason' => $item['approver_assignment_reason'] ?? null,
+        'approverAssignmentReasonLabel' => !empty($item['approver_assignment_reason']) ? (FINANCE_ASSIGNMENT_REASONS[$item['approver_assignment_reason']] ?? $item['approver_assignment_reason']) : null,
         'createdAt' => $item['created_at'],
         'updatedAt' => $item['updated_at'],
     ];
@@ -460,6 +462,15 @@ function financeIsEligibleApprover(array $account, int $userId, int $claimantUse
     return false;
 }
 
+// How the current approver assignment came about (FRD s28.7 assignment_reason).
+const FINANCE_ASSIGNMENT_REASONS = [
+    'claimant_selection' => 'Claimant selection',
+    'reassignment' => 'Reassignment',
+    'overdue' => 'Overdue - reassigned',
+    'conflict' => 'Conflict of interest',
+    'admin_correction' => 'Admin correction',
+];
+
 // Immutable submission snapshot of a nominated approver (FR-FIN-NA-008): who was
 // chosen, from which group/account, and that they were eligible at submit time.
 function financeApproverSnapshot(array $account, int $approverUserId): array
@@ -580,15 +591,17 @@ function financeSeedDemoDataIfMissing(): void
 function itemsToCsv(array $rows): string
 {
     $out = fopen('php://temp', 'r+');
-    fputcsv($out, ['Claim number', 'Item', 'Type', 'Claimant', 'Account', 'Category', 'Expense date', 'Claimed', 'Approved', 'Status', 'Approved at', 'Paid at']);
+    fputcsv($out, ['Claim number', 'Item', 'Type', 'Claimant', 'Account', 'Category', 'Approval group', 'Approver', 'Approver assignment', 'Expense date', 'Claimed', 'Approved', 'Status', 'Approved at', 'Paid at']);
     foreach ($rows as $row) {
         $s = serializeItem($row);
         $claimant = dbGet('SELECT first_name, last_name FROM users WHERE id = ?', [$row['claim_claimant_user_id']]);
         fputcsv($out, [
             $row['claim_number'], $s['itemNumber'], $s['itemType'],
             $claimant ? $claimant['first_name'] . ' ' . $claimant['last_name'] : '',
-            $s['account']['name'] ?? '', $s['category']['name'] ?? '', $s['expenseDate'],
-            $s['claimedAmount'], $s['approvedAmount'], $s['status'], $s['approvedAt'], $s['paidAt'],
+            $s['account']['name'] ?? '', $s['category']['name'] ?? '',
+            $s['selectedApproverSnapshot']['groupName'] ?? '',
+            $s['selectedApprover']['name'] ?? '', $s['approverAssignmentReasonLabel'] ?? '',
+            $s['expenseDate'], $s['claimedAmount'], $s['approvedAmount'], $s['status'], $s['approvedAt'], $s['paidAt'],
         ]);
     }
     rewind($out);

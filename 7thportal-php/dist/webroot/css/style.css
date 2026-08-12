@@ -153,6 +153,7 @@ tr:hover td { background: #faf9fc; }
 .chip-x { border: 0; background: transparent; cursor: pointer; font-size: 1rem; line-height: 1; color: var(--muted); padding: 0; }
 .chip-x:hover { color: var(--red); }
 label.check { display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 400; }
+tr.row-warn > td { background: color-mix(in srgb, var(--amber) 12%, transparent); }
 .badge[data-role="admin"] { background: var(--purple); }
 
 /* ── Buttons ─────────────────────────────────────────────────────────── */
