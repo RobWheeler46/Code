@@ -28,9 +28,12 @@ destination.
 
 > **Data-source note:** the spec named **airplanes.live** as the MVP provider,
 > but it has since restricted its public REST API to HTTP 403 for general
-> clients. The app therefore defaults to **adsb.fi**, which serves the same open
-> community ADS-B data in the same format. Both (and `simulation`) are selectable
-> via `AIRCRAFT_PROVIDER`, behind the same `AircraftProvider` interface.
+> clients. The app therefore defaults to **`failover`** — **adsb.fi** primary
+> (same open community ADS-B format) with **OpenSky** as an automatic backup: if
+> the primary starts failing it switches over, then recovers once the primary is
+> healthy again. `adsbfi`, `opensky`, `airplaneslive` and `simulation` are also
+> selectable via `AIRCRAFT_PROVIDER`, all behind the same `AircraftProvider`
+> interface.
 
 The **frontend has no knowledge of the aircraft provider** (FRD §102). All
 third-party calls happen on the backend; the browser only ever receives
@@ -119,7 +122,7 @@ screen. Startup defaults come from the environment (see `.env.example`):
 | --- | --- | --- |
 | `HTTP_PORT` | `3000` | |
 | `DATABASE_PATH` | `./data/tracker.sqlite` | |
-| `AIRCRAFT_PROVIDER` | `adsbfi` | `adsbfi` \| `airplaneslive` \| `simulation` |
+| `AIRCRAFT_PROVIDER` | `failover` | `failover` \| `adsbfi` \| `opensky` \| `airplaneslive` \| `simulation` |
 | `AIRCRAFT_POLL_INTERVAL_MS` | `1100` | ~1 Hz, within provider limits |
 | `SITE_PASSWORD` | *(unset)* | When set, changing config / viewing diagnostics needs this password; the display stays open (FRD §79) |
 | `PORT` | *(from host)* | Honoured for PaaS (Railway); falls back to `HTTP_PORT` |
@@ -231,8 +234,12 @@ helicopter, chosen from the ICAO type code); aircraft photos in the detail
 overlay via a backend planespotters.net proxy (with attribution); optional
 **trails** and **destination arcs** (Settings toggles).
 
+**Multi-provider failover (done)** — the default `failover` provider uses
+adsb.fi with OpenSky as an automatic backup (per-provider cooldown, auto
+recovery), so one source going down can't take the display offline.
+
 **Future phases** — local RTL-SDR ADS-B (`LocalReadsbProvider`) and hybrid
-source; multi-provider failover; interesting-aircraft detection + push alerts;
-optional history; projector/ceiling features. The core "minimal" display
-philosophy stays unchanged.
+local+internet source; interesting-aircraft detection + push alerts; optional
+history; projector/ceiling features. The core "minimal" display philosophy stays
+unchanged.
 ```

@@ -5,6 +5,8 @@ import {
   createAirplanesLiveProvider,
   createAdsbFiProvider,
 } from "./reApiProvider.js";
+import { OpenSkyProvider } from "./openSkyProvider.js";
+import { FailoverProvider } from "./failoverProvider.js";
 import { SimulationProvider } from "./simulationProvider.js";
 import type { AircraftProviderName } from "../config/env.js";
 
@@ -17,8 +19,13 @@ export function createAircraftProvider(
     case "airplaneslive":
       return createAirplanesLiveProvider();
     case "adsbfi":
-    default:
       return createAdsbFiProvider();
+    case "opensky":
+      return new OpenSkyProvider();
+    case "failover":
+    default:
+      // adsb.fi primary, OpenSky backup (a genuinely independent source).
+      return new FailoverProvider([createAdsbFiProvider(), new OpenSkyProvider()]);
   }
 }
 

@@ -14,7 +14,12 @@ if (existsSync(envFile)) {
   }
 }
 
-export type AircraftProviderName = "airplaneslive" | "adsbfi" | "simulation";
+export type AircraftProviderName =
+  | "failover"
+  | "airplaneslive"
+  | "adsbfi"
+  | "opensky"
+  | "simulation";
 export type RouteProviderName = "adsbdb";
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -30,15 +35,23 @@ function int(name: string, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-// Default to adsb.fi: airplanes.live restricted its public API to 403 for
-// general clients after this project's spec was written (FRD §9).
-const aircraftProviderRaw = str("AIRCRAFT_PROVIDER", "adsbfi");
-const aircraftProvider: AircraftProviderName =
-  aircraftProviderRaw === "simulation"
-    ? "simulation"
-    : aircraftProviderRaw === "airplaneslive"
-      ? "airplaneslive"
-      : "adsbfi";
+// Default to failover (adsb.fi primary, OpenSky backup) for resilience:
+// airplanes.live restricted its public API to 403 for general clients after
+// this project's spec was written (FRD §9).
+const aircraftProviderRaw = str("AIRCRAFT_PROVIDER", "failover");
+function parseProvider(value: string): AircraftProviderName {
+  switch (value) {
+    case "simulation":
+    case "airplaneslive":
+    case "adsbfi":
+    case "opensky":
+    case "failover":
+      return value;
+    default:
+      return "failover";
+  }
+}
+const aircraftProvider: AircraftProviderName = parseProvider(aircraftProviderRaw);
 
 export interface Env {
   nodeEnv: string;
