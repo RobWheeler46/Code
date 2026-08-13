@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { useWebSocket } from "./hooks/useWebSocket.js";
-import { useConfig } from "./hooks/useConfig.js";
-import { SkyDisplay } from "./display/SkyDisplay.js";
+import { LiveDisplay } from "./display/LiveDisplay.js";
+import { OverrideDisplay } from "./display/OverrideDisplay.js";
 import { SettingsPage } from "./settings/SettingsPage.js";
 import { DiagnosticsPage } from "./diagnostics/DiagnosticsPage.js";
 import { AuthGate } from "./components/AuthGate.js";
@@ -22,12 +21,15 @@ function isFormField(target: EventTarget | null): boolean {
   return tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA";
 }
 
+/** Read a ?postcode= override from the URL once, if present. */
+function readOverridePostcode(): string | null {
+  const value = new URLSearchParams(window.location.search).get("postcode");
+  return value && value.trim().length > 0 ? value.trim() : null;
+}
+
 export function App() {
   const [view, setView] = useState<View>("display");
-  const live = useWebSocket();
-  // Initial config (fast REST fetch) as a fallback until the WS delivers it.
-  const { config: restConfig } = useConfig();
-  const config = live.config ?? restConfig;
+  const [overridePostcode] = useState<string | null>(readOverridePostcode);
 
   // Keyboard shortcuts (FRD §61). Configurable in a future release.
   useEffect(() => {
@@ -67,21 +69,10 @@ export function App() {
     );
   }
 
-  if (!config) {
-    return (
-      <div className="sky">
-        <div className="no-aircraft">Connecting…</div>
-      </div>
-    );
-  }
-
-  return (
-    <SkyDisplay
-      aircraft={live.aircraft}
-      snapshotTimestamp={live.snapshotTimestamp}
-      config={config}
-      sourceStatus={live.sourceStatus}
-      connected={live.connected}
-    />
+  // A ?postcode= URL shows that area for this tab only (per-viewer override).
+  return overridePostcode ? (
+    <OverrideDisplay postcode={overridePostcode} />
+  ) : (
+    <LiveDisplay />
   );
 }

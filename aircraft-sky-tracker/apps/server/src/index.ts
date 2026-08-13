@@ -32,6 +32,7 @@ import { GeoService } from "./geo/geoService.js";
 import { RouteService } from "./routes/routeService.js";
 import { PhotoService } from "./routes/photoService.js";
 import { AircraftStateService } from "./aircraft/stateService.js";
+import { ViewService } from "./aircraft/viewService.js";
 import { AircraftPollingService } from "./aircraft/pollingService.js";
 import { WebSocketService } from "./websocket/wsService.js";
 import { DiagnosticsService } from "./diagnostics/diagnosticsService.js";
@@ -92,7 +93,8 @@ async function main(): Promise<void> {
   const photos = new PhotoService();
   const state = new AircraftStateService(geo, routes);
   const ws = new WebSocketService();
-  let provider = createAircraftProvider(env.aircraftProvider);
+  const provider = createAircraftProvider(env.aircraftProvider);
+  const viewService = new ViewService(location, settings, routes, provider);
 
   const polling = new AircraftPollingService(provider, env.aircraftPollIntervalMs, {
     onResult: (raw, meta) => {
@@ -270,6 +272,7 @@ async function main(): Promise<void> {
     health: () => diagnostics.health(),
     diagnostics: () => diagnostics.report(),
     photo: (registration, icaoHex) => photos.getPhoto(registration, icaoHex),
+    view: (postcode) => viewService.getView(postcode),
   };
 
   // HTTP application.

@@ -146,9 +146,25 @@ The browser talks only to the backend (FRD §39):
 | `POST` | `/api/location/validate` | Validate a UK postcode + resolve coordinates |
 | `GET` | `/api/aircraft` | Current aircraft snapshot (diagnostics/dev) |
 | `GET` | `/api/aircraft/photo?reg=&hex=` | Aircraft photo (proxies planespotters.net) |
+| `GET` | `/api/view?postcode=` | Per-viewer snapshot for any postcode (read-only) |
 | `GET` | `/api/health` | Source/route health |
 | `GET` | `/api/diagnostics` | Counts, timings, provider status |
 | `WS` | `/ws` | Live `aircraft.snapshot` / `source.status` / `config.updated` |
+
+## Per-viewer postcode (URL override)
+
+Add `?postcode=` to the URL to show the sky around a different postcode **for
+that tab only** — the saved default and other screens are unaffected, so you can
+point different displays at different areas at once:
+
+```
+https://<host>/?postcode=EH1 1BB      # Edinburgh
+https://<host>/?postcode=SW1A 1AA     # London
+```
+
+It is read-only (no password needed) and reuses your saved display settings and
+radius, overriding only the centre. The backend resolves the postcode on demand
+and caches per-centre to stay gentle on the aircraft provider.
 
 ## Keyboard shortcuts
 

@@ -7,6 +7,7 @@ import { Router, type Request, type Response } from "express";
 import type { AppConfig, ConfigUpdate, Aircraft } from "@ast/shared";
 import type { HealthReport, DiagnosticsReport } from "../diagnostics/diagnosticsService.js";
 import type { PhotoResult } from "../routes/photoService.js";
+import type { ViewResult } from "../aircraft/viewService.js";
 import { basicAuthMiddleware, isAuthEnabled } from "./auth.js";
 
 export interface ValidateResult {
@@ -33,6 +34,7 @@ export interface ApiContext {
   health(): HealthReport;
   diagnostics(): DiagnosticsReport;
   photo(registration?: string, icaoHex?: string): Promise<PhotoResult>;
+  view(postcode: string): Promise<ViewResult>;
 }
 
 export function createApiRouter(ctx: ApiContext): Router {
@@ -54,6 +56,22 @@ export function createApiRouter(ctx: ApiContext): Router {
   // GET /api/config - current configuration (needed to render the display).
   router.get("/config", (_req: Request, res: Response) => {
     res.json(ctx.getConfig());
+  });
+
+  // GET /api/view?postcode= - per-viewer location override (read-only, public).
+  // Returns an aircraft snapshot + effective config for an arbitrary postcode
+  // without changing the shared configuration or other viewers.
+  router.get("/view", async (req: Request, res: Response) => {
+    const postcode = typeof req.query.postcode === "string" ? req.query.postcode : "";
+    if (postcode.trim().length === 0) {
+      res.status(400).json({ error: "postcode query parameter required" });
+      return;
+    }
+    try {
+      res.json(await ctx.view(postcode));
+    } catch (err) {
+      res.status(502).json({ error: `View unavailable: ${String(err)}` });
+    }
   });
 
   // --- Protected endpoints: viewing is open, changing config requires auth ---

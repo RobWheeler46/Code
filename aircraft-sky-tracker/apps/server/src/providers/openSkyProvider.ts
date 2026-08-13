@@ -70,8 +70,8 @@ export class OpenSkyProvider implements AircraftProvider {
   readonly name = "opensky";
   lastHttpStatus: number | undefined;
 
-  private lastFetchMs = 0;
-  private cached: ProviderAircraft[] = [];
+  // Cache per centre (the app can query multiple centres for per-viewer URLs).
+  private cache = new Map<string, { aircraft: ProviderAircraft[]; ts: number }>();
 
   async fetchAircraft(
     latitude: number,
@@ -79,8 +79,10 @@ export class OpenSkyProvider implements AircraftProvider {
     radiusMiles: number,
   ): Promise<ProviderAircraft[]> {
     // Serve cached results between calls to respect anonymous rate limits.
-    if (Date.now() - this.lastFetchMs < MIN_INTERVAL_MS) {
-      return this.cached;
+    const key = `${latitude.toFixed(3)},${longitude.toFixed(3)},${radiusMiles}`;
+    const cached = this.cache.get(key);
+    if (cached && Date.now() - cached.ts < MIN_INTERVAL_MS) {
+      return cached.aircraft;
     }
 
     const marginMiles = radiusMiles * 1.1;
@@ -98,7 +100,6 @@ export class OpenSkyProvider implements AircraftProvider {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     this.lastHttpStatus = res.status;
-    this.lastFetchMs = Date.now();
     if (!res.ok) {
       throw new Error(`opensky HTTP ${res.status}`);
     }
@@ -111,7 +112,7 @@ export class OpenSkyProvider implements AircraftProvider {
       const aircraft = mapOpenSkyState(state, nowSeconds);
       if (aircraft) mapped.push(aircraft);
     }
-    this.cached = mapped;
+    this.cache.set(key, { aircraft: mapped, ts: Date.now() });
     log.debug("fetched aircraft", { received: mapped.length });
     return mapped;
   }
