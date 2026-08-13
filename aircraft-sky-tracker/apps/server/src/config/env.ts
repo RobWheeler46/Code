@@ -1,0 +1,83 @@
+/** Environment configuration (FRD §83). */
+
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+import { DEFAULT_POSTCODE, DEFAULT_RADIUS_MILES } from "@ast/shared";
+
+// Load a local .env file if present (optional convenience; Node 24 built-in).
+const envFile = resolve(process.cwd(), ".env");
+if (existsSync(envFile)) {
+  try {
+    process.loadEnvFile(envFile);
+  } catch {
+    // Ignore malformed .env; fall back to process defaults.
+  }
+}
+
+export type AircraftProviderName = "airplaneslive" | "adsbfi" | "simulation";
+export type RouteProviderName = "adsbdb";
+export type LogLevel = "debug" | "info" | "warn" | "error";
+
+function str(name: string, fallback: string): string {
+  const v = process.env[name];
+  return v === undefined || v === "" ? fallback : v;
+}
+
+function int(name: string, fallback: number): number {
+  const v = process.env[name];
+  if (v === undefined || v === "") return fallback;
+  const n = Number.parseInt(v, 10);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+// Default to adsb.fi: airplanes.live restricted its public API to 403 for
+// general clients after this project's spec was written (FRD §9).
+const aircraftProviderRaw = str("AIRCRAFT_PROVIDER", "adsbfi");
+const aircraftProvider: AircraftProviderName =
+  aircraftProviderRaw === "simulation"
+    ? "simulation"
+    : aircraftProviderRaw === "airplaneslive"
+      ? "airplaneslive"
+      : "adsbfi";
+
+export interface Env {
+  nodeEnv: string;
+  isProduction: boolean;
+  httpPort: number;
+  databasePath: string;
+  /** Optional HTTP Basic Auth for internet-facing deployments (FRD §79). */
+  siteUsername: string;
+  sitePassword: string | undefined;
+  aircraftProvider: AircraftProviderName;
+  aircraftPollIntervalMs: number;
+  defaultPostcode: string;
+  defaultRadiusMiles: number;
+  routeProvider: RouteProviderName;
+  logLevel: LogLevel;
+  /** Optional Host allow-list for LAN deployments (FRD §80). Empty = allow all. */
+  allowedHosts: string[];
+  localAdsbUrl: string | undefined;
+}
+
+const nodeEnv = str("NODE_ENV", "production");
+
+export const env: Env = {
+  nodeEnv,
+  isProduction: nodeEnv === "production",
+  // Railway (and most PaaS) inject PORT; fall back to HTTP_PORT then 3000.
+  httpPort: int("PORT", int("HTTP_PORT", 3000)),
+  databasePath: str("DATABASE_PATH", "./data/tracker.sqlite"),
+  siteUsername: str("SITE_USERNAME", "tracker"),
+  sitePassword: process.env["SITE_PASSWORD"] || undefined,
+  aircraftProvider,
+  aircraftPollIntervalMs: int("AIRCRAFT_POLL_INTERVAL_MS", 1100),
+  defaultPostcode: str("DEFAULT_POSTCODE", DEFAULT_POSTCODE),
+  defaultRadiusMiles: int("DEFAULT_RADIUS_MILES", DEFAULT_RADIUS_MILES),
+  routeProvider: "adsbdb",
+  logLevel: str("LOG_LEVEL", "info") as LogLevel,
+  allowedHosts: str("ALLOWED_HOSTS", "")
+    .split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter((h) => h.length > 0),
+  localAdsbUrl: process.env["LOCAL_ADSB_URL"] || undefined,
+};

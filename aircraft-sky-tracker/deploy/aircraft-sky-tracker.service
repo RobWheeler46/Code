@@ -1,0 +1,32 @@
+# systemd service for the Local Aircraft Sky Tracker backend (FRD §88).
+#
+# Install:
+#   sudo cp deploy/aircraft-sky-tracker.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now aircraft-sky-tracker
+#
+# Starts automatically, restarts after crash or reboot, logs to the journal,
+# and requires no interactive terminal.
+
+[Unit]
+Description=Local Aircraft Sky Tracker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/aircraft-sky-tracker
+ExecStart=/usr/bin/node apps/server/dist/index.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=HTTP_PORT=3000
+Environment=DATABASE_PATH=/home/pi/aircraft-sky-tracker/data/tracker.sqlite
+Environment=AIRCRAFT_PROVIDER=airplaneslive
+Environment=DEFAULT_POSTCODE=SN25 4TP
+Environment=DEFAULT_RADIUS_MILES=10
+Environment=LOG_LEVEL=info
+
+[Install]
+WantedBy=multi-user.target

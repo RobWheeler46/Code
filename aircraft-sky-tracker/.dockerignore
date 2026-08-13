@@ -1,0 +1,10 @@
+# Keep the build context small and force a clean install inside the image.
+# Critically, never ship the local (Windows) node_modules into the Linux build.
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+data
+.git
+.env
+*.log
+.claude

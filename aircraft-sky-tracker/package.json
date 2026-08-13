@@ -1,0 +1,31 @@
+{
+  "name": "aircraft-sky-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local Aircraft Sky Tracker - an exceptionally simple real-time view of aircraft near a configured UK postcode.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "build": "npm run build -w @ast/shared && npm run build -w @ast/server && npm run build -w @ast/web",
+    "build:shared": "npm run build -w @ast/shared",
+    "build:server": "npm run build -w @ast/server",
+    "build:web": "npm run build -w @ast/web",
+    "start": "node apps/server/dist/index.js",
+    "dev": "npm run build:shared && concurrently -k -n shared,server,web -c cyan,green,magenta \"npm:dev:shared\" \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:shared": "tsc -w -p packages/shared/tsconfig.json --preserveWatchOutput",
+    "dev:server": "npm run dev -w @ast/server",
+    "dev:web": "npm run dev -w @ast/web",
+    "test": "npm run test -w @ast/shared && npm run test -w @ast/server",
+    "typecheck": "tsc -b --pretty"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "typescript": "^5.7.2"
+  }
+}

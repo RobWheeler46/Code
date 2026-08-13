@@ -1,0 +1,21 @@
+# Run: docker compose -f docker/docker-compose.yml up -d --build
+services:
+  tracker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: aircraft-sky-tracker
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      HTTP_PORT: "3000"
+      AIRCRAFT_PROVIDER: airplaneslive
+      AIRCRAFT_POLL_INTERVAL_MS: "1100"
+      DEFAULT_POSTCODE: SN25 4TP
+      DEFAULT_RADIUS_MILES: "10"
+      ROUTE_PROVIDER: adsbdb
+      LOG_LEVEL: info
+    volumes:
+      - ../data:/app/data
+    restart: unless-stopped

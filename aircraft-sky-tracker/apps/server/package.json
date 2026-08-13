@@ -1,0 +1,23 @@
+{
+  "name": "@ast/server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsc -p tsconfig.json && concurrently -k -n tsc,node -c blue,green \"tsc -w -p tsconfig.json --preserveWatchOutput\" \"node --watch --enable-source-maps dist/index.js\"",
+    "test": "tsc -p tsconfig.test.json && node --test \"dist/**/*.test.js\""
+  },
+  "dependencies": {
+    "@ast/shared": "*",
+    "express": "^4.21.2",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.2",
+    "@types/ws": "^8.5.13"
+  }
+}
