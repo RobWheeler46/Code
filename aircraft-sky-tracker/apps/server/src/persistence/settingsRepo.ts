@@ -20,6 +20,7 @@ interface SettingsRow {
   show_range_ring: number;
   show_header: number;
   show_trails: number;
+  show_destination_arcs: number;
   interpolation: number;
 }
 
@@ -44,6 +45,7 @@ function rowToConfig(row: SettingsRow): AppConfig {
     showRangeRing: bool(row.show_range_ring),
     showHeader: bool(row.show_header),
     showTrails: bool(row.show_trails),
+    showDestinationArcs: bool(row.show_destination_arcs),
     interpolationEnabled: bool(row.interpolation),
   };
 }
@@ -66,9 +68,10 @@ export class SettingsRepo {
           id, postcode, latitude, longitude, radius_miles, aircraft_source,
           display_mode, show_registration, show_destination, show_flight_number,
           show_altitude, show_distance, show_centre_marker, show_range_ring,
-          show_header, show_trails, interpolation, created_at, updated_at
+          show_header, show_trails, show_destination_arcs, interpolation,
+          created_at, updated_at
         ) VALUES (
-          1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )`,
       )
       .run(
@@ -87,6 +90,7 @@ export class SettingsRepo {
         Number(defaults.showRangeRing),
         Number(defaults.showHeader),
         Number(defaults.showTrails),
+        Number(defaults.showDestinationArcs),
         Number(defaults.interpolationEnabled),
         now,
         now,
@@ -117,7 +121,8 @@ export class SettingsRepo {
           aircraft_source = ?, display_mode = ?, show_registration = ?,
           show_destination = ?, show_flight_number = ?, show_altitude = ?,
           show_distance = ?, show_centre_marker = ?, show_range_ring = ?,
-          show_header = ?, show_trails = ?, interpolation = ?, updated_at = ?
+          show_header = ?, show_trails = ?, show_destination_arcs = ?,
+          interpolation = ?, updated_at = ?
         WHERE id = 1`,
       )
       .run(
@@ -136,6 +141,7 @@ export class SettingsRepo {
         Number(config.showRangeRing),
         Number(config.showHeader),
         Number(config.showTrails),
+        Number(config.showDestinationArcs),
         Number(config.interpolationEnabled),
         now,
       );

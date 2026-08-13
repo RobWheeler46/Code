@@ -19,6 +19,7 @@ export interface AppConfig {
   showRangeRing: boolean;
   showHeader: boolean;
   showTrails: boolean;
+  showDestinationArcs: boolean;
   interpolationEnabled: boolean;
 }
 
@@ -45,6 +46,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   showRangeRing: false,
   showHeader: false,
   showTrails: false,
+  showDestinationArcs: false,
   interpolationEnabled: true,
 };
 
@@ -65,6 +67,7 @@ export type ConfigUpdate = Partial<
     | "showRangeRing"
     | "showHeader"
     | "showTrails"
+    | "showDestinationArcs"
     | "interpolationEnabled"
   >
 >;

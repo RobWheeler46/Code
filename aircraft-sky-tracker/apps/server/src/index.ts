@@ -30,6 +30,7 @@ import { SettingsRepo } from "./persistence/settingsRepo.js";
 import { LocationService } from "./location/locationService.js";
 import { GeoService } from "./geo/geoService.js";
 import { RouteService } from "./routes/routeService.js";
+import { PhotoService } from "./routes/photoService.js";
 import { AircraftStateService } from "./aircraft/stateService.js";
 import { AircraftPollingService } from "./aircraft/pollingService.js";
 import { WebSocketService } from "./websocket/wsService.js";
@@ -88,6 +89,7 @@ async function main(): Promise<void> {
     longitude: config.longitude,
   });
   const routes = new RouteService();
+  const photos = new PhotoService();
   const state = new AircraftStateService(geo, routes);
   const ws = new WebSocketService();
   let provider = createAircraftProvider(env.aircraftProvider);
@@ -218,6 +220,7 @@ async function main(): Promise<void> {
         "showRangeRing",
         "showHeader",
         "showTrails",
+        "showDestinationArcs",
         "interpolationEnabled",
       ] as const;
       for (const key of booleanKeys) {
@@ -266,6 +269,7 @@ async function main(): Promise<void> {
 
     health: () => diagnostics.health(),
     diagnostics: () => diagnostics.report(),
+    photo: (registration, icaoHex) => photos.getPhoto(registration, icaoHex),
   };
 
   // HTTP application.

@@ -142,6 +142,7 @@ The browser talks only to the backend (FRD §39):
 | `POST` | `/api/config/reset` | Restore defaults (SN25 4TP, 10 mi, minimal) |
 | `POST` | `/api/location/validate` | Validate a UK postcode + resolve coordinates |
 | `GET` | `/api/aircraft` | Current aircraft snapshot (diagnostics/dev) |
+| `GET` | `/api/aircraft/photo?reg=&hex=` | Aircraft photo (proxies planespotters.net) |
 | `GET` | `/api/health` | Source/route health |
 | `GET` | `/api/diagnostics` | Counts, timings, provider status |
 | `WS` | `/ws` | Live `aircraft.snapshot` / `source.status` / `config.updated` |
@@ -225,8 +226,13 @@ automatic reconnection, Raspberry Pi kiosk deployment.
 **Out of scope for MVP** — street/satellite maps, airspace charts, weather, user
 accounts, aircraft photos/history, notifications.
 
-**Future phases** — improved silhouettes and light/helicopter/turboprop icons;
-local RTL-SDR ADS-B (`LocalReadsbProvider`) and hybrid source; interesting-aircraft
-detection; optional history; projector/ceiling features. The core "minimal"
-display philosophy stays unchanged.
+**Phase 1.1 (done)** — type-aware silhouettes (jet / turboprop / light /
+helicopter, chosen from the ICAO type code); aircraft photos in the detail
+overlay via a backend planespotters.net proxy (with attribution); optional
+**trails** and **destination arcs** (Settings toggles).
+
+**Future phases** — local RTL-SDR ADS-B (`LocalReadsbProvider`) and hybrid
+source; multi-provider failover; interesting-aircraft detection + push alerts;
+optional history; projector/ceiling features. The core "minimal" display
+philosophy stays unchanged.
 ```

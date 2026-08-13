@@ -1,15 +1,19 @@
 /**
- * Canvas geographic-projection renderer (FRD §27, §48-57, §71-75).
+ * Canvas geographic-projection renderer (FRD §27, §48-57, §71-75, Phase 1.1).
  *
  * This is a projection, not a map. Aircraft sit at their true relative position
  * about the configured centre, their outlines point along their track, and the
  * text labels stay horizontal. Positions are interpolated between ~1 Hz
  * snapshots for smooth 60 FPS motion (FRD §52).
+ *
+ * Phase 1.1 additions: type-aware silhouettes (jet / turboprop / light /
+ * helicopter), optional trails, and optional destination arcs.
  */
 
 import {
   type Aircraft,
   type AppConfig,
+  type AircraftCategory,
   haversineDistanceMiles,
   bearingDegrees,
   distanceBearingToEastNorth,
@@ -22,6 +26,7 @@ const FADE_IN_MS = 500; // FRD §53
 const FADE_OUT_MS = 750; // FRD §53
 const IMPLAUSIBLE_JUMP_MILES = 5; // snap instead of interpolate (FRD §53)
 const ICON_SIZE = 34; // px (FRD §55: ~30-45)
+const TRAIL_MAX_POINTS = 24; // ~24s of history at 1 Hz
 
 interface Fix {
   latitude: number;
@@ -37,6 +42,7 @@ interface RenderState {
   data: Aircraft;
   firstSeenMs: number;
   removedAtMs: number | undefined;
+  history: { latitude: number; longitude: number }[];
 }
 
 export interface HitTarget {
@@ -60,6 +66,7 @@ export class SkyRenderer {
   private hitTargets: HitTarget[] = [];
   private cssWidth = 0;
   private cssHeight = 0;
+  private scale = 1;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -85,7 +92,7 @@ export class SkyRenderer {
   }
 
   /** Merge a new server snapshot into the interpolation state (FRD §52-53). */
-  ingest(aircraft: Aircraft[], timestamp: number): void {
+  ingest(aircraft: Aircraft[], _timestamp: number): void {
     const now = performance.now();
     const seen = new Set<string>();
 
@@ -106,6 +113,7 @@ export class SkyRenderer {
           data: a,
           firstSeenMs: now,
           removedAtMs: undefined,
+          history: [{ latitude: a.latitude, longitude: a.longitude }],
         });
         continue;
       }
@@ -120,6 +128,8 @@ export class SkyRenderer {
       // Snap on an implausible jump; otherwise interpolate from the last fix.
       existing.prev = jump > IMPLAUSIBLE_JUMP_MILES ? fix : existing.cur;
       existing.cur = fix;
+      existing.history.push({ latitude: a.latitude, longitude: a.longitude });
+      if (existing.history.length > TRAIL_MAX_POINTS) existing.history.shift();
     }
 
     // Anything absent from this snapshot begins fading out (FRD §53).
@@ -132,6 +142,25 @@ export class SkyRenderer {
 
   getHitTargets(): HitTarget[] {
     return this.hitTargets;
+  }
+
+  /** Project a lat/lon to screen coordinates using the current viewport. */
+  private projectLatLon(latitude: number, longitude: number): { x: number; y: number } {
+    const config = this.config;
+    if (!config) return { x: 0, y: 0 };
+    const distance = haversineDistanceMiles(
+      config.latitude,
+      config.longitude,
+      latitude,
+      longitude,
+    );
+    const bearing = bearingDegrees(config.latitude, config.longitude, latitude, longitude);
+    return projectToScreen(
+      distanceBearingToEastNorth(distance, bearing),
+      this.cssWidth,
+      this.cssHeight,
+      this.scale,
+    );
   }
 
   /** Draw one frame at time `now` (performance.now()). */
@@ -148,15 +177,13 @@ export class SkyRenderer {
 
     const w = this.cssWidth;
     const h = this.cssHeight;
-    const scale = projectionScale(w, h, config.radiusMiles);
-    const centreX = w / 2;
-    const centreY = h / 2;
+    this.scale = projectionScale(w, h, config.radiusMiles);
 
-    this.drawReference(config, scale, centreX, centreY);
+    this.drawReference(config, w / 2, h / 2);
 
     // Compute drawable placements, closest-to-centre first (label priority §72).
     const placements = [...this.states.values()]
-      .map((s) => this.place(s, config, w, h, now))
+      .map((s) => this.place(s, config, now))
       .filter((p): p is Placement => p !== undefined)
       .sort((a, b) => a.data.distanceMiles - b.data.distanceMiles);
 
@@ -167,18 +194,13 @@ export class SkyRenderer {
     }
   }
 
-  private drawReference(
-    config: AppConfig,
-    scale: number,
-    cx: number,
-    cy: number,
-  ): void {
+  private drawReference(config: AppConfig, cx: number, cy: number): void {
     const ctx = this.ctx;
     if (config.showRangeRing) {
       ctx.strokeStyle = "rgba(120,130,150,0.35)";
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.arc(cx, cy, config.radiusMiles * scale, 0, Math.PI * 2);
+      ctx.arc(cx, cy, config.radiusMiles * this.scale, 0, Math.PI * 2);
       ctx.stroke();
     }
     if (config.showCentreMarker) {
@@ -189,13 +211,7 @@ export class SkyRenderer {
     }
   }
 
-  private place(
-    state: RenderState,
-    config: AppConfig,
-    w: number,
-    h: number,
-    now: number,
-  ): Placement | undefined {
+  private place(state: RenderState, config: AppConfig, now: number): Placement | undefined {
     // Fade lifecycle (FRD §53).
     let alpha = clamp((now - state.firstSeenMs) / FADE_IN_MS, 0, 1);
     if (state.removedAtMs !== undefined) {
@@ -220,36 +236,29 @@ export class SkyRenderer {
       frac,
     );
 
-    const scale = projectionScale(w, h, config.radiusMiles);
-    const distance = haversineDistanceMiles(
-      config.latitude,
-      config.longitude,
-      latitude,
-      longitude,
-    );
-    const bearing = bearingDegrees(config.latitude, config.longitude, latitude, longitude);
-    const screen = projectToScreen(
-      distanceBearingToEastNorth(distance, bearing),
-      w,
-      h,
-      scale,
-    );
+    const screen = this.projectLatLon(latitude, longitude);
 
     return {
       id: state.id,
       data: state.data,
+      history: state.history,
       x: screen.x,
       y: screen.y,
       track: state.data.trackDegrees === undefined ? undefined : track,
+      category: state.data.aircraftCategory as AircraftCategory | undefined,
       alpha,
     };
   }
 
   private drawAircraft(p: Placement, config: AppConfig, occupied: Rect[]): void {
     const ctx = this.ctx;
+
+    if (config.showTrails) this.drawTrail(p);
+    if (config.showDestinationArcs) this.drawDestinationArc(p);
+
     ctx.save();
     ctx.globalAlpha = p.alpha;
-    this.drawIcon(p.x, p.y, p.track ?? 0);
+    this.drawIcon(p.x, p.y, p.track ?? 0, p.category ?? "unknown");
     ctx.restore();
 
     // Labels stay horizontal (FRD §51).
@@ -259,30 +268,99 @@ export class SkyRenderer {
     }
   }
 
-  /** Purpose-designed jet silhouette, nose-up at zero rotation (FRD §55). */
-  private drawIcon(x: number, y: number, trackDegrees: number): void {
+  /** Fading breadcrumb trail behind an aircraft (FRD Phase 1.1). */
+  private drawTrail(p: Placement): void {
+    if (p.history.length < 2) return;
+    const ctx = this.ctx;
+    const points = p.history.map((h) => this.projectLatLon(h.latitude, h.longitude));
+    ctx.save();
+    ctx.lineWidth = 1.5;
+    ctx.lineCap = "round";
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i - 1] as { x: number; y: number };
+      const b = points[i] as { x: number; y: number };
+      const segAlpha = (i / points.length) * 0.45 * p.alpha;
+      ctx.strokeStyle = `rgba(160,180,220,${segAlpha})`;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  /** Faint ray from the aircraft toward its destination's bearing (Phase 1.1). */
+  private drawDestinationArc(p: Placement): void {
+    const dest = p.data.destination;
+    if (!dest || dest.latitude === undefined || dest.longitude === undefined) return;
+    const ctx = this.ctx;
+    const bearing = bearingDegrees(
+      p.data.latitude,
+      p.data.longitude,
+      dest.latitude,
+      dest.longitude,
+    );
+    const rad = (bearing * Math.PI) / 180;
+    const length = Math.min(this.cssWidth, this.cssHeight) * 0.42;
+    const dx = Math.sin(rad) * length; // east component -> +x
+    const dy = -Math.cos(rad) * length; // north component -> -y
+    ctx.save();
+    ctx.globalAlpha = p.alpha;
+    ctx.strokeStyle = "rgba(150,170,255,0.28)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 6]);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(p.x + dx, p.y + dy);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /**
+   * Type-aware silhouette, nose-up at zero rotation (FRD §51, §55, Phase 1.1).
+   * Unknown/jet categories share the generic swept-wing outline.
+   */
+  private drawIcon(x: number, y: number, trackDegrees: number, category: AircraftCategory): void {
     const ctx = this.ctx;
     const s = ICON_SIZE / 34;
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate((trackDegrees * Math.PI) / 180); // 0=N,90=E (FRD §51)
     ctx.scale(s, s);
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = "#f2f2f2";
+    ctx.fillStyle = "rgba(10,12,16,0.55)";
+    switch (category) {
+      case "helicopter":
+        this.pathHelicopter();
+        break;
+      case "turboprop":
+        this.pathTurboprop();
+        break;
+      case "piston":
+        this.pathPiston();
+        break;
+      default:
+        this.pathJet();
+    }
+    ctx.restore();
+  }
+
+  /** Swept-wing airliner / jet (default). */
+  private pathJet(): void {
+    const ctx = this.ctx;
     ctx.beginPath();
-    // Nose
     ctx.moveTo(0, -16);
-    // Right fuselage down to wing root
     ctx.lineTo(2, -6);
-    // Right wing
     ctx.lineTo(16, 2);
     ctx.lineTo(16, 5);
     ctx.lineTo(2, 2);
-    // Right rear fuselage
     ctx.lineTo(2, 10);
-    // Right tailplane
     ctx.lineTo(7, 14);
     ctx.lineTo(7, 16);
     ctx.lineTo(0, 13);
-    // Mirror to the left
     ctx.lineTo(-7, 16);
     ctx.lineTo(-7, 14);
     ctx.lineTo(-2, 10);
@@ -291,13 +369,92 @@ export class SkyRenderer {
     ctx.lineTo(-16, 2);
     ctx.lineTo(-2, -6);
     ctx.closePath();
-    ctx.lineJoin = "round";
-    ctx.lineWidth = 1.6;
-    ctx.strokeStyle = "#f2f2f2";
-    ctx.fillStyle = "rgba(10,12,16,0.55)";
     ctx.fill();
     ctx.stroke();
-    ctx.restore();
+  }
+
+  /** Straight-wing turboprop with two nacelles. */
+  private pathTurboprop(): void {
+    const ctx = this.ctx;
+    ctx.beginPath();
+    ctx.moveTo(0, -15);
+    ctx.lineTo(2, -4);
+    ctx.lineTo(15, -3);
+    ctx.lineTo(15, 0);
+    ctx.lineTo(2, 1);
+    ctx.lineTo(2, 11);
+    ctx.lineTo(7, 15);
+    ctx.lineTo(0, 13);
+    ctx.lineTo(-7, 15);
+    ctx.lineTo(-2, 11);
+    ctx.lineTo(-2, 1);
+    ctx.lineTo(-15, 0);
+    ctx.lineTo(-15, -3);
+    ctx.lineTo(-2, -4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Nacelles on the wings.
+    ctx.beginPath();
+    ctx.moveTo(8, -5);
+    ctx.lineTo(8, 1);
+    ctx.moveTo(-8, -5);
+    ctx.lineTo(-8, 1);
+    ctx.stroke();
+  }
+
+  /** Small straight-wing single (light / piston). */
+  private pathPiston(): void {
+    const ctx = this.ctx;
+    ctx.beginPath();
+    ctx.moveTo(0, -12);
+    ctx.lineTo(1.5, -5);
+    ctx.lineTo(13, -3);
+    ctx.lineTo(13, -1);
+    ctx.lineTo(1.5, 1);
+    ctx.lineTo(1.5, 9);
+    ctx.lineTo(5, 12);
+    ctx.lineTo(0, 11);
+    ctx.lineTo(-5, 12);
+    ctx.lineTo(-1.5, 9);
+    ctx.lineTo(-1.5, 1);
+    ctx.lineTo(-13, -1);
+    ctx.lineTo(-13, -3);
+    ctx.lineTo(-1.5, -5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Propeller line at the nose.
+    ctx.beginPath();
+    ctx.moveTo(-4, -13);
+    ctx.lineTo(4, -13);
+    ctx.stroke();
+  }
+
+  /** Helicopter: rotor disc, fuselage and tail boom. */
+  private pathHelicopter(): void {
+    const ctx = this.ctx;
+    // Rotor disc.
+    ctx.beginPath();
+    ctx.arc(0, -1, 14, 0, Math.PI * 2);
+    ctx.stroke();
+    // Rotor blades.
+    ctx.beginPath();
+    ctx.moveTo(-14, -1);
+    ctx.lineTo(14, -1);
+    ctx.moveTo(0, -15);
+    ctx.lineTo(0, 13);
+    ctx.stroke();
+    // Fuselage pod + tail boom.
+    ctx.beginPath();
+    ctx.ellipse(0, -1, 3.5, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, 4);
+    ctx.lineTo(0, 15);
+    ctx.lineTo(-3, 16);
+    ctx.stroke();
   }
 
   /**
@@ -391,9 +548,11 @@ export class SkyRenderer {
 interface Placement {
   id: string;
   data: Aircraft;
+  history: { latitude: number; longitude: number }[];
   x: number;
   y: number;
   track: number | undefined;
+  category: AircraftCategory | undefined;
   alpha: number;
 }
 

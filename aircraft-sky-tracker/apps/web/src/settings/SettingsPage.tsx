@@ -24,6 +24,7 @@ const DISPLAY_TOGGLES: { key: keyof AppConfig; label: string }[] = [
   { key: "showRangeRing", label: "Range circle" },
   { key: "showHeader", label: "Header" },
   { key: "showTrails", label: "Trails" },
+  { key: "showDestinationArcs", label: "Destination arcs" },
 ];
 
 /** Settings screen (FRD §62-65). */
@@ -96,6 +97,7 @@ export function SettingsPage({ onBack }: Props) {
         showRangeRing: draft.showRangeRing,
         showHeader: draft.showHeader,
         showTrails: draft.showTrails,
+        showDestinationArcs: draft.showDestinationArcs,
       };
       // Only change the active location once a new postcode is entered (FRD §63).
       const normalised = postcodeInput.trim().toUpperCase().replace(/\s+/g, " ");

@@ -8,6 +8,7 @@
  */
 
 import type { Aircraft, ProviderAircraft } from "@ast/shared";
+import { aircraftCategoryFromType } from "@ast/shared";
 import { GeoService } from "../geo/geoService.js";
 import { RouteService } from "../routes/routeService.js";
 import {
@@ -110,6 +111,7 @@ export class AircraftStateService {
         distanceMiles: round(distanceMiles, 2),
         bearingFromCentre: round(bearingFromCentre, 1),
         aircraftTypeCode,
+        aircraftCategory: aircraftCategoryFromType(aircraftTypeCode),
         destination,
         positionAgeSeconds: normalised.positionAgeSeconds,
         lastUpdated: new Date(now).toISOString(),

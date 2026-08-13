@@ -64,11 +64,12 @@ function migrate(db: DatabaseSync): void {
       show_distance      INTEGER NOT NULL,
       show_centre_marker INTEGER NOT NULL,
       show_range_ring    INTEGER NOT NULL,
-      show_header        INTEGER NOT NULL,
-      show_trails        INTEGER NOT NULL,
-      interpolation      INTEGER NOT NULL,
-      created_at         TEXT    NOT NULL,
-      updated_at         TEXT    NOT NULL
+      show_header         INTEGER NOT NULL,
+      show_trails         INTEGER NOT NULL,
+      show_destination_arcs INTEGER NOT NULL DEFAULT 0,
+      interpolation       INTEGER NOT NULL,
+      created_at          TEXT    NOT NULL,
+      updated_at          TEXT    NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS location_cache (
@@ -108,4 +109,22 @@ function migrate(db: DatabaseSync): void {
       source                   TEXT NOT NULL
     );
   `);
+
+  // Additive migrations for databases created by earlier versions.
+  ensureColumn(db, "settings", "show_destination_arcs", "INTEGER NOT NULL DEFAULT 0");
+}
+
+/** Add a column to an existing table if it is not already present. */
+function ensureColumn(
+  db: DatabaseSync,
+  table: string,
+  column: string,
+  definition: string,
+): void {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as {
+    name: string;
+  }[];
+  if (!columns.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
 }

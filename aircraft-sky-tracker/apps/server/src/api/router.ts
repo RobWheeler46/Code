@@ -6,6 +6,7 @@
 import { Router, type Request, type Response } from "express";
 import type { AppConfig, ConfigUpdate, Aircraft } from "@ast/shared";
 import type { HealthReport, DiagnosticsReport } from "../diagnostics/diagnosticsService.js";
+import type { PhotoResult } from "../routes/photoService.js";
 import { basicAuthMiddleware, isAuthEnabled } from "./auth.js";
 
 export interface ValidateResult {
@@ -31,6 +32,7 @@ export interface ApiContext {
   snapshot(): { generatedAt: string; aircraft: Aircraft[] };
   health(): HealthReport;
   diagnostics(): DiagnosticsReport;
+  photo(registration?: string, icaoHex?: string): Promise<PhotoResult>;
 }
 
 export function createApiRouter(ctx: ApiContext): Router {
@@ -95,6 +97,22 @@ export function createApiRouter(ctx: ApiContext): Router {
   // GET /api/aircraft - current snapshot (diagnostics/development, FRD §41).
   router.get("/aircraft", (_req: Request, res: Response) => {
     res.json(ctx.snapshot());
+  });
+
+  // GET /api/aircraft/photo?reg=&hex= - aircraft photo for the detail overlay.
+  // Public: part of the open display. Proxies planespotters (FRD §79).
+  router.get("/aircraft/photo", async (req: Request, res: Response) => {
+    const reg = typeof req.query.reg === "string" ? req.query.reg : undefined;
+    const hex = typeof req.query.hex === "string" ? req.query.hex : undefined;
+    if (!reg && !hex) {
+      res.status(400).json({ error: "reg or hex query parameter required" });
+      return;
+    }
+    try {
+      res.json(await ctx.photo(reg, hex));
+    } catch {
+      res.json({});
+    }
   });
 
   // GET /api/health (FRD §42).
