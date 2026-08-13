@@ -4,6 +4,7 @@ import { useConfig } from "./hooks/useConfig.js";
 import { SkyDisplay } from "./display/SkyDisplay.js";
 import { SettingsPage } from "./settings/SettingsPage.js";
 import { DiagnosticsPage } from "./diagnostics/DiagnosticsPage.js";
+import { AuthGate } from "./components/AuthGate.js";
 
 type View = "display" | "settings" | "diagnostics";
 
@@ -52,10 +53,18 @@ export function App() {
   }, []);
 
   if (view === "settings") {
-    return <SettingsPage onBack={() => setView("display")} />;
+    return (
+      <AuthGate title="Settings" onBack={() => setView("display")}>
+        <SettingsPage onBack={() => setView("display")} />
+      </AuthGate>
+    );
   }
   if (view === "diagnostics") {
-    return <DiagnosticsPage onBack={() => setView("display")} />;
+    return (
+      <AuthGate title="System Diagnostics" onBack={() => setView("display")}>
+        <DiagnosticsPage onBack={() => setView("display")} />
+      </AuthGate>
+    );
   }
 
   if (!config) {

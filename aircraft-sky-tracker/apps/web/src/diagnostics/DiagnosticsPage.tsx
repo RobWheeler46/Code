@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { authHeaders } from "../auth.js";
 
 interface Props {
   onBack: () => void;
@@ -32,7 +33,7 @@ export function DiagnosticsPage({ onBack }: Props) {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/diagnostics");
+      const res = await fetch("/api/diagnostics", { headers: authHeaders() });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setReport((await res.json()) as DiagnosticsReport);
       setError(undefined);

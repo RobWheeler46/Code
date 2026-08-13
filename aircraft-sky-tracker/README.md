@@ -121,7 +121,7 @@ screen. Startup defaults come from the environment (see `.env.example`):
 | `DATABASE_PATH` | `./data/tracker.sqlite` | |
 | `AIRCRAFT_PROVIDER` | `adsbfi` | `adsbfi` \| `airplaneslive` \| `simulation` |
 | `AIRCRAFT_POLL_INTERVAL_MS` | `1100` | ~1 Hz, within provider limits |
-| `SITE_USERNAME` / `SITE_PASSWORD` | *(unset)* | Enables HTTP Basic Auth when set (FRD §79) |
+| `SITE_PASSWORD` | *(unset)* | When set, changing config / viewing diagnostics needs this password; the display stays open (FRD §79) |
 | `PORT` | *(from host)* | Honoured for PaaS (Railway); falls back to `HTTP_PORT` |
 | `DEFAULT_POSTCODE` | `SN25 4TP` | |
 | `DEFAULT_RADIUS_MILES` | `10` | statute miles |
@@ -187,8 +187,9 @@ railway init -n aircraft-sky-tracker
 railway service aircraft-sky-tracker
 railway volume add -m /app/data                 # persist settings + caches
 railway variables set AIRCRAFT_PROVIDER=adsbfi DATABASE_PATH=/app/data/tracker.sqlite \
-  DEFAULT_POSTCODE="SN25 4TP" SITE_USERNAME=tracker
-# set a password (kept out of shell history):
+  DEFAULT_POSTCODE="SN25 4TP"
+# optional: require a password to change config / view diagnostics (display
+# stays open). Kept out of shell history:
 printf '%s' 'your-password' | railway variables set SITE_PASSWORD --stdin
 railway up --ci                                 # build + deploy
 railway domain                                  # public URL

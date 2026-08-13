@@ -9,7 +9,6 @@
 
 import { timingSafeEqual } from "node:crypto";
 import type { Request, Response, NextFunction } from "express";
-import type { IncomingHttpHeaders } from "node:http";
 import { env } from "../config/env.js";
 
 export function isAuthEnabled(): boolean {
@@ -23,7 +22,11 @@ function safeEqual(a: string, b: string): boolean {
   return timingSafeEqual(ab, bb);
 }
 
-/** Validate an Authorization header against the configured credential. */
+/**
+ * Validate an Authorization header against the configured password.
+ * Only the password is checked (the username in "user:pass" is ignored) so
+ * users only need to enter a single password.
+ */
 export function checkBasicAuth(header: string | undefined): boolean {
   if (!isAuthEnabled()) return true;
   if (!header || !header.startsWith("Basic ")) return false;
@@ -35,13 +38,8 @@ export function checkBasicAuth(header: string | undefined): boolean {
   }
   const sep = decoded.indexOf(":");
   if (sep === -1) return false;
-  const user = decoded.slice(0, sep);
   const pass = decoded.slice(sep + 1);
-  return safeEqual(user, env.siteUsername) && safeEqual(pass, env.sitePassword ?? "");
-}
-
-export function authorized(headers: IncomingHttpHeaders): boolean {
-  return checkBasicAuth(headers.authorization);
+  return safeEqual(pass, env.sitePassword ?? "");
 }
 
 /** Express middleware enforcing Basic Auth when enabled. */

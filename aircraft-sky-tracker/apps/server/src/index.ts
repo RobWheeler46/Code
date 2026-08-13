@@ -41,7 +41,7 @@ import {
   type UpdateOutcome,
   type ValidateResult,
 } from "./api/router.js";
-import { basicAuthMiddleware, isAuthEnabled } from "./api/auth.js";
+import { isAuthEnabled } from "./api/auth.js";
 
 const log = createLogger("server");
 const startedAtMs = Date.now();
@@ -278,10 +278,10 @@ async function main(): Promise<void> {
   app.get("/api/health", (_req: Request, res: Response) => {
     res.json(apiContext.health());
   });
-  // Optional Basic Auth for internet-facing deployments (FRD §79).
+  // Viewing the display is always open; individual config/diagnostics routes
+  // enforce Basic Auth themselves when SITE_PASSWORD is set (FRD §79).
   if (isAuthEnabled()) {
-    app.use(basicAuthMiddleware);
-    log.info("HTTP Basic Auth enabled (health check remains public)");
+    log.info("config/diagnostics password protection enabled (viewing is open)");
   }
   app.use("/api", createApiRouter(apiContext));
   app.use("/api", (_req: Request, res: Response) => {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AppConfig, ConfigUpdate } from "@ast/shared";
+import { authHeaders } from "../auth.js";
 
 export interface ValidateResult {
   valid: boolean;
@@ -45,7 +46,7 @@ export function useConfig(): UseConfig {
   const update = useCallback(async (patch: ConfigUpdate): Promise<AppConfig> => {
     const res = await fetch("/api/config", {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify(patch),
     });
     const body = (await res.json()) as AppConfig | { error: string };
@@ -58,7 +59,10 @@ export function useConfig(): UseConfig {
   }, []);
 
   const reset = useCallback(async (): Promise<AppConfig> => {
-    const res = await fetch("/api/config/reset", { method: "POST" });
+    const res = await fetch("/api/config/reset", {
+      method: "POST",
+      headers: { ...authHeaders() },
+    });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const next = (await res.json()) as AppConfig;
     setConfig(next);
@@ -69,7 +73,7 @@ export function useConfig(): UseConfig {
     async (postcode: string): Promise<ValidateResult> => {
       const res = await fetch("/api/location/validate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ postcode }),
       });
       if (!res.ok) {

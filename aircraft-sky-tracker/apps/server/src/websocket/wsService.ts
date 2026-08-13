@@ -11,7 +11,6 @@ import type { Duplex } from "node:stream";
 import { WebSocketServer, WebSocket } from "ws";
 import { WS_PATH, type ServerMessage } from "@ast/shared";
 import { env } from "../config/env.js";
-import { authorized } from "../api/auth.js";
 import { createLogger } from "../logging/logger.js";
 
 const log = createLogger("websocket");
@@ -48,11 +47,7 @@ export class WebSocketService {
         socket.destroy();
         return;
       }
-      if (!authorized(req.headers)) {
-        socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
-        socket.destroy();
-        return;
-      }
+      // Viewing the live display is open - no auth on the WebSocket.
       this.wss.handleUpgrade(req, socket, head, (ws) => {
         this.wss.emit("connection", ws, req);
       });

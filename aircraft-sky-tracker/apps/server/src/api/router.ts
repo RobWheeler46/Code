@@ -6,6 +6,7 @@
 import { Router, type Request, type Response } from "express";
 import type { AppConfig, ConfigUpdate, Aircraft } from "@ast/shared";
 import type { HealthReport, DiagnosticsReport } from "../diagnostics/diagnosticsService.js";
+import { basicAuthMiddleware, isAuthEnabled } from "./auth.js";
 
 export interface ValidateResult {
   valid: boolean;
@@ -35,13 +36,28 @@ export interface ApiContext {
 export function createApiRouter(ctx: ApiContext): Router {
   const router = Router();
 
-  // GET /api/config - current configuration.
+  // --- Public (view) endpoints: no authentication required ---
+
+  // GET /api/auth/status - tells the client whether config changes need a
+  // password, so it can show an unlock prompt only when necessary.
+  router.get("/auth/status", (_req: Request, res: Response) => {
+    res.json({ authRequired: isAuthEnabled() });
+  });
+
+  // GET /api/auth/check - protected; used by the client to verify a password.
+  router.get("/auth/check", basicAuthMiddleware, (_req: Request, res: Response) => {
+    res.json({ ok: true });
+  });
+
+  // GET /api/config - current configuration (needed to render the display).
   router.get("/config", (_req: Request, res: Response) => {
     res.json(ctx.getConfig());
   });
 
+  // --- Protected endpoints: viewing is open, changing config requires auth ---
+
   // PUT /api/config - update configuration.
-  router.put("/config", async (req: Request, res: Response) => {
+  router.put("/config", basicAuthMiddleware, async (req: Request, res: Response) => {
     const update = req.body as ConfigUpdate;
     if (typeof update !== "object" || update === null) {
       res.status(400).json({ error: "Invalid configuration payload" });
@@ -56,13 +72,13 @@ export function createApiRouter(ctx: ApiContext): Router {
   });
 
   // POST /api/config/reset - restore defaults.
-  router.post("/config/reset", async (_req: Request, res: Response) => {
+  router.post("/config/reset", basicAuthMiddleware, async (_req: Request, res: Response) => {
     const config = await ctx.resetConfig();
     res.json(config);
   });
 
   // POST /api/location/validate - validate a UK postcode and resolve coords.
-  router.post("/location/validate", async (req: Request, res: Response) => {
+  router.post("/location/validate", basicAuthMiddleware, async (req: Request, res: Response) => {
     const postcode = (req.body as { postcode?: unknown })?.postcode;
     if (typeof postcode !== "string" || postcode.trim().length === 0) {
       res.status(400).json({ error: "postcode is required" });
@@ -86,8 +102,8 @@ export function createApiRouter(ctx: ApiContext): Router {
     res.json(ctx.health());
   });
 
-  // GET /api/diagnostics (FRD §43).
-  router.get("/diagnostics", (_req: Request, res: Response) => {
+  // GET /api/diagnostics (FRD §43) - protected (may reveal configuration).
+  router.get("/diagnostics", basicAuthMiddleware, (_req: Request, res: Response) => {
     res.json(ctx.diagnostics());
   });
 
