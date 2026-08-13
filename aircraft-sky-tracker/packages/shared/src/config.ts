@@ -21,6 +21,10 @@ export interface AppConfig {
   showTrails: boolean;
   showDestinationArcs: boolean;
   interpolationEnabled: boolean;
+  /** Highlight interesting aircraft on the display (FRD Phase 3). */
+  highlightInteresting: boolean;
+  /** Comma/space separated registrations or type codes to always flag. */
+  watchlist: string;
 }
 
 export const DEFAULT_POSTCODE = "SN25 4TP";
@@ -48,6 +52,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   showTrails: false,
   showDestinationArcs: false,
   interpolationEnabled: true,
+  highlightInteresting: true,
+  watchlist: "",
 };
 
 /** Configuration fields a client is permitted to update (FRD §39). */
@@ -69,5 +75,7 @@ export type ConfigUpdate = Partial<
     | "showTrails"
     | "showDestinationArcs"
     | "interpolationEnabled"
+    | "highlightInteresting"
+    | "watchlist"
   >
 >;

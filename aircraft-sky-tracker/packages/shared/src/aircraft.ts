@@ -7,6 +7,14 @@
 
 export type RouteConfidence = "high" | "medium" | "low";
 
+/** Why an aircraft is flagged as interesting (FRD Phase 3). */
+export interface AircraftInterest {
+  /** Short primary label for display / alerts, e.g. "Military", "A380". */
+  label: string;
+  /** All matched reasons, e.g. ["Military", "Low"]. */
+  reasons: string[];
+}
+
 /** Destination / route information for a flight (FRD §31). */
 export interface Destination {
   airportName?: string;
@@ -34,6 +42,8 @@ export interface Aircraft {
   aircraftTypeCode?: string;
   aircraftCategory?: string;
   destination?: Destination;
+  /** Set when the aircraft matches an interesting-aircraft rule (FRD Phase 3). */
+  interest?: AircraftInterest;
   positionAgeSeconds: number;
   lastUpdated: string;
   source: string;

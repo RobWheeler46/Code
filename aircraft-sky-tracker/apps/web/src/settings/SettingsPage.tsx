@@ -98,6 +98,8 @@ export function SettingsPage({ onBack }: Props) {
         showHeader: draft.showHeader,
         showTrails: draft.showTrails,
         showDestinationArcs: draft.showDestinationArcs,
+        highlightInteresting: draft.highlightInteresting,
+        watchlist: draft.watchlist,
       };
       // Only change the active location once a new postcode is entered (FRD §63).
       const normalised = postcodeInput.trim().toUpperCase().replace(/\s+/g, " ");
@@ -194,6 +196,33 @@ export function SettingsPage({ onBack }: Props) {
           {toggle.label}
         </label>
       ))}
+
+      <h2>Interesting aircraft</h2>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={draft.highlightInteresting}
+          onChange={(e) => setToggle("highlightInteresting", e.target.checked)}
+        />
+        Highlight interesting aircraft
+      </label>
+      <div className="field">
+        <label htmlFor="watchlist">Watchlist</label>
+        <input
+          id="watchlist"
+          type="text"
+          value={draft.watchlist}
+          onChange={(e) => setDraft({ ...draft, watchlist: e.target.value })}
+          placeholder="G-EUUA, A388, SPIT"
+          spellCheck={false}
+        />
+        <div className="hint">
+          Registrations or type codes to always flag, separated by commas.
+          Military, heavy (A380/747), helicopters and low aircraft are flagged
+          automatically. Phone push alerts are enabled by setting the
+          NOTIFY_NTFY_TOPIC server variable.
+        </div>
+      </div>
 
       {saveError && <div className="status-line err">{saveError}</div>}
 

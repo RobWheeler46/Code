@@ -86,6 +86,9 @@ export function AircraftDetailsOverlay({ aircraft, onClose }: Props) {
         <div className="reg" style={{ fontSize: "1.4rem", fontWeight: 600 }}>
           {identifier}
         </div>
+        {aircraft.interest && (
+          <div className="interest-badge">★ {aircraft.interest.reasons.join(" · ")}</div>
+        )}
         <div className="sub" style={{ marginBottom: "1rem" }}>
           {typeLine || "Unknown type"}
           {aircraft.callsign ? ` · ${aircraft.callsign}` : ""}

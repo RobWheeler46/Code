@@ -22,6 +22,8 @@ export interface NormalisedAircraft {
   groundSpeedKnots?: number;
   trackDegrees?: number;
   aircraftTypeCode?: string;
+  /** Provider dbFlags (military / interesting bits), when numeric. */
+  providerFlags?: number;
   positionAgeSeconds: number;
   source: string;
 }
@@ -58,6 +60,7 @@ export function normaliseAircraft(
     groundSpeedKnots: raw.groundSpeedKnots,
     trackDegrees: raw.trackDegrees,
     aircraftTypeCode: raw.aircraftTypeCode?.trim() || undefined,
+    providerFlags: typeof raw.providerFlags === "number" ? raw.providerFlags : undefined,
     positionAgeSeconds: age,
     source,
   };

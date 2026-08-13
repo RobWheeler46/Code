@@ -125,6 +125,8 @@ screen. Startup defaults come from the environment (see `.env.example`):
 | `AIRCRAFT_PROVIDER` | `failover` | `failover` \| `adsbfi` \| `opensky` \| `airplaneslive` \| `simulation` |
 | `AIRCRAFT_POLL_INTERVAL_MS` | `1100` | ~1 Hz, within provider limits |
 | `SITE_PASSWORD` | *(unset)* | When set, changing config / viewing diagnostics needs this password; the display stays open (FRD §79) |
+| `NOTIFY_NTFY_TOPIC` | *(unset)* | ntfy topic for interesting-aircraft push alerts; push is off until set |
+| `NOTIFY_NTFY_SERVER` | `https://ntfy.sh` | ntfy server for push alerts |
 | `PORT` | *(from host)* | Honoured for PaaS (Railway); falls back to `HTTP_PORT` |
 | `DEFAULT_POSTCODE` | `SN25 4TP` | |
 | `DEFAULT_RADIUS_MILES` | `10` | statute miles |
@@ -150,6 +152,20 @@ The browser talks only to the backend (FRD §39):
 | `GET` | `/api/health` | Source/route health |
 | `GET` | `/api/diagnostics` | Counts, timings, provider status |
 | `WS` | `/ws` | Live `aircraft.snapshot` / `source.status` / `config.updated` |
+
+## Interesting-aircraft alerts
+
+Notable traffic is flagged automatically and highlighted in amber on the display
+(toggle in Settings): **military** and DB-flagged special aircraft (from the
+provider's dbFlags), **heavy/unusual types** (A380, 747, Antonov), **helicopters**,
+and **low** aircraft (< 1000 ft). Add your own **watchlist** of registrations or
+type codes in Settings (e.g. `G-EUUA, A388, SPIT`).
+
+For phone push notifications when something notable enters the area, set
+`NOTIFY_NTFY_TOPIC` to a private topic and subscribe to it in the
+[ntfy](https://ntfy.sh) app — you'll get alerts like
+*"Military: RRR2718 — 3.1 mi NW · 1,200 ft"*. Each aircraft alerts at most once
+per 30 minutes. Alerts fire only for the saved location, not per-viewer URLs.
 
 ## Per-viewer postcode (URL override)
 
@@ -254,8 +270,11 @@ overlay via a backend planespotters.net proxy (with attribution); optional
 adsb.fi with OpenSky as an automatic backup (per-provider cooldown, auto
 recovery), so one source going down can't take the display offline.
 
+**Interesting-aircraft alerts (done)** — military / heavy / helicopter / low /
+watchlist detection, amber highlight on the display, and opt-in ntfy push
+notifications.
+
 **Future phases** — local RTL-SDR ADS-B (`LocalReadsbProvider`) and hybrid
-local+internet source; interesting-aircraft detection + push alerts; optional
-history; projector/ceiling features. The core "minimal" display philosophy stays
-unchanged.
+local+internet source; optional aircraft history; projector/ceiling features.
+The core "minimal" display philosophy stays unchanged.
 ```

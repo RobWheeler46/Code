@@ -24,6 +24,8 @@ interface DiagnosticsReport {
   lastHttpStatus: number | null;
   pollingIntervalMs: number;
   uptimeSeconds: number;
+  alertsEnabled: boolean;
+  lastAlert: string | null;
 }
 
 /** System diagnostics screen (FRD §66-67). */
@@ -106,6 +108,16 @@ export function DiagnosticsPage({ onBack }: Props) {
             <span className="v">{report.webSocketClients}</span>
             <span className="k">Uptime</span>
             <span className="v">{formatUptime(report.uptimeSeconds)}</span>
+          </div>
+
+          <h2>Alerts</h2>
+          <div className="rows">
+            <span className="k">Push alerts</span>
+            <span className={`v ${report.alertsEnabled ? "badge-ok" : ""}`}>
+              {report.alertsEnabled ? "✓ Enabled" : "Off (set NOTIFY_NTFY_TOPIC)"}
+            </span>
+            <span className="k">Last alert</span>
+            <span className="v">{report.lastAlert ?? "—"}</span>
           </div>
         </>
       )}

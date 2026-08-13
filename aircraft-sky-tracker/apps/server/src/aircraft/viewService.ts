@@ -18,6 +18,7 @@ import {
   aircraftCategoryFromType,
 } from "@ast/shared";
 import { normaliseAircraft } from "./normaliser.js";
+import { evaluateInterest, parseWatchlist } from "./interest.js";
 import type { RouteService } from "../routes/routeService.js";
 import type { LocationService } from "../location/locationService.js";
 import type { SettingsRepo } from "../persistence/settingsRepo.js";
@@ -75,7 +76,12 @@ export class ViewService {
 
     let aircraft: Aircraft[] = [];
     try {
-      aircraft = await this.snapshotFor(resolved.latitude, resolved.longitude, radius);
+      aircraft = await this.snapshotFor(
+        resolved.latitude,
+        resolved.longitude,
+        radius,
+        globalConfig.watchlist,
+      );
     } catch (err) {
       log.warn("view snapshot failed", { postcode: resolved.postcode, error: String(err) });
     }
@@ -100,12 +106,14 @@ export class ViewService {
     lat: number,
     lon: number,
     radius: number,
+    watchlist: string,
   ): Promise<Aircraft[]> {
-    const key = `${lat.toFixed(4)},${lon.toFixed(4)},${radius}`;
+    const key = `${lat.toFixed(4)},${lon.toFixed(4)},${radius},${watchlist}`;
     const now = Date.now();
     const cached = this.snapshots.get(key);
     if (cached && now - cached.ts < SNAPSHOT_TTL_MS) return cached.aircraft;
 
+    const watchTokens = parseWatchlist(watchlist);
     const raw = await this.provider.fetchAircraft(lat, lon, radius);
     const source = this.provider.name;
     const out: Aircraft[] = [];
@@ -132,6 +140,20 @@ export class ViewService {
         trackDegrees: n.trackDegrees,
       });
 
+      const category = aircraftCategoryFromType(type);
+      const interest = evaluateInterest(
+        {
+          icaoHex: n.icaoHex,
+          registration,
+          callsign: n.callsign,
+          aircraftTypeCode: type,
+          aircraftCategory: category,
+          altitudeFeet: n.altitudeFeet,
+          providerFlags: n.providerFlags,
+        },
+        watchTokens,
+      );
+
       out.push({
         id: n.id,
         icaoHex: n.icaoHex,
@@ -145,8 +167,9 @@ export class ViewService {
         distanceMiles: round(distance, 2),
         bearingFromCentre: round(bearing, 1),
         aircraftTypeCode: type,
-        aircraftCategory: aircraftCategoryFromType(type),
+        aircraftCategory: category,
         destination,
+        interest,
         positionAgeSeconds: n.positionAgeSeconds,
         lastUpdated: new Date(now).toISOString(),
         source,

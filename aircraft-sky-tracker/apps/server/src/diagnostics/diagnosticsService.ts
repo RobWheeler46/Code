@@ -7,6 +7,7 @@ import type { AircraftStateService } from "../aircraft/stateService.js";
 import type { RouteService } from "../routes/routeService.js";
 import type { WebSocketService } from "../websocket/wsService.js";
 import type { LocationService } from "../location/locationService.js";
+import type { AlertService } from "../alerts/alertService.js";
 import { env } from "../config/env.js";
 
 export interface HealthReport {
@@ -35,6 +36,8 @@ export interface DiagnosticsReport {
   lastHttpStatus: number | null;
   pollingIntervalMs: number;
   uptimeSeconds: number;
+  alertsEnabled: boolean;
+  lastAlert: string | null;
 }
 
 export class DiagnosticsService {
@@ -45,6 +48,7 @@ export class DiagnosticsService {
     private readonly routes: RouteService,
     private readonly ws: WebSocketService,
     private readonly location: LocationService,
+    private readonly alerts: AlertService,
     private readonly startedAtMs: number,
   ) {}
 
@@ -98,6 +102,8 @@ export class DiagnosticsService {
       lastHttpStatus: this.routes.lastHttpStatus ?? null,
       pollingIntervalMs: env.aircraftPollIntervalMs,
       uptimeSeconds: Math.floor((Date.now() - this.startedAtMs) / 1000),
+      alertsEnabled: this.alerts.enabled,
+      lastAlert: this.alerts.lastAlert ?? null,
     };
   }
 }

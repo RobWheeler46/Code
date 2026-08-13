@@ -15,6 +15,7 @@ import {
   normaliseAircraft,
   MAX_POSITION_AGE_SECONDS,
 } from "./normaliser.js";
+import { evaluateInterest, parseWatchlist } from "./interest.js";
 
 /** How long to hold an aircraft that has dropped out of the feed (FRD §54). */
 const HOLD_MS = 30_000;
@@ -55,9 +56,11 @@ export class AircraftStateService {
     radiusMiles: number,
     source: string,
     now: number = Date.now(),
+    watchlist = "",
   ): Aircraft[] {
     let insideRadius = 0;
     const seen = new Set<string>();
+    const watchTokens = parseWatchlist(watchlist);
 
     for (const item of raw) {
       const normalised = normaliseAircraft(item, source);
@@ -98,6 +101,20 @@ export class AircraftStateService {
         trackDegrees: normalised.trackDegrees,
       });
 
+      const category = aircraftCategoryFromType(aircraftTypeCode);
+      const interest = evaluateInterest(
+        {
+          icaoHex: normalised.icaoHex,
+          registration,
+          callsign: normalised.callsign,
+          aircraftTypeCode,
+          aircraftCategory: category,
+          altitudeFeet: normalised.altitudeFeet,
+          providerFlags: normalised.providerFlags,
+        },
+        watchTokens,
+      );
+
       const aircraft: Aircraft = {
         id: normalised.id,
         icaoHex: normalised.icaoHex,
@@ -111,8 +128,9 @@ export class AircraftStateService {
         distanceMiles: round(distanceMiles, 2),
         bearingFromCentre: round(bearingFromCentre, 1),
         aircraftTypeCode,
-        aircraftCategory: aircraftCategoryFromType(aircraftTypeCode),
+        aircraftCategory: category,
         destination,
+        interest,
         positionAgeSeconds: normalised.positionAgeSeconds,
         lastUpdated: new Date(now).toISOString(),
         source,

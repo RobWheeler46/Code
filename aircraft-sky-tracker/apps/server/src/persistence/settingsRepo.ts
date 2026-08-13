@@ -21,6 +21,8 @@ interface SettingsRow {
   show_header: number;
   show_trails: number;
   show_destination_arcs: number;
+  highlight_interesting: number;
+  watchlist: string;
   interpolation: number;
 }
 
@@ -47,6 +49,8 @@ function rowToConfig(row: SettingsRow): AppConfig {
     showTrails: bool(row.show_trails),
     showDestinationArcs: bool(row.show_destination_arcs),
     interpolationEnabled: bool(row.interpolation),
+    highlightInteresting: bool(row.highlight_interesting),
+    watchlist: row.watchlist ?? "",
   };
 }
 
@@ -68,10 +72,11 @@ export class SettingsRepo {
           id, postcode, latitude, longitude, radius_miles, aircraft_source,
           display_mode, show_registration, show_destination, show_flight_number,
           show_altitude, show_distance, show_centre_marker, show_range_ring,
-          show_header, show_trails, show_destination_arcs, interpolation,
+          show_header, show_trails, show_destination_arcs,
+          highlight_interesting, watchlist, interpolation,
           created_at, updated_at
         ) VALUES (
-          1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )`,
       )
       .run(
@@ -91,6 +96,8 @@ export class SettingsRepo {
         Number(defaults.showHeader),
         Number(defaults.showTrails),
         Number(defaults.showDestinationArcs),
+        Number(defaults.highlightInteresting),
+        defaults.watchlist,
         Number(defaults.interpolationEnabled),
         now,
         now,
@@ -122,6 +129,7 @@ export class SettingsRepo {
           show_destination = ?, show_flight_number = ?, show_altitude = ?,
           show_distance = ?, show_centre_marker = ?, show_range_ring = ?,
           show_header = ?, show_trails = ?, show_destination_arcs = ?,
+          highlight_interesting = ?, watchlist = ?,
           interpolation = ?, updated_at = ?
         WHERE id = 1`,
       )
@@ -142,6 +150,8 @@ export class SettingsRepo {
         Number(config.showHeader),
         Number(config.showTrails),
         Number(config.showDestinationArcs),
+        Number(config.highlightInteresting),
+        config.watchlist,
         Number(config.interpolationEnabled),
         now,
       );

@@ -67,6 +67,8 @@ function migrate(db: DatabaseSync): void {
       show_header         INTEGER NOT NULL,
       show_trails         INTEGER NOT NULL,
       show_destination_arcs INTEGER NOT NULL DEFAULT 0,
+      highlight_interesting INTEGER NOT NULL DEFAULT 1,
+      watchlist           TEXT    NOT NULL DEFAULT '',
       interpolation       INTEGER NOT NULL,
       created_at          TEXT    NOT NULL,
       updated_at          TEXT    NOT NULL
@@ -112,6 +114,8 @@ function migrate(db: DatabaseSync): void {
 
   // Additive migrations for databases created by earlier versions.
   ensureColumn(db, "settings", "show_destination_arcs", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn(db, "settings", "highlight_interesting", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db, "settings", "watchlist", "TEXT NOT NULL DEFAULT ''");
 }
 
 /** Add a column to an existing table if it is not already present. */

@@ -27,6 +27,7 @@ const FADE_OUT_MS = 750; // FRD §53
 const IMPLAUSIBLE_JUMP_MILES = 5; // snap instead of interpolate (FRD §53)
 const ICON_SIZE = 34; // px (FRD §55: ~30-45)
 const TRAIL_MAX_POINTS = 24; // ~24s of history at 1 Hz
+const INTEREST_COLOUR = "#ffcf6b"; // amber highlight for interesting aircraft
 
 interface Fix {
   latitude: number;
@@ -252,13 +253,26 @@ export class SkyRenderer {
 
   private drawAircraft(p: Placement, config: AppConfig, occupied: Rect[]): void {
     const ctx = this.ctx;
+    const highlight = config.highlightInteresting && p.data.interest !== undefined;
 
     if (config.showTrails) this.drawTrail(p);
     if (config.showDestinationArcs) this.drawDestinationArc(p);
 
+    // Highlight ring for interesting aircraft (FRD Phase 3).
+    if (highlight) {
+      ctx.save();
+      ctx.globalAlpha = p.alpha * 0.75;
+      ctx.strokeStyle = INTEREST_COLOUR;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, ICON_SIZE * 0.8, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     ctx.save();
     ctx.globalAlpha = p.alpha;
-    this.drawIcon(p.x, p.y, p.track ?? 0, p.category ?? "unknown");
+    this.drawIcon(p.x, p.y, p.track ?? 0, p.category ?? "unknown", highlight);
     ctx.restore();
 
     // Labels stay horizontal (FRD §51).
@@ -320,7 +334,13 @@ export class SkyRenderer {
    * Type-aware silhouette, nose-up at zero rotation (FRD §51, §55, Phase 1.1).
    * Unknown/jet categories share the generic swept-wing outline.
    */
-  private drawIcon(x: number, y: number, trackDegrees: number, category: AircraftCategory): void {
+  private drawIcon(
+    x: number,
+    y: number,
+    trackDegrees: number,
+    category: AircraftCategory,
+    highlight = false,
+  ): void {
     const ctx = this.ctx;
     const s = ICON_SIZE / 34;
     ctx.save();
@@ -330,7 +350,7 @@ export class SkyRenderer {
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
     ctx.lineWidth = 1.6;
-    ctx.strokeStyle = "#f2f2f2";
+    ctx.strokeStyle = highlight ? INTEREST_COLOUR : "#f2f2f2";
     ctx.fillStyle = "rgba(10,12,16,0.55)";
     switch (category) {
       case "helicopter":
@@ -464,9 +484,14 @@ export class SkyRenderer {
    */
   private labelLines(a: Aircraft, config: AppConfig): LabelLine[] {
     const lines: LabelLine[] = [];
+    const interesting = config.highlightInteresting && a.interest !== undefined;
     const identifier = a.registration ?? a.callsign ?? a.icaoHex;
-    if (config.showRegistration && identifier) {
+    // Interesting aircraft always show their identifier + reason (FRD Phase 3).
+    if ((config.showRegistration || interesting) && identifier) {
       lines.push({ text: identifier, primary: true });
+    }
+    if (interesting && a.interest) {
+      lines.push({ text: a.interest.label, primary: false, accent: true });
     }
     if (config.showDestination) {
       const dest = a.destination?.displayName;
@@ -536,8 +561,12 @@ export class SkyRenderer {
     ctx.textBaseline = "top";
     let y = top;
     for (const line of visibleLines) {
-      ctx.font = font(line.primary ? regSize : subSize, line.primary);
-      ctx.fillStyle = line.primary ? "#f2f2f2" : "#9aa0a6";
+      ctx.font = font(line.primary ? regSize : subSize, line.primary || Boolean(line.accent));
+      ctx.fillStyle = line.accent
+        ? INTEREST_COLOUR
+        : line.primary
+          ? "#f2f2f2"
+          : "#9aa0a6";
       ctx.fillText(line.text, p.x, y);
       y += lineHeight;
     }
@@ -559,6 +588,7 @@ interface Placement {
 interface LabelLine {
   text: string;
   primary: boolean;
+  accent?: boolean;
 }
 
 function font(size: number, bold: boolean): string {

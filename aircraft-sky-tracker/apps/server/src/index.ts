@@ -35,6 +35,7 @@ import { AircraftStateService } from "./aircraft/stateService.js";
 import { ViewService } from "./aircraft/viewService.js";
 import { AircraftPollingService } from "./aircraft/pollingService.js";
 import { WebSocketService } from "./websocket/wsService.js";
+import { AlertService } from "./alerts/alertService.js";
 import { DiagnosticsService } from "./diagnostics/diagnosticsService.js";
 import { createAircraftProvider } from "./providers/index.js";
 import {
@@ -95,16 +96,28 @@ async function main(): Promise<void> {
   const ws = new WebSocketService();
   const provider = createAircraftProvider(env.aircraftProvider);
   const viewService = new ViewService(location, settings, routes, provider);
+  const alerts = new AlertService({
+    topic: env.notifyNtfyTopic,
+    server: env.notifyNtfyServer,
+  });
 
   const polling = new AircraftPollingService(provider, env.aircraftPollIntervalMs, {
     onResult: (raw, meta) => {
       const cfg = settings.get();
-      const aircraft = state.update(raw, cfg.radiusMiles, provider.name);
+      const aircraft = state.update(
+        raw,
+        cfg.radiusMiles,
+        provider.name,
+        Date.now(),
+        cfg.watchlist,
+      );
       ws.broadcast({
         type: "aircraft.snapshot",
         timestamp: Date.now(),
         aircraft,
       });
+      // Push alerts for newly-arrived interesting aircraft (global location only).
+      alerts.process(aircraft);
       log.debug("poll processed", {
         received: meta.received,
         displayed: aircraft.length,
@@ -134,6 +147,7 @@ async function main(): Promise<void> {
     routes,
     ws,
     location,
+    alerts,
     startedAtMs,
   );
 
@@ -224,9 +238,17 @@ async function main(): Promise<void> {
         "showTrails",
         "showDestinationArcs",
         "interpolationEnabled",
+        "highlightInteresting",
       ] as const;
       for (const key of booleanKeys) {
         if (update[key] !== undefined) next[key] = Boolean(update[key]);
+      }
+
+      if (update.watchlist !== undefined) {
+        if (typeof update.watchlist !== "string" || update.watchlist.length > 500) {
+          return { ok: false, status: 400, error: "Watchlist must be a string under 500 characters" };
+        }
+        next.watchlist = update.watchlist;
       }
 
       const saved = settings.save(next);

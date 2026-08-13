@@ -70,6 +70,9 @@ export interface Env {
   /** Optional Host allow-list for LAN deployments (FRD §80). Empty = allow all. */
   allowedHosts: string[];
   localAdsbUrl: string | undefined;
+  /** Push alerts (FRD Phase 3): ntfy topic + server. Push is off unless a topic is set. */
+  notifyNtfyTopic: string | undefined;
+  notifyNtfyServer: string;
 }
 
 const nodeEnv = str("NODE_ENV", "production");
@@ -93,4 +96,6 @@ export const env: Env = {
     .map((h) => h.trim().toLowerCase())
     .filter((h) => h.length > 0),
   localAdsbUrl: process.env["LOCAL_ADSB_URL"] || undefined,
+  notifyNtfyTopic: process.env["NOTIFY_NTFY_TOPIC"] || undefined,
+  notifyNtfyServer: str("NOTIFY_NTFY_SERVER", "https://ntfy.sh"),
 };
