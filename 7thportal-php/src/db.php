@@ -13,6 +13,13 @@ if (!is_dir($dataDir)) mkdir($dataDir, 0775, true);
 $GLOBALS['__db'] = new PDO('sqlite:' . $dbFile);
 $GLOBALS['__db']->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 $GLOBALS['__db']->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+// busy_timeout is the main defence against the post-deploy "database is locked"
+// 500: migrations run at bootstrap, so when several first-load requests hit at
+// once, one holds the write lock while it migrates. Without a busy timeout the
+// others fail INSTANTLY; with it they wait (up to 15s) for the lock to clear and
+// then find the work already done. Must be set on every connection, before any
+// write. WAL also lets readers run while one writer holds the lock.
+$GLOBALS['__db']->exec('PRAGMA busy_timeout = 15000');
 $GLOBALS['__db']->exec('PRAGMA journal_mode = WAL');
 $GLOBALS['__db']->exec('PRAGMA foreign_keys = ON');
 
