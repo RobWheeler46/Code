@@ -71,6 +71,11 @@ function equipmentFieldsFromBody(array $body, array $existing = []): array
         'warranty_expiry' => $val('warrantyExpiry', 'warranty_expiry'),
         'serial_number' => $val('serialNumber', 'serial_number'),
         'insurance_relevant' => $bool('insuranceRelevant', 'insurance_relevant'),
+        'suitable_sections' => $val('suitableSections', 'suitable_sections'),
+        'suitable_events' => $val('suitableEvents', 'suitable_events'),
+        'max_group_size' => $intOrNull('maxGroupSize', 'max_group_size'),
+        'setup_time_mins' => $intOrNull('setupTimeMins', 'setup_time_mins'),
+        'vehicle_required' => $val('vehicleRequired', 'vehicle_required'),
     ];
 }
 

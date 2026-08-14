@@ -202,6 +202,12 @@ function serializeAsset(array $a): array
         'warrantyExpiry' => $a['warranty_expiry'] ?? null,
         'serialNumber' => $a['serial_number'] ?? null,
         'insuranceRelevant' => (bool) ($a['insurance_relevant'] ?? 0),
+        // Suitability rules (FR-QM-ADV-013).
+        'suitableSections' => $a['suitable_sections'] ?? null,
+        'suitableEvents' => $a['suitable_events'] ?? null,
+        'maxGroupSize' => isset($a['max_group_size']) && $a['max_group_size'] !== null ? (int) $a['max_group_size'] : null,
+        'setupTimeMins' => isset($a['setup_time_mins']) && $a['setup_time_mins'] !== null ? (int) $a['setup_time_mins'] : null,
+        'vehicleRequired' => $a['vehicle_required'] ?? null,
         'updatedAt' => $a['updated_at'],
     ];
 }

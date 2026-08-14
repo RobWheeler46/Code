@@ -338,6 +338,7 @@ async function addItem(b) {
     ${field('Item from the register', `<select id="qi-asset"><option value="">&mdash; free-text item &mdash;</option>${cat.map(a => `<option value="${a.id}" data-name="${escapeHtml(a.name)}" data-restricted="${a.restricted ? 1 : 0}">${escapeHtml(a.name)}${a.restricted ? ' [restricted]' : ''}${a.windowKnown ? ` (${a.available} free)` : ''}</option>`).join('')}</select>`)}
     ${field('Or type an item name', `<input id="qi-name" placeholder="Only needed for a free-text item">`)}
     ${field('Quantity', `<input id="qi-qty" type="number" min="1" value="1" style="width:100px">`)}
+    <div id="qi-suit" class="muted" style="font-size:.82rem;margin:.2rem 0"></div>
     <div id="qi-permit-wrap" style="display:none;border:1px solid var(--amber);border-radius:var(--radius);padding:.6rem .8rem;margin:.5rem 0">
       <p class="muted" style="margin:0 0 .4rem">This is <strong>controlled equipment</strong>. A Quartermaster can only approve it once the permit/qualification is confirmed and a responsible adult is named (FR-QM-ADV-008).</p>
       <label class="check"><input type="checkbox" id="qi-permit"> I confirm the required permit/qualification is held for this activity</label>
@@ -345,9 +346,20 @@ async function addItem(b) {
     </div>
     <div class="modal-actions" style="display:flex;gap:.5rem;margin-top:1rem"><button class="btn" id="qi-save">Add</button><button class="btn btn-secondary" id="qi-cancel">Cancel</button></div>`);
   const permitWrap = document.getElementById('qi-permit-wrap');
+  const suit = document.getElementById('qi-suit');
   document.getElementById('qi-asset').addEventListener('change', (e) => {
     const opt = e.target.selectedOptions[0];
     permitWrap.style.display = opt && opt.dataset.restricted === '1' ? '' : 'none';
+    const a = opt && opt.value ? cat.find(x => x.id == opt.value) : null;
+    const bits = [];
+    if (a) {
+      if (a.suitableSections) bits.push('Sections: ' + a.suitableSections);
+      if (a.suitableEvents) bits.push('Events: ' + a.suitableEvents);
+      if (a.maxGroupSize) bits.push('Max group ' + a.maxGroupSize);
+      if (a.setupTimeMins) bits.push('Setup ' + a.setupTimeMins + ' min');
+      if (a.vehicleRequired) bits.push('Vehicle: ' + a.vehicleRequired);
+    }
+    suit.textContent = bits.length ? '↳ ' + bits.join(' · ') : '';
   });
   document.getElementById('qi-cancel').addEventListener('click', closeModal);
   document.getElementById('qi-save').addEventListener('click', async () => {

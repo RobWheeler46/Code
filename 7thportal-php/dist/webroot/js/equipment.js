@@ -532,6 +532,16 @@ function openAssetForm(asset) {
         ${field('Replacement value (£)', `<input id="ef-repval" type="number" min="0" step="0.01" value="${a.replacementValue ?? ''}" style="width:140px">`)}
       </div>
       ${field('&nbsp;', `<label class="check"><input type="checkbox" id="ef-insurance" ${a.insuranceRelevant ? 'checked' : ''}> Insurance-relevant item</label>`)}
+      <p class="muted" style="margin:.6rem 0 .2rem;font-size:.82rem">Suitability (shown to requesters when booking)</p>
+      <div class="cap-actions">
+        ${field('Suitable sections', `<input id="ef-suit-sections" value="${escapeHtml(a.suitableSections || '')}" placeholder="e.g. Cubs, Scouts">`)}
+        ${field('Suitable events', `<input id="ef-suit-events" value="${escapeHtml(a.suitableEvents || '')}" placeholder="e.g. camp, day trip">`)}
+      </div>
+      <div class="cap-actions">
+        ${field('Max group size', `<input id="ef-maxgroup" type="number" min="0" value="${a.maxGroupSize ?? ''}" style="width:110px">`)}
+        ${field('Setup time (mins)', `<input id="ef-setup" type="number" min="0" value="${a.setupTimeMins ?? ''}" style="width:120px">`)}
+        ${field('Vehicle required', `<input id="ef-vehicle" value="${escapeHtml(a.vehicleRequired || '')}" placeholder="e.g. van, minibus" style="width:150px">`)}
+      </div>
     </details>
     <div class="modal-actions" style="display:flex;gap:.5rem;margin-top:1rem;align-items:center">
       <button class="btn" id="ef-save">${isEdit ? 'Save changes' : 'Add asset'}</button>
@@ -577,6 +587,11 @@ function openAssetForm(asset) {
       warrantyExpiry: document.getElementById('ef-warranty').value,
       replacementValue: document.getElementById('ef-repval').value,
       insuranceRelevant: document.getElementById('ef-insurance').checked,
+      suitableSections: document.getElementById('ef-suit-sections').value.trim(),
+      suitableEvents: document.getElementById('ef-suit-events').value.trim(),
+      maxGroupSize: document.getElementById('ef-maxgroup').value,
+      setupTimeMins: document.getElementById('ef-setup').value,
+      vehicleRequired: document.getElementById('ef-vehicle').value.trim(),
     };
     // Opening stock is only set at creation; thereafter the balance moves only via
     // the stock ledger (the Stock button), never a direct quantity edit.

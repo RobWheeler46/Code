@@ -612,6 +612,12 @@ CREATE TABLE IF NOT EXISTS equipment_assets (
   warranty_expiry TEXT,
   serial_number TEXT,
   insurance_relevant INTEGER NOT NULL DEFAULT 0,
+  -- QM Advanced Controls suitability rules (FR-QM-ADV-013)
+  suitable_sections TEXT,
+  suitable_events TEXT,
+  max_group_size INTEGER,
+  setup_time_mins INTEGER,
+  vehicle_required TEXT,
   created_by INTEGER REFERENCES users(id),
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -1228,6 +1234,14 @@ if ($eqSql && !str_contains($eqSql, 'item_type')) {
     db()->exec('ALTER TABLE equipment_assets ADD COLUMN warranty_expiry TEXT');
     db()->exec('ALTER TABLE equipment_assets ADD COLUMN serial_number TEXT');
     db()->exec('ALTER TABLE equipment_assets ADD COLUMN insurance_relevant INTEGER NOT NULL DEFAULT 0');
+}
+// Migration: QM suitability rules (FR-QM-ADV-013). Add if an older table predates them.
+if ($eqSql && !str_contains($eqSql, 'suitable_sections')) {
+    db()->exec('ALTER TABLE equipment_assets ADD COLUMN suitable_sections TEXT');
+    db()->exec('ALTER TABLE equipment_assets ADD COLUMN suitable_events TEXT');
+    db()->exec('ALTER TABLE equipment_assets ADD COLUMN max_group_size INTEGER');
+    db()->exec('ALTER TABLE equipment_assets ADD COLUMN setup_time_mins INTEGER');
+    db()->exec('ALTER TABLE equipment_assets ADD COLUMN vehicle_required TEXT');
 }
 // Migration: QM v2.4.3 tracking mode (Appendix I 18.4). Add the column and backfill
 // from the existing item_type (consumables map to consumable; everything else to

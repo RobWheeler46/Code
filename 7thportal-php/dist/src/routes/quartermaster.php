@@ -83,6 +83,12 @@ $router->get('/api/qm/catalogue', function ($params) {
             'available' => max(0, $owned - $reserved),
             'windowKnown' => (bool) ($collectAt && $returnAt),
             'restricted' => (bool) ($a['restricted'] ?? 0),
+            // Suitability (FR-QM-ADV-013) shown to help the requester choose well.
+            'suitableSections' => $a['suitable_sections'] ?? null,
+            'suitableEvents' => $a['suitable_events'] ?? null,
+            'maxGroupSize' => $a['max_group_size'] !== null ? (int) $a['max_group_size'] : null,
+            'setupTimeMins' => $a['setup_time_mins'] !== null ? (int) $a['setup_time_mins'] : null,
+            'vehicleRequired' => $a['vehicle_required'] ?? null,
         ];
     }, $assets);
 
