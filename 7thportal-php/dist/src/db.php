@@ -731,6 +731,33 @@ CREATE TABLE IF NOT EXISTS equipment_stocktake_lines (
 );
 CREATE INDEX IF NOT EXISTS idx_equipment_stocktake_lines_stocktake ON equipment_stocktake_lines(stocktake_id);
 
+-- QM v2.4.3 import review (Appendix I). A stock-control import stages into review
+-- rows with a proposed tracking mode / unit / opening quantity; ambiguous or
+-- incomplete rows stay in needs_review, mixed rows can be split, and only validated
+-- ('ready') rows are activated into the live register.
+CREATE TABLE IF NOT EXISTS equipment_import_batches (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','activated')),
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS equipment_import_rows (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  batch_id INTEGER NOT NULL REFERENCES equipment_import_batches(id) ON DELETE CASCADE,
+  source_row INTEGER,
+  name TEXT NOT NULL,
+  category TEXT,
+  location TEXT,
+  tracking_mode TEXT,
+  issue_unit TEXT,
+  opening_qty INTEGER NOT NULL DEFAULT 0,
+  review_status TEXT NOT NULL DEFAULT 'needs_review' CHECK(review_status IN ('needs_review','ready','activated','skipped')),
+  issues TEXT,
+  created_asset_id INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_equipment_import_rows_batch ON equipment_import_rows(batch_id, review_status);
+
 -- Quartermaster Booking (FRD FR-QM / backlog LATER-005). Builds on the equipment
 -- register: leaders raise booking requests for stores items and Quartermasters
 -- (Group Leadership Team + admins) approve/substitute at item-line level, then run

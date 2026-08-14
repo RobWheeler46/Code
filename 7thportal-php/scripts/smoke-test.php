@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -190,6 +190,18 @@ function scenario_logic_stock_ledger(): void
     // ledger rows are retained (audit surface), not overwritten
     $rows = (int) dbGet('SELECT COUNT(*) c FROM equipment_stock_ledger WHERE asset_id = ?', [$id])['c'];
     check('stock: every movement retained in the ledger', $rows === 4);
+}
+
+// QM v2.4.3 import review: a row is 'ready' only with an explicit valid tracking
+// mode (and a unit for consumables); otherwise it is held in needs_review.
+function scenario_logic_import_review(): void
+{
+    useDb(tmpDb('imp')); boot(); loadLibs();
+    check('import: no tracking mode -> needs_review', equipmentImportRowReview(['name' => 'Tent', 'tracking_mode' => null])['status'] === 'needs_review');
+    check('import: valid bulk mode -> ready', equipmentImportRowReview(['name' => 'Tent', 'tracking_mode' => 'bulk_reusable'])['status'] === 'ready');
+    check('import: consumable without unit -> needs_review', equipmentImportRowReview(['name' => 'Rope', 'tracking_mode' => 'consumable', 'issue_unit' => ''])['status'] === 'needs_review');
+    check('import: consumable with unit -> ready', equipmentImportRowReview(['name' => 'Rope', 'tracking_mode' => 'consumable', 'issue_unit' => 'm'])['status'] === 'ready');
+    check('import: blank name -> needs_review', equipmentImportRowReview(['name' => '', 'tracking_mode' => 'bulk_reusable'])['status'] === 'needs_review');
 }
 
 // QM v2.4.3 stocktake: a counted variance posts a 'stocktake' ledger movement that

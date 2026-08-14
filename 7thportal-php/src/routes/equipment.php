@@ -212,6 +212,7 @@ $router->post('/api/equipment/import', function ($params) {
         'section' => ['section', 'section name'], 'value' => ['value', 'value (£)', 'cost'],
         'purchaseDate' => ['purchase date', 'purchased'], 'nextInspectionDate' => ['next inspection date', 'next inspection', 'next check'],
         'replacementDueDate' => ['replacement due date', 'replacement due'], 'notes' => ['notes', 'note'],
+        'trackingMode' => ['tracking mode', 'tracking'], 'unit' => ['unit', 'issue unit', 'quantity unit', 'uom'],
     ];
     $header = array_map(fn($h) => strtolower(trim((string) $h)), array_shift($rows));
     $col = [];
@@ -221,46 +222,141 @@ $router->post('/api/equipment/import', function ($params) {
     if (!isset($col['name'])) jsonResponse(['error' => 'The CSV needs a "Name" column.'], 422);
 
     $cell = fn($row, $field) => isset($col[$field]) ? trim((string) ($row[$col[$field]] ?? '')) : '';
+    $normTrack = function ($v) {
+        $v = strtolower(trim((string) $v));
+        if ($v === '') return null;
+        if (str_contains($v, 'serial')) return 'serialised';
+        if (str_contains($v, 'consum')) return 'consumable';
+        if (str_contains($v, 'bulk') || str_contains($v, 'reusable')) return 'bulk_reusable';
+        return null; // unrecognised -> held for review
+    };
     $ready = []; $errors = [];
     foreach ($rows as $n => $row) {
         $rowNo = $n + 2; // 1-based + header
         $name = $cell($row, 'name');
         if ($name === '') { $errors[] = ['row' => $rowNo, 'error' => 'Missing name']; continue; }
         $ready[] = [
-            'row' => $rowNo,
-            'fields' => [
-                'name' => $name,
-                'category' => equipmentEnumFromInput($cell($row, 'category'), EQUIPMENT_CATEGORIES, 'general'),
-                'quantity' => max(0, (int) ($cell($row, 'quantity') ?: 1)),
-                'condition' => equipmentEnumFromInput($cell($row, 'condition'), EQUIPMENT_CONDITIONS, 'good'),
-                'status' => equipmentEnumFromInput($cell($row, 'status'), EQUIPMENT_STATUSES, 'available'),
-                'owner_name' => $cell($row, 'owner') ?: null,
-                'location' => $cell($row, 'location') ?: null,
-                'section_name' => $cell($row, 'section') ?: null,
-                'value' => is_numeric($cell($row, 'value')) ? (float) $cell($row, 'value') : null,
-                'purchase_date' => $cell($row, 'purchaseDate') ?: null,
-                'next_inspection_date' => $cell($row, 'nextInspectionDate') ?: null,
-                'replacement_due_date' => $cell($row, 'replacementDueDate') ?: null,
-                'notes' => $cell($row, 'notes') ?: null,
-            ],
+            'row' => $rowNo, 'name' => $name,
+            'category' => equipmentEnumFromInput($cell($row, 'category'), EQUIPMENT_CATEGORIES, 'general'),
+            'location' => $cell($row, 'location') ?: null,
+            'tracking_mode' => $normTrack($cell($row, 'trackingMode')),
+            'issue_unit' => $cell($row, 'unit') ?: null,
+            'opening_qty' => max(0, (int) ($cell($row, 'quantity') ?: 1)),
         ];
     }
 
     if ($dryRun) {
-        jsonResponse(['dryRun' => true, 'readyCount' => count($ready), 'errors' => $errors, 'preview' => array_map(fn($r) => ['row' => $r['row'], 'name' => $r['fields']['name'], 'category' => $r['fields']['category'], 'quantity' => $r['fields']['quantity']], array_slice($ready, 0, 10))]);
+        jsonResponse(['dryRun' => true, 'readyCount' => count($ready), 'errors' => $errors, 'preview' => array_map(fn($r) => ['row' => $r['row'], 'name' => $r['name'], 'category' => $r['category'], 'quantity' => $r['opening_qty'], 'trackingMode' => $r['tracking_mode']], array_slice($ready, 0, 10))]);
     }
 
-    $imported = 0;
+    // v2.4.3: stage into an import batch of review rows rather than creating live
+    // assets. Rows without an explicit tracking mode (or otherwise incomplete) are
+    // held in needs_review; only 'ready' rows can later be activated.
+    if (!$ready) jsonResponse(['error' => 'No importable rows found.'], 422);
+    $batchId = dbRun('INSERT INTO equipment_import_batches (created_by) VALUES (?)', [$user['id']])['lastInsertId'];
     foreach ($ready as $r) {
-        $f = $r['fields'];
-        $cols = array_keys($f);
-        $res = dbRun('INSERT INTO equipment_assets (' . implode(',', $cols) . ', created_by) VALUES (' . implode(',', array_fill(0, count($cols), '?')) . ', ?)', [...array_values($f), $user['id']]);
-        // v2.4.3: the imported quantity is an opening balance, posted to the ledger.
-        equipmentPostStockMovement((int) $res['lastInsertId'], 'opening', (int) ($f['quantity'] ?? 0), 'Opening balance (import)', null, (int) $user['id']);
-        $imported++;
+        $review = equipmentImportRowReview($r);
+        dbRun('INSERT INTO equipment_import_rows (batch_id, source_row, name, category, location, tracking_mode, issue_unit, opening_qty, review_status, issues) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [$batchId, $r['row'], $r['name'], $r['category'], $r['location'], $r['tracking_mode'], $r['issue_unit'], $r['opening_qty'], $review['status'], $review['issues'] ? json_encode($review['issues']) : null]);
     }
-    logAudit(['userId' => $user['id'], 'action' => 'equipment_import', 'entityType' => 'equipment', 'ipAddress' => clientIp(), 'details' => ['imported' => $imported, 'skipped' => count($errors)]]);
-    jsonResponse(['ok' => true, 'imported' => $imported, 'skipped' => count($errors), 'errors' => $errors]);
+    logAudit(['userId' => $user['id'], 'action' => 'equipment_import_stage', 'entityType' => 'equipment_import_batch', 'entityId' => (string) $batchId, 'ipAddress' => clientIp(), 'details' => ['rows' => count($ready), 'skipped' => count($errors)]]);
+    jsonResponse(['ok' => true, 'batchId' => (int) $batchId, 'staged' => count($ready), 'skipped' => count($errors), 'errors' => $errors]);
+});
+
+// ── Import review (v2.4.3 Appendix I) ──────────────────────────────────────────
+// Registered before /api/equipment/:id so these prefixes aren't captured as an id.
+
+$router->get('/api/equipment/import-batches/:id', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireEquipmentEnabled();
+    $b = dbGet('SELECT * FROM equipment_import_batches WHERE id = ?', [$params['id']]);
+    if (!$b) jsonResponse(['error' => 'Import batch not found.'], 404);
+    $names = [];
+    foreach (dbAll('SELECT id, first_name, last_name FROM users') as $u) $names[(int) $u['id']] = trim($u['first_name'] . ' ' . $u['last_name']);
+    jsonResponse(array_merge(serializeImportBatch($b, $names), [
+        'rows' => array_map('serializeImportRow', dbAll('SELECT * FROM equipment_import_rows WHERE batch_id = ? ORDER BY id', [$b['id']])),
+        'meta' => ['categories' => EQUIPMENT_CATEGORIES, 'trackingModes' => EQUIPMENT_TRACKING_MODES],
+    ]));
+});
+
+function equipmentImportRowOr404(array $user, $id): array
+{
+    requireLeader($user);
+    requireEquipmentEnabled();
+    $r = dbGet('SELECT * FROM equipment_import_rows WHERE id = ?', [$id]);
+    if (!$r) jsonResponse(['error' => 'Row not found.'], 404);
+    if ($r['review_status'] === 'activated') jsonResponse(['error' => 'This row has already been activated.'], 409);
+    return $r;
+}
+
+$router->patch('/api/equipment/import-rows/:id', function ($params) {
+    $user = requireAuth();
+    $r = equipmentImportRowOr404($user, $params['id']);
+    $b = requestBody();
+    $tm = array_key_exists('trackingMode', $b) ? (array_key_exists($b['trackingMode'], EQUIPMENT_TRACKING_MODES) ? $b['trackingMode'] : null) : $r['tracking_mode'];
+    $fields = [
+        'name' => array_key_exists('name', $b) ? trim((string) $b['name']) : $r['name'],
+        'category' => array_key_exists('category', $b) && array_key_exists($b['category'], EQUIPMENT_CATEGORIES) ? $b['category'] : $r['category'],
+        'location' => array_key_exists('location', $b) ? (trim((string) $b['location']) ?: null) : $r['location'],
+        'tracking_mode' => $tm,
+        'issue_unit' => array_key_exists('issueUnit', $b) ? (trim((string) $b['issueUnit']) ?: null) : $r['issue_unit'],
+        'opening_qty' => array_key_exists('openingQty', $b) ? max(0, (int) $b['openingQty']) : (int) $r['opening_qty'],
+    ];
+    $review = equipmentImportRowReview($fields);
+    dbRun('UPDATE equipment_import_rows SET name = ?, category = ?, location = ?, tracking_mode = ?, issue_unit = ?, opening_qty = ?, review_status = ?, issues = ? WHERE id = ?',
+        [$fields['name'], $fields['category'], $fields['location'], $fields['tracking_mode'], $fields['issue_unit'], $fields['opening_qty'], $review['status'], $review['issues'] ? json_encode($review['issues']) : null, $r['id']]);
+    jsonResponse(serializeImportRow(dbGet('SELECT * FROM equipment_import_rows WHERE id = ?', [$r['id']])));
+});
+
+// Split a mixed row into two (e.g. reusable + consumable) so each has one
+// unambiguous tracking mode; the QM then classifies each half.
+$router->post('/api/equipment/import-rows/:id/split', function ($params) {
+    $user = requireAuth();
+    $r = equipmentImportRowOr404($user, $params['id']);
+    dbRun('INSERT INTO equipment_import_rows (batch_id, source_row, name, category, location, tracking_mode, issue_unit, opening_qty, review_status, issues) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [$r['batch_id'], $r['source_row'], $r['name'] . ' (split)', $r['category'], $r['location'], null, null, 0, 'needs_review', json_encode(['No explicit tracking mode'])]);
+    logAudit(['userId' => $user['id'], 'action' => 'equipment_import_split', 'entityType' => 'equipment_import_row', 'entityId' => (string) $r['id'], 'ipAddress' => clientIp()]);
+    jsonResponse(array_map('serializeImportRow', dbAll('SELECT * FROM equipment_import_rows WHERE batch_id = ? ORDER BY id', [$r['batch_id']])));
+});
+
+$router->post('/api/equipment/import-rows/:id/skip', function ($params) {
+    $user = requireAuth();
+    $r = equipmentImportRowOr404($user, $params['id']);
+    dbRun("UPDATE equipment_import_rows SET review_status = 'skipped' WHERE id = ?", [$r['id']]);
+    jsonResponse(serializeImportRow(dbGet('SELECT * FROM equipment_import_rows WHERE id = ?', [$r['id']])));
+});
+
+// Activate the validated ('ready') rows: create the live asset with its opening
+// state (serialised -> instances; bulk/consumable -> opening ledger movement).
+// Rows still in needs_review are left for the QM to resolve.
+$router->post('/api/equipment/import-batches/:id/activate', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireEquipmentEnabled();
+    $b = dbGet('SELECT * FROM equipment_import_batches WHERE id = ?', [$params['id']]);
+    if (!$b) jsonResponse(['error' => 'Import batch not found.'], 404);
+    $activated = 0;
+    foreach (dbAll("SELECT * FROM equipment_import_rows WHERE batch_id = ? AND review_status = 'ready'", [$b['id']]) as $r) {
+        $itemType = $r['tracking_mode'] === 'consumable' ? 'consumable' : 'asset';
+        $res = dbRun('INSERT INTO equipment_assets (name, category, location, tracking_mode, item_type, issue_unit, quantity, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [$r['name'], $r['category'] ?: 'general', $r['location'], $r['tracking_mode'], $itemType, $r['issue_unit'], (int) $r['opening_qty'], $user['id']]);
+        $assetId = (int) $res['lastInsertId'];
+        if ($r['tracking_mode'] === 'serialised') {
+            for ($k = 1; $k <= (int) $r['opening_qty']; $k++) {
+                dbRun('INSERT INTO equipment_asset_instances (asset_id, instance_ref) VALUES (?, ?)', [$assetId, $r['name'] . ' #' . str_pad((string) $k, 2, '0', STR_PAD_LEFT)]);
+            }
+            equipmentSyncSerialisedQuantity($assetId);
+        } else {
+            equipmentPostStockMovement($assetId, 'opening', (int) $r['opening_qty'], 'Opening balance (import)', null, (int) $user['id']);
+        }
+        dbRun("UPDATE equipment_import_rows SET review_status = 'activated', created_asset_id = ? WHERE id = ?", [$assetId, $r['id']]);
+        $activated++;
+    }
+    $remaining = (int) dbGet("SELECT COUNT(*) AS n FROM equipment_import_rows WHERE batch_id = ? AND review_status IN ('needs_review','ready')", [$b['id']])['n'];
+    if ($remaining === 0) dbRun("UPDATE equipment_import_batches SET status = 'activated' WHERE id = ?", [$b['id']]);
+    logAudit(['userId' => $user['id'], 'action' => 'equipment_import_activate', 'entityType' => 'equipment_import_batch', 'entityId' => (string) $b['id'], 'ipAddress' => clientIp(), 'details' => ['activated' => $activated]]);
+    jsonResponse(['ok' => true, 'activated' => $activated, 'remaining' => $remaining]);
 });
 
 // ── Stocktake (v2.4.3 Appendix I 18.8) ─────────────────────────────────────────

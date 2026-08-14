@@ -17,10 +17,10 @@ function openImportModal() {
   const modal = document.createElement('div');
   modal.id = 'eq-import-modal'; modal.className = 'modal-backdrop';
   modal.innerHTML = `<div class="modal-box"><h2>Import equipment</h2>
-    <p class="muted">Upload a CSV with one asset per row. <a href="/api/equipment/import-template.csv">Download the template</a> — if your data is in a spreadsheet, save it as CSV first.</p>
+    <p class="muted">Upload a CSV with one item per row. <a href="/api/equipment/import-template.csv">Download the template</a>. Imports are <strong>staged for review</strong> — you confirm each item's tracking mode before it goes live.</p>
     <div class="field"><input type="file" id="eq-import-file" accept=".csv,text/csv"></div>
     <div id="eq-import-preview"></div>
-    <div class="cap-actions"><button class="btn" id="eq-import-apply" disabled>Import</button><button class="btn btn-secondary" id="eq-import-cancel">Cancel</button></div>
+    <div class="cap-actions"><button class="btn" id="eq-import-apply" disabled>Stage for review</button><button class="btn btn-secondary" id="eq-import-cancel">Cancel</button></div>
     <div id="eq-import-msg"></div></div>`;
   document.body.appendChild(modal);
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
@@ -36,11 +36,11 @@ function openImportModal() {
         const d = await Api.post('/api/equipment/import', { csv: csvText, dryRun: true });
         const errs = d.errors.length ? `<div class="alert alert-warning">${d.errors.length} row(s) will be skipped: ${d.errors.slice(0, 5).map(x => `row ${x.row} (${escapeHtml(x.error)})`).join(', ')}${d.errors.length > 5 ? '…' : ''}</div>` : '';
         const rows = d.preview.map(p => `<tr><td>${escapeHtml(p.name)}</td><td class="muted">${escapeHtml(p.category)}</td><td>${p.quantity}</td></tr>`).join('');
-        document.getElementById('eq-import-preview').innerHTML = `<div class="alert alert-success">${d.readyCount} asset(s) ready to import.</div>${errs}
-          ${rows ? `<table class="data-table"><thead><tr><th>Name</th><th>Category</th><th>Qty</th></tr></thead><tbody>${rows}</tbody></table>${d.readyCount > 10 ? '<p class="muted">Showing the first 10.</p>' : ''}` : ''}`;
+        document.getElementById('eq-import-preview').innerHTML = `<div class="alert alert-success">${d.readyCount} row(s) will be staged for review.</div>${errs}
+          ${rows ? `<table class="data-table"><thead><tr><th>Name</th><th>Category</th><th>Qty</th><th>Tracking</th></tr></thead><tbody>${d.preview.map(p => `<tr><td>${escapeHtml(p.name)}</td><td class="muted">${escapeHtml(p.category)}</td><td>${p.quantity}</td><td class="muted">${p.trackingMode ? escapeHtml(p.trackingMode) : '<span class="badge" data-status="suspended">needs review</span>'}</td></tr>`).join('')}</tbody></table>${d.readyCount > 10 ? '<p class="muted">Showing the first 10.</p>' : ''}` : ''}`;
         const apply = document.getElementById('eq-import-apply');
         apply.disabled = d.readyCount === 0;
-        apply.textContent = `Import ${d.readyCount} asset${d.readyCount === 1 ? '' : 's'}`;
+        apply.textContent = `Stage ${d.readyCount} row${d.readyCount === 1 ? '' : 's'} for review`;
       } catch (err) { document.getElementById('eq-import-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`; }
     };
     reader.readAsText(file);
@@ -49,10 +49,63 @@ function openImportModal() {
     if (!csvText) return;
     try {
       const r = await Api.post('/api/equipment/import', { csv: csvText });
-      const msg = document.getElementById('eq-import-msg');
-      msg.innerHTML = `<div class="alert alert-success">Imported ${r.imported} asset(s)${r.skipped ? `, skipped ${r.skipped}` : ''}.</div>`;
-      setTimeout(() => { modal.remove(); loadEquipment(); }, 900);
+      modal.remove();
+      renderImportReview(r.batchId);
     } catch (err) { document.getElementById('eq-import-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`; }
+  });
+}
+
+// Import review (v2.4.3): confirm each staged row's tracking mode / unit / opening,
+// split a mixed row, skip a row, then activate only the validated ('ready') rows.
+async function renderImportReview(batchId) {
+  const d = await Api.get(`/api/equipment/import-batches/${batchId}`);
+  const sel = (map, v, blank) => (blank ? `<option value="">${blank}</option>` : '') + Object.entries(map).map(([k, l]) => `<option value="${k}"${k === v ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('');
+  const badge = s => ({ needs_review: '<span class="badge" data-status="suspended">needs review</span>', ready: '<span class="badge" data-status="active">ready</span>', activated: '<span class="badge" data-status="archived">activated</span>', skipped: '<span class="badge" data-status="draft">skipped</span>' }[s] || s);
+  const rowsHtml = d.rows.map(r => {
+    const editable = r.reviewStatus !== 'activated' && r.reviewStatus !== 'skipped';
+    return `<tr>
+      <td><input data-ir-name="${r.id}" value="${escapeHtml(r.name)}" ${editable ? '' : 'disabled'} style="min-width:130px"></td>
+      <td><select data-ir-cat="${r.id}" ${editable ? '' : 'disabled'}>${sel(d.meta.categories, r.category)}</select></td>
+      <td><select data-ir-track="${r.id}" ${editable ? '' : 'disabled'}>${sel(d.meta.trackingModes, r.trackingMode, '— choose —')}</select></td>
+      <td><input data-ir-unit="${r.id}" value="${escapeHtml(r.issueUnit || '')}" ${editable ? '' : 'disabled'} style="width:90px" placeholder="unit"></td>
+      <td><input type="number" min="0" data-ir-open="${r.id}" value="${r.openingQty}" ${editable ? '' : 'disabled'} style="width:70px"></td>
+      <td>${badge(r.reviewStatus)}${r.issues && r.issues.length ? `<br><span class="muted" style="font-size:.78rem">${r.issues.map(escapeHtml).join(', ')}</span>` : ''}</td>
+      <td style="white-space:nowrap">${editable ? `<button class="btn btn-secondary btn-sm ir-save" data-id="${r.id}">Save</button> <button class="btn btn-secondary btn-sm ir-split" data-id="${r.id}">Split</button> <button class="btn btn-secondary btn-sm ir-skip" data-id="${r.id}">Skip</button>` : ''}</td>
+    </tr>`;
+  }).join('');
+  const readyCount = d.counts.ready || 0, needCount = d.counts.needs_review || 0;
+  const existing = document.getElementById('eq-ir-modal'); if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'eq-ir-modal'; modal.className = 'modal-backdrop';
+  modal.innerHTML = `<div class="modal-box" style="max-width:920px"><h2>Import review</h2>
+    <p class="muted">Confirm each row's <strong>tracking mode</strong> (and a unit for consumables) so it becomes "ready", then activate. Rows in "needs review" won't be activated. Split a mixed reusable+consumable row into two.</p>
+    <div id="eq-ir-msg"></div>
+    <div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Name</th><th>Category</th><th>Tracking mode</th><th>Unit</th><th>Opening</th><th>Status</th><th></th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
+    <div class="cap-actions" style="margin-top:1rem">
+      <button class="btn" id="ir-activate"${readyCount ? '' : ' disabled'}>Activate ${readyCount} ready row${readyCount === 1 ? '' : 's'}</button>
+      <span class="muted">${needCount ? needCount + ' still need review' : ''}</span>
+      <button class="btn btn-secondary" id="eq-ir-close" style="margin-left:auto">Close</button>
+    </div></div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.getElementById('eq-ir-close').addEventListener('click', () => { modal.remove(); loadEquipment(); });
+  const irMsg = document.getElementById('eq-ir-msg');
+  const saveRow = async (id) => Api.patch(`/api/equipment/import-rows/${id}`, {
+    name: document.querySelector(`[data-ir-name="${id}"]`).value.trim(),
+    category: document.querySelector(`[data-ir-cat="${id}"]`).value,
+    trackingMode: document.querySelector(`[data-ir-track="${id}"]`).value,
+    issueUnit: document.querySelector(`[data-ir-unit="${id}"]`).value.trim(),
+    openingQty: document.querySelector(`[data-ir-open="${id}"]`).value,
+  });
+  modal.querySelectorAll('.ir-save').forEach(b => b.addEventListener('click', async () => { try { await saveRow(b.dataset.id); renderImportReview(batchId); } catch (e) { irMsg.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; } }));
+  modal.querySelectorAll('.ir-split').forEach(b => b.addEventListener('click', async () => { try { await Api.post(`/api/equipment/import-rows/${b.dataset.id}/split`, {}); renderImportReview(batchId); } catch (e) { irMsg.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; } }));
+  modal.querySelectorAll('.ir-skip').forEach(b => b.addEventListener('click', async () => { try { await Api.post(`/api/equipment/import-rows/${b.dataset.id}/skip`, {}); renderImportReview(batchId); } catch (e) { irMsg.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; } }));
+  document.getElementById('ir-activate').addEventListener('click', async () => {
+    try {
+      const r = await Api.post(`/api/equipment/import-batches/${batchId}/activate`, {});
+      irMsg.innerHTML = `<div class="alert alert-success">Activated ${r.activated} item(s) into the register.${r.remaining ? ` ${r.remaining} still need review.` : ''}</div>`;
+      setTimeout(() => renderImportReview(batchId), 800);
+    } catch (e) { irMsg.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
   });
 }
 

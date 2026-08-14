@@ -67,6 +67,40 @@ function serializeAssetInstance(array $i): array
     ];
 }
 
+// QM v2.4.3 import review (Appendix I). A row is 'ready' only once it has a name,
+// an explicit valid tracking mode, and (for consumables) a unit; otherwise it stays
+// in needs_review with the blocking issues listed.
+function equipmentImportRowReview(array $r): array
+{
+    $issues = [];
+    if (trim((string) ($r['name'] ?? '')) === '') $issues[] = 'Missing name';
+    if (!array_key_exists($r['tracking_mode'] ?? '', EQUIPMENT_TRACKING_MODES)) $issues[] = 'No explicit tracking mode';
+    if (($r['tracking_mode'] ?? '') === 'consumable' && trim((string) ($r['issue_unit'] ?? '')) === '') $issues[] = 'Consumable needs a unit';
+    return ['status' => $issues ? 'needs_review' : 'ready', 'issues' => $issues];
+}
+function serializeImportRow(array $r): array
+{
+    return [
+        'id' => (int) $r['id'], 'sourceRow' => $r['source_row'] !== null ? (int) $r['source_row'] : null,
+        'name' => $r['name'], 'category' => $r['category'], 'location' => $r['location'],
+        'trackingMode' => $r['tracking_mode'], 'issueUnit' => $r['issue_unit'], 'openingQty' => (int) $r['opening_qty'],
+        'reviewStatus' => $r['review_status'], 'issues' => !empty($r['issues']) ? json_decode($r['issues'], true) : [],
+        'createdAssetId' => $r['created_asset_id'] !== null ? (int) $r['created_asset_id'] : null,
+    ];
+}
+function serializeImportBatch(array $b, array $userNames): array
+{
+    $counts = [];
+    foreach (dbAll('SELECT review_status, COUNT(*) AS n FROM equipment_import_rows WHERE batch_id = ? GROUP BY review_status', [$b['id']]) as $row) {
+        $counts[$row['review_status']] = (int) $row['n'];
+    }
+    return [
+        'id' => (int) $b['id'], 'status' => $b['status'],
+        'by' => $userNames[(int) $b['created_by']] ?? 'Leader', 'at' => $b['created_at'],
+        'counts' => $counts, 'total' => array_sum($counts),
+    ];
+}
+
 function serializeStocktakeLine(array $l): array
 {
     $a = dbGet('SELECT name, issue_unit FROM equipment_assets WHERE id = ?', [$l['asset_id']]);
