@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_kit', 'logic_stock_ledger', 'logic_serialised'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -190,6 +190,20 @@ function scenario_logic_stock_ledger(): void
     // ledger rows are retained (audit surface), not overwritten
     $rows = (int) dbGet('SELECT COUNT(*) c FROM equipment_stock_ledger WHERE asset_id = ?', [$id])['c'];
     check('stock: every movement retained in the ledger', $rows === 4);
+}
+
+// QM v2.4.3 stocktake: a counted variance posts a 'stocktake' ledger movement that
+// adjusts the balance to the counted figure and stays auditable.
+function scenario_logic_stocktake(): void
+{
+    useDb(tmpDb('stk2')); boot(); loadLibs();
+    $id = dbRun("INSERT INTO equipment_assets (name, item_type, tracking_mode) VALUES ('Pegs', 'consumable', 'consumable')")['lastInsertId'];
+    equipmentPostStockMovement((int) $id, 'opening', 10, 'Opening', null, 0);
+    $counted = 7; $delta = $counted - equipmentStockBalance((int) $id); // -3
+    equipmentPostStockMovement((int) $id, 'stocktake', $delta, 'Stocktake STK-1', 'STK-1', 0);
+    check('stocktake: balance adjusts to the counted figure', equipmentStockBalance((int) $id) === 7);
+    $st = (int) dbGet("SELECT COUNT(*) c FROM equipment_stock_ledger WHERE asset_id = ? AND movement_type = 'stocktake'", [$id])['c'];
+    check('stocktake: an attributable stocktake movement is recorded', $st === 1);
 }
 
 // QM v2.4.3 serialised instances: active/available counts derive from instance

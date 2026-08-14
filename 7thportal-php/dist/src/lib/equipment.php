@@ -67,6 +67,25 @@ function serializeAssetInstance(array $i): array
     ];
 }
 
+function serializeStocktakeLine(array $l): array
+{
+    $a = dbGet('SELECT name, issue_unit FROM equipment_assets WHERE id = ?', [$l['asset_id']]);
+    $counted = $l['counted_qty'] !== null ? (int) $l['counted_qty'] : null;
+    return [
+        'id' => (int) $l['id'], 'assetId' => (int) $l['asset_id'], 'name' => $a['name'] ?? '(deleted)', 'issueUnit' => $a['issue_unit'] ?? null,
+        'systemQty' => (int) $l['system_qty'], 'countedQty' => $counted,
+        'variance' => $counted !== null ? $counted - (int) $l['system_qty'] : null,
+        'postedDelta' => $l['posted_delta'] !== null ? (int) $l['posted_delta'] : null,
+    ];
+}
+function serializeStocktake(array $s, array $userNames): array
+{
+    return [
+        'id' => (int) $s['id'], 'reference' => $s['reference'], 'scope' => $s['scope'], 'status' => $s['status'], 'note' => $s['note'],
+        'by' => $userNames[(int) $s['created_by']] ?? 'Leader', 'at' => $s['created_at'], 'postedAt' => $s['posted_at'],
+    ];
+}
+
 function serializeStockMovement(array $m, array $userNames): array
 {
     return [

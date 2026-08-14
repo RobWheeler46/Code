@@ -6,6 +6,7 @@ const eqFilters = { q: '', category: '', status: '' };
   if (!me) return;
   document.getElementById('add-asset').addEventListener('click', () => openAssetForm(null));
   document.getElementById('import-assets').addEventListener('click', openImportModal);
+  document.getElementById('stocktake-btn').addEventListener('click', openStocktakeModal);
   loadEquipment();
 })();
 
@@ -270,6 +271,80 @@ async function openStockModal(assetId) {
   });
 }
 function field2(label, html) { return `<div class="field"><label>${label}</label>${html}</div>`; }
+
+// Stocktake (v2.4.3 18.8): pick a scope, count each item, then post variances as
+// attributable 'stocktake' ledger adjustments (a reason is required).
+async function openStocktakeModal() {
+  let recent = [];
+  try { recent = await Api.get('/api/equipment/stocktakes'); } catch (e) { /* ignore */ }
+  const existing = document.getElementById('eq-stk-modal'); if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'eq-stk-modal'; modal.className = 'modal-backdrop';
+  modal.innerHTML = `<div class="modal-box"><h2>Stocktake</h2>
+    <div id="eq-stk-msg"></div>
+    <div id="eq-stk-body">
+      <p class="muted">Count your bulk &amp; consumable stock. Serialised units are reconciled in their own Units panel.</p>
+      <div class="cap-actions">
+        ${field2('Category', `<select id="stk-cat">${optionList(EQ_META.categories, '', 'All categories')}</select>`)}
+        ${field2('Location contains (optional)', `<input id="stk-loc" placeholder="e.g. Container A">`)}
+      </div>
+      <div class="cap-actions"><button class="btn" id="stk-start">Start stocktake</button><button class="btn btn-secondary" id="eq-stk-cancel">Close</button></div>
+      ${recent.length ? `<h3 style="font-size:1rem;margin:1rem 0 .3rem">Recent</h3>
+        <table class="data-table"><tbody>${recent.slice(0, 6).map(s => `<tr><td><strong>${escapeHtml(s.reference)}</strong> <span class="muted">${escapeHtml(s.scope || '')}</span></td>
+          <td><span class="badge" data-status="${s.status === 'posted' ? 'active' : 'draft'}">${escapeHtml(s.status)}</span></td>
+          <td class="muted">${escapeHtml(s.by)} · ${formatDate(s.at)}</td></tr>`).join('')}</tbody></table>` : ''}
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.getElementById('eq-stk-cancel').addEventListener('click', () => { modal.remove(); loadEquipment(); });
+  document.getElementById('stk-start').addEventListener('click', async () => {
+    try {
+      const st = await Api.post('/api/equipment/stocktakes', { category: document.getElementById('stk-cat').value || null, location: document.getElementById('stk-loc').value.trim() });
+      renderStocktakeSheet(st.id);
+    } catch (e) { document.getElementById('eq-stk-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
+}
+
+async function renderStocktakeSheet(stocktakeId) {
+  const d = await Api.get(`/api/equipment/stocktakes/${stocktakeId}`);
+  const body = document.getElementById('eq-stk-body');
+  const posted = d.status === 'posted';
+  body.innerHTML = `
+    <p><strong>${escapeHtml(d.reference)}</strong> — <span class="muted">${escapeHtml(d.scope || '')}</span> ${posted ? '<span class="badge" data-status="active">posted</span>' : ''}</p>
+    <table class="data-table"><thead><tr><th>Item</th><th style="text-align:right">System</th><th style="text-align:right">Counted</th><th style="text-align:right">Variance</th></tr></thead>
+    <tbody>${d.lines.map(l => `<tr>
+      <td>${escapeHtml(l.name)} <span class="muted">${escapeHtml(l.issueUnit || '')}</span></td>
+      <td style="text-align:right">${l.systemQty}</td>
+      <td style="text-align:right">${posted ? (l.countedQty ?? '&mdash;') : `<input type="number" min="0" data-stk-line="${l.id}" data-sys="${l.systemQty}" value="${l.countedQty ?? ''}" style="width:80px;text-align:right">`}</td>
+      <td style="text-align:right" data-stk-var="${l.id}">${l.postedDelta != null ? (l.postedDelta > 0 ? '+' + l.postedDelta : l.postedDelta) : (l.variance != null ? (l.variance > 0 ? '+' + l.variance : l.variance) : '&mdash;')}</td>
+    </tr>`).join('')}</tbody></table>
+    ${posted ? `<div class="alert alert-success">Stocktake posted. Variances were written to the stock ledger.</div>
+      <div class="cap-actions"><button class="btn btn-secondary" id="eq-stk-cancel2">Close</button></div>`
+    : `${field2('Reason (required to post)', `<input id="stk-reason" placeholder="e.g. Annual stocktake, damage write-off">`)}
+      <div class="cap-actions"><button class="btn" id="stk-post">Post adjustments</button><button class="btn btn-secondary" id="eq-stk-cancel2">Cancel</button></div>`}`;
+  document.getElementById('eq-stk-cancel2').addEventListener('click', () => { document.getElementById('eq-stk-modal').remove(); loadEquipment(); });
+  if (posted) return;
+  // live variance as you type
+  body.querySelectorAll('[data-stk-line]').forEach(inp => inp.addEventListener('input', () => {
+    const cell = body.querySelector(`[data-stk-var="${inp.dataset.stkLine}"]`);
+    if (inp.value === '') { cell.textContent = '—'; return; }
+    const v = Number(inp.value) - Number(inp.dataset.sys);
+    cell.textContent = v > 0 ? '+' + v : String(v);
+  }));
+  document.getElementById('stk-post').addEventListener('click', async () => {
+    const reason = document.getElementById('stk-reason').value.trim();
+    if (!reason) { document.getElementById('eq-stk-msg').innerHTML = '<div class="alert alert-error">A reason is required.</div>'; return; }
+    try {
+      // save each counted line, then post
+      for (const inp of body.querySelectorAll('[data-stk-line]')) {
+        if (inp.value !== '') await Api.patch(`/api/equipment/stocktakes/${stocktakeId}/lines/${inp.dataset.stkLine}`, { countedQty: inp.value });
+      }
+      await Api.post(`/api/equipment/stocktakes/${stocktakeId}/post`, { reason });
+      renderStocktakeSheet(stocktakeId);
+    } catch (e) { document.getElementById('eq-stk-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
+}
 
 // Serialised-asset instances (v2.4.3 18.4): each physical unit is tracked with its
 // own reference, status and condition; the asset's balance is the active count.

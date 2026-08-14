@@ -707,6 +707,30 @@ CREATE TABLE IF NOT EXISTS equipment_asset_instances (
 );
 CREATE INDEX IF NOT EXISTS idx_equipment_asset_instances_asset ON equipment_asset_instances(asset_id, status);
 
+-- QM v2.4.3 stocktake (Appendix I 18.8). A stocktake snapshots system balances for
+-- a scope of bulk/consumable items, records the counted quantity, computes variance
+-- and, on posting, writes a 'stocktake' ledger movement per varying line with the
+-- stocktake reference and reason. The original count and variance stay auditable.
+CREATE TABLE IF NOT EXISTS equipment_stocktakes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  reference TEXT NOT NULL,
+  scope TEXT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','posted','cancelled')),
+  note TEXT,
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  posted_at TEXT
+);
+CREATE TABLE IF NOT EXISTS equipment_stocktake_lines (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  stocktake_id INTEGER NOT NULL REFERENCES equipment_stocktakes(id) ON DELETE CASCADE,
+  asset_id INTEGER NOT NULL REFERENCES equipment_assets(id) ON DELETE CASCADE,
+  system_qty INTEGER NOT NULL,
+  counted_qty INTEGER,
+  posted_delta INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_equipment_stocktake_lines_stocktake ON equipment_stocktake_lines(stocktake_id);
+
 -- Quartermaster Booking (FRD FR-QM / backlog LATER-005). Builds on the equipment
 -- register: leaders raise booking requests for stores items and Quartermasters
 -- (Group Leadership Team + admins) approve/substitute at item-line level, then run

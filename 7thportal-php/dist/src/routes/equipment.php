@@ -263,6 +263,95 @@ $router->post('/api/equipment/import', function ($params) {
     jsonResponse(['ok' => true, 'imported' => $imported, 'skipped' => count($errors), 'errors' => $errors]);
 });
 
+// ── Stocktake (v2.4.3 Appendix I 18.8) ─────────────────────────────────────────
+// Registered before /api/equipment/:id so "stocktakes" isn't captured as an id.
+
+$router->get('/api/equipment/stocktakes', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireEquipmentEnabled();
+    $names = [];
+    foreach (dbAll('SELECT id, first_name, last_name FROM users') as $u) $names[(int) $u['id']] = trim($u['first_name'] . ' ' . $u['last_name']);
+    jsonResponse(array_map(fn($s) => serializeStocktake($s, $names), dbAll('SELECT * FROM equipment_stocktakes ORDER BY id DESC LIMIT 20')));
+});
+
+// Start a stocktake: snapshot the current balance of each in-scope bulk/consumable
+// item into count lines (serialised items are reconciled via their unit panel).
+$router->post('/api/equipment/stocktakes', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireEquipmentEnabled();
+    $b = requestBody();
+    $where = ["tracking_mode IN ('bulk_reusable','consumable')", "status != 'retired'"]; $args = [];
+    $scopeBits = [];
+    if (($c = $b['category'] ?? null) && array_key_exists($c, EQUIPMENT_CATEGORIES)) { $where[] = 'category = ?'; $args[] = $c; $scopeBits[] = EQUIPMENT_CATEGORIES[$c]; }
+    if (($loc = trim((string) ($b['location'] ?? ''))) !== '') { $where[] = '(location LIKE ? OR storage_area LIKE ?)'; $args[] = "%$loc%"; $args[] = "%$loc%"; $scopeBits[] = 'location ~ "' . $loc . '"'; }
+    $assets = dbAll('SELECT id FROM equipment_assets WHERE ' . implode(' AND ', $where) . ' ORDER BY name', $args);
+    if (!$assets) jsonResponse(['error' => 'No stock-tracked items match that scope.'], 400);
+    $ref = 'STK-' . date('Y') . '-' . str_pad((string) ((int) (dbGet('SELECT COALESCE(MAX(id),0) AS n FROM equipment_stocktakes')['n']) + 1), 4, '0', STR_PAD_LEFT);
+    $scope = $scopeBits ? implode(', ', $scopeBits) : 'All stock-tracked items';
+    $stId = dbRun('INSERT INTO equipment_stocktakes (reference, scope, note, created_by) VALUES (?, ?, ?, ?)', [$ref, $scope, trim((string) ($b['note'] ?? '')) ?: null, $user['id']])['lastInsertId'];
+    foreach ($assets as $a) {
+        dbRun('INSERT INTO equipment_stocktake_lines (stocktake_id, asset_id, system_qty) VALUES (?, ?, ?)', [$stId, $a['id'], equipmentStockBalance((int) $a['id'])]);
+    }
+    logAudit(['userId' => $user['id'], 'action' => 'equipment_stocktake_start', 'entityType' => 'equipment_stocktake', 'entityId' => (string) $stId, 'ipAddress' => clientIp(), 'details' => ['ref' => $ref, 'lines' => count($assets)]]);
+    jsonResponse(['id' => (int) $stId, 'reference' => $ref], 201);
+});
+
+$router->get('/api/equipment/stocktakes/:id', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireEquipmentEnabled();
+    $s = dbGet('SELECT * FROM equipment_stocktakes WHERE id = ?', [$params['id']]);
+    if (!$s) jsonResponse(['error' => 'Stocktake not found.'], 404);
+    $names = [];
+    foreach (dbAll('SELECT id, first_name, last_name FROM users') as $u) $names[(int) $u['id']] = trim($u['first_name'] . ' ' . $u['last_name']);
+    jsonResponse(array_merge(serializeStocktake($s, $names), [
+        'lines' => array_map('serializeStocktakeLine', dbAll('SELECT * FROM equipment_stocktake_lines WHERE stocktake_id = ? ORDER BY id', [$s['id']])),
+    ]));
+});
+
+$router->patch('/api/equipment/stocktakes/:id/lines/:lid', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireEquipmentEnabled();
+    $s = dbGet('SELECT * FROM equipment_stocktakes WHERE id = ?', [$params['id']]);
+    if (!$s) jsonResponse(['error' => 'Stocktake not found.'], 404);
+    if ($s['status'] !== 'draft') jsonResponse(['error' => 'This stocktake has already been posted.'], 409);
+    $line = dbGet('SELECT * FROM equipment_stocktake_lines WHERE id = ? AND stocktake_id = ?', [$params['lid'], $s['id']]);
+    if (!$line) jsonResponse(['error' => 'Line not found.'], 404);
+    $b = requestBody();
+    $counted = (array_key_exists('countedQty', $b) && $b['countedQty'] !== '' && $b['countedQty'] !== null) ? max(0, (int) $b['countedQty']) : null;
+    dbRun('UPDATE equipment_stocktake_lines SET counted_qty = ? WHERE id = ?', [$counted, $line['id']]);
+    jsonResponse(serializeStocktakeLine(dbGet('SELECT * FROM equipment_stocktake_lines WHERE id = ?', [$line['id']])));
+});
+
+// Post the stocktake: each counted line that differs from the live balance gets a
+// 'stocktake' ledger movement adjusting to the counted figure. A reason is required.
+$router->post('/api/equipment/stocktakes/:id/post', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireEquipmentEnabled();
+    $s = dbGet('SELECT * FROM equipment_stocktakes WHERE id = ?', [$params['id']]);
+    if (!$s) jsonResponse(['error' => 'Stocktake not found.'], 404);
+    if ($s['status'] !== 'draft') jsonResponse(['error' => 'This stocktake has already been posted.'], 409);
+    $b = requestBody();
+    $reason = trim((string) ($b['reason'] ?? ''));
+    if ($reason === '') jsonResponse(['error' => 'A reason is required before posting a stocktake.'], 400);
+    $adjusted = 0;
+    foreach (dbAll('SELECT * FROM equipment_stocktake_lines WHERE stocktake_id = ? AND counted_qty IS NOT NULL', [$s['id']]) as $line) {
+        $current = equipmentStockBalance((int) $line['asset_id']);
+        $delta = (int) $line['counted_qty'] - $current;
+        if ($delta === 0) { dbRun('UPDATE equipment_stocktake_lines SET posted_delta = 0 WHERE id = ?', [$line['id']]); continue; }
+        equipmentPostStockMovement((int) $line['asset_id'], 'stocktake', $delta, 'Stocktake ' . $s['reference'] . ': ' . $reason, $s['reference'], (int) $user['id']);
+        dbRun('UPDATE equipment_stocktake_lines SET posted_delta = ? WHERE id = ?', [$delta, $line['id']]);
+        $adjusted++;
+    }
+    dbRun("UPDATE equipment_stocktakes SET status = 'posted', posted_at = datetime('now'), note = ? WHERE id = ?", [trim($reason), $s['id']]);
+    logAudit(['userId' => $user['id'], 'action' => 'equipment_stocktake_post', 'entityType' => 'equipment_stocktake', 'entityId' => (string) $s['id'], 'ipAddress' => clientIp(), 'details' => ['adjusted' => $adjusted]]);
+    jsonResponse(['ok' => true, 'adjusted' => $adjusted]);
+});
+
 $router->get('/api/equipment/:id', function ($params) {
     $user = requireAuth();
     requireLeader($user);
