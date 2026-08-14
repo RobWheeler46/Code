@@ -687,6 +687,26 @@ CREATE TABLE IF NOT EXISTS equipment_stock_ledger (
 );
 CREATE INDEX IF NOT EXISTS idx_equipment_stock_ledger_asset ON equipment_stock_ledger(asset_id, id);
 
+-- QM v2.4.3 serialised asset instances (Appendix I 18.4/18.8). A serialised asset
+-- (tracking_mode='serialised') has one record per physical unit with a stable
+-- reference, lifecycle status, condition and location. Active/available counts are
+-- derived from these instances, not the stock ledger. A qty>1 master row is not a
+-- valid live identity record.
+CREATE TABLE IF NOT EXISTS equipment_asset_instances (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  asset_id INTEGER NOT NULL REFERENCES equipment_assets(id) ON DELETE CASCADE,
+  instance_ref TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'available' CHECK(status IN ('available','reserved','issued','maintenance','quarantine','retired','disposed')),
+  condition TEXT NOT NULL DEFAULT 'good' CHECK(condition IN ('new','good','fair','poor','unserviceable')),
+  location TEXT,
+  barcode TEXT,
+  notes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  retired_at TEXT,
+  UNIQUE(asset_id, instance_ref)
+);
+CREATE INDEX IF NOT EXISTS idx_equipment_asset_instances_asset ON equipment_asset_instances(asset_id, status);
+
 -- Quartermaster Booking (FRD FR-QM / backlog LATER-005). Builds on the equipment
 -- register: leaders raise booking requests for stores items and Quartermasters
 -- (Group Leadership Team + admins) approve/substitute at item-line level, then run

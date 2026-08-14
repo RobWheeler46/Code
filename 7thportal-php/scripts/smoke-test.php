@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_kit', 'logic_stock_ledger'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_kit', 'logic_stock_ledger', 'logic_serialised'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -190,6 +190,29 @@ function scenario_logic_stock_ledger(): void
     // ledger rows are retained (audit surface), not overwritten
     $rows = (int) dbGet('SELECT COUNT(*) c FROM equipment_stock_ledger WHERE asset_id = ?', [$id])['c'];
     check('stock: every movement retained in the ledger', $rows === 4);
+}
+
+// QM v2.4.3 serialised instances: active/available counts derive from instance
+// lifecycle; a qty>1 master row is not the identity record.
+function scenario_logic_serialised(): void
+{
+    useDb(tmpDb('ser')); boot(); loadLibs();
+    $id = dbRun("INSERT INTO equipment_assets (name, tracking_mode) VALUES ('Radio', 'serialised')")['lastInsertId'];
+    foreach (['R-01', 'R-02', 'R-03'] as $ref) dbRun('INSERT INTO equipment_asset_instances (asset_id, instance_ref) VALUES (?, ?)', [$id, $ref]);
+    $c = equipmentInstanceCounts((int) $id);
+    check('serialised: 3 instances -> active 3, available 3', $c['active'] === 3 && $c['available'] === 3);
+    // one to maintenance: still active (owned) but not available
+    dbRun("UPDATE equipment_asset_instances SET status = 'maintenance' WHERE asset_id = ? AND instance_ref = 'R-02'", [$id]);
+    $c = equipmentInstanceCounts((int) $id);
+    check('serialised: maintenance stays active, drops available', $c['active'] === 3 && $c['available'] === 2);
+    // retire one: no longer active
+    dbRun("UPDATE equipment_asset_instances SET status = 'retired' WHERE asset_id = ? AND instance_ref = 'R-03'", [$id]);
+    check('serialised: retired instance drops active', equipmentInstanceCounts((int) $id)['active'] === 2);
+    // cached quantity syncs to active count for booking availability
+    equipmentSyncSerialisedQuantity((int) $id);
+    check('serialised: cached quantity = active count', (int) dbGet('SELECT quantity FROM equipment_assets WHERE id = ?', [$id])['quantity'] === 2);
+    // serializer balance for serialised is the active count
+    check('serialised: serializeAsset balance = active count', serializeAsset(dbGet('SELECT * FROM equipment_assets WHERE id = ?', [$id]))['stockBalance'] === 2);
 }
 
 // QM kit completeness check: overall result derives from component statuses.

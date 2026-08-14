@@ -115,10 +115,20 @@ $router->post('/api/equipment', function ($params) {
         'INSERT INTO equipment_assets (' . implode(',', $cols) . ', created_by) VALUES (' . implode(',', array_fill(0, count($cols), '?')) . ', ?)',
         [...array_values($f), $user['id']]
     );
-    // v2.4.3: seed the opening balance as a ledger movement, so the balance is
-    // reproducible from movements from day one (the created quantity/stock_level is
-    // the opening figure, not a directly-editable master field thereafter).
-    equipmentPostStockMovement((int) $result['lastInsertId'], 'opening', (int) $f['quantity'], 'Opening balance', null, (int) $user['id']);
+    // v2.4.3: seed the opening state. Serialised assets get one instance per opening
+    // unit (a qty>1 master row is not a valid live identity record); bulk/consumable
+    // seed an opening ledger movement so the balance is reproducible from movements.
+    $newId = (int) $result['lastInsertId'];
+    if ($f['tracking_mode'] === 'serialised') {
+        $n = max(0, (int) $f['quantity']);
+        for ($k = 1; $k <= $n; $k++) {
+            dbRun('INSERT INTO equipment_asset_instances (asset_id, instance_ref, condition, location) VALUES (?, ?, ?, ?)',
+                [$newId, $f['name'] . ' #' . str_pad((string) $k, 2, '0', STR_PAD_LEFT), $f['condition'], $f['location']]);
+        }
+        equipmentSyncSerialisedQuantity($newId);
+    } else {
+        equipmentPostStockMovement($newId, 'opening', (int) $f['quantity'], 'Opening balance', null, (int) $user['id']);
+    }
     logAudit(['userId' => $user['id'], 'action' => 'equipment_create', 'entityType' => 'equipment', 'entityId' => (string) $result['lastInsertId'], 'ipAddress' => clientIp(), 'details' => ['name' => $f['name']]]);
     jsonResponse(serializeAsset(dbGet('SELECT * FROM equipment_assets WHERE id = ?', [$result['lastInsertId']])), 201);
 });
@@ -269,9 +279,11 @@ $router->get('/api/equipment/:id', function ($params) {
         'isKit' => $isKit,
         'kitComponents' => $isKit ? array_map('serializeKitComponent', kitComponentsFor((int) $a['id'])) : [],
         'kitChecks' => $isKit ? array_map(fn($r) => serializeKitCheck($r, $userNames), dbAll('SELECT * FROM equipment_kit_checks WHERE kit_asset_id = ? ORDER BY id DESC LIMIT 10', [$a['id']])) : [],
-        'stockBalance' => equipmentStockBalance((int) $a['id']),
+        'stockBalance' => ($a['tracking_mode'] ?? '') === 'serialised' ? equipmentInstanceCounts((int) $a['id'])['active'] : equipmentStockBalance((int) $a['id']),
         'stockLedger' => array_map(fn($m) => serializeStockMovement($m, $userNames), dbAll('SELECT * FROM equipment_stock_ledger WHERE asset_id = ? ORDER BY id DESC LIMIT 30', [$a['id']])),
-        'meta' => ['outcomes' => EQUIPMENT_INSPECTION_OUTCOMES, 'conditions' => EQUIPMENT_CONDITIONS, 'kitCheckTypes' => EQUIPMENT_KIT_CHECK_TYPES, 'kitComponentStatuses' => EQUIPMENT_KIT_COMPONENT_STATUSES, 'stockMovements' => EQUIPMENT_STOCK_MOVEMENTS],
+        'isSerialised' => ($a['tracking_mode'] ?? '') === 'serialised',
+        'instances' => ($a['tracking_mode'] ?? '') === 'serialised' ? array_map('serializeAssetInstance', equipmentInstances((int) $a['id'])) : [],
+        'meta' => ['outcomes' => EQUIPMENT_INSPECTION_OUTCOMES, 'conditions' => EQUIPMENT_CONDITIONS, 'kitCheckTypes' => EQUIPMENT_KIT_CHECK_TYPES, 'kitComponentStatuses' => EQUIPMENT_KIT_COMPONENT_STATUSES, 'stockMovements' => EQUIPMENT_STOCK_MOVEMENTS, 'instanceStatuses' => EQUIPMENT_INSTANCE_STATUSES],
     ]);
 });
 
@@ -375,6 +387,55 @@ $router->post('/api/equipment/:id/stock', function ($params) {
     $after = equipmentPostStockMovement((int) $a['id'], $type, $delta, $reason, $sourceRef, (int) $user['id']);
     logAudit(['userId' => $user['id'], 'action' => 'equipment_stock_' . $type, 'entityType' => 'equipment', 'entityId' => (string) $a['id'], 'ipAddress' => clientIp(), 'details' => ['delta' => $delta, 'after' => $after]]);
     jsonResponse(['balance' => $after]);
+});
+
+// ── Serialised asset instances (v2.4.3 18.4) ───────────────────────────────────
+
+function equipmentSerialisedOr404(array $user, $id): array
+{
+    requireLeader($user);
+    requireEquipmentEnabled();
+    $a = dbGet('SELECT * FROM equipment_assets WHERE id = ?', [$id]);
+    if (!$a) jsonResponse(['error' => 'Asset not found.'], 404);
+    if (($a['tracking_mode'] ?? '') !== 'serialised') jsonResponse(['error' => 'This asset is not serialised. Set its tracking mode to "Serialised asset" first.'], 400);
+    return $a;
+}
+
+$router->post('/api/equipment/:id/instances', function ($params) {
+    $user = requireAuth();
+    $a = equipmentSerialisedOr404($user, $params['id']);
+    $b = requestBody();
+    $ref = trim((string) ($b['ref'] ?? ''));
+    if ($ref === '') jsonResponse(['error' => 'A unique reference / asset ID is required.'], 400);
+    if (dbGet('SELECT 1 FROM equipment_asset_instances WHERE asset_id = ? AND instance_ref = ?', [$a['id'], $ref])) {
+        jsonResponse(['error' => 'That reference is already used on this asset.'], 400);
+    }
+    $condition = array_key_exists($b['condition'] ?? null, EQUIPMENT_CONDITIONS) ? $b['condition'] : 'good';
+    dbRun('INSERT INTO equipment_asset_instances (asset_id, instance_ref, condition, location, barcode, notes) VALUES (?, ?, ?, ?, ?, ?)',
+        [$a['id'], $ref, $condition, trim((string) ($b['location'] ?? '')) ?: null, trim((string) ($b['barcode'] ?? '')) ?: null, trim((string) ($b['notes'] ?? '')) ?: null]);
+    equipmentSyncSerialisedQuantity((int) $a['id']);
+    logAudit(['userId' => $user['id'], 'action' => 'equipment_instance_add', 'entityType' => 'equipment', 'entityId' => (string) $a['id'], 'ipAddress' => clientIp(), 'details' => ['ref' => $ref]]);
+    jsonResponse(array_map('serializeAssetInstance', equipmentInstances((int) $a['id'])));
+});
+
+$router->patch('/api/equipment/:id/instances/:iid', function ($params) {
+    $user = requireAuth();
+    $a = equipmentSerialisedOr404($user, $params['id']);
+    $inst = dbGet('SELECT * FROM equipment_asset_instances WHERE id = ? AND asset_id = ?', [$params['iid'], $a['id']]);
+    if (!$inst) jsonResponse(['error' => 'Instance not found.'], 404);
+    $b = requestBody();
+    $status = array_key_exists($b['status'] ?? null, EQUIPMENT_INSTANCE_STATUSES) ? $b['status'] : $inst['status'];
+    $condition = array_key_exists($b['condition'] ?? null, EQUIPMENT_CONDITIONS) ? $b['condition'] : $inst['condition'];
+    $retiredAt = in_array($status, ['retired', 'disposed'], true) ? ($inst['retired_at'] ?: gmdate('Y-m-d H:i:s')) : null;
+    dbRun('UPDATE equipment_asset_instances SET status = ?, condition = ?, location = ?, barcode = ?, notes = ?, retired_at = ? WHERE id = ?',
+        [$status, $condition,
+         array_key_exists('location', $b) ? (trim((string) $b['location']) ?: null) : $inst['location'],
+         array_key_exists('barcode', $b) ? (trim((string) $b['barcode']) ?: null) : $inst['barcode'],
+         array_key_exists('notes', $b) ? (trim((string) $b['notes']) ?: null) : $inst['notes'],
+         $retiredAt, $inst['id']]);
+    equipmentSyncSerialisedQuantity((int) $a['id']);
+    logAudit(['userId' => $user['id'], 'action' => 'equipment_instance_update', 'entityType' => 'equipment', 'entityId' => (string) $a['id'], 'ipAddress' => clientIp(), 'details' => ['instanceId' => (int) $inst['id'], 'status' => $status]]);
+    jsonResponse(array_map('serializeAssetInstance', equipmentInstances((int) $a['id'])));
 });
 
 // Record an inspection: applies the outcome (condition/lock/repair/retire) and

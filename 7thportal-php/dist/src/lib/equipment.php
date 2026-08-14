@@ -35,6 +35,38 @@ function equipmentPostStockMovement(int $assetId, string $type, int $delta, ?str
     dbRun("UPDATE equipment_assets SET $col = ?, updated_at = datetime('now') WHERE id = ?", [$after, $assetId]);
     return $after;
 }
+// QM v2.4.3 serialised asset instance lifecycle (Appendix I 18.4).
+const EQUIPMENT_INSTANCE_STATUSES = ['available' => 'Available', 'reserved' => 'Reserved', 'issued' => 'Issued', 'maintenance' => 'Maintenance', 'quarantine' => 'Quarantine', 'retired' => 'Retired', 'disposed' => 'Disposed'];
+
+function equipmentInstances(int $assetId): array
+{
+    return dbAll('SELECT * FROM equipment_asset_instances WHERE asset_id = ? ORDER BY instance_ref, id', [$assetId]);
+}
+// Active = still owned (not retired/disposed); available = ready to book.
+function equipmentInstanceCounts(int $assetId): array
+{
+    $active = (int) dbGet("SELECT COUNT(*) AS n FROM equipment_asset_instances WHERE asset_id = ? AND status NOT IN ('retired','disposed')", [$assetId])['n'];
+    $available = (int) dbGet("SELECT COUNT(*) AS n FROM equipment_asset_instances WHERE asset_id = ? AND status = 'available'", [$assetId])['n'];
+    return ['active' => $active, 'available' => $available];
+}
+// Keep the cached quantity column = active instance count so the existing
+// date-aware booking availability keeps working for serialised assets too.
+function equipmentSyncSerialisedQuantity(int $assetId): int
+{
+    $active = equipmentInstanceCounts($assetId)['active'];
+    dbRun("UPDATE equipment_assets SET quantity = ?, updated_at = datetime('now') WHERE id = ?", [$active, $assetId]);
+    return $active;
+}
+function serializeAssetInstance(array $i): array
+{
+    return [
+        'id' => (int) $i['id'], 'ref' => $i['instance_ref'],
+        'status' => $i['status'], 'statusLabel' => EQUIPMENT_INSTANCE_STATUSES[$i['status']] ?? $i['status'],
+        'condition' => $i['condition'], 'location' => $i['location'], 'barcode' => $i['barcode'], 'notes' => $i['notes'],
+        'active' => !in_array($i['status'], ['retired', 'disposed'], true),
+    ];
+}
+
 function serializeStockMovement(array $m, array $userNames): array
 {
     return [
@@ -98,7 +130,10 @@ function serializeAsset(array $a): array
         // QM Advanced Controls richer inventory model.
         'itemType' => $a['item_type'] ?? 'asset',
         'trackingMode' => $a['tracking_mode'] ?? 'bulk_reusable',
-        'stockBalance' => equipmentStockBalance((int) $a['id']),
+        // Serialised balance comes from instance lifecycle (18.8); bulk/consumable
+        // from the stock ledger.
+        'stockBalance' => ($a['tracking_mode'] ?? '') === 'serialised' ? equipmentInstanceCounts((int) $a['id'])['active'] : equipmentStockBalance((int) $a['id']),
+        'instanceCounts' => ($a['tracking_mode'] ?? '') === 'serialised' ? equipmentInstanceCounts((int) $a['id']) : null,
         'parentKitId' => isset($a['parent_kit_id']) && $a['parent_kit_id'] !== null ? (int) $a['parent_kit_id'] : null,
         'restricted' => (bool) ($a['restricted'] ?? 0),
         'restrictedCategory' => $a['restricted_category'] ?? null,

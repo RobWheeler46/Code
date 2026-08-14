@@ -224,6 +224,7 @@ async function openKitModal(assetId) {
 async function openStockModal(assetId) {
   let d;
   try { d = await Api.get(`/api/equipment/${assetId}`); } catch (e) { alert(e.message); return; }
+  if (d.isSerialised) return renderInstancesModal(assetId, d);
   const a = d.asset;
   const opt = (map, v) => Object.entries(map).map(([k, l]) => `<option value="${k}"${k === v ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('');
   const ledger = d.stockLedger.length
@@ -269,6 +270,59 @@ async function openStockModal(assetId) {
   });
 }
 function field2(label, html) { return `<div class="field"><label>${label}</label>${html}</div>`; }
+
+// Serialised-asset instances (v2.4.3 18.4): each physical unit is tracked with its
+// own reference, status and condition; the asset's balance is the active count.
+function renderInstancesModal(assetId, d) {
+  const a = d.asset;
+  const opt = (map, v) => Object.entries(map).map(([k, l]) => `<option value="${k}"${k === v ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('');
+  const rows = d.instances.length
+    ? d.instances.map(i => `<tr${i.active ? '' : ' class="muted"'}>
+        <td><strong>${escapeHtml(i.ref)}</strong></td>
+        <td><select data-inst-status="${i.id}">${opt(d.meta.instanceStatuses, i.status)}</select></td>
+        <td><select data-inst-cond="${i.id}">${opt(d.meta.conditions, i.condition)}</select></td>
+        <td><input data-inst-loc="${i.id}" value="${escapeHtml(i.location || '')}" style="width:130px"></td>
+        <td><button class="btn btn-secondary btn-sm inst-save" data-iid="${i.id}">Save</button></td></tr>`).join('')
+    : '<tr><td colspan="5" class="muted">No units yet — add each physical unit with its own reference.</td></tr>';
+  const existing = document.getElementById('eq-stock-modal'); if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'eq-stock-modal'; modal.className = 'modal-backdrop';
+  modal.innerHTML = `<div class="modal-box"><h2>Units: ${escapeHtml(a.name)}</h2>
+    <p>Active: <strong>${d.instanceCounts ? d.instanceCounts.active : 0}</strong> · Available: <strong>${d.instanceCounts ? d.instanceCounts.available : 0}</strong></p>
+    <p class="muted" style="font-size:.82rem">Serialised: each unit has its own identity and lifecycle. Availability is the count of Available units; retiring/disposing keeps the record but removes it from stock.</p>
+    <div id="eq-stock-msg"></div>
+    <table class="data-table"><thead><tr><th>Reference</th><th>Status</th><th>Condition</th><th>Location</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+    <h3 style="font-size:1rem;margin:1rem 0 .3rem">Add a unit</h3>
+    <div class="cap-actions">
+      ${field2('Reference / asset ID', `<input id="in-ref" placeholder="e.g. Radio #04 or serial">`)}
+      ${field2('Condition', `<select id="in-cond">${opt(d.meta.conditions, 'good')}</select>`)}
+      ${field2('Location', `<input id="in-loc" style="width:130px">`)}
+      <button class="btn btn-secondary btn-sm" id="in-add" style="align-self:end">Add unit</button>
+    </div>
+    <div class="cap-actions" style="margin-top:1rem"><button class="btn btn-secondary" id="eq-stock-cancel">Close</button></div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  const msg = document.getElementById('eq-stock-msg');
+  document.getElementById('eq-stock-cancel').addEventListener('click', () => { modal.remove(); loadEquipment(); });
+  document.getElementById('in-add').addEventListener('click', async () => {
+    const ref = document.getElementById('in-ref').value.trim();
+    if (!ref) return;
+    try { await Api.post(`/api/equipment/${assetId}/instances`, { ref, condition: document.getElementById('in-cond').value, location: document.getElementById('in-loc').value.trim() }); openStockModal(assetId); }
+    catch (e) { msg.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
+  modal.querySelectorAll('.inst-save').forEach(btn => btn.addEventListener('click', async () => {
+    const id = btn.dataset.iid;
+    try {
+      await Api.patch(`/api/equipment/${assetId}/instances/${id}`, {
+        status: document.querySelector(`[data-inst-status="${id}"]`).value,
+        condition: document.querySelector(`[data-inst-cond="${id}"]`).value,
+        location: document.querySelector(`[data-inst-loc="${id}"]`).value.trim(),
+      });
+      openStockModal(assetId);
+    } catch (e) { msg.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  }));
+}
 
 function optionList(map, selected, allLabel) {
   return `<option value="">${allLabel}</option>` + Object.entries(map).map(([k, v]) => `<option value="${k}"${k === selected ? ' selected' : ''}>${escapeHtml(v)}</option>`).join('');
