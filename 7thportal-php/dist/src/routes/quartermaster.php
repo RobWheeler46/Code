@@ -124,6 +124,90 @@ $router->post('/api/qm/bookings', function ($params) {
     jsonResponse(serializeQmBooking(qmBookingOr404($id), true), 201);
 });
 
+// ── Equipment bundles (FR-QM-ADV-014) ──────────────────────────────────────────
+// A Quartermaster curates reusable kit lists; any requester can spin one into a
+// draft booking. Managing bundles needs QM rights; using one needs booking rights.
+
+$router->get('/api/qm/bundles', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireQmBookingEnabled();
+    jsonResponse(['bundles' => array_map('serializeQmBundle', dbAll('SELECT * FROM qm_bundles ORDER BY name')), 'canManage' => qmCanApprove($user)]);
+});
+
+$router->post('/api/qm/bundles', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireQmBookingEnabled();
+    if (!qmCanApprove($user)) jsonResponse(['error' => 'Quartermaster access required to manage bundles.'], 403);
+    $body = requestBody();
+    $name = trim((string) ($body['name'] ?? ''));
+    if ($name === '') jsonResponse(['error' => 'A bundle name is required.'], 400);
+    $id = dbRun('INSERT INTO qm_bundles (name, description, created_by) VALUES (?, ?, ?)', [$name, trim((string) ($body['description'] ?? '')) ?: null, $user['id']])['lastInsertId'];
+    logAudit(['userId' => $user['id'], 'action' => 'qm_bundle_create', 'entityType' => 'qm_bundle', 'entityId' => (string) $id, 'ipAddress' => clientIp()]);
+    jsonResponse(serializeQmBundle(dbGet('SELECT * FROM qm_bundles WHERE id = ?', [$id])), 201);
+});
+
+$router->delete('/api/qm/bundles/:id', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireQmBookingEnabled();
+    if (!qmCanApprove($user)) jsonResponse(['error' => 'Quartermaster access required.'], 403);
+    dbRun('DELETE FROM qm_bundles WHERE id = ?', [$params['id']]);
+    logAudit(['userId' => $user['id'], 'action' => 'qm_bundle_delete', 'entityType' => 'qm_bundle', 'entityId' => (string) $params['id'], 'ipAddress' => clientIp()]);
+    jsonResponse(['ok' => true]);
+});
+
+$router->post('/api/qm/bundles/:id/items', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireQmBookingEnabled();
+    if (!qmCanApprove($user)) jsonResponse(['error' => 'Quartermaster access required.'], 403);
+    $bundle = dbGet('SELECT * FROM qm_bundles WHERE id = ?', [$params['id']]);
+    if (!$bundle) jsonResponse(['error' => 'Bundle not found.'], 404);
+    $body = requestBody();
+    $assetId = !empty($body['assetId']) ? (int) $body['assetId'] : null;
+    $itemName = trim((string) ($body['itemName'] ?? ''));
+    if ($assetId) {
+        $asset = dbGet('SELECT name FROM equipment_assets WHERE id = ?', [$assetId]);
+        if (!$asset) jsonResponse(['error' => 'Item not found in the register.'], 400);
+        if ($itemName === '') $itemName = $asset['name'];
+    }
+    if ($itemName === '') jsonResponse(['error' => 'An item name is required.'], 400);
+    $sort = (int) (dbGet('SELECT COALESCE(MAX(sort_order),0) AS m FROM qm_bundle_items WHERE bundle_id = ?', [$bundle['id']])['m']) + 1;
+    dbRun('INSERT INTO qm_bundle_items (bundle_id, equipment_asset_id, item_name, requested_qty, sort_order) VALUES (?, ?, ?, ?, ?)', [$bundle['id'], $assetId, $itemName, max(1, (int) ($body['requestedQty'] ?? 1)), $sort]);
+    jsonResponse(serializeQmBundle(dbGet('SELECT * FROM qm_bundles WHERE id = ?', [$bundle['id']])));
+});
+
+$router->delete('/api/qm/bundles/:id/items/:iid', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireQmBookingEnabled();
+    if (!qmCanApprove($user)) jsonResponse(['error' => 'Quartermaster access required.'], 403);
+    dbRun('DELETE FROM qm_bundle_items WHERE id = ? AND bundle_id = ?', [$params['iid'], $params['id']]);
+    jsonResponse(serializeQmBundle(dbGet('SELECT * FROM qm_bundles WHERE id = ?', [$params['id']]) ?: ['id' => $params['id'], 'name' => '', 'description' => null]));
+});
+
+// Spin a bundle into a fresh DRAFT booking for the requester (they then set dates
+// and submit for QM review like any other booking).
+$router->post('/api/qm/bundles/:id/create-booking', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireQmBookingEnabled();
+    if (qmIsSummaryOnly($user)) jsonResponse(['error' => 'Your role cannot raise bookings.'], 403);
+    $bundle = dbGet('SELECT * FROM qm_bundles WHERE id = ?', [$params['id']]);
+    if (!$bundle) jsonResponse(['error' => 'Bundle not found.'], 404);
+    $items = dbAll('SELECT * FROM qm_bundle_items WHERE bundle_id = ? ORDER BY sort_order, id', [$bundle['id']]);
+    if (!$items) jsonResponse(['error' => 'This bundle has no items yet.'], 400);
+    $bid = (int) dbRun("INSERT INTO qm_bookings (requester_user_id, purpose, status) VALUES (?, ?, 'draft')", [$user['id'], 'From bundle: ' . $bundle['name']])['lastInsertId'];
+    dbRun('UPDATE qm_bookings SET reference = ? WHERE id = ?', ['QM-' . str_pad((string) $bid, 4, '0', STR_PAD_LEFT), $bid]);
+    foreach ($items as $sortIdx => $it) {
+        dbRun('INSERT INTO qm_booking_items (booking_id, equipment_asset_id, item_name, requested_qty, sort_order) VALUES (?, ?, ?, ?, ?)', [$bid, $it['equipment_asset_id'], $it['item_name'], (int) $it['requested_qty'], $sortIdx + 1]);
+    }
+    logAudit(['userId' => $user['id'], 'action' => 'qm_bundle_create_booking', 'entityType' => 'qm_booking', 'entityId' => (string) $bid, 'ipAddress' => clientIp(), 'details' => ['bundleId' => (int) $bundle['id'], 'items' => count($items)]]);
+    jsonResponse(['bookingId' => $bid], 201);
+});
+
 // ── Detail (booking + items) ───────────────────────────────────────────────────
 $router->get('/api/qm/bookings/:id', function ($params) {
     $user = requireAuth();

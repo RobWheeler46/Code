@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -248,6 +248,17 @@ function scenario_logic_kit(): void
     check('kit: all present -> complete', kitCheckResult(['present', 'present']) === 'complete');
     check('kit: a missing -> incomplete', kitCheckResult(['present', 'missing']) === 'incomplete');
     check('kit: a damaged wins over missing -> damaged', kitCheckResult(['missing', 'damaged']) === 'damaged');
+}
+
+// QM equipment bundle: serializes with its items (FR-QM-ADV-014).
+function scenario_logic_bundle(): void
+{
+    useDb(tmpDb('bun')); boot(); loadLibs();
+    $bid = dbRun("INSERT INTO qm_bundles (name) VALUES ('Camping kit')")['lastInsertId'];
+    dbRun('INSERT INTO qm_bundle_items (bundle_id, item_name, requested_qty) VALUES (?, ?, ?)', [$bid, 'Tent', 2]);
+    dbRun('INSERT INTO qm_bundle_items (bundle_id, item_name, requested_qty) VALUES (?, ?, ?)', [$bid, 'Stove', 1]);
+    $s = serializeQmBundle(dbGet('SELECT * FROM qm_bundles WHERE id = ?', [$bid]));
+    check('bundle: serializes with item count', $s['itemCount'] === 2 && $s['items'][0]['itemName'] === 'Tent' && $s['items'][0]['requestedQty'] === 2);
 }
 
 // QM restricted-booking gate: a restricted line isn't cleared for approval until

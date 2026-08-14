@@ -65,8 +65,9 @@ async function renderList() {
   }
   CAN_APPROVE = data.canApprove; META = data.meta;
 
-  head.innerHTML = `<button class="btn" id="qm-new">New booking</button>`;
+  head.innerHTML = `<button class="btn btn-secondary" id="qm-bundles">Kit bundles</button> <button class="btn" id="qm-new">New booking</button>`;
   document.getElementById('qm-new').addEventListener('click', createBooking);
+  document.getElementById('qm-bundles').addEventListener('click', openBundlesModal);
 
   let summaryHtml = '';
   if (CAN_APPROVE) {
@@ -140,6 +141,53 @@ async function createBooking() {
     const b = await Api.post('/api/qm/bookings', {});
     go(b.id);
   } catch (e) { alert(e.message); }
+}
+
+// Kit bundles (FR-QM-ADV-014): reusable equipment lists. Any requester can spin a
+// bundle into a draft booking; QMs curate the bundles.
+async function openBundlesModal() {
+  let data, cat = [];
+  try { data = await Api.get('/api/qm/bundles'); } catch (e) { alert(e.message); return; }
+  const manage = data.canManage;
+  if (manage) { try { cat = (await Api.get('/api/qm/catalogue')).items || []; } catch (e) { /* free-text still works */ } }
+  const field = (label, html) => `<div class="field"><label>${label}</label>${html}</div>`;
+  const bundleHtml = data.bundles.length ? data.bundles.map(b => `
+    <div class="approval-group" data-bundle="${b.id}">
+      <div class="cap-head"><strong>${escapeHtml(b.name)}</strong>
+        <span class="cap-actions"><button class="btn btn-sm bn-use" data-id="${b.id}"${b.itemCount ? '' : ' disabled'}>Create booking</button>${manage ? ` <button class="btn btn-danger btn-sm bn-del" data-id="${b.id}">Delete</button>` : ''}</span></div>
+      ${b.description ? `<p class="muted" style="margin:.2rem 0">${escapeHtml(b.description)}</p>` : ''}
+      <div class="chips">${b.items.length ? b.items.map(i => `<span class="chip">${escapeHtml(i.itemName)} &times;${i.requestedQty}${manage ? `<button class="chip-x bn-item-del" data-bid="${b.id}" data-iid="${i.id}" title="Remove">&times;</button>` : ''}</span>`).join('') : '<span class="muted">No items yet.</span>'}</div>
+      ${manage ? `<div class="inline-form">
+        <select data-bn-asset="${b.id}"><option value="">&mdash; free-text &mdash;</option>${cat.map(a => `<option value="${a.id}" data-name="${escapeHtml(a.name)}">${escapeHtml(a.name)}</option>`).join('')}</select>
+        <input data-bn-name="${b.id}" placeholder="or item name" style="width:130px">
+        <input type="number" min="1" value="1" data-bn-qty="${b.id}" style="width:64px">
+        <button class="btn btn-secondary btn-sm bn-item-add" data-id="${b.id}">Add</button>
+      </div>` : ''}
+    </div>`).join('') : '<p class="muted">No bundles yet.</p>';
+  const modal = openModal('Kit bundles', `
+    <p class="muted">Reusable equipment lists — one click turns a bundle into a draft booking you then date and submit.</p>
+    <div id="qm-bn-msg"></div>
+    ${manage ? `<div class="inline-form">${field('New bundle', `<input id="bn-new-name" placeholder="e.g. Camping weekend kit">`)}<button class="btn btn-secondary btn-sm" id="bn-create" style="align-self:end">Add bundle</button></div>` : ''}
+    ${bundleHtml}
+    <div class="modal-actions" style="margin-top:1rem"><button class="btn btn-secondary" id="qm-bn-close">Close</button></div>`);
+  const msg = document.getElementById('qm-bn-msg');
+  const err = (e) => { msg.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; };
+  document.getElementById('qm-bn-close').addEventListener('click', closeModal);
+  const c = document.getElementById('bn-create');
+  if (c) c.addEventListener('click', async () => { const name = document.getElementById('bn-new-name').value.trim(); if (!name) return; try { await Api.post('/api/qm/bundles', { name }); openBundlesModal(); } catch (e) { err(e); } });
+  document.querySelectorAll('.bn-del').forEach(b => b.addEventListener('click', async () => { try { await Api.delete(`/api/qm/bundles/${b.dataset.id}`); openBundlesModal(); } catch (e) { err(e); } }));
+  document.querySelectorAll('.bn-item-del').forEach(b => b.addEventListener('click', async () => { try { await Api.delete(`/api/qm/bundles/${b.dataset.bid}/items/${b.dataset.iid}`); openBundlesModal(); } catch (e) { err(e); } }));
+  document.querySelectorAll('.bn-item-add').forEach(b => b.addEventListener('click', async () => {
+    const id = b.dataset.id;
+    const assetSel = document.querySelector(`[data-bn-asset="${id}"]`);
+    const assetId = assetSel.value || null;
+    const name = document.querySelector(`[data-bn-name="${id}"]`).value.trim() || (assetId ? assetSel.selectedOptions[0].dataset.name : '');
+    if (!name) return;
+    try { await Api.post(`/api/qm/bundles/${id}/items`, { assetId, itemName: name, requestedQty: document.querySelector(`[data-bn-qty="${id}"]`).value }); openBundlesModal(); } catch (e) { err(e); }
+  }));
+  document.querySelectorAll('.bn-use').forEach(b => b.addEventListener('click', async () => {
+    try { const r = await Api.post(`/api/qm/bundles/${b.dataset.id}/create-booking`, {}); closeModal(); go(r.bookingId); } catch (e) { err(e); }
+  }));
 }
 
 // ── Detail view ─────────────────────────────────────────────────────────────────

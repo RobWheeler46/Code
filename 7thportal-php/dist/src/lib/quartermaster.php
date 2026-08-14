@@ -190,6 +190,20 @@ function qmLineRestrictionSatisfied(array $item): bool
     return !empty($item['permit_confirmed']) && trim((string) ($item['responsible_adult'] ?? '')) !== '';
 }
 
+// QM equipment bundles (FR-QM-ADV-014).
+function serializeQmBundleItem(array $i): array
+{
+    return ['id' => (int) $i['id'], 'assetId' => $i['equipment_asset_id'] !== null ? (int) $i['equipment_asset_id'] : null, 'itemName' => $i['item_name'], 'requestedQty' => (int) $i['requested_qty']];
+}
+function serializeQmBundle(array $b): array
+{
+    $items = dbAll('SELECT * FROM qm_bundle_items WHERE bundle_id = ? ORDER BY sort_order, id', [$b['id']]);
+    return [
+        'id' => (int) $b['id'], 'name' => $b['name'], 'description' => $b['description'],
+        'items' => array_map('serializeQmBundleItem', $items), 'itemCount' => count($items),
+    ];
+}
+
 // Action Centre items (FR-QM-015/016): pending requests for QMs, overdue returns for
 // QMs and the borrowing leader, and "more info needed" prompts for the requester.
 function qmActionItems(array $user): array

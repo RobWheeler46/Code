@@ -824,6 +824,26 @@ CREATE TABLE IF NOT EXISTS qm_booking_items (
 CREATE INDEX IF NOT EXISTS idx_qm_booking_items_booking ON qm_booking_items(booking_id);
 CREATE INDEX IF NOT EXISTS idx_qm_booking_items_asset ON qm_booking_items(equipment_asset_id);
 
+-- QM equipment bundles (FR-QM-ADV-014): a reusable named kit list a Quartermaster
+-- curates (e.g. "Camping weekend kit") that can generate a draft booking request in
+-- one action.
+CREATE TABLE IF NOT EXISTS qm_bundles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  description TEXT,
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS qm_bundle_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  bundle_id INTEGER NOT NULL REFERENCES qm_bundles(id) ON DELETE CASCADE,
+  equipment_asset_id INTEGER REFERENCES equipment_assets(id) ON DELETE SET NULL,
+  item_name TEXT NOT NULL,
+  requested_qty INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_qm_bundle_items_bundle ON qm_bundle_items(bundle_id);
+
 -- Internal calendar (FRD FR-CAL / backlog LATER-007). A local planning layer that
 -- links modules together - it does NOT replace OSM as the source of truth for OSM
 -- programme/event data. The calendar view aggregates these local entries with
