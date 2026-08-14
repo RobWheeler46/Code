@@ -587,6 +587,10 @@ CREATE TABLE IF NOT EXISTS equipment_assets (
   maintenance_locked INTEGER NOT NULL DEFAULT 0,
   -- QM Advanced Controls (FRD FR-QM-ADV/INV): richer inventory model
   item_type TEXT NOT NULL DEFAULT 'asset' CHECK(item_type IN ('asset','kit','kit_component','consumable')),
+  -- QM v2.4.3 tracking mode (Appendix I 18.4): serialised (per-instance), bulk
+  -- reusable (by quantity), or consumable (issued/used up). Distinct from the
+  -- Controlled-Equipment rule profile (the `restricted` flag).
+  tracking_mode TEXT NOT NULL DEFAULT 'bulk_reusable' CHECK(tracking_mode IN ('serialised','bulk_reusable','consumable')),
   parent_kit_id INTEGER,
   restricted INTEGER NOT NULL DEFAULT 0,
   restricted_category TEXT,
@@ -664,6 +668,24 @@ CREATE TABLE IF NOT EXISTS equipment_kit_check_items (
   note TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_equipment_kit_check_items_check ON equipment_kit_check_items(check_id);
+
+-- QM v2.4.3 stock ledger (Appendix I 18.8). Every stock-affecting event is an
+-- attributable, immutable movement; the current bulk/consumable balance is the sum
+-- of deltas. There is NO direct set-current-quantity anywhere - a correction is a
+-- movement with a reason and a recorded before/after. movement_type: opening,
+-- purchase, issue, loss, disposal, stocktake, correction, return.
+CREATE TABLE IF NOT EXISTS equipment_stock_ledger (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  asset_id INTEGER NOT NULL REFERENCES equipment_assets(id) ON DELETE CASCADE,
+  movement_type TEXT NOT NULL CHECK(movement_type IN ('opening','purchase','issue','loss','disposal','stocktake','correction','return')),
+  delta INTEGER NOT NULL,
+  balance_after INTEGER NOT NULL,
+  reason TEXT,
+  source_ref TEXT,
+  actor_user_id INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_equipment_stock_ledger_asset ON equipment_stock_ledger(asset_id, id);
 
 -- Quartermaster Booking (FRD FR-QM / backlog LATER-005). Builds on the equipment
 -- register: leaders raise booking requests for stores items and Quartermasters
@@ -1108,6 +1130,24 @@ if ($eqSql && !str_contains($eqSql, 'item_type')) {
     db()->exec('ALTER TABLE equipment_assets ADD COLUMN warranty_expiry TEXT');
     db()->exec('ALTER TABLE equipment_assets ADD COLUMN serial_number TEXT');
     db()->exec('ALTER TABLE equipment_assets ADD COLUMN insurance_relevant INTEGER NOT NULL DEFAULT 0');
+}
+// Migration: QM v2.4.3 tracking mode (Appendix I 18.4). Add the column and backfill
+// from the existing item_type (consumables map to consumable; everything else to
+// bulk reusable - serialised is opted into deliberately per item).
+if ($eqSql && !str_contains($eqSql, 'tracking_mode')) {
+    db()->exec("ALTER TABLE equipment_assets ADD COLUMN tracking_mode TEXT NOT NULL DEFAULT 'bulk_reusable'");
+    db()->exec("UPDATE equipment_assets SET tracking_mode = 'consumable' WHERE item_type = 'consumable'");
+}
+// Migration: seed opening stock balances into the ledger (v2.4.3 18.8) so current
+// balance is reproducible from movements. One-off per asset that has no ledger yet:
+// the opening delta is the consumable stock_level where set, else the owned
+// quantity. Idempotent - only assets with zero ledger rows are seeded.
+if (dbGet("SELECT name FROM sqlite_master WHERE type='table' AND name='equipment_stock_ledger'")) {
+    foreach (dbAll("SELECT a.id, a.item_type, a.quantity, a.stock_level FROM equipment_assets a WHERE NOT EXISTS (SELECT 1 FROM equipment_stock_ledger l WHERE l.asset_id = a.id)") as $a) {
+        $opening = $a['item_type'] === 'consumable' && $a['stock_level'] !== null ? (int) $a['stock_level'] : (int) $a['quantity'];
+        db()->prepare('INSERT INTO equipment_stock_ledger (asset_id, movement_type, delta, balance_after, reason) VALUES (?, ?, ?, ?, ?)')
+            ->execute([$a['id'], 'opening', $opening, $opening, 'Opening balance (migrated)']);
+    }
 }
 // Migration: restricted-equipment booking gate (FRD FR-QM-ADV-008) - a booking
 // line for controlled kit carries a permit/qualification confirmation and a named

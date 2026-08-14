@@ -4,6 +4,48 @@
 const EQUIPMENT_CATEGORIES = ['camping' => 'Camping equipment', 'activity' => 'Activity kit', 'safety' => 'Safety equipment', 'general' => 'General equipment'];
 const EQUIPMENT_CONDITIONS = ['new' => 'New', 'good' => 'Good', 'fair' => 'Fair', 'poor' => 'Poor', 'unserviceable' => 'Unserviceable'];
 const EQUIPMENT_STATUSES = ['available' => 'Available', 'allocated' => 'Allocated', 'loaned' => 'Loaned', 'under_repair' => 'Under repair', 'retired' => 'Retired', 'missing' => 'Missing'];
+// QM v2.4.3 tracking modes (Appendix I 18.4).
+const EQUIPMENT_TRACKING_MODES = ['serialised' => 'Serialised asset', 'bulk_reusable' => 'Bulk reusable', 'consumable' => 'Consumable'];
+// Stock-administration movement types a user can post (opening/return are posted by
+// system flows; stocktake is posted by the stocktake flow).
+const EQUIPMENT_STOCK_MOVEMENTS = ['purchase' => 'Purchase / receipt', 'issue' => 'Issue / consume', 'loss' => 'Loss / missing', 'disposal' => 'Disposal / retire', 'correction' => 'Manual correction'];
+
+// Current ledger-derived balance for an asset - the sum of every attributable
+// movement (v2.4.3 18.8). This is the authoritative quantity; the cached
+// quantity/stock_level column is only ever written by equipmentPostStockMovement.
+function equipmentStockBalance(int $assetId): int
+{
+    return (int) (dbGet('SELECT COALESCE(SUM(delta), 0) AS b FROM equipment_stock_ledger WHERE asset_id = ?', [$assetId])['b'] ?? 0);
+}
+
+// Post an attributable stock movement and refresh the cached balance column. There
+// is deliberately NO direct set-quantity path anywhere else. A decrement is clamped
+// so the balance never goes negative. Returns the new balance.
+function equipmentPostStockMovement(int $assetId, string $type, int $delta, ?string $reason, ?string $sourceRef, int $actorUserId): int
+{
+    $asset = dbGet('SELECT tracking_mode, item_type FROM equipment_assets WHERE id = ?', [$assetId]);
+    $current = equipmentStockBalance($assetId);
+    $after = max(0, $current + $delta);
+    $applied = $after - $current;
+    dbRun('INSERT INTO equipment_stock_ledger (asset_id, movement_type, delta, balance_after, reason, source_ref, actor_user_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [$assetId, $type, $applied, $after, $reason, $sourceRef, $actorUserId ?: null]);
+    // Keep the legacy column in sync so date-aware availability keeps working; a
+    // consumable's balance lives in stock_level, everything else in quantity.
+    $col = (($asset['tracking_mode'] ?? '') === 'consumable' || ($asset['item_type'] ?? '') === 'consumable') ? 'stock_level' : 'quantity';
+    dbRun("UPDATE equipment_assets SET $col = ?, updated_at = datetime('now') WHERE id = ?", [$after, $assetId]);
+    return $after;
+}
+function serializeStockMovement(array $m, array $userNames): array
+{
+    return [
+        'id' => (int) $m['id'], 'movementType' => $m['movement_type'],
+        'movementLabel' => (EQUIPMENT_STOCK_MOVEMENTS[$m['movement_type']] ?? ucfirst($m['movement_type'])),
+        'delta' => (int) $m['delta'], 'balanceAfter' => (int) $m['balance_after'],
+        'reason' => $m['reason'], 'sourceRef' => $m['source_ref'],
+        'by' => $userNames[(int) $m['actor_user_id']] ?? 'System', 'at' => $m['created_at'],
+    ];
+}
+
 // QM Advanced Controls (FRD FR-QM-ADV-001 / INV): an item is a single asset, a kit
 // (container with expected components), a component of a kit, or a consumable
 // (stock-tracked with a reorder threshold).
@@ -55,6 +97,8 @@ function serializeAsset(array $a): array
         'maintenanceLocked' => (bool) ($a['maintenance_locked'] ?? 0),
         // QM Advanced Controls richer inventory model.
         'itemType' => $a['item_type'] ?? 'asset',
+        'trackingMode' => $a['tracking_mode'] ?? 'bulk_reusable',
+        'stockBalance' => equipmentStockBalance((int) $a['id']),
         'parentKitId' => isset($a['parent_kit_id']) && $a['parent_kit_id'] !== null ? (int) $a['parent_kit_id'] : null,
         'restricted' => (bool) ($a['restricted'] ?? 0),
         'restrictedCategory' => $a['restricted_category'] ?? null,

@@ -56,6 +56,7 @@ function equipmentFieldsFromBody(array $body, array $existing = []): array
         'last_checked_date' => $val('lastCheckedDate', 'last_checked_date'),
         // QM Advanced Controls richer inventory model.
         'item_type' => $enum('itemType', 'item_type', EQUIPMENT_ITEM_TYPES, 'asset'),
+        'tracking_mode' => $enum('trackingMode', 'tracking_mode', EQUIPMENT_TRACKING_MODES, 'bulk_reusable'),
         'parent_kit_id' => $intOrNull('parentKitId', 'parent_kit_id'),
         'restricted' => $bool('restricted', 'restricted'),
         'restricted_category' => $nenum('restrictedCategory', 'restricted_category', EQUIPMENT_RESTRICTED_CATEGORIES),
@@ -98,7 +99,8 @@ $router->get('/api/equipment', function ($params) {
             'unknownLocation' => (int) dbGet("SELECT COUNT(*) AS n FROM equipment_assets WHERE status != 'retired' AND location_confidence = 'unknown'")['n'],
         ],
         'meta' => ['categories' => EQUIPMENT_CATEGORIES, 'conditions' => EQUIPMENT_CONDITIONS, 'statuses' => EQUIPMENT_STATUSES,
-            'itemTypes' => EQUIPMENT_ITEM_TYPES, 'restrictedCategories' => EQUIPMENT_RESTRICTED_CATEGORIES, 'locationConfidence' => EQUIPMENT_LOCATION_CONFIDENCE],
+            'itemTypes' => EQUIPMENT_ITEM_TYPES, 'restrictedCategories' => EQUIPMENT_RESTRICTED_CATEGORIES, 'locationConfidence' => EQUIPMENT_LOCATION_CONFIDENCE,
+            'trackingModes' => EQUIPMENT_TRACKING_MODES],
     ]);
 });
 
@@ -113,6 +115,10 @@ $router->post('/api/equipment', function ($params) {
         'INSERT INTO equipment_assets (' . implode(',', $cols) . ', created_by) VALUES (' . implode(',', array_fill(0, count($cols), '?')) . ', ?)',
         [...array_values($f), $user['id']]
     );
+    // v2.4.3: seed the opening balance as a ledger movement, so the balance is
+    // reproducible from movements from day one (the created quantity/stock_level is
+    // the opening figure, not a directly-editable master field thereafter).
+    equipmentPostStockMovement((int) $result['lastInsertId'], 'opening', (int) $f['quantity'], 'Opening balance', null, (int) $user['id']);
     logAudit(['userId' => $user['id'], 'action' => 'equipment_create', 'entityType' => 'equipment', 'entityId' => (string) $result['lastInsertId'], 'ipAddress' => clientIp(), 'details' => ['name' => $f['name']]]);
     jsonResponse(serializeAsset(dbGet('SELECT * FROM equipment_assets WHERE id = ?', [$result['lastInsertId']])), 201);
 });
@@ -238,7 +244,9 @@ $router->post('/api/equipment/import', function ($params) {
     foreach ($ready as $r) {
         $f = $r['fields'];
         $cols = array_keys($f);
-        dbRun('INSERT INTO equipment_assets (' . implode(',', $cols) . ', created_by) VALUES (' . implode(',', array_fill(0, count($cols), '?')) . ', ?)', [...array_values($f), $user['id']]);
+        $res = dbRun('INSERT INTO equipment_assets (' . implode(',', $cols) . ', created_by) VALUES (' . implode(',', array_fill(0, count($cols), '?')) . ', ?)', [...array_values($f), $user['id']]);
+        // v2.4.3: the imported quantity is an opening balance, posted to the ledger.
+        equipmentPostStockMovement((int) $res['lastInsertId'], 'opening', (int) ($f['quantity'] ?? 0), 'Opening balance (import)', null, (int) $user['id']);
         $imported++;
     }
     logAudit(['userId' => $user['id'], 'action' => 'equipment_import', 'entityType' => 'equipment', 'ipAddress' => clientIp(), 'details' => ['imported' => $imported, 'skipped' => count($errors)]]);
@@ -261,7 +269,9 @@ $router->get('/api/equipment/:id', function ($params) {
         'isKit' => $isKit,
         'kitComponents' => $isKit ? array_map('serializeKitComponent', kitComponentsFor((int) $a['id'])) : [],
         'kitChecks' => $isKit ? array_map(fn($r) => serializeKitCheck($r, $userNames), dbAll('SELECT * FROM equipment_kit_checks WHERE kit_asset_id = ? ORDER BY id DESC LIMIT 10', [$a['id']])) : [],
-        'meta' => ['outcomes' => EQUIPMENT_INSPECTION_OUTCOMES, 'conditions' => EQUIPMENT_CONDITIONS, 'kitCheckTypes' => EQUIPMENT_KIT_CHECK_TYPES, 'kitComponentStatuses' => EQUIPMENT_KIT_COMPONENT_STATUSES],
+        'stockBalance' => equipmentStockBalance((int) $a['id']),
+        'stockLedger' => array_map(fn($m) => serializeStockMovement($m, $userNames), dbAll('SELECT * FROM equipment_stock_ledger WHERE asset_id = ? ORDER BY id DESC LIMIT 30', [$a['id']])),
+        'meta' => ['outcomes' => EQUIPMENT_INSPECTION_OUTCOMES, 'conditions' => EQUIPMENT_CONDITIONS, 'kitCheckTypes' => EQUIPMENT_KIT_CHECK_TYPES, 'kitComponentStatuses' => EQUIPMENT_KIT_COMPONENT_STATUSES, 'stockMovements' => EQUIPMENT_STOCK_MOVEMENTS],
     ]);
 });
 
@@ -332,6 +342,41 @@ $router->post('/api/equipment/:id/kit-checks', function ($params) {
     jsonResponse(['result' => $result, 'checkId' => (int) $checkId]);
 });
 
+// ── Stock administration (v2.4.3 Appendix I 18.8) ──────────────────────────────
+// Post an attributable stock movement. This is the ONLY way to change a balance -
+// there is no set-current-quantity operation. Purchase adds; issue/loss/disposal
+// subtract; a manual correction moves the balance to a stated target (a reason is
+// mandatory). Every movement records delta, before/after, actor, reason and source.
+$router->post('/api/equipment/:id/stock', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireEquipmentEnabled();
+    $a = dbGet('SELECT * FROM equipment_assets WHERE id = ?', [$params['id']]);
+    if (!$a) jsonResponse(['error' => 'Asset not found.'], 404);
+    $b = requestBody();
+    $type = $b['movementType'] ?? '';
+    if (!array_key_exists($type, EQUIPMENT_STOCK_MOVEMENTS)) jsonResponse(['error' => 'Choose a valid stock movement.'], 400);
+    $reason = trim((string) ($b['reason'] ?? '')) ?: null;
+    $sourceRef = trim((string) ($b['sourceRef'] ?? '')) ?: null;
+    $current = equipmentStockBalance((int) $a['id']);
+
+    if ($type === 'correction') {
+        if (!array_key_exists('targetBalance', $b) || !is_numeric($b['targetBalance'])) jsonResponse(['error' => 'A target balance is required for a correction.'], 400);
+        if ($reason === null) jsonResponse(['error' => 'A reason is required for a manual correction.'], 400);
+        $delta = max(0, (int) $b['targetBalance']) - $current;
+        if ($delta === 0) jsonResponse(['error' => 'The target matches the current balance - nothing to correct.'], 400);
+    } else {
+        $qty = (int) ($b['quantity'] ?? 0);
+        if ($qty < 1) jsonResponse(['error' => 'Enter a quantity of at least 1.'], 400);
+        if (in_array($type, ['loss', 'disposal'], true) && $reason === null) jsonResponse(['error' => 'A reason is required for a loss or disposal.'], 400);
+        $delta = $type === 'purchase' ? $qty : -$qty;
+        if ($delta < 0 && $qty > $current) jsonResponse(['error' => "Only {$current} in stock - cannot remove {$qty}."], 400);
+    }
+    $after = equipmentPostStockMovement((int) $a['id'], $type, $delta, $reason, $sourceRef, (int) $user['id']);
+    logAudit(['userId' => $user['id'], 'action' => 'equipment_stock_' . $type, 'entityType' => 'equipment', 'entityId' => (string) $a['id'], 'ipAddress' => clientIp(), 'details' => ['delta' => $delta, 'after' => $after]]);
+    jsonResponse(['balance' => $after]);
+});
+
 // Record an inspection: applies the outcome (condition/lock/repair/retire) and
 // logs it to the asset history (QM Maintenance & Inspection Workflow).
 $router->post('/api/equipment/:id/inspections', function ($params) {
@@ -358,6 +403,10 @@ $router->patch('/api/equipment/:id', function ($params) {
     if (!$existing) jsonResponse(['error' => 'Asset not found.'], 404);
     $f = equipmentFieldsFromBody(requestBody(), $existing);
     if ($f['name'] === '') jsonResponse(['error' => 'An asset name is required.'], 400);
+    // v2.4.3 18.8: stock balance is never set directly - it moves only via the stock
+    // ledger. Drop quantity/stock_level from an edit so the register form can't
+    // overwrite the balance; use the stock-administration endpoint instead.
+    unset($f['quantity'], $f['stock_level']);
     $set = implode(', ', array_map(fn($c) => "$c = ?", array_keys($f)));
     dbRun("UPDATE equipment_assets SET $set, updated_at = datetime('now') WHERE id = ?", [...array_values($f), $existing['id']]);
     $statusChanged = $f['status'] !== $existing['status'];

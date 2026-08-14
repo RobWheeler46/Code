@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_kit'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_kit', 'logic_stock_ledger'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -168,6 +168,28 @@ function scenario_logic_equipment(): void
     check('equipment: low-stock consumable raises a QM task', $has('at or below reorder level'));
     check('equipment: unknown-location item raises a QM task', $has('unconfirmed storage location'));
     check('equipment: no spurious tasks for a normal asset', count($acts) === 2, count($acts) . ' tasks');
+}
+
+// QM v2.4.3 stock ledger: balance is the sum of attributable movements, never a
+// direct set; decrements clamp at zero; a correction moves to a target.
+function scenario_logic_stock_ledger(): void
+{
+    useDb(tmpDb('stk')); boot(); loadLibs();
+    $id = dbRun("INSERT INTO equipment_assets (name, item_type, tracking_mode) VALUES ('Rope', 'consumable', 'consumable')")['lastInsertId'];
+    check('stock: fresh asset has zero balance', equipmentStockBalance((int) $id) === 0);
+    equipmentPostStockMovement((int) $id, 'opening', 10, 'Opening', null, 0);
+    equipmentPostStockMovement((int) $id, 'purchase', 5, 'Bought more', null, 0);
+    equipmentPostStockMovement((int) $id, 'issue', -3, 'Camp', null, 0);
+    check('stock: 10 + 5 - 3 = 12', equipmentStockBalance((int) $id) === 12);
+    // cached column mirrors the ledger
+    $col = (int) dbGet('SELECT stock_level FROM equipment_assets WHERE id = ?', [$id])['stock_level'];
+    check('stock: cached stock_level mirrors ledger balance', $col === 12);
+    // decrement clamps at zero (cannot go negative)
+    equipmentPostStockMovement((int) $id, 'loss', -100, 'Flood', null, 0);
+    check('stock: decrement clamps at zero', equipmentStockBalance((int) $id) === 0);
+    // ledger rows are retained (audit surface), not overwritten
+    $rows = (int) dbGet('SELECT COUNT(*) c FROM equipment_stock_ledger WHERE asset_id = ?', [$id])['c'];
+    check('stock: every movement retained in the ledger', $rows === 4);
 }
 
 // QM kit completeness check: overall result derives from component statuses.

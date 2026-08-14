@@ -93,7 +93,7 @@ async function loadEquipment() {
             <td>${escapeHtml(EQ_META.conditions[a.condition] || a.condition)}</td>
             <td><span class="badge" data-status="${a.status === 'available' ? 'active' : (a.status === 'retired' ? 'archived' : 'pending_approval')}">${escapeHtml(EQ_META.statuses[a.status] || a.status)}</span>${a.maintenanceLocked ? ' <span class="badge" data-status="deleted">Locked</span>' : ''}</td>
             <td>${nextCheckLabel(a)}</td>
-            <td style="white-space:nowrap">${a.itemType === 'kit' ? `<button class="btn btn-secondary btn-sm eq-kit" data-id="${a.id}">Kit</button> ` : ''}<button class="btn btn-secondary btn-sm eq-inspect" data-id="${a.id}">Inspect</button> <button class="btn btn-secondary btn-sm eq-edit" data-id="${a.id}">Edit</button></td>
+            <td style="white-space:nowrap">${a.itemType === 'kit' ? `<button class="btn btn-secondary btn-sm eq-kit" data-id="${a.id}">Kit</button> ` : ''}<button class="btn btn-secondary btn-sm eq-stock" data-id="${a.id}">Stock</button> <button class="btn btn-secondary btn-sm eq-inspect" data-id="${a.id}">Inspect</button> <button class="btn btn-secondary btn-sm eq-edit" data-id="${a.id}">Edit</button></td>
           </tr>`).join('')}</tbody>
       </table>` : '<div class="empty-state">No assets match. Add your first asset to get started.</div>'}
     </div>`;
@@ -105,6 +105,7 @@ async function loadEquipment() {
   document.querySelectorAll('.eq-edit').forEach(b => b.addEventListener('click', () => openAssetForm(data.assets.find(a => a.id == b.dataset.id))));
   document.querySelectorAll('.eq-inspect').forEach(b => b.addEventListener('click', () => openInspectForm(b.dataset.id)));
   document.querySelectorAll('.eq-kit').forEach(b => b.addEventListener('click', () => openKitModal(b.dataset.id)));
+  document.querySelectorAll('.eq-stock').forEach(b => b.addEventListener('click', () => openStockModal(b.dataset.id)));
 }
 
 // Record inspection modal: the six outcomes drive condition/lock/repair/retire,
@@ -218,6 +219,57 @@ async function openKitModal(assetId) {
   });
 }
 
+// Stock administration (v2.4.3 18.8): post an attributable movement (there is no
+// direct set-quantity) and see the ledger. The balance shown is ledger-derived.
+async function openStockModal(assetId) {
+  let d;
+  try { d = await Api.get(`/api/equipment/${assetId}`); } catch (e) { alert(e.message); return; }
+  const a = d.asset;
+  const opt = (map, v) => Object.entries(map).map(([k, l]) => `<option value="${k}"${k === v ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('');
+  const ledger = d.stockLedger.length
+    ? d.stockLedger.map(m => `<tr><td>${escapeHtml(m.movementLabel)}</td><td style="text-align:right">${m.delta > 0 ? '+' : ''}${m.delta}</td><td style="text-align:right">${m.balanceAfter}</td>
+        <td class="muted">${escapeHtml(m.by)} · ${formatDateTime(m.at)}${m.reason ? ' · ' + escapeHtml(m.reason) : ''}</td></tr>`).join('')
+    : '<tr><td colspan="4" class="muted">No movements yet.</td></tr>';
+  const existing = document.getElementById('eq-stock-modal'); if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'eq-stock-modal'; modal.className = 'modal-backdrop';
+  modal.innerHTML = `<div class="modal-box"><h2>Stock: ${escapeHtml(a.name)}</h2>
+    <p>Current balance: <strong style="font-size:1.2rem">${d.stockBalance}</strong> <span class="muted">${escapeHtml(a.issueUnit || '')}</span></p>
+    <p class="muted" style="font-size:.82rem">Stock only changes through recorded movements — there is no direct edit. A correction needs a reason and records the before/after.</p>
+    <div id="eq-stock-msg"></div>
+    <div class="cap-actions">
+      ${field2('Movement', `<select id="sm-type">${opt(d.meta.stockMovements, 'purchase')}</select>`)}
+      <div class="field" id="sm-qty-wrap"><label>Quantity</label><input id="sm-qty" type="number" min="1" value="1" style="width:100px"></div>
+      <div class="field" id="sm-target-wrap" style="display:none"><label>Correct to</label><input id="sm-target" type="number" min="0" value="${d.stockBalance}" style="width:100px"></div>
+    </div>
+    <div class="cap-actions">
+      ${field2('Reason', `<input id="sm-reason" placeholder="Required for loss, disposal or correction" style="min-width:220px">`)}
+      ${field2('Reference (optional)', `<input id="sm-ref" placeholder="e.g. invoice no.">`)}
+    </div>
+    <div class="cap-actions"><button class="btn" id="sm-save">Post movement</button><button class="btn btn-secondary" id="eq-stock-cancel">Close</button></div>
+    <h3 style="font-size:1rem;margin:1rem 0 .3rem">Stock ledger</h3>
+    <table class="data-table"><thead><tr><th>Movement</th><th style="text-align:right">Δ</th><th style="text-align:right">Balance</th><th>Who / when</th></tr></thead><tbody>${ledger}</tbody></table>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.getElementById('eq-stock-cancel').addEventListener('click', () => { modal.remove(); loadEquipment(); });
+  const typeSel = document.getElementById('sm-type');
+  typeSel.addEventListener('change', () => {
+    const isCorr = typeSel.value === 'correction';
+    document.getElementById('sm-qty-wrap').style.display = isCorr ? 'none' : '';
+    document.getElementById('sm-target-wrap').style.display = isCorr ? '' : 'none';
+  });
+  document.getElementById('sm-save').addEventListener('click', async () => {
+    const type = typeSel.value;
+    const body = { movementType: type, reason: document.getElementById('sm-reason').value.trim(), sourceRef: document.getElementById('sm-ref').value.trim() };
+    if (type === 'correction') body.targetBalance = document.getElementById('sm-target').value;
+    else body.quantity = document.getElementById('sm-qty').value;
+    try { await Api.post(`/api/equipment/${assetId}/stock`, body); openStockModal(assetId); }
+    catch (e) { document.getElementById('eq-stock-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
+}
+function field2(label, html) { return `<div class="field"><label>${label}</label>${html}</div>`; }
+
 function optionList(map, selected, allLabel) {
   return `<option value="">${allLabel}</option>` + Object.entries(map).map(([k, v]) => `<option value="${k}"${k === selected ? ' selected' : ''}>${escapeHtml(v)}</option>`).join('');
 }
@@ -247,7 +299,9 @@ function openAssetForm(asset) {
     ${field('Name', `<input id="ef-name" value="${escapeHtml(a.name || '')}">`)}
     <div class="cap-actions">
       ${field('Category', `<select id="ef-category">${sel(EQ_META.categories, a.category)}</select>`)}
-      ${field('Quantity', `<input id="ef-quantity" type="number" min="0" value="${a.quantity ?? 1}" style="width:90px">`)}
+      ${isEdit
+        ? field('Current stock', `<input value="${a.stockBalance ?? 0}" disabled style="width:90px" title="Ledger-derived — change it with the Stock button"><span class="muted" style="font-size:.8rem"> use Stock</span>`)
+        : field('Opening stock', `<input id="ef-quantity" type="number" min="0" value="${a.quantity ?? 1}" style="width:90px">`)}
     </div>
     <div class="cap-actions">
       ${field('Condition', `<select id="ef-condition">${sel(EQ_META.conditions, a.condition)}</select>`)}
@@ -270,14 +324,14 @@ function openAssetForm(asset) {
       <summary>Advanced — type, restricted gear, stock &amp; identity</summary>
       <div class="cap-actions">
         ${field('Item type', `<select id="ef-itemtype">${sel(EQ_META.itemTypes || { asset: 'Asset' }, a.itemType || 'asset')}</select>`)}
-        ${field('Restricted / controlled', `<label class="check"><input type="checkbox" id="ef-restricted" ${a.restricted ? 'checked' : ''}> Requires a permit</label>`)}
+        ${field('Tracking mode', `<select id="ef-trackmode">${sel(EQ_META.trackingModes || { bulk_reusable: 'Bulk reusable' }, a.trackingMode || 'bulk_reusable')}</select>`)}
       </div>
-      <div class="field" id="ef-restricted-cat-wrap" style="${a.restricted ? '' : 'display:none'}">
-        <label>Restricted category</label><select id="ef-restricted-cat"><option value="">&mdash;</option>${sel(EQ_META.restrictedCategories || {}, a.restrictedCategory || '')}</select>
+      <div class="cap-actions">
+        ${field('Restricted / controlled', `<label class="check"><input type="checkbox" id="ef-restricted" ${a.restricted ? 'checked' : ''}> Requires a permit</label>`)}
+        <div class="field" id="ef-restricted-cat-wrap" style="${a.restricted ? '' : 'display:none'}"><label>Restricted category</label><select id="ef-restricted-cat"><option value="">&mdash;</option>${sel(EQ_META.restrictedCategories || {}, a.restrictedCategory || '')}</select></div>
       </div>
       <div id="ef-stock-wrap" style="${a.itemType === 'consumable' ? '' : 'display:none'}">
         <div class="cap-actions">
-          ${field('Stock level', `<input id="ef-stock" type="number" min="0" value="${a.stockLevel ?? ''}" style="width:110px">`)}
           ${field('Reorder at', `<input id="ef-reorder" type="number" min="0" value="${a.reorderThreshold ?? ''}" style="width:110px">`)}
           ${field('Issue unit', `<input id="ef-issueunit" value="${escapeHtml(a.issueUnit || '')}" placeholder="e.g. box, litre" style="width:150px">`)}
         </div>
@@ -316,7 +370,6 @@ function openAssetForm(asset) {
     const payload = {
       name: document.getElementById('ef-name').value.trim(),
       category: document.getElementById('ef-category').value,
-      quantity: document.getElementById('ef-quantity').value,
       condition: document.getElementById('ef-condition').value,
       status: document.getElementById('ef-status').value,
       owner: document.getElementById('ef-owner').value.trim(),
@@ -329,12 +382,12 @@ function openAssetForm(asset) {
       value: document.getElementById('ef-value').value,
       notes: document.getElementById('ef-notes').value.trim(),
       itemType: document.getElementById('ef-itemtype').value,
+      trackingMode: document.getElementById('ef-trackmode').value,
       restricted: document.getElementById('ef-restricted').checked,
       restrictedCategory: document.getElementById('ef-restricted-cat').value,
       storageArea: document.getElementById('ef-storagearea').value.trim(),
       locationCode: document.getElementById('ef-loccode').value.trim(),
       locationConfidence: document.getElementById('ef-locconf').value,
-      stockLevel: document.getElementById('ef-stock').value,
       reorderThreshold: document.getElementById('ef-reorder').value,
       issueUnit: document.getElementById('ef-issueunit').value.trim(),
       serialNumber: document.getElementById('ef-serial').value.trim(),
@@ -343,6 +396,9 @@ function openAssetForm(asset) {
       replacementValue: document.getElementById('ef-repval').value,
       insuranceRelevant: document.getElementById('ef-insurance').checked,
     };
+    // Opening stock is only set at creation; thereafter the balance moves only via
+    // the stock ledger (the Stock button), never a direct quantity edit.
+    if (!isEdit) payload.quantity = document.getElementById('ef-quantity').value;
     if (!payload.name) { document.getElementById('eq-form-msg').innerHTML = '<div class="alert alert-error">A name is required.</div>'; return; }
     try {
       if (isEdit) await Api.patch(`/api/equipment/${asset.id}`, payload);
