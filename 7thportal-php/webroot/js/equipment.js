@@ -7,6 +7,7 @@ const eqFilters = { q: '', category: '', status: '' };
   document.getElementById('add-asset').addEventListener('click', () => openAssetForm(null));
   document.getElementById('import-assets').addEventListener('click', openImportModal);
   document.getElementById('stocktake-btn').addEventListener('click', openStocktakeModal);
+  document.getElementById('storage-map-btn').addEventListener('click', openStorageMap);
   loadEquipment();
 })();
 
@@ -324,6 +325,29 @@ async function openStockModal(assetId) {
   });
 }
 function field2(label, html) { return `<div class="field"><label>${label}</label>${html}</div>`; }
+
+// Storage map (v2.4.3 / FR-QM-ADV-012): what's stored where, grouped by area.
+async function openStorageMap() {
+  let d;
+  try { d = await Api.get('/api/equipment/storage-map'); } catch (e) { alert(e.message); return; }
+  const areas = d.areas.map(g => `<div class="approval-group">
+      <div class="cap-head"><strong>${escapeHtml(g.area)}</strong><span class="muted">${g.count} item${g.count === 1 ? '' : 's'}</span></div>
+      <table class="data-table"><tbody>${g.items.map(i => `<tr>
+        <td>${i.locationCode ? `<span class="badge" data-status="active">${escapeHtml(i.locationCode)}</span> ` : ''}${escapeHtml(i.name)}</td>
+        <td class="muted">${i.location ? escapeHtml(i.location) : ''}</td>
+        <td style="text-align:right">${i.balance}</td></tr>`).join('')}</tbody></table>
+    </div>`).join('') || '<p class="muted">No items to map yet.</p>';
+  const existing = document.getElementById('eq-map-modal'); if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'eq-map-modal'; modal.className = 'modal-backdrop';
+  modal.innerHTML = `<div class="modal-box" style="max-width:720px"><h2>Storage map</h2>
+    <p class="muted">What's stored where — grouped by storage area, with location codes and current quantities.</p>
+    ${areas}
+    <div class="modal-actions" style="margin-top:1rem"><button class="btn btn-secondary" id="eq-map-close">Close</button></div></div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.getElementById('eq-map-close').addEventListener('click', () => modal.remove());
+}
 
 // Stocktake (v2.4.3 18.8): pick a scope, count each item, then post variances as
 // attributable 'stocktake' ledger adjustments (a reason is required).

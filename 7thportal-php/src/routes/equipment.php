@@ -453,6 +453,25 @@ $router->post('/api/equipment/stocktakes/:id/post', function ($params) {
     jsonResponse(['ok' => true, 'adjusted' => $adjusted]);
 });
 
+// ── Storage map (FR-QM-ADV-012) ────────────────────────────────────────────────
+// A read-only view of what is stored where, grouped by storage area then location
+// code. Registered before /:id so "storage-map" isn't captured as an id.
+$router->get('/api/equipment/storage-map', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireEquipmentEnabled();
+    $map = [];
+    foreach (dbAll("SELECT id, name, storage_area, location_code, location, quantity, stock_level, item_type, tracking_mode FROM equipment_assets WHERE status != 'retired' ORDER BY storage_area IS NULL, storage_area, location_code, name") as $a) {
+        $area = trim((string) ($a['storage_area'] ?? '')) ?: 'Unassigned';
+        // Cached quantity/stock_level mirrors the ledger/instance balance.
+        $bal = ($a['item_type'] ?? '') === 'consumable' ? (int) ($a['stock_level'] ?? 0) : (int) $a['quantity'];
+        $map[$area][] = ['name' => $a['name'], 'locationCode' => $a['location_code'], 'location' => $a['location'], 'balance' => $bal];
+    }
+    $areas = [];
+    foreach ($map as $area => $items) $areas[] = ['area' => $area, 'items' => $items, 'count' => count($items)];
+    jsonResponse(['areas' => $areas]);
+});
+
 $router->get('/api/equipment/:id', function ($params) {
     $user = requireAuth();
     requireLeader($user);
