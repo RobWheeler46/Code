@@ -17,9 +17,20 @@ const PERSONAS = [
 
 (async () => {
   const box = document.getElementById('content');
-  let cfg;
-  try { cfg = await Api.get('/api/config'); } catch (e) { cfg = null; }
-  if (!cfg || !cfg.demoModeAllowed) {
+  // Load the server config, retrying a couple of times: on a fresh deploy the
+  // first requests can transiently fail (500 / DB lock) while migrations settle,
+  // and a failed load must NOT be mistaken for "demo mode disabled" - those are
+  // different conditions with different messages.
+  let cfg = null, loadFailed = false;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try { cfg = await Api.get('/api/config'); loadFailed = false; break; }
+    catch (e) { loadFailed = true; await new Promise(r => setTimeout(r, 600)); }
+  }
+  if (loadFailed || !cfg) {
+    box.innerHTML = '<div class="alert alert-warning">Couldn\'t reach the server to load the demo options. This is usually temporary just after a deploy - <a href="#" onclick="location.reload();return false;">try again</a> in a moment.</div>';
+    return;
+  }
+  if (!cfg.demoModeAllowed) {
     box.innerHTML = '<div class="alert alert-warning">Demo mode is not enabled on this server. <a href="login.html">Go to login</a>.</div>';
     return;
   }
