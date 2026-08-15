@@ -850,6 +850,15 @@ CREATE TABLE IF NOT EXISTS qm_bundle_items (
 );
 CREATE INDEX IF NOT EXISTS idx_qm_bundle_items_bundle ON qm_bundle_items(bundle_id);
 
+-- A booking can be for one OR MORE sections (v2.4.3: booking selects mandatory
+-- section(s)). Stored as a join; qm_bookings.section_name keeps a display summary.
+CREATE TABLE IF NOT EXISTS qm_booking_sections (
+  booking_id INTEGER NOT NULL REFERENCES qm_bookings(id) ON DELETE CASCADE,
+  osm_section_id TEXT NOT NULL,
+  section_name TEXT NOT NULL,
+  PRIMARY KEY (booking_id, osm_section_id)
+);
+
 -- Internal calendar (FRD FR-CAL / backlog LATER-007). A local planning layer that
 -- links modules together - it does NOT replace OSM as the source of truth for OSM
 -- programme/event data. The calendar view aggregates these local entries with

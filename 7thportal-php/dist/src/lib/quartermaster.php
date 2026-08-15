@@ -39,6 +39,22 @@ function requireQmBookingEnabled(): void
     if (!qmBookingEnabled()) jsonResponse(['error' => 'Quartermaster booking is not enabled.'], 404);
 }
 
+// The group's sections for the booking section picker: the synced osm_sections
+// list, or the demo sections as a fallback before an OSM sync has run.
+function qmSectionList(): array
+{
+    $rows = dbAll('SELECT osm_section_id, section_name FROM osm_sections ORDER BY section_name');
+    if ($rows) return array_map(fn($r) => ['id' => $r['osm_section_id'], 'name' => $r['section_name']], $rows);
+    if (defined('OSM_DEMO_SECTIONS')) {
+        return array_map(fn($s) => ['id' => (string) $s['sectionid'], 'name' => $s['sectionname']], array_values(OSM_DEMO_SECTIONS));
+    }
+    return [];
+}
+function qmBookingSections(int $bookingId): array
+{
+    return array_map(fn($r) => ['id' => $r['osm_section_id'], 'name' => $r['section_name']], dbAll('SELECT osm_section_id, section_name FROM qm_booking_sections WHERE booking_id = ? ORDER BY section_name', [$bookingId]));
+}
+
 // Who acts as a Quartermaster (approve, substitute, handover, return, close).
 function qmCanApprove(array $user): bool
 {
@@ -120,6 +136,7 @@ function serializeQmBooking(array $b, bool $full = false): array
         'purpose' => $b['purpose'],
         'sectionId' => $b['osm_section_id'],
         'sectionName' => $b['section_name'],
+        'sections' => qmBookingSections((int) $b['id']),
         'eventHubId' => $b['event_hub_id'] !== null ? (int) $b['event_hub_id'] : null,
         'eventName' => $b['event_name'],
         'collectAt' => $b['collect_at'],

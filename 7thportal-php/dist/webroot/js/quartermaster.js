@@ -304,13 +304,18 @@ async function act(url, body, okMsg) {
 
 // ── Owner: header + item editing ────────────────────────────────────────────────
 async function editHeader(b) {
-  let events = [];
+  let events = [], sections = [];
   try { events = (await Api.get('/api/events')).events || []; } catch (e) { /* events module may be off */ }
+  try { sections = (await Api.get('/api/qm/sections')).sections || []; } catch (e) { /* fall back to none */ }
   const field = (label, html) => `<div class="field"><label>${label}</label>${html}</div>`;
   const toLocal = v => v ? v.replace(' ', 'T').slice(0, 16) : '';
+  const selectedIds = new Set((b.sections || []).map(s => String(s.id)));
+  const sectionPicker = sections.length
+    ? `<div class="chips" id="qh-sections">${sections.map(s => `<label class="check"><input type="checkbox" class="qh-sec" value="${escapeHtml(String(s.id))}" data-name="${escapeHtml(s.name)}" ${selectedIds.has(String(s.id)) ? 'checked' : ''}> ${escapeHtml(s.name)}</label>`).join('')}</div>`
+    : '<p class="muted">No sections available yet (needs an OSM sync).</p>';
   const modal = openModal('Request details', `
     ${field('Purpose', `<input id="qh-purpose" value="${escapeHtml(b.purpose || '')}" placeholder="e.g. Beavers weekend camp">`)}
-    ${field('Section (optional)', `<input id="qh-section" value="${escapeHtml(b.sectionName || '')}">`)}
+    ${field('Section(s) — required, choose one or more', sectionPicker)}
     ${events.length ? field('Linked event/camp (optional)', `<select id="qh-event"><option value="">None</option>${events.map(ev => `<option value="${ev.id}"${ev.id == b.eventHubId ? ' selected' : ''}>${escapeHtml(ev.title)}</option>`).join('')}</select>`) : ''}
     <div class="cap-actions">
       ${field('Collect at', `<input id="qh-collect" type="datetime-local" value="${toLocal(b.collectAt)}">`)}
@@ -319,9 +324,11 @@ async function editHeader(b) {
     <div class="modal-actions" style="display:flex;gap:.5rem;margin-top:1rem"><button class="btn" id="qh-save">Save</button><button class="btn btn-secondary" id="qh-cancel">Cancel</button></div>`);
   document.getElementById('qh-cancel').addEventListener('click', closeModal);
   document.getElementById('qh-save').addEventListener('click', async () => {
+    const chosen = [...document.querySelectorAll('.qh-sec:checked')].map(c => ({ id: c.value, name: c.dataset.name }));
+    if (!chosen.length) { modalError('Choose at least one section.'); return; }
     const payload = {
       purpose: document.getElementById('qh-purpose').value.trim(),
-      sectionName: document.getElementById('qh-section').value.trim(),
+      sections: chosen,
       collectAt: document.getElementById('qh-collect').value,
       returnAt: document.getElementById('qh-return').value,
     };

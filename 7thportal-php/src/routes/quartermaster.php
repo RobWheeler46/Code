@@ -130,6 +130,14 @@ $router->post('/api/qm/bookings', function ($params) {
     jsonResponse(serializeQmBooking(qmBookingOr404($id), true), 201);
 });
 
+// The group's sections for the booking section picker (leader-readable).
+$router->get('/api/qm/sections', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireQmBookingEnabled();
+    jsonResponse(['sections' => qmSectionList()]);
+});
+
 // ── Equipment bundles (FR-QM-ADV-014) ──────────────────────────────────────────
 // A Quartermaster curates reusable kit lists; any requester can spin one into a
 // draft booking. Managing bundles needs QM rights; using one needs booking rights.
@@ -245,6 +253,20 @@ $router->patch('/api/qm/bookings/:id', function ($params) {
         $args = [];
         $set = function ($col, $val) use (&$fields, &$args) { $fields[] = "$col = ?"; $args[] = $val; };
         if (array_key_exists('purpose', $body)) $set('purpose', trim((string) $body['purpose']) ?: null);
+        // Multiple mandatory sections (validated at submit): replace the join rows
+        // and keep section_name / osm_section_id as a display + legacy summary.
+        if (array_key_exists('sections', $body) && is_array($body['sections'])) {
+            dbRun('DELETE FROM qm_booking_sections WHERE booking_id = ?', [$b['id']]);
+            $names = []; $firstId = null;
+            foreach ($body['sections'] as $s) {
+                $sid = trim((string) ($s['id'] ?? '')); $sname = trim((string) ($s['name'] ?? ''));
+                if ($sid === '' || $sname === '') continue;
+                dbRun('INSERT OR IGNORE INTO qm_booking_sections (booking_id, osm_section_id, section_name) VALUES (?, ?, ?)', [$b['id'], $sid, $sname]);
+                $names[] = $sname; $firstId = $firstId ?? $sid;
+            }
+            $set('section_name', $names ? implode(', ', $names) : null);
+            $set('osm_section_id', $firstId);
+        }
         if (array_key_exists('sectionId', $body)) $set('osm_section_id', $body['sectionId'] ?: null);
         if (array_key_exists('sectionName', $body)) $set('section_name', $body['sectionName'] ?: null);
         if (array_key_exists('collectAt', $body)) $set('collect_at', qmNormalizeDateTime($body['collectAt'], false));
@@ -352,6 +374,7 @@ $router->post('/api/qm/bookings/:id/submit', function ($params) {
     $b = qmBookingOr404($params['id']);
     if ((int) $b['requester_user_id'] !== (int) $user['id']) jsonResponse(['error' => 'You cannot submit this booking.'], 403);
     if ($b['status'] !== 'draft') jsonResponse(['error' => 'Only a draft can be submitted.'], 409);
+    if (count(qmBookingSections((int) $b['id'])) === 0) jsonResponse(['error' => 'Choose at least one section before submitting.'], 400);
     if (!$b['collect_at'] || !$b['return_at']) jsonResponse(['error' => 'A collection date and a return date are required before submitting.'], 400);
     if ($b['return_at'] <= $b['collect_at']) jsonResponse(['error' => 'The return date must be after the collection date.'], 400);
     if (count(qmBookingItems((int) $b['id'])) === 0) jsonResponse(['error' => 'Add at least one item before submitting.'], 400);
