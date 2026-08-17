@@ -157,7 +157,7 @@ async function loadEquipment() {
   let t; q.addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => { eqFilters.q = q.value.trim(); loadEquipment(); }, 300); });
   document.getElementById('eq-cat').addEventListener('change', e => { eqFilters.category = e.target.value; loadEquipment(); });
   document.getElementById('eq-status').addEventListener('change', e => { eqFilters.status = e.target.value; loadEquipment(); });
-  document.querySelectorAll('.eq-edit').forEach(b => b.addEventListener('click', () => openAssetForm(data.assets.find(a => a.id == b.dataset.id))));
+  document.querySelectorAll('.eq-edit').forEach(b => b.addEventListener('click', () => openEditAsset(b.dataset.id)));
   document.querySelectorAll('.eq-inspect').forEach(b => b.addEventListener('click', () => openInspectForm(b.dataset.id)));
   document.querySelectorAll('.eq-kit').forEach(b => b.addEventListener('click', () => openKitModal(b.dataset.id)));
   document.querySelectorAll('.eq-stock').forEach(b => b.addEventListener('click', () => openStockModal(b.dataset.id)));
@@ -492,71 +492,103 @@ function nextCheckLabel(a) {
   return '<span class="muted">&mdash;</span>';
 }
 
-function openAssetForm(asset) {
-  const isEdit = !!asset;
-  const a = asset || { category: 'general', condition: 'good', status: 'available', quantity: 1 };
-  const sel = (map, v) => Object.entries(map).map(([k, l]) => `<option value="${k}"${k === v ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('');
+// Plain-language tracking choices (FRD v2.4.4 FR-QM-028): the Quartermaster never
+// has to understand the domain labels. Each maps to an approved tracking mode.
+const EQ_TRACK = {
+  bulk_reusable: { label: 'Quantity', hint: 'Interchangeable units booked by number — e.g. tents, chairs, mugs.' },
+  serialised: { label: 'Individual items', hint: 'Each physical unit tracked by its own ID — e.g. a stove that needs inspection.' },
+  consumable: { label: 'Consumable stock', hint: 'Used up and not returned — e.g. gas, first-aid supplies.' },
+};
+
+// Open the Edit form. Fetches the detail record so we know whether tracking is
+// locked (history exists) and can show current stock/condition/status read-only.
+async function openEditAsset(id) {
+  let d;
+  try { d = await Api.get(`/api/equipment/${id}`); }
+  catch (e) { showEqError(e.message); return; }
+  openAssetForm(d.asset, { mode: 'edit', hasHistory: !!d.hasHistory, stockBalance: d.stockBalance });
+}
+function showEqError(msg) {
+  const box = document.getElementById('eq-form-msg');
+  if (box) box.innerHTML = `<div class="alert alert-error">${escapeHtml(msg)}</div>`;
+}
+
+// v2.4.4 (FR-QM-027/032): progressive Add/Edit form. Core setup first; tracking-,
+// safety-, inspection-, booking-, purchase-specific fields reveal only when relevant.
+// Edit changes master data only — stock, condition and lifecycle stay read-only and
+// route through the Stock button, inspections and disposal.
+function openAssetForm(asset, opts) {
+  opts = opts || {};
+  const mode = opts.mode || (asset ? 'edit' : 'add'); // add | edit | duplicate
+  const isEdit = mode === 'edit';
+  const a = asset || { category: 'general', condition: 'good', status: 'available', quantity: 1, trackingMode: 'bulk_reusable' };
+  const curMode = EQ_TRACK[a.trackingMode] ? a.trackingMode : 'bulk_reusable';
+  const trackLocked = isEdit && opts.hasHistory; // AC-126
+  const sel = (map, v) => Object.entries(map || {}).map(([k, l]) => `<option value="${k}"${k === v ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('');
   const field = (label, html) => `<div class="field"><label>${label}</label>${html}</div>`;
-  const existing = document.getElementById('eq-modal'); if (existing) existing.remove();
+  const title = mode === 'edit' ? 'Edit equipment' : mode === 'duplicate' ? 'Duplicate equipment' : 'Add equipment';
+
+  const trackChoiceHtml = trackLocked
+    ? `<div class="field"><label>Tracking</label><div class="eq-locked"><strong>${escapeHtml(EQ_TRACK[curMode].label)}</strong> — locked once the item has stock, bookings or history. A change needs a controlled migration.</div></div>`
+    : `<div class="field"><label>How is this tracked?</label>${Object.entries(EQ_TRACK).map(([m, t]) =>
+        `<label class="eq-track-opt"><input type="radio" name="ef-track" value="${m}"${m === curMode ? ' checked' : ''}>
+          <span><strong>${escapeHtml(t.label)}</strong><span class="muted eq-track-hint">${escapeHtml(t.hint)}</span></span></label>`).join('')}`;
+
+  // Current-state panel (edit only, read-only) — AC-127.
+  const statePanel = isEdit ? `<div class="eq-state-panel">
+      <div class="eq-state"><span class="muted">Owned / in stock</span><strong>${opts.stockBalance ?? a.stockBalance ?? 0}</strong></div>
+      ${a.trackingMode === 'serialised' && a.instanceCounts ? `<div class="eq-state"><span class="muted">Units available</span><strong>${a.instanceCounts.available ?? '—'}</strong></div>` : ''}
+      <div class="eq-state"><span class="muted">Status</span><strong>${escapeHtml(EQ_META.statuses[a.status] || a.status || '—')}</strong></div>
+      <div class="eq-state"><span class="muted">Condition</span><strong>${escapeHtml(EQ_META.conditions[a.condition] || a.condition || '—')}</strong></div>
+    </div>
+    <p class="muted eq-state-note">Read-only. Change stock with the <strong>Stock</strong> button; condition and status change through inspections, returns and disposal — not here.</p>` : '';
+
+  const existingModal = document.getElementById('eq-modal'); if (existingModal) existingModal.remove();
   const modal = document.createElement('div');
   modal.id = 'eq-modal'; modal.className = 'modal-backdrop';
-  modal.innerHTML = `<div class="modal-box"><h2>${isEdit ? 'Edit asset' : 'Add asset'}</h2>
+  modal.innerHTML = `<div class="modal-box eq-form"><h2>${title}</h2>
     <div id="eq-form-msg"></div>
     ${field('Name', `<input id="ef-name" value="${escapeHtml(a.name || '')}">`)}
-    <div class="cap-actions">
-      ${field('Category', `<select id="ef-category">${sel(EQ_META.categories, a.category)}</select>`)}
-      ${isEdit
-        ? field('Current stock', `<input value="${a.stockBalance ?? 0}" disabled style="width:90px" title="Ledger-derived — change it with the Stock button"><span class="muted" style="font-size:.8rem"> use Stock</span>`)
-        : field('Opening stock', `<input id="ef-quantity" type="number" min="0" value="${a.quantity ?? 1}" style="width:90px">`)}
+    ${field('Category', `<select id="ef-category">${sel(EQ_META.categories, a.category)}</select>`)}
+    ${trackChoiceHtml}
+    <div id="ef-track-fields">
+      ${isEdit ? '' : `<div class="cap-actions" id="ef-open-wrap">
+        <div class="field" id="ef-open-qty-wrap"><label id="ef-open-label">Opening quantity</label><input id="ef-quantity" type="number" min="0" value="${a.quantity ?? 1}" style="width:120px"></div>
+        <div class="field" id="ef-cond-wrap"><label>Initial condition</label><select id="ef-condition">${sel(EQ_META.conditions, a.condition || 'good')}</select></div>
+      </div>`}
+      ${statePanel}
+      <div class="cap-actions" id="ef-unit-wrap"${curMode === 'serialised' ? ' style="display:none"' : ''}>
+        ${field('Quantity unit', `<input id="ef-issueunit" value="${escapeHtml(a.issueUnit || '')}" placeholder="e.g. each, box, litre" style="width:180px">`)}
+      </div>
+      <div class="cap-actions" id="ef-consumable-wrap"${curMode === 'consumable' ? '' : ' style="display:none"'}>
+        ${field('Low-stock at', `<input id="ef-reorder" type="number" min="0" value="${a.reorderThreshold ?? ''}" style="width:110px" placeholder="optional">`)}
+      </div>
     </div>
-    <div class="cap-actions">
-      ${field('Condition', `<select id="ef-condition">${sel(EQ_META.conditions, a.condition)}</select>`)}
-      ${field('Status', `<select id="ef-status">${sel(EQ_META.statuses, a.status)}</select>`)}
-    </div>
-    ${field('Owner / responsible', `<input id="ef-owner" value="${escapeHtml(a.owner || '')}" placeholder="e.g. Quartermaster">`)}
     ${field('Storage location', `<input id="ef-location" value="${escapeHtml(a.location || '')}">`)}
-    ${field('Section (optional)', `<input id="ef-section" value="${escapeHtml(a.sectionName || '')}">`)}
-    ${field('Linked event/camp (optional)', `<input id="ef-event" value="${escapeHtml(a.linkedEvent || '')}">`)}
-    <div class="cap-actions">
-      ${field('Next inspection', `<input id="ef-inspect" type="date" value="${a.nextInspectionDate || ''}">`)}
-      ${field('Replacement due', `<input id="ef-replace" type="date" value="${a.replacementDueDate || ''}">`)}
-    </div>
-    <div class="cap-actions">
-      ${field('Loan due (if loaned)', `<input id="ef-loan" type="date" value="${a.loanDueDate || ''}">`)}
-      ${field('Value (£)', `<input id="ef-value" type="number" min="0" step="0.01" value="${a.value ?? ''}" style="width:120px">`)}
-    </div>
-    ${field('Notes', `<textarea id="ef-notes" rows="2">${escapeHtml(a.notes || '')}</textarea>`)}
-    <details class="eq-advanced"${(a.itemType && a.itemType !== 'asset') || a.restricted || a.stockLevel != null || a.serialNumber || a.storageArea ? ' open' : ''}>
-      <summary>Advanced — type, restricted gear, stock &amp; identity</summary>
+
+    <details class="eq-section"${a.restricted ? ' open' : ''}>
+      <summary>Safety &amp; controls</summary>
+      <label class="check"><input type="checkbox" id="ef-restricted" ${a.restricted ? 'checked' : ''}> Extra controls required (permit / controlled equipment)</label>
+      <div class="field" id="ef-restricted-cat-wrap" style="${a.restricted ? '' : 'display:none'}"><label>Controlled category</label><select id="ef-restricted-cat"><option value="">—</option>${sel(EQ_META.restrictedCategories || {}, a.restrictedCategory || '')}</select></div>
+      <label class="check"><input type="checkbox" id="ef-insurance" ${a.insuranceRelevant ? 'checked' : ''}> Insurance-relevant item</label>
+    </details>
+
+    <details class="eq-section"${a.nextInspectionDate || a.replacementDueDate ? ' open' : ''}>
+      <summary>Inspection &amp; maintenance</summary>
       <div class="cap-actions">
-        ${field('Item type', `<select id="ef-itemtype">${sel(EQ_META.itemTypes || { asset: 'Asset' }, a.itemType || 'asset')}</select>`)}
-        ${field('Tracking mode', `<select id="ef-trackmode">${sel(EQ_META.trackingModes || { bulk_reusable: 'Bulk reusable' }, a.trackingMode || 'bulk_reusable')}</select>`)}
+        ${field('Next inspection', `<input id="ef-inspect" type="date" value="${a.nextInspectionDate || ''}">`)}
+        ${field('Replacement due', `<input id="ef-replace" type="date" value="${a.replacementDueDate || ''}">`)}
       </div>
+    </details>
+
+    <details class="eq-section"${a.owner || a.sectionName || a.linkedEvent || a.suitableSections || a.suitableEvents || a.maxGroupSize || a.vehicleRequired ? ' open' : ''}>
+      <summary>Ownership, booking &amp; suitability</summary>
+      ${field('Owner / responsible', `<input id="ef-owner" value="${escapeHtml(a.owner || '')}" placeholder="e.g. Quartermaster">`)}
       <div class="cap-actions">
-        ${field('Restricted / controlled', `<label class="check"><input type="checkbox" id="ef-restricted" ${a.restricted ? 'checked' : ''}> Requires a permit</label>`)}
-        <div class="field" id="ef-restricted-cat-wrap" style="${a.restricted ? '' : 'display:none'}"><label>Restricted category</label><select id="ef-restricted-cat"><option value="">&mdash;</option>${sel(EQ_META.restrictedCategories || {}, a.restrictedCategory || '')}</select></div>
+        ${field('Section (optional)', `<input id="ef-section" value="${escapeHtml(a.sectionName || '')}">`)}
+        ${field('Linked event/camp (optional)', `<input id="ef-event" value="${escapeHtml(a.linkedEvent || '')}">`)}
       </div>
-      <div id="ef-stock-wrap" style="${a.itemType === 'consumable' ? '' : 'display:none'}">
-        <div class="cap-actions">
-          ${field('Reorder at', `<input id="ef-reorder" type="number" min="0" value="${a.reorderThreshold ?? ''}" style="width:110px">`)}
-          ${field('Issue unit', `<input id="ef-issueunit" value="${escapeHtml(a.issueUnit || '')}" placeholder="e.g. box, litre" style="width:150px">`)}
-        </div>
-      </div>
-      <div class="cap-actions">
-        ${field('Storage area', `<input id="ef-storagearea" value="${escapeHtml(a.storageArea || '')}" placeholder="e.g. Container A">`)}
-        ${field('Location code', `<input id="ef-loccode" value="${escapeHtml(a.locationCode || '')}" placeholder="e.g. A-3-2" style="width:130px">`)}
-        ${field('Confidence', `<select id="ef-locconf"><option value="">&mdash;</option>${sel(EQ_META.locationConfidence || {}, a.locationConfidence || '')}</select>`)}
-      </div>
-      <div class="cap-actions">
-        ${field('Serial number', `<input id="ef-serial" value="${escapeHtml(a.serialNumber || '')}">`)}
-        ${field('Supplier', `<input id="ef-supplier" value="${escapeHtml(a.supplier || '')}">`)}
-      </div>
-      <div class="cap-actions">
-        ${field('Warranty expiry', `<input id="ef-warranty" type="date" value="${a.warrantyExpiry || ''}">`)}
-        ${field('Replacement value (£)', `<input id="ef-repval" type="number" min="0" step="0.01" value="${a.replacementValue ?? ''}" style="width:140px">`)}
-      </div>
-      ${field('&nbsp;', `<label class="check"><input type="checkbox" id="ef-insurance" ${a.insuranceRelevant ? 'checked' : ''}> Insurance-relevant item</label>`)}
-      <p class="muted" style="margin:.6rem 0 .2rem;font-size:.82rem">Suitability (shown to requesters when booking)</p>
+      <p class="muted" style="margin:.4rem 0 .2rem;font-size:.82rem">Suitability (shown to requesters when booking)</p>
       <div class="cap-actions">
         ${field('Suitable sections', `<input id="ef-suit-sections" value="${escapeHtml(a.suitableSections || '')}" placeholder="e.g. Cubs, Scouts">`)}
         ${field('Suitable events', `<input id="ef-suit-events" value="${escapeHtml(a.suitableEvents || '')}" placeholder="e.g. camp, day trip">`)}
@@ -567,71 +599,128 @@ function openAssetForm(asset) {
         ${field('Vehicle required', `<input id="ef-vehicle" value="${escapeHtml(a.vehicleRequired || '')}" placeholder="e.g. van, minibus" style="width:150px">`)}
       </div>
     </details>
-    <div class="modal-actions" style="display:flex;gap:.5rem;margin-top:1rem;align-items:center">
-      <button class="btn" id="ef-save">${isEdit ? 'Save changes' : 'Add asset'}</button>
+
+    <details class="eq-section"${a.value != null || a.serialNumber || a.supplier || a.storageArea || a.warrantyExpiry || a.replacementValue != null ? ' open' : ''}>
+      <summary>Purchase, value &amp; identity</summary>
+      <div class="cap-actions">
+        ${field('Value (£)', `<input id="ef-value" type="number" min="0" step="0.01" value="${a.value ?? ''}" style="width:120px">`)}
+        ${field('Replacement value (£)', `<input id="ef-repval" type="number" min="0" step="0.01" value="${a.replacementValue ?? ''}" style="width:150px">`)}
+      </div>
+      <div class="cap-actions">
+        ${field('Serial number', `<input id="ef-serial" value="${escapeHtml(a.serialNumber || '')}">`)}
+        ${field('Supplier', `<input id="ef-supplier" value="${escapeHtml(a.supplier || '')}">`)}
+      </div>
+      <div class="cap-actions">
+        ${field('Warranty expiry', `<input id="ef-warranty" type="date" value="${a.warrantyExpiry || ''}">`)}
+      </div>
+      <div class="cap-actions">
+        ${field('Storage area', `<input id="ef-storagearea" value="${escapeHtml(a.storageArea || '')}" placeholder="e.g. Container A">`)}
+        ${field('Location code', `<input id="ef-loccode" value="${escapeHtml(a.locationCode || '')}" placeholder="e.g. A-3-2" style="width:130px">`)}
+        ${field('Confidence', `<select id="ef-locconf"><option value="">—</option>${sel(EQ_META.locationConfidence || {}, a.locationConfidence || '')}</select>`)}
+      </div>
+    </details>
+    ${field('Notes', `<textarea id="ef-notes" rows="2">${escapeHtml(a.notes || '')}</textarea>`)}
+
+    <div class="modal-actions eq-form-actions">
+      <button class="btn" id="ef-save">${isEdit ? 'Save changes' : 'Add equipment'}</button>
       <button class="btn btn-secondary" id="ef-cancel">Cancel</button>
-      ${isEdit ? '<button class="btn btn-secondary eq-delete" id="ef-delete" style="margin-left:auto">Delete</button>' : ''}
-    </div></div>`;
+      ${isEdit ? '<button class="btn btn-secondary" id="ef-duplicate">Duplicate</button><button class="btn btn-secondary eq-delete" id="ef-delete">Delete</button>' : ''}
+    </div>
+    <div id="ef-confirm"></div></div>`;
   document.body.appendChild(modal);
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
   document.getElementById('ef-cancel').addEventListener('click', () => modal.remove());
-  // Consumable stock fields only apply to consumables; restricted category only
-  // when the item is marked restricted.
-  const itypeSel = document.getElementById('ef-itemtype');
-  itypeSel.addEventListener('change', () => { document.getElementById('ef-stock-wrap').style.display = itypeSel.value === 'consumable' ? '' : 'none'; });
+
+  // Tracking choice drives which fields are relevant (FR-QM-028/032).
+  function currentTrack() {
+    if (trackLocked) return curMode;
+    const r = modal.querySelector('input[name="ef-track"]:checked');
+    return r ? r.value : curMode;
+  }
+  function syncTrack() {
+    const m = currentTrack();
+    const openLabel = document.getElementById('ef-open-label');
+    if (openLabel) openLabel.textContent = m === 'serialised' ? 'Number of individual units' : m === 'consumable' ? 'Opening stock' : 'Opening quantity';
+    document.getElementById('ef-unit-wrap').style.display = m === 'serialised' ? 'none' : '';
+    document.getElementById('ef-consumable-wrap').style.display = m === 'consumable' ? '' : 'none';
+  }
+  modal.querySelectorAll('input[name="ef-track"]').forEach(r => r.addEventListener('change', syncTrack));
+  syncTrack();
   const restrChk = document.getElementById('ef-restricted');
   restrChk.addEventListener('change', () => { document.getElementById('ef-restricted-cat-wrap').style.display = restrChk.checked ? '' : 'none'; });
 
   document.getElementById('ef-save').addEventListener('click', async () => {
+    const v = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+    const track = currentTrack();
     const payload = {
-      name: document.getElementById('ef-name').value.trim(),
-      category: document.getElementById('ef-category').value,
-      condition: document.getElementById('ef-condition').value,
-      status: document.getElementById('ef-status').value,
-      owner: document.getElementById('ef-owner').value.trim(),
-      location: document.getElementById('ef-location').value.trim(),
-      sectionName: document.getElementById('ef-section').value.trim(),
-      linkedEvent: document.getElementById('ef-event').value.trim(),
+      name: v('ef-name'), category: document.getElementById('ef-category').value,
+      location: v('ef-location'), notes: v('ef-notes'),
+      owner: v('ef-owner'), sectionName: v('ef-section'), linkedEvent: v('ef-event'),
       nextInspectionDate: document.getElementById('ef-inspect').value,
       replacementDueDate: document.getElementById('ef-replace').value,
-      loanDueDate: document.getElementById('ef-loan').value,
-      value: document.getElementById('ef-value').value,
-      notes: document.getElementById('ef-notes').value.trim(),
-      itemType: document.getElementById('ef-itemtype').value,
-      trackingMode: document.getElementById('ef-trackmode').value,
-      restricted: document.getElementById('ef-restricted').checked,
-      restrictedCategory: document.getElementById('ef-restricted-cat').value,
-      storageArea: document.getElementById('ef-storagearea').value.trim(),
-      locationCode: document.getElementById('ef-loccode').value.trim(),
-      locationConfidence: document.getElementById('ef-locconf').value,
-      reorderThreshold: document.getElementById('ef-reorder').value,
-      issueUnit: document.getElementById('ef-issueunit').value.trim(),
-      serialNumber: document.getElementById('ef-serial').value.trim(),
-      supplier: document.getElementById('ef-supplier').value.trim(),
-      warrantyExpiry: document.getElementById('ef-warranty').value,
-      replacementValue: document.getElementById('ef-repval').value,
+      value: v('ef-value'), replacementValue: v('ef-repval'),
+      restricted: restrChk.checked, restrictedCategory: document.getElementById('ef-restricted-cat').value,
       insuranceRelevant: document.getElementById('ef-insurance').checked,
-      suitableSections: document.getElementById('ef-suit-sections').value.trim(),
-      suitableEvents: document.getElementById('ef-suit-events').value.trim(),
-      maxGroupSize: document.getElementById('ef-maxgroup').value,
-      setupTimeMins: document.getElementById('ef-setup').value,
-      vehicleRequired: document.getElementById('ef-vehicle').value.trim(),
+      issueUnit: v('ef-issueunit'),
+      reorderThreshold: track === 'consumable' ? v('ef-reorder') : '',
+      storageArea: v('ef-storagearea'), locationCode: v('ef-loccode'), locationConfidence: document.getElementById('ef-locconf').value,
+      serialNumber: v('ef-serial'), supplier: v('ef-supplier'), warrantyExpiry: document.getElementById('ef-warranty').value,
+      suitableSections: v('ef-suit-sections'), suitableEvents: v('ef-suit-events'),
+      maxGroupSize: v('ef-maxgroup'), setupTimeMins: v('ef-setup'), vehicleRequired: v('ef-vehicle'),
     };
-    // Opening stock is only set at creation; thereafter the balance moves only via
-    // the stock ledger (the Stock button), never a direct quantity edit.
-    if (!isEdit) payload.quantity = document.getElementById('ef-quantity').value;
-    if (!payload.name) { document.getElementById('eq-form-msg').innerHTML = '<div class="alert alert-error">A name is required.</div>'; return; }
+    // Tracking mode + its paired item type: only sent when unlocked. On edit with
+    // history the backend ignores them anyway, but we omit them to be explicit.
+    if (!trackLocked) {
+      payload.trackingMode = track;
+      // Preserve a kit/kit_component item type; otherwise derive from the tracking choice.
+      payload.itemType = track === 'consumable' ? 'consumable' : (['kit', 'kit_component'].includes(a.itemType) ? a.itemType : 'asset');
+    }
+    // Opening stock/condition are creation-only (FR-QM-029): the balance then moves
+    // only through the stock ledger, and condition through inspections.
+    if (!isEdit) {
+      payload.quantity = document.getElementById('ef-quantity').value;
+      payload.condition = document.getElementById('ef-condition').value;
+    }
+    if (!payload.name) { showEqError('A name is required.'); document.getElementById('ef-name').focus(); return; }
+    if (track === 'consumable' && !payload.issueUnit) {
+      showEqError('Consumable stock needs a quantity unit (e.g. box, litre).');
+      document.getElementById('ef-unit-wrap').style.display = ''; document.getElementById('ef-issueunit').focus();
+      return;
+    }
     try {
-      if (isEdit) await Api.patch(`/api/equipment/${asset.id}`, payload);
+      if (isEdit) await Api.patch(`/api/equipment/${a.id}`, payload);
       else await Api.post('/api/equipment', payload);
       modal.remove(); loadEquipment();
-    } catch (e) { document.getElementById('eq-form-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+    } catch (e) { showEqError(e.message); }
   });
 
+  // Duplicate (FR-QM-033): reopen as a fresh Add pre-filled with safe master
+  // defaults only — never identity, stock, lifecycle or history.
+  const dup = document.getElementById('ef-duplicate');
+  if (dup) dup.addEventListener('click', () => {
+    const copy = {
+      name: (a.name || '') + ' (copy)', category: a.category, trackingMode: a.trackingMode,
+      location: a.location, storageArea: a.storageArea, locationConfidence: a.locationConfidence,
+      owner: a.owner, sectionName: a.sectionName, restricted: a.restricted, restrictedCategory: a.restrictedCategory,
+      insuranceRelevant: a.insuranceRelevant, issueUnit: a.issueUnit, reorderThreshold: a.reorderThreshold,
+      suitableSections: a.suitableSections, suitableEvents: a.suitableEvents, maxGroupSize: a.maxGroupSize,
+      setupTimeMins: a.setupTimeMins, vehicleRequired: a.vehicleRequired, supplier: a.supplier,
+      condition: 'good', status: 'available', quantity: 1, itemType: a.itemType,
+      // deliberately dropped: id, serialNumber, current stock, dates, value, notes.
+    };
+    modal.remove();
+    openAssetForm(copy, { mode: 'duplicate' });
+  });
+
+  // Delete with an inline confirm (no native confirm() — testing preview safe).
   const del = document.getElementById('ef-delete');
-  if (del) del.addEventListener('click', async () => {
-    if (!confirm('Delete this asset? This cannot be undone.')) return;
-    try { await Api.delete(`/api/equipment/${asset.id}`); modal.remove(); loadEquipment(); }
-    catch (e) { document.getElementById('eq-form-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  if (del) del.addEventListener('click', () => {
+    document.getElementById('ef-confirm').innerHTML = `<div class="alert alert-warning" style="margin-top:.6rem">Delete <strong>${escapeHtml(a.name)}</strong>? This cannot be undone.
+      <div class="cap-actions" style="margin-top:.5rem"><button class="btn eq-del-yes" id="ef-del-yes">Delete</button><button class="btn btn-secondary" id="ef-del-no">Keep</button></div></div>`;
+    document.getElementById('ef-del-no').addEventListener('click', () => { document.getElementById('ef-confirm').innerHTML = ''; });
+    document.getElementById('ef-del-yes').addEventListener('click', async () => {
+      try { await Api.delete(`/api/equipment/${a.id}`); modal.remove(); loadEquipment(); }
+      catch (e) { showEqError(e.message); }
+    });
   });
 }

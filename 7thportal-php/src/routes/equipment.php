@@ -483,6 +483,8 @@ $router->get('/api/equipment/:id', function ($params) {
     $isKit = ($a['item_type'] ?? 'asset') === 'kit';
     jsonResponse([
         'asset' => serializeAsset($a),
+        // v2.4.4 (AC-126): drives the tracking-mode lock on the Edit form.
+        'hasHistory' => equipmentHasHistory((int) $a['id']),
         'inspections' => array_map(fn($r) => serializeInspection($r, $userNames), dbAll('SELECT * FROM equipment_inspections WHERE asset_id = ? ORDER BY id DESC', [$a['id']])),
         'repairs' => array_map(fn($r) => serializeRepair($r, $userNames), dbAll("SELECT * FROM equipment_repairs WHERE asset_id = ? ORDER BY (status='resolved'), id DESC", [$a['id']])),
         'isKit' => $isKit,
@@ -673,14 +675,25 @@ $router->patch('/api/equipment/:id', function ($params) {
     if (!$existing) jsonResponse(['error' => 'Asset not found.'], 404);
     $f = equipmentFieldsFromBody(requestBody(), $existing);
     if ($f['name'] === '') jsonResponse(['error' => 'An asset name is required.'], 400);
-    // v2.4.3 18.8: stock balance is never set directly - it moves only via the stock
-    // ledger. Drop quantity/stock_level from an edit so the register form can't
-    // overwrite the balance; use the stock-administration endpoint instead.
-    unset($f['quantity'], $f['stock_level']);
+    // v2.4.4 (FR-QM-029/031, AC-127): the normal Edit form changes master identity/
+    // configuration only. It must NOT mutate derived stock or lifecycle state, so we
+    // drop them all here regardless of what the body sent:
+    //   - quantity/stock_level: balance moves only via the stock ledger (v2.4.3 18.8)
+    //   - status: lifecycle (loaned/under_repair/missing/retired) comes from bookings,
+    //     inspections and the Disposal/Retirement stock movement, not a master edit
+    //   - condition: post-creation condition is an inspection/maintenance outcome
+    unset($f['quantity'], $f['stock_level'], $f['status'], $f['condition']);
+    // v2.4.4 (AC-126): once history exists, tracking mode (and its paired item type)
+    // is locked - a change is a controlled migration, not an ordinary edit.
+    if (equipmentHasHistory((int) $existing['id'])) unset($f['tracking_mode'], $f['item_type']);
+    // Before/after diff of the master fields actually changing (AC-129).
+    $changes = [];
+    foreach ($f as $col => $new) {
+        if ((string) ($existing[$col] ?? '') !== (string) ($new ?? '')) $changes[$col] = ['from' => $existing[$col] ?? null, 'to' => $new];
+    }
     $set = implode(', ', array_map(fn($c) => "$c = ?", array_keys($f)));
     dbRun("UPDATE equipment_assets SET $set, updated_at = datetime('now') WHERE id = ?", [...array_values($f), $existing['id']]);
-    $statusChanged = $f['status'] !== $existing['status'];
-    logAudit(['userId' => $user['id'], 'action' => $statusChanged ? 'equipment_status_change' : 'equipment_update', 'entityType' => 'equipment', 'entityId' => (string) $existing['id'], 'ipAddress' => clientIp(), 'details' => $statusChanged ? ['from' => $existing['status'], 'to' => $f['status']] : null]);
+    logAudit(['userId' => $user['id'], 'action' => 'equipment_update', 'entityType' => 'equipment', 'entityId' => (string) $existing['id'], 'ipAddress' => clientIp(), 'details' => $changes ?: null]);
     jsonResponse(serializeAsset(dbGet('SELECT * FROM equipment_assets WHERE id = ?', [$existing['id']])));
 });
 

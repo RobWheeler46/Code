@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -239,6 +239,33 @@ function scenario_logic_serialised(): void
     check('serialised: cached quantity = active count', (int) dbGet('SELECT quantity FROM equipment_assets WHERE id = ?', [$id])['quantity'] === 2);
     // serializer balance for serialised is the active count
     check('serialised: serializeAsset balance = active count', serializeAsset(dbGet('SELECT * FROM equipment_assets WHERE id = ?', [$id]))['stockBalance'] === 2);
+}
+
+// v2.4.4 (AC-126): tracking mode locks once operational history exists. A just-
+// created record has none (only an opening balance / all-available instances), so
+// a QM can still correct a mistaken tracking choice; a real movement, booking,
+// issued unit, inspection or repair then locks it.
+function scenario_logic_qm_edit_guard(): void
+{
+    useDb(tmpDb('guard')); boot(); loadLibs();
+    // Bulk: opening balance alone is not "history".
+    $id = dbRun("INSERT INTO equipment_assets (name, tracking_mode) VALUES ('Folding table', 'bulk_reusable')")['lastInsertId'];
+    equipmentPostStockMovement((int) $id, 'opening', 4, 'Opening', null, 0);
+    check('guard: opening-only bulk item has no history (tracking still editable)', equipmentHasHistory((int) $id) === false);
+    equipmentPostStockMovement((int) $id, 'purchase', 2, 'Bought more', null, 0);
+    check('guard: a real stock movement locks tracking', equipmentHasHistory((int) $id) === true);
+    // Serialised: all-available instances are not history; an issued unit is.
+    $sid = dbRun("INSERT INTO equipment_assets (name, tracking_mode) VALUES ('Stove', 'serialised')")['lastInsertId'];
+    foreach (['S-01', 'S-02'] as $ref) dbRun('INSERT INTO equipment_asset_instances (asset_id, instance_ref) VALUES (?, ?)', [$sid, $ref]);
+    check('guard: fresh serialised (all available) has no history', equipmentHasHistory((int) $sid) === false);
+    dbRun("UPDATE equipment_asset_instances SET status = 'issued' WHERE asset_id = ? AND instance_ref = 'S-01'", [$sid]);
+    check('guard: an issued serialised unit locks tracking', equipmentHasHistory((int) $sid) === true);
+    // An inspection record also counts as history.
+    $uid = dbRun("INSERT INTO users (auth_type, first_name, last_name, portal_role) VALUES ('local', 'Quarter', 'Master', 'quartermaster')")['lastInsertId'];
+    $iid = dbRun("INSERT INTO equipment_assets (name, tracking_mode) VALUES ('Ladder', 'bulk_reusable')")['lastInsertId'];
+    check('guard: brand-new item has no history', equipmentHasHistory((int) $iid) === false);
+    dbRun("INSERT INTO equipment_inspections (asset_id, outcome, inspected_by) VALUES (?, 'pass', ?)", [$iid, $uid]);
+    check('guard: an inspection record locks tracking', equipmentHasHistory((int) $iid) === true);
 }
 
 // QM kit completeness check: overall result derives from component statuses.

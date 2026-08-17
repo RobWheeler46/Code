@@ -49,6 +49,21 @@ function equipmentInstanceCounts(int $assetId): array
     $available = (int) dbGet("SELECT COUNT(*) AS n FROM equipment_asset_instances WHERE asset_id = ? AND status = 'available'", [$assetId])['n'];
     return ['active' => $active, 'available' => $available];
 }
+// v2.4.4 (AC-126): a record has operational history once stock has moved beyond
+// its opening balance, a serialised unit has left the shelf, it has been booked,
+// or it has an inspection/repair trail. Tracking mode locks on the normal Edit
+// form once this is true - a change then requires the controlled migration, not a
+// master-data edit. (A just-created record has none of this, so a QM can still fix
+// a mistaken tracking choice immediately after creating it.)
+function equipmentHasHistory(int $assetId): bool
+{
+    if ((int) dbGet("SELECT COUNT(*) AS n FROM equipment_stock_ledger WHERE asset_id = ? AND movement_type != 'opening'", [$assetId])['n'] > 0) return true;
+    if ((int) dbGet("SELECT COUNT(*) AS n FROM equipment_asset_instances WHERE asset_id = ? AND status != 'available'", [$assetId])['n'] > 0) return true;
+    if ((int) dbGet('SELECT COUNT(*) AS n FROM qm_booking_items WHERE equipment_asset_id = ?', [$assetId])['n'] > 0) return true;
+    if ((int) dbGet('SELECT COUNT(*) AS n FROM equipment_inspections WHERE asset_id = ?', [$assetId])['n'] > 0) return true;
+    if ((int) dbGet('SELECT COUNT(*) AS n FROM equipment_repairs WHERE asset_id = ?', [$assetId])['n'] > 0) return true;
+    return false;
+}
 // Keep the cached quantity column = active instance count so the existing
 // date-aware booking availability keeps working for serialised assets too.
 function equipmentSyncSerialisedQuantity(int $assetId): int
