@@ -1,4 +1,17 @@
 <?php
+// Hard requirement: PHP 8.1+. The app uses 8.0/8.1 features (str_starts_with,
+// str_contains, match) that are undefined on older PHP, so on a mis-set host -
+// e.g. a cPanel subdomain left on PHP 7.x while the live site runs 8.1+ - every
+// request otherwise dies with a cryptic "Call to undefined function" fatal deep
+// in a required file, taking the whole site down. Fail early with an actionable
+// message instead. This check uses only ancient built-ins so it runs anywhere.
+if (PHP_VERSION_ID < 80100) {
+    header('Content-Type: text/plain; charset=utf-8');
+    echo "7thPortal requires PHP 8.1 or newer. This server is running PHP " . PHP_VERSION . ".\n";
+    echo "Fix: in cPanel > MultiPHP Manager, set this domain to PHP 8.1+ (match the live site), then reload.\n";
+    exit;
+}
+
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $method = $_SERVER['REQUEST_METHOD'];
 
