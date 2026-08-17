@@ -26,16 +26,59 @@ $isProd = env('APP_ENV') === 'production';
 error_reporting(E_ALL);
 ini_set('display_errors', $isProd ? '0' : '1');
 
-// db.php runs the schema migrations at load, before any route logic. A failure
-// here (e.g. a migration tripping on an unexpected DB state) would otherwise be an
-// uncaught fatal that the host often replaces with its own blank 500 page, hiding
-// the cause. Catch it: always log the detail, and in development surface the real
-// message with a 200 status so it is readable in the browser even when the host
-// swallows 500 bodies. Production still fails closed with a generic message.
+// Bootstrap (schema migrations in db.php, plus loading http.php and the lib
+// files below) runs before any route logic. A failure in any of it - a migration
+// tripping on unexpected DB state, or even a PARSE ERROR in one uploaded file -
+// would otherwise be an uncaught fatal that the host replaces with its own blank
+// 500 page, hiding the cause and taking down every dynamic route at once. Two
+// nets catch it:
+//   1. A shutdown handler records ANY fatal (including parse/compile errors that
+//      try/catch cannot catch) to data/bootstrap-error.log - a plain file OUTSIDE
+//      the web root, readable via cPanel File Manager. This is what makes the
+//      recurring "every page 500s after a deploy" diagnosable without shell access.
+//   2. The try/catch below turns a catchable bootstrap Throwable into a graceful
+//      response: in development the real message with a 200 status (readable even
+//      when the host swallows 500 bodies); in production a generic 500.
+$bootErrorLog = __DIR__ . '/../data/bootstrap-error.log';
+register_shutdown_function(function () use ($bootErrorLog, $isProd) {
+    $e = error_get_last();
+    if (!$e || !in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_RECOVERABLE_ERROR], true)) return;
+    $line = date('c') . '  FATAL: ' . $e['message'] . ' in ' . $e['file'] . ':' . $e['line'] . "\n";
+    @file_put_contents($bootErrorLog, $line, FILE_APPEND);
+    error_log('[bootstrap] fatal: ' . $e['message'] . ' in ' . $e['file'] . ':' . $e['line']);
+    if (!$isProd && !headers_sent()) {
+        http_response_code(200);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo "BOOTSTRAP FATAL (shown because APP_ENV is not production)\n\n" . $line;
+    }
+});
+
 try {
     require_once __DIR__ . '/../src/db.php';
+    require_once __DIR__ . '/../src/http.php';
+    require_once __DIR__ . '/../src/router.php';
+    require_once __DIR__ . '/../src/lib/helpers.php';
+    require_once __DIR__ . '/../src/lib/middleware.php';
+    require_once __DIR__ . '/../src/lib/osm.php';
+    require_once __DIR__ . '/../src/lib/osmData.php';
+    require_once __DIR__ . '/../src/lib/mailer.php';
+    require_once __DIR__ . '/../src/lib/gallery.php';
+    require_once __DIR__ . '/../src/lib/finance.php';
+    require_once __DIR__ . '/../src/lib/documents.php';
+    require_once __DIR__ . '/../src/lib/notifications.php';
+    require_once __DIR__ . '/../src/lib/equipment.php';
+    require_once __DIR__ . '/../src/lib/quartermaster.php';
+    require_once __DIR__ . '/../src/lib/incidents.php';
+    require_once __DIR__ . '/../src/lib/events.php';
+    require_once __DIR__ . '/../src/lib/calendar.php';
+    require_once __DIR__ . '/../src/lib/attendance.php';
+    require_once __DIR__ . '/../src/lib/activity.php';
+    require_once __DIR__ . '/../src/lib/patrolpoints.php';
+    require_once __DIR__ . '/../src/lib/demoseed.php';
+    require_once __DIR__ . '/../src/lib/actions.php';
 } catch (Throwable $e) {
-    error_log('[bootstrap] migration/db init failed: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+    @file_put_contents($bootErrorLog, date('c') . '  THROW: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine() . "\n" . $e->getTraceAsString() . "\n", FILE_APPEND);
+    error_log('[bootstrap] init failed: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
     if (!$isProd) {
         http_response_code(200);
         header('Content-Type: text/plain; charset=utf-8');
@@ -48,7 +91,6 @@ try {
     echo json_encode(['error' => 'The site is temporarily unavailable. Please try again shortly.']);
     exit;
 }
-require_once __DIR__ . '/../src/http.php';
 
 if (loginDebugEnabled() && preg_match('#^/(auth|api/auth|api/me|login\.html)#', $uri)) {
     loginLog('--- New request ---', [
@@ -59,26 +101,6 @@ if (loginDebugEnabled() && preg_match('#^/(auth|api/auth|api/me|login\.html)#', 
         'phpVersion' => PHP_VERSION,
     ]);
 }
-require_once __DIR__ . '/../src/router.php';
-require_once __DIR__ . '/../src/lib/helpers.php';
-require_once __DIR__ . '/../src/lib/middleware.php';
-require_once __DIR__ . '/../src/lib/osm.php';
-require_once __DIR__ . '/../src/lib/osmData.php';
-require_once __DIR__ . '/../src/lib/mailer.php';
-require_once __DIR__ . '/../src/lib/gallery.php';
-require_once __DIR__ . '/../src/lib/finance.php';
-require_once __DIR__ . '/../src/lib/documents.php';
-require_once __DIR__ . '/../src/lib/notifications.php';
-require_once __DIR__ . '/../src/lib/equipment.php';
-require_once __DIR__ . '/../src/lib/quartermaster.php';
-require_once __DIR__ . '/../src/lib/incidents.php';
-require_once __DIR__ . '/../src/lib/events.php';
-require_once __DIR__ . '/../src/lib/calendar.php';
-require_once __DIR__ . '/../src/lib/attendance.php';
-require_once __DIR__ . '/../src/lib/activity.php';
-require_once __DIR__ . '/../src/lib/patrolpoints.php';
-require_once __DIR__ . '/../src/lib/demoseed.php';
-require_once __DIR__ . '/../src/lib/actions.php';
 
 // Idempotent maintenance, mirrors the one-off boot tasks in the Node
 // version's server.js. Cheap enough to run every request at this app's scale.
