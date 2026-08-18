@@ -88,18 +88,48 @@ const CAP_TREND_LABEL = { rising: '↑ Rising', falling: '↓ Falling', stable: 
 
 const CAP_SOURCE_LABEL = { manual: 'Manual', osm: 'OSM', portal: 'Portal', none: '&mdash;' };
 
+const SECTION_TYPE_LABELS = { squirrels: 'Squirrels', beavers: 'Beavers', cubs: 'Cubs', scouts: 'Scouts', explorers: 'Explorers', network: 'Network', group: 'Group / other' };
+
 async function renderCapacity() {
   const box = document.getElementById('tab-content');
   box.innerHTML = '<p class="muted">Loading&hellip;</p>';
-  let dash, cfg;
+  let dash, cfg, mng;
   try {
-    [dash, cfg] = await Promise.all([Api.get('/api/admin/sections/capacity'), Api.get('/api/admin/sections/capacity/settings')]);
+    [dash, cfg, mng] = await Promise.all([Api.get('/api/admin/sections/capacity'), Api.get('/api/admin/sections/capacity/settings'), Api.get('/api/admin/sections/manage')]);
   } catch (e) { box.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; return; }
   const t = dash.totals;
   const cfgBy = {}; (cfg.configured || []).forEach(c => { cfgBy[c.osm_section_id] = c; });
   const known = cfg.sections || [];
+  const typeOpts = (v, types) => `<option value="">&mdash;</option>` + (types || mng.types).map(tp => `<option value="${tp}"${tp === v ? ' selected' : ''}>${escapeHtml(SECTION_TYPE_LABELS[tp] || tp)}</option>`).join('');
 
   box.innerHTML = `
+    <div class="card">
+      <h2>Sections</h2>
+      <p class="muted">The group&rsquo;s sections feed booking, capacity, equipment suitability and other pickers. Sections normally come from OSM (read-only here). When OSM isn&rsquo;t connected you can manage your own below.</p>
+      ${mng.usingDemoFallback ? '<div class="alert alert-warning">No sections defined yet &mdash; the app is showing the built-in demo sections (Cubs, Scouts) everywhere. Add your real sections below to take over.</div>' : ''}
+      <div id="sec-mng-msg"></div>
+      ${mng.sections.length ? `<table class="data-table">
+        <thead><tr><th>Section</th><th>Type</th><th>Source</th><th></th></tr></thead>
+        <tbody>${mng.sections.map(s => s.editable ? `
+          <tr data-sec="${escapeHtml(s.id)}">
+            <td><input class="sec-name" value="${escapeHtml(s.name)}" style="min-width:140px"></td>
+            <td><select class="sec-type">${typeOpts(s.type)}</select></td>
+            <td class="muted">Local</td>
+            <td class="cap-actions"><button class="btn btn-sm sec-save">Save</button><button class="btn btn-sm btn-secondary sec-remove">Remove</button></td>
+          </tr>` : `
+          <tr>
+            <td><strong>${escapeHtml(s.name)}</strong></td>
+            <td>${escapeHtml(SECTION_TYPE_LABELS[s.type] || s.type || '&mdash;')}</td>
+            <td class="muted">OSM</td>
+            <td class="muted" style="font-size:.82rem">read-only</td>
+          </tr>`).join('')}</tbody>
+      </table>` : ''}
+      <div class="cap-actions" style="margin-top:.6rem">
+        <input id="sec-new-name" placeholder="New section name" style="min-width:160px">
+        <select id="sec-new-type">${typeOpts('')}</select>
+        <button class="btn" id="sec-add">Add section</button>
+      </div>
+    </div>
     <div class="cap-stats">
       <div class="card"><div class="muted">Total active children</div><div class="cap-big">${t.totalActive}</div></div>
       <div class="card"><div class="muted">Available spaces</div><div class="cap-big">${t.availableSpaces}</div></div>
@@ -153,6 +183,33 @@ async function renderCapacity() {
       </table>` : '<p class="muted">Sign in with an OSM leader account to list your sections here.</p>'}
     </div>
   `;
+
+  const secMsg = m => { document.getElementById('sec-mng-msg').innerHTML = m ? `<div class="alert alert-error">${escapeHtml(m)}</div>` : ''; };
+  const addBtn = document.getElementById('sec-add');
+  if (addBtn) addBtn.addEventListener('click', async () => {
+    const name = document.getElementById('sec-new-name').value.trim();
+    if (!name) { secMsg('Enter a section name.'); return; }
+    try {
+      await Api.post('/api/admin/sections', { name, type: document.getElementById('sec-new-type').value });
+      renderCapacity();
+    } catch (e) { secMsg(e.message); }
+  });
+  box.querySelectorAll('.sec-save').forEach(btn => btn.addEventListener('click', async () => {
+    const row = btn.closest('tr');
+    try {
+      await Api.patch(`/api/admin/sections/${encodeURIComponent(row.dataset.sec)}`, { name: row.querySelector('.sec-name').value.trim(), type: row.querySelector('.sec-type').value });
+      renderCapacity();
+    } catch (e) { secMsg(e.message); }
+  }));
+  box.querySelectorAll('.sec-remove').forEach(btn => btn.addEventListener('click', () => {
+    const row = btn.closest('tr');
+    if (btn.dataset.confirm) {
+      Api.delete(`/api/admin/sections/${encodeURIComponent(row.dataset.sec)}`).then(renderCapacity).catch(e => secMsg(e.message));
+      return;
+    }
+    btn.dataset.confirm = '1'; btn.textContent = 'Confirm remove'; btn.classList.add('eq-del-yes');
+    setTimeout(() => { if (btn.isConnected) { btn.textContent = 'Remove'; delete btn.dataset.confirm; btn.classList.remove('eq-del-yes'); } }, 4000);
+  }));
 
   box.querySelectorAll('.cap-save').forEach(btn => btn.addEventListener('click', async () => {
     const row = btn.closest('tr');

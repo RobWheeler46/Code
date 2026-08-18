@@ -246,6 +246,76 @@ $router->put('/api/admin/sections/capacity/settings', function ($params) {
     jsonResponse(['ok' => true]);
 });
 
+// ── Centralised section management ─────────────────────────────────────────────
+// Sections are normally OSM-owned, but the portal needs a section list even when
+// OSM is not connected (e.g. the test site) or for a section OSM does not expose.
+// These endpoints manage LOCAL sections (source='local') that live in osm_sections
+// alongside any OSM-synced ones and feed every section picker (QM booking, capacity,
+// equipment suitability). OSM-synced sections stay read-only here - their name/type
+// are owned by OSM - so a later OSM sync never fights the admin's local edits.
+const SECTION_MANAGE_TYPES = ['squirrels', 'beavers', 'cubs', 'scouts', 'explorers', 'network', 'group'];
+
+$router->get('/api/admin/sections/manage', function ($params) {
+    requireAdmin(requireAuth());
+    $rows = dbAll('SELECT osm_section_id, section_name, section_type, source FROM osm_sections ORDER BY section_name');
+    jsonResponse([
+        'sections' => array_map(fn($r) => [
+            'id' => $r['osm_section_id'], 'name' => $r['section_name'], 'type' => $r['section_type'],
+            'source' => $r['source'] ?? 'osm', 'editable' => ($r['source'] ?? 'osm') === 'local',
+        ], $rows),
+        'types' => SECTION_MANAGE_TYPES,
+        // With no rows the pickers fall back to the built-in demo sections; adding one
+        // local section takes over from that fallback.
+        'usingDemoFallback' => count($rows) === 0,
+    ]);
+});
+
+$router->post('/api/admin/sections', function ($params) {
+    $admin = requireAuth();
+    requireAdmin($admin);
+    $body = requestBody();
+    $name = trim((string) ($body['name'] ?? ''));
+    if ($name === '') jsonResponse(['error' => 'A section name is required.'], 400);
+    $type = in_array($body['type'] ?? '', SECTION_MANAGE_TYPES, true) ? $body['type'] : null;
+    // A prefixed id can never collide with a real (numeric) OSM section id, so an OSM
+    // sync's ON CONFLICT(osm_section_id) will never match - local rows stay untouched.
+    $id = 'local-' . bin2hex(random_bytes(4));
+    dbRun("INSERT INTO osm_sections (osm_section_id, section_name, section_type, source, sync_status) VALUES (?, ?, ?, 'local', 'ok')", [$id, $name, $type]);
+    logAudit(['userId' => $admin['id'], 'action' => 'admin_section_create', 'entityType' => 'osm_section', 'entityId' => $id, 'ipAddress' => clientIp(), 'details' => ['name' => $name, 'type' => $type]]);
+    jsonResponse(['ok' => true, 'id' => $id], 201);
+});
+
+$router->patch('/api/admin/sections/:id', function ($params) {
+    $admin = requireAuth();
+    requireAdmin($admin);
+    $row = dbGet('SELECT * FROM osm_sections WHERE osm_section_id = ?', [$params['id']]);
+    if (!$row) jsonResponse(['error' => 'Section not found.'], 404);
+    if (($row['source'] ?? 'osm') !== 'local') jsonResponse(['error' => 'OSM-synced sections are managed in OSM and cannot be edited here.'], 403);
+    $body = requestBody();
+    $name = trim((string) ($body['name'] ?? $row['section_name']));
+    if ($name === '') jsonResponse(['error' => 'A section name is required.'], 400);
+    $type = array_key_exists('type', $body) ? (in_array($body['type'], SECTION_MANAGE_TYPES, true) ? $body['type'] : null) : $row['section_type'];
+    dbRun('UPDATE osm_sections SET section_name = ?, section_type = ? WHERE osm_section_id = ?', [$name, $type, $row['osm_section_id']]);
+    // Keep the capacity row's cached name in step so the tracker relabels too.
+    dbRun('UPDATE section_capacity SET section_name = ? WHERE osm_section_id = ?', [$name, $row['osm_section_id']]);
+    logAudit(['userId' => $admin['id'], 'action' => 'admin_section_update', 'entityType' => 'osm_section', 'entityId' => $row['osm_section_id'], 'ipAddress' => clientIp(), 'details' => ['name' => $name, 'type' => $type]]);
+    jsonResponse(['ok' => true]);
+});
+
+$router->delete('/api/admin/sections/:id', function ($params) {
+    $admin = requireAuth();
+    requireAdmin($admin);
+    $row = dbGet('SELECT * FROM osm_sections WHERE osm_section_id = ?', [$params['id']]);
+    if (!$row) jsonResponse(['error' => 'Section not found.'], 404);
+    if (($row['source'] ?? 'osm') !== 'local') jsonResponse(['error' => 'OSM-synced sections cannot be removed here.'], 403);
+    dbRun('DELETE FROM osm_sections WHERE osm_section_id = ?', [$row['osm_section_id']]);
+    dbRun('DELETE FROM section_capacity WHERE osm_section_id = ?', [$row['osm_section_id']]);
+    // Historical qm_booking_sections rows keep their snapshot name - a past booking's
+    // record must survive a section being removed, so they are left in place.
+    logAudit(['userId' => $admin['id'], 'action' => 'admin_section_delete', 'entityType' => 'osm_section', 'entityId' => $row['osm_section_id'], 'ipAddress' => clientIp(), 'details' => ['name' => $row['section_name']]]);
+    jsonResponse(['ok' => true]);
+});
+
 // Named drill-down for a section - the portal's own linked children (not OSM).
 $router->get('/api/admin/sections/:sectionId/children', function ($params) {
     $admin = requireAuth();

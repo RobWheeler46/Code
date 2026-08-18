@@ -396,7 +396,8 @@ CREATE TABLE IF NOT EXISTS osm_sections (
   last_synced_at TEXT,
   synced_by INTEGER REFERENCES users(id),
   sync_status TEXT NOT NULL DEFAULT 'ok' CHECK(sync_status IN ('ok','error')),
-  sync_error TEXT
+  sync_error TEXT,
+  source TEXT NOT NULL DEFAULT 'osm'
 );
 
 CREATE TABLE IF NOT EXISTS section_capacity (
@@ -1277,6 +1278,13 @@ $qmiSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='qm_b
 if ($qmiSql && !str_contains($qmiSql, 'permit_confirmed')) {
     db()->exec('ALTER TABLE qm_booking_items ADD COLUMN permit_confirmed INTEGER NOT NULL DEFAULT 0');
     db()->exec('ALTER TABLE qm_booking_items ADD COLUMN responsible_adult TEXT');
+}
+// Migration: osm_sections gained a source marker so admin-managed local sections
+// (added when OSM is not connected, e.g. the test site) can coexist with OSM-synced
+// ones - an OSM sync only touches source='osm' rows and never clobbers local ones.
+$osmSecSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='osm_sections'")['sql'] ?? '';
+if ($osmSecSql && !str_contains($osmSecSql, 'source')) {
+    db()->exec("ALTER TABLE osm_sections ADD COLUMN source TEXT NOT NULL DEFAULT 'osm'");
 }
 // Migration: pp_submissions gained guest attribution (FRD v2.4 s13.8) - guest
 // scores are owned by a service user but carry the link id and unverified name.

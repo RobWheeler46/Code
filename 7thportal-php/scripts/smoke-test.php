@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -266,6 +266,21 @@ function scenario_logic_qm_edit_guard(): void
     check('guard: brand-new item has no history', equipmentHasHistory((int) $iid) === false);
     dbRun("INSERT INTO equipment_inspections (asset_id, outcome, inspected_by) VALUES (?, 'pass', ?)", [$iid, $uid]);
     check('guard: an inspection record locks tracking', equipmentHasHistory((int) $iid) === true);
+}
+
+// Centralised sections: the QM booking picker reads osm_sections (any source), so an
+// admin-managed local section feeds it; with no rows it falls back to demo sections.
+function scenario_logic_sections(): void
+{
+    useDb(tmpDb('sec')); boot(); loadLibs();
+    require_once dirname(__DIR__) . '/src/lib/osm.php'; // for the OSM_DEMO_SECTIONS fallback
+    $demo = qmSectionList();
+    check('sections: empty osm_sections -> demo fallback', count($demo) >= 1 && $demo[0]['name'] !== '');
+    dbRun("INSERT INTO osm_sections (osm_section_id, section_name, section_type, source, sync_status) VALUES ('local-aa', 'Beavers', 'beavers', 'local', 'ok')");
+    $list = qmSectionList();
+    check('sections: a local section feeds the QM picker', in_array('Beavers', array_column($list, 'name'), true));
+    // once real rows exist, the demo fallback no longer applies
+    check('sections: demo fallback drops once a section exists', count($list) === 1);
 }
 
 // QM kit completeness check: overall result derives from component statuses.
