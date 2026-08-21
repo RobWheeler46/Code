@@ -403,13 +403,17 @@ textarea { min-height: 5rem; resize: vertical; }
   .app-nav .tagline, .app-nav .user-info { display: none; }
   .btn { min-height: 42px; }
   input, select, textarea { font-size: 16px; }   /* stop iOS zoom-on-focus */
+  /* Contain dense tables below the sidebar breakpoint so they scroll inside
+     their own box - otherwise a wide table's min-content width (e.g. the
+     equipment register's action-button column) pushes the whole page sideways
+     in the 700-899px band where the sidebar is hidden but the table isn't yet
+     contained. */
+  .card table.data-table, .card > table:not(.kv-table) { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 }
 
 @media (max-width: 640px) {
   .container { padding: 1rem; }
   .modal-backdrop { padding: 0.5rem; }
-  /* Contain dense tables so core mobile journeys never scroll the whole page */
-  .card table.data-table, .card > table:not(.kv-table) { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 }
 
 /* Responsive "cards" tables: on phones a <table class="rcards"> collapses each row
