@@ -33,7 +33,7 @@ function render() {
       ${pinRow}${teamRow}${pointRow}${reasonRow}
       <div id="g-msg"></div>
       <div class="pp-qs-submit"><div class="muted">${selTeam && selPoints !== null ? esc((INFO.teams.find(t => t.id === selTeam) || {}).name) + ' · ' + (selPoints >= 0 ? '+' : '') + selPoints : 'Pick a team and points'}</div>
-        <button class="btn" id="g-go"${ready ? '' : ' disabled'} data-act="submit">Submit for approval</button></div>
+        <button class="btn" id="g-go"${ready ? '' : ' disabled'} data-act="submit">Send for approval</button></div>
     </div>`;
 }
 

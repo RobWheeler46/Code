@@ -69,7 +69,7 @@ function render() {
       ${activityRow}${catRow}${teamRow}${pointRow}${reasonRow}
       <div id="pp-qs-msg"></div>
       <div class="pp-qs-submit"><div class="muted">${summary}</div>
-        <button class="btn" id="pp-qs-go"${ready ? '' : ' disabled'} data-act="submit">${C.approvalMode === 'approval' ? 'Submit for approval' : 'Award points'}</button></div>
+        <button class="btn" id="pp-qs-go"${ready ? '' : ' disabled'} data-act="submit">${C.approvalMode === 'approval' ? 'Send for approval' : 'Award points'}</button></div>
     </div>${recent}`;
 }
 

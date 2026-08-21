@@ -21,7 +21,7 @@ function openImportModal() {
     <p class="muted">Upload a CSV with one item per row. <a href="/api/equipment/import-template.csv">Download the template</a>. Imports are <strong>staged for review</strong> — you confirm each item's tracking mode before it goes live.</p>
     <div class="field"><input type="file" id="eq-import-file" accept=".csv,text/csv"></div>
     <div id="eq-import-preview"></div>
-    <div class="cap-actions"><button class="btn" id="eq-import-apply" disabled>Stage for review</button><button class="btn btn-secondary" id="eq-import-cancel">Cancel</button></div>
+    <div class="cap-actions"><button class="btn" id="eq-import-apply" disabled>Send for review</button><button class="btn btn-secondary" id="eq-import-cancel">Cancel</button></div>
     <div id="eq-import-msg"></div></div>`;
   document.body.appendChild(modal);
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
@@ -186,7 +186,7 @@ async function openInspectForm(assetId) {
     <div class="field" id="ei-next-wrap"><label>Next inspection date</label><input id="ei-next" type="date" value="${a.nextInspectionDate || ''}"></div>
     <div class="field" id="ei-lock-wrap" hidden><label style="font-weight:400"><input type="checkbox" id="ei-lock"> Lock the item until it can be inspected</label></div>
     <div class="field"><label>Note</label><textarea id="ei-note" rows="2" placeholder="Findings, advisory, or repair details"></textarea></div>
-    <div class="cap-actions"><button class="btn" id="ei-save">Record inspection</button><button class="btn btn-secondary" id="ei-cancel">Cancel</button></div>
+    <div class="cap-actions"><button class="btn" id="ei-save">Log inspection</button><button class="btn btn-secondary" id="ei-cancel">Cancel</button></div>
     <h3 style="font-size:1rem;margin:1rem 0 .3rem">Inspection history</h3>${history}
   </div>`;
   document.body.appendChild(modal);

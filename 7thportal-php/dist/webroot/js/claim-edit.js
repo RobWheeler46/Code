@@ -77,7 +77,7 @@ function render(claim) {
     </div>` : ''}
 
     <div class="actions-row">
-      ${isOwner && hasSubmittableItems ? '<button class="btn btn-primary" id="submit-claim-btn">Submit claim for approval</button>' : ''}
+      ${isOwner && hasSubmittableItems ? '<button class="btn btn-primary" id="submit-claim-btn">Send claim for approval</button>' : ''}
       ${isOwner && claim.status === 'draft' ? '<button class="btn btn-danger" id="delete-claim-btn">Delete claim</button>' : ''}
       <a class="btn btn-secondary" href="expenses.html">Back to claims</a>
     </div>
@@ -242,7 +242,7 @@ function renderApprovalActions(item) {
     <div class="actions-row">
       ${a.canApprove ? `<button class="btn btn-success btn-sm" data-approve="${item.id}">Approve</button>` : ''}
       ${a.canSecondApprove ? `<button class="btn btn-success btn-sm" data-second-approve="${item.id}">Approve (second approval)</button>` : ''}
-      ${a.canRequestInfo ? `<button class="btn btn-secondary btn-sm" data-request-info="${item.id}">Request more information</button>` : ''}
+      ${a.canRequestInfo ? `<button class="btn btn-secondary btn-sm" data-request-info="${item.id}">Ask for more info</button>` : ''}
       ${a.canReject ? `<button class="btn btn-danger btn-sm" data-reject="${item.id}">Reject</button>` : ''}
     </div>
     <div class="field" id="reason-field-${item.id}" style="display:none;">

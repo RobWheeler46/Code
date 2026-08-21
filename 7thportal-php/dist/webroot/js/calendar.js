@@ -247,7 +247,7 @@ function openItemDetail(it) {
   if (it.canManage) {
     actions = `<div class="modal-actions" style="display:flex;gap:.5rem;margin-top:1rem;flex-wrap:wrap">
       <button class="btn btn-sm" id="ci-edit">Edit</button>
-      ${it.parentSafe ? '<button class="btn btn-secondary btn-sm" id="ci-unpub">Unpublish</button>' : '<button class="btn btn-secondary btn-sm" id="ci-pub">Publish to parents</button>'}
+      ${it.parentSafe ? '<button class="btn btn-secondary btn-sm" id="ci-unpub">Unpublish</button>' : '<button class="btn btn-secondary btn-sm" id="ci-pub">Share with parents</button>'}
       ${(META.eventHubEnabled && !it.convertedEventHubId) ? '<button class="btn btn-secondary btn-sm" id="ci-convert">Convert to event</button>' : ''}
       ${it.convertedEventHubId ? `<a class="btn btn-secondary btn-sm" href="event-hub.html?id=${it.convertedEventHubId}">Open linked event</a>` : ''}
       <button class="btn btn-secondary btn-sm" id="ci-cancel">Cancel</button>
@@ -332,10 +332,10 @@ function openEntryForm(entry, defaultDate) {
 
 function publishEntry(id) {
   const field = (label, html) => `<div class="field"><label>${label}</label>${html}</div>`;
-  openModal('Publish to parents', `
+  openModal('Share with parents', `
     <p class="muted">Parents will see only the parent-safe title and description below - not leader-only notes.</p>
-    ${field('Parent-safe title', `<input id="cp-title" placeholder="e.g. Cubs sleepover">`)}
-    ${field('Parent-safe description (optional)', `<textarea id="cp-desc" rows="2"></textarea>`)}
+    ${field('Title parents will see', `<input id="cp-title" placeholder="e.g. Cubs sleepover">`)}
+    ${field('Description parents will see (optional)', `<textarea id="cp-desc" rows="2"></textarea>`)}
     <div class="modal-actions" style="display:flex;gap:.5rem;margin-top:1rem"><button class="btn" id="cp-ok">Publish</button><button class="btn btn-secondary" id="cp-cancel">Cancel</button></div>`);
   document.getElementById('cp-cancel').addEventListener('click', closeModal);
   document.getElementById('cp-ok').addEventListener('click', async () => {

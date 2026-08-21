@@ -120,7 +120,7 @@ function statusNote(album) {
 
 function actionButtons(album) {
   const btns = [];
-  if (album.status === 'draft') btns.push('<button class="btn btn-primary" id="submit-btn">Submit for approval</button>');
+  if (album.status === 'draft') btns.push('<button class="btn btn-primary" id="submit-btn">Send for approval</button>');
   if (ME.role === 'admin' && album.status === 'pending_approval') {
     btns.push('<button class="btn btn-success" id="approve-btn">Approve &amp; publish</button>');
     btns.push('<button class="btn btn-secondary" id="reject-btn">Send back to draft</button>');

@@ -270,13 +270,13 @@ function renderActions(b, items, isOwner) {
   const box = document.getElementById('qm-actions');
   const btns = [];
   if (isOwner && b.status === 'draft') {
-    btns.push(`<button class="btn" id="qm-submit">Submit for review</button>`);
+    btns.push(`<button class="btn" id="qm-submit">Send for review</button>`);
     btns.push(`<button class="btn btn-secondary" id="qm-delete">Delete draft</button>`);
   }
-  if (CAN_APPROVE && b.status === 'submitted') btns.push(`<button class="btn" id="qm-finalise">Finalise decision</button>`);
+  if (CAN_APPROVE && b.status === 'submitted') btns.push(`<button class="btn" id="qm-finalise">Confirm decision</button>`);
   if (CAN_APPROVE && ['approved', 'partially_approved'].includes(b.status)) btns.push(`<button class="btn" id="qm-ready">Mark ready for collection</button>`);
   if (CAN_APPROVE && ['ready_for_collection', 'approved', 'partially_approved'].includes(b.status)) btns.push(`<button class="btn" id="qm-collect">Record collection</button>`);
-  if (CAN_APPROVE && b.status === 'collected') btns.push(`<button class="btn" id="qm-return">Record return</button>`);
+  if (CAN_APPROVE && b.status === 'collected') btns.push(`<button class="btn" id="qm-return">Log return</button>`);
   if (CAN_APPROVE && b.status === 'returned') btns.push(`<button class="btn" id="qm-close">Close booking</button>`);
   // Cancel: owner while draft/submitted, QM at any non-terminal point.
   const cancellable = !['closed', 'cancelled'].includes(b.status) && (CAN_APPROVE || (isOwner && ['draft', 'submitted'].includes(b.status)));
@@ -421,7 +421,7 @@ async function decideItem(b, item, decision) {
       + field('Substitute item', `<select id="qd-sub"><option value="">&mdash; type below &mdash;</option>${cat.map(a => `<option value="${a.id}" data-name="${escapeHtml(a.name)}">${escapeHtml(a.name)}${a.windowKnown ? ` (${a.available} free)` : ''}</option>`).join('')}</select>`)
       + field('Or substitute name', `<input id="qd-subname" value="${escapeHtml(item.substituteName || '')}">`);
   }
-  const titles = { approve: 'Approve item', reject: 'Reject item', substitute: 'Substitute item', more_info: 'Request more information' };
+  const titles = { approve: 'Approve item', reject: 'Reject item', substitute: 'Substitute item', more_info: 'Ask for more info' };
   const modal = openModal(titles[decision] + ': ' + item.itemName, `
     ${extra}
     ${field('Note to requester (optional)', `<textarea id="qd-notes" rows="2">${escapeHtml(item.qmNotes || '')}</textarea>`)}
@@ -501,7 +501,7 @@ function recordReturn(b, items) {
       <td><select class="qrt-flag" data-id="${i.id}"><option value="">OK</option><option value="damaged">Damaged</option><option value="missing">Missing</option></select></td>
       <td><input class="qrt-damage" data-id="${i.id}" placeholder="Damage / missing note"></td>
     </tr>`).join('');
-  openModal('Record return', `
+  openModal('Log return', `
     ${field('Overall condition note (optional)', `<input id="qrt-note" placeholder="e.g. All returned, tent 2 needs drying">`)}
     ${approved.length ? `<table class="data-table"><thead><tr><th>Item</th><th>State</th><th>Note</th></tr></thead><tbody>${rows}</tbody></table>
     <p class="muted" style="margin-top:.5rem">Items flagged damaged are set to <em>Under repair</em> in the register; missing items are set to <em>Missing</em>.</p>` : ''}

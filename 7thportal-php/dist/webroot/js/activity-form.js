@@ -237,7 +237,7 @@ function approverPanel() {
     ${F('Comment (required to return or reject)', `<textarea id="ap-comment" rows="2"></textarea>`)}
     <div class="cap-actions">
       <button class="btn" id="ap-approve">Approve</button>
-      <button class="btn btn-secondary" id="ap-info">Request more info</button>
+      <button class="btn btn-secondary" id="ap-info">Ask for more info</button>
       <button class="btn btn-secondary" id="ap-reject">Reject</button>
     </div><div id="ap-msg"></div></div>`;
 }
@@ -261,7 +261,7 @@ function submitBarInner(checks) {
       ? `<div class="alert alert-warning">Before submitting, complete: ${missing.map(esc).join(', ')}.</div>`
       : '<div class="alert alert-success">All required items are complete.</div>'}
     <div class="cap-actions">
-      <button class="btn" id="af-submit"${missing.length ? ' disabled' : ''}>${FORM.status === 'more_info' ? 'Resubmit' : 'Submit for approval'}</button>
+      <button class="btn" id="af-submit"${missing.length ? ' disabled' : ''}>${FORM.status === 'more_info' ? 'Resubmit' : 'Send for approval'}</button>
       <button class="btn btn-secondary" id="f-save" style="margin-left:auto">Save now</button>
       ${ACTIONS.canDelete ? '<button class="btn btn-secondary" id="af-delete">Delete draft</button>' : ''}
     </div>`;
