@@ -28,6 +28,11 @@
   --pending-bg: #e2ebf7; --pending-ink: #1e4684;
   --neutral-bg: #ece9f1; --neutral-ink: #4a4557;
   --demo-bg: #efe6fb;    --demo-ink: #55299e;
+  /* Soft layered shadows (v1.1 restyle) — warmth without heaviness on dense screens. */
+  --shadow-sm: 0 1px 2px rgba(27,21,51,.04);
+  --shadow: 0 1px 2px rgba(27,21,51,.04), 0 6px 18px rgba(27,21,51,.05);
+  --shadow-lg: 0 2px 6px rgba(27,21,51,.06), 0 16px 40px rgba(27,21,51,.12);
+  --radius-card: 14px;
 }
 
 * { box-sizing: border-box; }
@@ -114,9 +119,9 @@ a { color: var(--purple); }
 .app-main .container { max-width: none; margin: 0; }
 
 /* ── Cards ───────────────────────────────────────────────────────────── */
-.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; margin-bottom: 1.25rem; }
-.card.clickable { cursor: pointer; transition: box-shadow 0.15s; display: block; text-decoration: none; color: inherit; }
-.card.clickable:hover { box-shadow: 0 4px 14px rgba(109,40,217,0.14); }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 1.25rem; margin-bottom: 1.25rem; box-shadow: var(--shadow); }
+.card.clickable { cursor: pointer; transition: box-shadow 0.15s, transform 0.15s; display: block; text-decoration: none; color: inherit; }
+.card.clickable:hover { box-shadow: 0 4px 10px rgba(27,21,51,.06), 0 14px 30px rgba(109,40,217,0.14); transform: translateY(-1px); }
 .card.clickable:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
 
 .card-accent { border-left: 4px solid var(--purple); }
@@ -326,7 +331,7 @@ textarea { min-height: 5rem; resize: vertical; }
 /* Capacity RAG statuses (good/watch/full/over/unset) inherit the shared status-pill
    tints defined with the .badge rules above — no separate solid-fill rules needed. */
 .modal-backdrop { position: fixed; inset: 0; background: rgba(23,36,42,0.55); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 1rem; }
-.modal-box { background: var(--card); border-radius: 8px; padding: 1.5rem; width: 100%; max-width: 520px; max-height: 88vh; overflow: auto; box-shadow: 0 12px 40px rgba(0,0,0,0.25); }
+.modal-box { background: var(--card); border-radius: var(--radius-card); padding: 1.5rem; width: 100%; max-width: 520px; max-height: 88vh; overflow: auto; box-shadow: var(--shadow-lg); }
 .modal-box h2 { margin-top: 0; }
 
 /* Progressive Add/Edit Equipment form (FRD v2.4.4). */
@@ -484,3 +489,10 @@ textarea { min-height: 5rem; resize: vertical; }
 
 /* Key/value detail table (Quartermaster booking, etc.) */
 .build-tag { display: inline-block; margin-left: 0.4rem; padding: 0.05rem 0.4rem; border-radius: 4px; background: var(--border); color: var(--muted); font-size: 0.72rem; font-variant-numeric: tabular-nums; }
+
+/* Respect reduced-motion: keep the restyle's hover lift and drawer slide off when
+   the viewer has asked for less movement. */
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+  .card.clickable:hover { transform: none; }
+}
