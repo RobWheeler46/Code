@@ -20,6 +20,14 @@
   --muted: #6b6478;
   --radius: 10px;
   --radius-pill: 999px;
+  /* Semantic status tints (v1.1 restyle) — one tinted pill per state, icon+word,
+     never colour alone. Each status family funnels here via the JS badge-key maps. */
+  --ready-bg: #e4f4ee;   --ready-ink: #0a5f49;
+  --attn-bg: #fbeed6;    --attn-ink: #8a5606;
+  --block-bg: #f9e2e0;   --block-ink: #8a1c16;
+  --pending-bg: #e2ebf7; --pending-ink: #1e4684;
+  --neutral-bg: #ece9f1; --neutral-ink: #4a4557;
+  --demo-bg: #efe6fb;    --demo-ink: #55299e;
 }
 
 * { box-sizing: border-box; }
@@ -131,17 +139,25 @@ th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(
 th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.02em; }
 tr:hover td { background: #faf9fc; }
 
-.badge { display: inline-block; padding: 0.15rem 0.55rem; border-radius: var(--radius-pill); font-size: 0.75rem; font-weight: 600; color: #fff; background: var(--muted); }
-.badge[data-status="draft"] { background: #8a8393; }
-.badge[data-status="published"] { background: var(--green); }
-.badge[data-status="active"] { background: var(--green); }
-.badge[data-status="suspended"] { background: var(--amber); }
-.badge[data-status="deleted"] { background: var(--red); }
-.badge[data-status="pending_approval"] { background: var(--blue); }
-.badge[data-status="archived"] { background: #6b6475; }
-.badge[data-status="inactive"] { background: #8a8393; }
-.badge[data-completed="true"] { background: var(--green); }
-.badge[data-completed="false"] { background: var(--amber); }
+/* Status pills (v1.1 restyle): tinted background + same-hue ink, so status reads
+   softly and never depends on colour alone (the label text carries the meaning).
+   Default is the neutral tint; each canonical badge-key maps to a semantic family. */
+.badge { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.2rem 0.6rem; border-radius: var(--radius-pill); font-size: 0.76rem; font-weight: 700; letter-spacing: 0.01em; background: var(--neutral-bg); color: var(--neutral-ink); }
+.badge[data-status="active"],
+.badge[data-status="published"],
+.badge[data-status="good"],
+.badge[data-completed="true"] { background: var(--ready-bg); color: var(--ready-ink); }
+.badge[data-status="pending_approval"] { background: var(--pending-bg); color: var(--pending-ink); }
+.badge[data-status="suspended"],
+.badge[data-status="watch"],
+.badge[data-status="full"],
+.badge[data-completed="false"] { background: var(--attn-bg); color: var(--attn-ink); }
+.badge[data-status="deleted"],
+.badge[data-status="over"] { background: var(--block-bg); color: var(--block-ink); }
+.badge[data-status="draft"],
+.badge[data-status="archived"],
+.badge[data-status="inactive"],
+.badge[data-status="unset"] { background: var(--neutral-bg); color: var(--neutral-ink); }
 
 /* Finance approval groups (admin): group card + member chips */
 .inline-form { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin: 0.4rem 0; }
@@ -154,7 +170,7 @@ tr:hover td { background: #faf9fc; }
 .chip-x:hover { color: var(--red); }
 label.check { display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 400; }
 tr.row-warn > td { background: color-mix(in srgb, var(--amber) 12%, transparent); }
-.badge[data-role="admin"] { background: var(--purple); }
+.badge[data-role="admin"] { background: var(--demo-bg); color: var(--demo-ink); }
 
 /* ── Buttons ─────────────────────────────────────────────────────────── */
 .btn { display: inline-block; border: none; border-radius: var(--radius-pill); padding: 0.6rem 1.3rem; font-size: 0.9rem; cursor: pointer; font-weight: 700; text-decoration: none; }
@@ -307,11 +323,8 @@ textarea { min-height: 5rem; resize: vertical; }
 .data-table th, .data-table td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .data-table th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 .data-table input { padding: 0.3rem 0.4rem; border: 1px solid var(--border); border-radius: 5px; font: inherit; }
-.badge[data-status="good"] { background: var(--green); }
-.badge[data-status="watch"] { background: var(--amber); }
-.badge[data-status="full"] { background: #c2560a; }
-.badge[data-status="over"] { background: var(--red); }
-.badge[data-status="unset"] { background: #8a8393; }
+/* Capacity RAG statuses (good/watch/full/over/unset) inherit the shared status-pill
+   tints defined with the .badge rules above — no separate solid-fill rules needed. */
 .modal-backdrop { position: fixed; inset: 0; background: rgba(23,36,42,0.55); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 1rem; }
 .modal-box { background: var(--card); border-radius: 8px; padding: 1.5rem; width: 100%; max-width: 520px; max-height: 88vh; overflow: auto; box-shadow: 0 12px 40px rgba(0,0,0,0.25); }
 .modal-box h2 { margin-top: 0; }
