@@ -62,7 +62,11 @@ function render(album) {
       <div class="dropzone" id="dropzone">
         <p>Drag photos here, or</p>
         <input type="file" id="file-input" accept="image/*" multiple style="display:none;">
-        <button class="btn btn-secondary btn-sm" id="choose-files" type="button">Choose files</button>
+        <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none;">
+        <div class="cap-actions" style="justify-content:center">
+          <button class="btn btn-primary btn-sm camera-only" id="camera-photo" type="button">📷 Take photo</button>
+          <button class="btn btn-secondary btn-sm" id="choose-files" type="button">Choose files</button>
+        </div>
       </div>
       <div id="upload-status"></div>
     </div>
@@ -160,6 +164,12 @@ function wireUpload(album) {
   const dropzone = document.getElementById('dropzone');
   chooseBtn.addEventListener('click', () => input.click());
   input.addEventListener('change', () => uploadFiles(album.id, input.files));
+  const cameraInput = document.getElementById('camera-input');
+  const cameraBtn = document.getElementById('camera-photo');
+  if (cameraBtn) {
+    cameraBtn.addEventListener('click', () => cameraInput.click());
+    cameraInput.addEventListener('change', () => uploadFiles(album.id, cameraInput.files));
+  }
   ['dragover', 'dragenter'].forEach(evt => dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.add('dragover'); }));
   ['dragleave', 'drop'].forEach(evt => dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.remove('dragover'); }));
   dropzone.addEventListener('drop', (e) => { if (e.dataTransfer.files.length) uploadFiles(album.id, e.dataTransfer.files); });

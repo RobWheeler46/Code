@@ -513,3 +513,9 @@ textarea { min-height: 5rem; resize: vertical; }
   * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
   .card.clickable:hover { transform: none; }
 }
+
+/* Camera-first uploads (v1.1 restyle): the "Take photo" button is only useful on a
+   device with a camera and a touch (coarse) pointer — hidden on mouse/desktop, where
+   "Choose file" already opens the file picker. */
+.camera-only { display: none; }
+@media (pointer: coarse) { .camera-only { display: inline-block; } }

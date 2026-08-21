@@ -197,7 +197,11 @@ function renderReceiptCard(item, editable) {
       <div class="dropzone" id="dropzone-${item.id}" style="margin-top:0.5rem;">
         <p>Drag a receipt here, or</p>
         <input type="file" id="file-input-${item.id}" accept="image/*,application/pdf" style="display:none;">
-        <button class="btn btn-secondary btn-sm" id="choose-file-${item.id}" type="button">Choose file (JPG, PNG or PDF)</button>
+        <input type="file" id="camera-input-${item.id}" accept="image/*" capture="environment" style="display:none;">
+        <div class="cap-actions" style="justify-content:center">
+          <button class="btn btn-primary btn-sm camera-only" id="camera-btn-${item.id}" type="button">📷 Take photo</button>
+          <button class="btn btn-secondary btn-sm" id="choose-file-${item.id}" type="button">Choose file (JPG, PNG or PDF)</button>
+        </div>
       </div>
       <div id="upload-status-${item.id}"></div>
       ` : ''}
@@ -324,6 +328,12 @@ function wireItem(claim, item) {
       const input = document.getElementById(`file-input-${item.id}`);
       const chooseBtn = document.getElementById(`choose-file-${item.id}`);
       const dropzone = document.getElementById(`dropzone-${item.id}`);
+      const cameraInput = document.getElementById(`camera-input-${item.id}`);
+      const cameraBtn = document.getElementById(`camera-btn-${item.id}`);
+      if (cameraBtn) {
+        cameraBtn.addEventListener('click', () => cameraInput.click());
+        cameraInput.addEventListener('change', () => uploadReceipt(item.id, cameraInput.files[0]));
+      }
       if (chooseBtn) {
         chooseBtn.addEventListener('click', () => input.click());
         input.addEventListener('change', () => uploadReceipt(item.id, input.files[0]));
