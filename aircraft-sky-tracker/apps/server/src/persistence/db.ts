@@ -69,6 +69,9 @@ function migrate(db: DatabaseSync): void {
       show_destination_arcs INTEGER NOT NULL DEFAULT 0,
       highlight_interesting INTEGER NOT NULL DEFAULT 1,
       watchlist           TEXT    NOT NULL DEFAULT '',
+      low_altitude_threshold INTEGER NOT NULL DEFAULT 3000,
+      history_enabled     INTEGER NOT NULL DEFAULT 1,
+      history_retention_days INTEGER NOT NULL DEFAULT 31,
       interpolation       INTEGER NOT NULL,
       created_at          TEXT    NOT NULL,
       updated_at          TEXT    NOT NULL
@@ -110,12 +113,38 @@ function migrate(db: DatabaseSync): void {
       expires_at               TEXT NOT NULL,
       source                   TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS history_passes (
+      pass_id                    TEXT PRIMARY KEY,
+      icao_hex                   TEXT NOT NULL,
+      registration               TEXT,
+      callsign                   TEXT,
+      aircraft_type              TEXT,
+      aircraft_description       TEXT,
+      first_seen                 TEXT NOT NULL,
+      last_seen                  TEXT NOT NULL,
+      origin                     TEXT,
+      destination                TEXT,
+      route_confidence           TEXT,
+      closest_approach_miles     REAL NOT NULL,
+      minimum_altitude_feet      INTEGER,
+      maximum_altitude_feet      INTEGER,
+      maximum_ground_speed_knots INTEGER,
+      interesting                INTEGER NOT NULL,
+      interesting_reasons        TEXT NOT NULL,
+      created_date               TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_history_created_date
+      ON history_passes(created_date);
   `);
 
   // Additive migrations for databases created by earlier versions.
   ensureColumn(db, "settings", "show_destination_arcs", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn(db, "settings", "highlight_interesting", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn(db, "settings", "watchlist", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(db, "settings", "low_altitude_threshold", "INTEGER NOT NULL DEFAULT 3000");
+  ensureColumn(db, "settings", "history_enabled", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db, "settings", "history_retention_days", "INTEGER NOT NULL DEFAULT 31");
 }
 
 /** Add a column to an existing table if it is not already present. */

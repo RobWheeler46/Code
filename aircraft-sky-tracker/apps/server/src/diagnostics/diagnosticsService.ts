@@ -8,6 +8,7 @@ import type { RouteService } from "../routes/routeService.js";
 import type { WebSocketService } from "../websocket/wsService.js";
 import type { LocationService } from "../location/locationService.js";
 import type { AlertService } from "../alerts/alertService.js";
+import type { HistoryService } from "../history/historyService.js";
 import { env } from "../config/env.js";
 
 export interface HealthReport {
@@ -38,6 +39,8 @@ export interface DiagnosticsReport {
   uptimeSeconds: number;
   alertsEnabled: boolean;
   lastAlert: string | null;
+  passesToday: number;
+  interestingToday: number;
 }
 
 export class DiagnosticsService {
@@ -49,6 +52,7 @@ export class DiagnosticsService {
     private readonly ws: WebSocketService,
     private readonly location: LocationService,
     private readonly alerts: AlertService,
+    private readonly history: HistoryService,
     private readonly startedAtMs: number,
   ) {}
 
@@ -104,6 +108,8 @@ export class DiagnosticsService {
       uptimeSeconds: Math.floor((Date.now() - this.startedAtMs) / 1000),
       alertsEnabled: this.alerts.enabled,
       lastAlert: this.alerts.lastAlert ?? null,
+      passesToday: this.history.passesToday(),
+      interestingToday: this.history.interestingToday(),
     };
   }
 }

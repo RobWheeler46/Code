@@ -23,6 +23,9 @@ interface SettingsRow {
   show_destination_arcs: number;
   highlight_interesting: number;
   watchlist: string;
+  low_altitude_threshold: number;
+  history_enabled: number;
+  history_retention_days: number;
   interpolation: number;
 }
 
@@ -51,6 +54,9 @@ function rowToConfig(row: SettingsRow): AppConfig {
     interpolationEnabled: bool(row.interpolation),
     highlightInteresting: bool(row.highlight_interesting),
     watchlist: row.watchlist ?? "",
+    lowAltitudeThresholdFeet: row.low_altitude_threshold,
+    historyEnabled: bool(row.history_enabled),
+    historyRetentionDays: row.history_retention_days,
   };
 }
 
@@ -73,10 +79,11 @@ export class SettingsRepo {
           display_mode, show_registration, show_destination, show_flight_number,
           show_altitude, show_distance, show_centre_marker, show_range_ring,
           show_header, show_trails, show_destination_arcs,
-          highlight_interesting, watchlist, interpolation,
+          highlight_interesting, watchlist, low_altitude_threshold,
+          history_enabled, history_retention_days, interpolation,
           created_at, updated_at
         ) VALUES (
-          1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )`,
       )
       .run(
@@ -98,6 +105,9 @@ export class SettingsRepo {
         Number(defaults.showDestinationArcs),
         Number(defaults.highlightInteresting),
         defaults.watchlist,
+        defaults.lowAltitudeThresholdFeet,
+        Number(defaults.historyEnabled),
+        defaults.historyRetentionDays,
         Number(defaults.interpolationEnabled),
         now,
         now,
@@ -130,7 +140,8 @@ export class SettingsRepo {
           show_distance = ?, show_centre_marker = ?, show_range_ring = ?,
           show_header = ?, show_trails = ?, show_destination_arcs = ?,
           highlight_interesting = ?, watchlist = ?,
-          interpolation = ?, updated_at = ?
+          low_altitude_threshold = ?, history_enabled = ?,
+          history_retention_days = ?, interpolation = ?, updated_at = ?
         WHERE id = 1`,
       )
       .run(
@@ -152,6 +163,9 @@ export class SettingsRepo {
         Number(config.showDestinationArcs),
         Number(config.highlightInteresting),
         config.watchlist,
+        config.lowAltitudeThresholdFeet,
+        Number(config.historyEnabled),
+        config.historyRetentionDays,
         Number(config.interpolationEnabled),
         now,
       );

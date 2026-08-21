@@ -36,6 +36,7 @@ import { ViewService } from "./aircraft/viewService.js";
 import { AircraftPollingService } from "./aircraft/pollingService.js";
 import { WebSocketService } from "./websocket/wsService.js";
 import { AlertService } from "./alerts/alertService.js";
+import { HistoryService } from "./history/historyService.js";
 import { DiagnosticsService } from "./diagnostics/diagnosticsService.js";
 import { createAircraftProvider } from "./providers/index.js";
 import {
@@ -100,6 +101,9 @@ async function main(): Promise<void> {
     topic: env.notifyNtfyTopic,
     server: env.notifyNtfyServer,
   });
+  const history = new HistoryService();
+  history.configure(config.historyEnabled, config.historyRetentionDays);
+  history.pruneExpired();
 
   const polling = new AircraftPollingService(provider, env.aircraftPollIntervalMs, {
     onResult: (raw, meta) => {
@@ -110,6 +114,7 @@ async function main(): Promise<void> {
         provider.name,
         Date.now(),
         cfg.watchlist,
+        cfg.lowAltitudeThresholdFeet,
       );
       ws.broadcast({
         type: "aircraft.snapshot",
@@ -118,6 +123,8 @@ async function main(): Promise<void> {
       });
       // Push alerts for newly-arrived interesting aircraft (global location only).
       alerts.process(aircraft);
+      // Record aircraft pass history (global location only, FRD §56).
+      history.ingest(aircraft);
       log.debug("poll processed", {
         received: meta.received,
         displayed: aircraft.length,
@@ -148,6 +155,7 @@ async function main(): Promise<void> {
     ws,
     location,
     alerts,
+    history,
     startedAtMs,
   );
 
@@ -239,6 +247,7 @@ async function main(): Promise<void> {
         "showDestinationArcs",
         "interpolationEnabled",
         "highlightInteresting",
+        "historyEnabled",
       ] as const;
       for (const key of booleanKeys) {
         if (update[key] !== undefined) next[key] = Boolean(update[key]);
@@ -251,8 +260,26 @@ async function main(): Promise<void> {
         next.watchlist = update.watchlist;
       }
 
+      if (update.lowAltitudeThresholdFeet !== undefined) {
+        const ft = Number(update.lowAltitudeThresholdFeet);
+        if (!Number.isFinite(ft) || ft < 100 || ft > 60000) {
+          return { ok: false, status: 400, error: "Low-altitude threshold must be 100-60000 ft" };
+        }
+        next.lowAltitudeThresholdFeet = Math.round(ft);
+      }
+
+      if (update.historyRetentionDays !== undefined) {
+        const days = Number(update.historyRetentionDays);
+        if (!Number.isFinite(days) || days < 1 || days > 365) {
+          return { ok: false, status: 400, error: "History retention must be 1-365 days" };
+        }
+        next.historyRetentionDays = Math.round(days);
+      }
+
       const saved = settings.save(next);
       applyRuntimeConfig(saved, centreChanged);
+      history.configure(saved.historyEnabled, saved.historyRetentionDays);
+      history.pruneExpired();
       log.info("configuration updated", { postcode: saved.postcode, radiusMiles: saved.radiusMiles });
       return { ok: true, status: 200, config: saved };
     },
@@ -272,6 +299,7 @@ async function main(): Promise<void> {
       }
       const saved = settings.save(base);
       applyRuntimeConfig(saved, true);
+      history.configure(saved.historyEnabled, saved.historyRetentionDays);
       log.info("configuration reset to defaults", { postcode: saved.postcode });
       return saved;
     },
@@ -295,6 +323,13 @@ async function main(): Promise<void> {
     diagnostics: () => diagnostics.report(),
     photo: (registration, icaoHex) => photos.getPhoto(registration, icaoHex),
     view: (postcode) => viewService.getView(postcode),
+
+    history: (date) => {
+      const day = date ?? history.todayDate();
+      return { date: day, passes: history.listByDate(day) };
+    },
+    historyDates: () => history.listDates(),
+    deleteHistory: (date) => ({ deleted: history.deleteByDate(date) }),
   };
 
   // HTTP application.
@@ -342,8 +377,17 @@ async function main(): Promise<void> {
     }
   });
 
+  // Debounced history persistence + periodic retention pruning (FRD §62, §78).
+  const historyFlushTimer = setInterval(() => history.flush(), 15_000);
+  const historyPruneTimer = setInterval(() => history.pruneExpired(), 60 * 60 * 1000);
+  historyFlushTimer.unref();
+  historyPruneTimer.unref();
+
   const shutdown = (signal: string): void => {
     log.info("shutting down", { signal });
+    clearInterval(historyFlushTimer);
+    clearInterval(historyPruneTimer);
+    history.flush();
     polling.stop();
     ws.close();
     server.close();

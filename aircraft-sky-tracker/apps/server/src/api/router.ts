@@ -8,7 +8,10 @@ import type { AppConfig, ConfigUpdate, Aircraft } from "@ast/shared";
 import type { HealthReport, DiagnosticsReport } from "../diagnostics/diagnosticsService.js";
 import type { PhotoResult } from "../routes/photoService.js";
 import type { ViewResult } from "../aircraft/viewService.js";
+import type { HistoryPass, HistoryDate } from "@ast/shared";
 import { basicAuthMiddleware, isAuthEnabled } from "./auth.js";
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export interface ValidateResult {
   valid: boolean;
@@ -35,6 +38,9 @@ export interface ApiContext {
   diagnostics(): DiagnosticsReport;
   photo(registration?: string, icaoHex?: string): Promise<PhotoResult>;
   view(postcode: string): Promise<ViewResult>;
+  history(date?: string): { date: string; passes: HistoryPass[] };
+  historyDates(): HistoryDate[];
+  deleteHistory(date: string): { deleted: number };
 }
 
 export function createApiRouter(ctx: ApiContext): Router {
@@ -141,6 +147,33 @@ export function createApiRouter(ctx: ApiContext): Router {
   // GET /api/diagnostics (FRD §43) - protected (may reveal configuration).
   router.get("/diagnostics", basicAuthMiddleware, (_req: Request, res: Response) => {
     res.json(ctx.diagnostics());
+  });
+
+  // --- Aircraft history (FRD v3.0 §56-63, §72) ---
+
+  // GET /api/history/dates - retained dates for the date selector (public).
+  router.get("/history/dates", (_req: Request, res: Response) => {
+    res.json(ctx.historyDates());
+  });
+
+  // GET /api/history?date=YYYY-MM-DD - passes for a date (default today, public).
+  router.get("/history", (req: Request, res: Response) => {
+    const date = typeof req.query.date === "string" ? req.query.date : undefined;
+    if (date !== undefined && !DATE_RE.test(date)) {
+      res.status(400).json({ error: "date must be YYYY-MM-DD" });
+      return;
+    }
+    res.json(ctx.history(date));
+  });
+
+  // DELETE /api/history/:date - clear a date (destructive -> requires auth).
+  router.delete("/history/:date", basicAuthMiddleware, (req: Request, res: Response) => {
+    const date = req.params.date ?? "";
+    if (!DATE_RE.test(date)) {
+      res.status(400).json({ error: "date must be YYYY-MM-DD" });
+      return;
+    }
+    res.json(ctx.deleteHistory(date));
   });
 
   return router;

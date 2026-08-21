@@ -149,9 +149,23 @@ The browser talks only to the backend (FRD §39):
 | `GET` | `/api/aircraft` | Current aircraft snapshot (diagnostics/dev) |
 | `GET` | `/api/aircraft/photo?reg=&hex=` | Aircraft photo (proxies planespotters.net) |
 | `GET` | `/api/view?postcode=` | Per-viewer snapshot for any postcode (read-only) |
+| `GET` | `/api/history?date=` | Aircraft pass history for a date (default today) |
+| `GET` | `/api/history/dates` | Retained dates with pass counts |
+| `DELETE` | `/api/history/{date}` | Clear a date's history (needs the password) |
 | `GET` | `/api/health` | Source/route health |
 | `GET` | `/api/diagnostics` | Counts, timings, provider status |
 | `WS` | `/ws` | Live `aircraft.snapshot` / `source.status` / `config.updated` |
+
+## Aircraft history
+
+The tracker records a **pass** for each aircraft that comes within the radius —
+one summary row per visit (not every raw position), capturing closest approach,
+lowest/highest altitude, top speed, best-confidence destination and any
+interesting reasons. Press **H** (or go to `/history` behaviour via the History
+view) to see today's passes, switch between retained dates, or clear a date.
+Retention defaults to **31 days** (configurable 7–365 in Settings); expired
+records are pruned automatically. History only reflects times the tracker was
+actually running (FRD §63).
 
 ## Interesting-aircraft alerts
 
@@ -192,6 +206,7 @@ Kiosk mode needs no interaction. On a desktop:
 | `Esc` | Close overlay / return to display |
 | `S` | Settings |
 | `D` | Diagnostics |
+| `H` | History |
 | `F` | Toggle full screen |
 
 ## Tests
@@ -270,9 +285,12 @@ overlay via a backend planespotters.net proxy (with attribution); optional
 adsb.fi with OpenSky as an automatic backup (per-provider cooldown, auto
 recovery), so one source going down can't take the display offline.
 
-**Interesting-aircraft alerts (done)** — military / heavy / helicopter / low /
-watchlist detection, amber highlight on the display, and opt-in ntfy push
-notifications.
+**Interesting-aircraft alerts (done)** — military / heavy / helicopter / low
+(configurable threshold, default 3,000 ft) / watchlist detection, amber
+highlight on the display, and opt-in ntfy push notifications.
+
+**Aircraft history (done, FRD v3.0)** — per-aircraft pass records, `/history`
+view with date filter + clear, configurable retention.
 
 **Future phases** — local RTL-SDR ADS-B (`LocalReadsbProvider`) and hybrid
 local+internet source; optional aircraft history; projector/ceiling features.

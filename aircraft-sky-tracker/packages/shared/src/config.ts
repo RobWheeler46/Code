@@ -25,6 +25,12 @@ export interface AppConfig {
   highlightInteresting: boolean;
   /** Comma/space separated registrations or type codes to always flag. */
   watchlist: string;
+  /** Altitude (ft) below which an aircraft is "low" (FRD v3.0 §50). */
+  lowAltitudeThresholdFeet: number;
+  /** Record aircraft pass history (FRD v3.0 §56). */
+  historyEnabled: boolean;
+  /** Days to retain history passes (FRD v3.0 §62). */
+  historyRetentionDays: number;
 }
 
 export const DEFAULT_POSTCODE = "SN25 4TP";
@@ -54,6 +60,9 @@ export const DEFAULT_CONFIG: AppConfig = {
   interpolationEnabled: true,
   highlightInteresting: true,
   watchlist: "",
+  lowAltitudeThresholdFeet: 3000,
+  historyEnabled: true,
+  historyRetentionDays: 31,
 };
 
 /** Configuration fields a client is permitted to update (FRD §39). */
@@ -77,5 +86,8 @@ export type ConfigUpdate = Partial<
     | "interpolationEnabled"
     | "highlightInteresting"
     | "watchlist"
+    | "lowAltitudeThresholdFeet"
+    | "historyEnabled"
+    | "historyRetentionDays"
   >
 >;

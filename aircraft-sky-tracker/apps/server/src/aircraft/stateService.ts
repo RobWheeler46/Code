@@ -57,6 +57,7 @@ export class AircraftStateService {
     source: string,
     now: number = Date.now(),
     watchlist = "",
+    lowAltitudeFeet?: number,
   ): Aircraft[] {
     let insideRadius = 0;
     const seen = new Set<string>();
@@ -113,6 +114,7 @@ export class AircraftStateService {
           providerFlags: normalised.providerFlags,
         },
         watchTokens,
+        lowAltitudeFeet,
       );
 
       const aircraft: Aircraft = {

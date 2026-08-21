@@ -26,6 +26,8 @@ interface DiagnosticsReport {
   uptimeSeconds: number;
   alertsEnabled: boolean;
   lastAlert: string | null;
+  passesToday: number;
+  interestingToday: number;
 }
 
 /** System diagnostics screen (FRD §66-67). */
@@ -110,8 +112,12 @@ export function DiagnosticsPage({ onBack }: Props) {
             <span className="v">{formatUptime(report.uptimeSeconds)}</span>
           </div>
 
-          <h2>Alerts</h2>
+          <h2>History / Alerts</h2>
           <div className="rows">
+            <span className="k">Passes today</span>
+            <span className="v">{report.passesToday}</span>
+            <span className="k">Interesting today</span>
+            <span className="v">{report.interestingToday}</span>
             <span className="k">Push alerts</span>
             <span className={`v ${report.alertsEnabled ? "badge-ok" : ""}`}>
               {report.alertsEnabled ? "✓ Enabled" : "Off (set NOTIFY_NTFY_TOPIC)"}

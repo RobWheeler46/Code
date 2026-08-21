@@ -100,6 +100,9 @@ export function SettingsPage({ onBack }: Props) {
         showDestinationArcs: draft.showDestinationArcs,
         highlightInteresting: draft.highlightInteresting,
         watchlist: draft.watchlist,
+        lowAltitudeThresholdFeet: draft.lowAltitudeThresholdFeet,
+        historyEnabled: draft.historyEnabled,
+        historyRetentionDays: draft.historyRetentionDays,
       };
       // Only change the active location once a new postcode is entered (FRD §63).
       const normalised = postcodeInput.trim().toUpperCase().replace(/\s+/g, " ");
@@ -222,6 +225,45 @@ export function SettingsPage({ onBack }: Props) {
           automatically. Phone push alerts are enabled by setting the
           NOTIFY_NTFY_TOPIC server variable.
         </div>
+      </div>
+      <div className="field">
+        <label htmlFor="lowalt">Low aircraft threshold (ft)</label>
+        <input
+          id="lowalt"
+          type="text"
+          inputMode="numeric"
+          value={String(draft.lowAltitudeThresholdFeet)}
+          onChange={(e) => {
+            const n = Number(e.target.value.replace(/[^0-9]/g, ""));
+            setDraft({ ...draft, lowAltitudeThresholdFeet: Number.isFinite(n) ? n : 0 });
+          }}
+        />
+      </div>
+
+      <h2>History</h2>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={draft.historyEnabled}
+          onChange={(e) => setToggle("historyEnabled", e.target.checked)}
+        />
+        Record aircraft history
+      </label>
+      <div className="field">
+        <label htmlFor="retention">Retention</label>
+        <select
+          id="retention"
+          value={draft.historyRetentionDays}
+          onChange={(e) =>
+            setDraft({ ...draft, historyRetentionDays: Number(e.target.value) })
+          }
+        >
+          {[7, 14, 31, 90, 180, 365].map((d) => (
+            <option key={d} value={d}>
+              {d} days
+            </option>
+          ))}
+        </select>
       </div>
 
       {saveError && <div className="status-line err">{saveError}</div>}

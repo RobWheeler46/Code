@@ -81,6 +81,7 @@ export class ViewService {
         resolved.longitude,
         radius,
         globalConfig.watchlist,
+        globalConfig.lowAltitudeThresholdFeet,
       );
     } catch (err) {
       log.warn("view snapshot failed", { postcode: resolved.postcode, error: String(err) });
@@ -107,6 +108,7 @@ export class ViewService {
     lon: number,
     radius: number,
     watchlist: string,
+    lowAltitudeFeet: number,
   ): Promise<Aircraft[]> {
     const key = `${lat.toFixed(4)},${lon.toFixed(4)},${radius},${watchlist}`;
     const now = Date.now();
@@ -152,6 +154,7 @@ export class ViewService {
           providerFlags: n.providerFlags,
         },
         watchTokens,
+        lowAltitudeFeet,
       );
 
       out.push({

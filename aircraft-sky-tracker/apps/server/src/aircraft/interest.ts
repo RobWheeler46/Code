@@ -10,8 +10,8 @@
 
 import type { AircraftInterest, AircraftCategory } from "@ast/shared";
 
-/** Below this altitude a fixed-wing aircraft is "low" (helicopters excluded). */
-export const LOW_ALTITUDE_FEET = 1000;
+/** Default altitude below which a fixed-wing aircraft is "low" (FRD v3.0 §50). */
+export const DEFAULT_LOW_ALTITUDE_FEET = 3000;
 
 /** dbFlags bit flags used by the re-api providers (airplanes.live / adsb.fi). */
 const FLAG_MILITARY = 1;
@@ -67,6 +67,7 @@ export function parseWatchlist(watchlist: string | undefined): string[] {
 export function evaluateInterest(
   input: InterestInput,
   watchlist: string[],
+  lowAltitudeFeet: number = DEFAULT_LOW_ALTITUDE_FEET,
 ): AircraftInterest | undefined {
   const reasons: string[] = [];
   const flags = typeof input.providerFlags === "number" ? input.providerFlags : 0;
@@ -83,7 +84,7 @@ export function evaluateInterest(
   if (
     input.altitudeFeet !== undefined &&
     input.altitudeFeet > 0 &&
-    input.altitudeFeet <= LOW_ALTITUDE_FEET &&
+    input.altitudeFeet <= lowAltitudeFeet &&
     input.aircraftCategory !== "helicopter"
   ) {
     reasons.push("Low");
