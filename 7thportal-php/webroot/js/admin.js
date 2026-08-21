@@ -128,6 +128,7 @@ async function renderCapacity() {
         <input id="sec-new-name" placeholder="New section name" style="min-width:160px">
         <select id="sec-new-type">${typeOpts('')}</select>
         <button class="btn" id="sec-add">Add section</button>
+        <button class="btn btn-secondary" id="sec-seed" title="Adds the 8 real 7th Swindon sections (Beavers, Cubs, Scouts)">Add 7th Swindon&rsquo;s sections</button>
       </div>
     </div>
     <div class="cap-stats">
@@ -185,6 +186,14 @@ async function renderCapacity() {
   `;
 
   const secMsg = m => { document.getElementById('sec-mng-msg').innerHTML = m ? `<div class="alert alert-error">${escapeHtml(m)}</div>` : ''; };
+  const seedBtn = document.getElementById('sec-seed');
+  if (seedBtn) seedBtn.addEventListener('click', async () => {
+    try {
+      const r = await Api.post('/api/admin/sections/seed-standard', {});
+      if (!r.added) { secMsg("7th Swindon's sections are already added."); return; }
+      renderCapacity();
+    } catch (e) { secMsg(e.message); }
+  });
   const addBtn = document.getElementById('sec-add');
   if (addBtn) addBtn.addEventListener('click', async () => {
     const name = document.getElementById('sec-new-name').value.trim();

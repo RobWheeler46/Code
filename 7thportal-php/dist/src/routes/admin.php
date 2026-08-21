@@ -255,6 +255,20 @@ $router->put('/api/admin/sections/capacity/settings', function ($params) {
 // are owned by OSM - so a later OSM sync never fights the admin's local edits.
 const SECTION_MANAGE_TYPES = ['squirrels', 'beavers', 'cubs', 'scouts', 'explorers', 'network', 'group'];
 
+// 7th Swindon's actual sections (Full FRD v1.0, Appendix A - Central Section
+// Directory seed records). Offered as a one-click seed so a fresh environment
+// (test or live) gets the real directory without hand-typing eight sections.
+const SEVENTH_SWINDON_SECTIONS = [
+    ['name' => 'Sparrowhawks Beavers', 'type' => 'beavers'],
+    ['name' => 'Falcon Beavers', 'type' => 'beavers'],
+    ['name' => 'Kingfisher Beavers', 'type' => 'beavers'],
+    ['name' => 'Isambard Cubs', 'type' => 'cubs'],
+    ['name' => 'Kingdom Cubs', 'type' => 'cubs'],
+    ['name' => 'Brunel Cubs', 'type' => 'cubs'],
+    ['name' => 'Discovery Scouts', 'type' => 'scouts'],
+    ['name' => 'Endeavour Scouts', 'type' => 'scouts'],
+];
+
 $router->get('/api/admin/sections/manage', function ($params) {
     requireAdmin(requireAuth());
     $rows = dbAll('SELECT osm_section_id, section_name, section_type, source FROM osm_sections ORDER BY section_name');
@@ -268,6 +282,23 @@ $router->get('/api/admin/sections/manage', function ($params) {
         // local section takes over from that fallback.
         'usingDemoFallback' => count($rows) === 0,
     ]);
+});
+
+// Seed 7th Swindon's standard sections (Appendix A). Idempotent - matches on name
+// (case-insensitive) so it never duplicates an existing section, whatever its source.
+$router->post('/api/admin/sections/seed-standard', function ($params) {
+    $admin = requireAuth();
+    requireAdmin($admin);
+    $existing = array_map('strtolower', array_column(dbAll('SELECT section_name FROM osm_sections'), 'section_name'));
+    $added = 0;
+    foreach (SEVENTH_SWINDON_SECTIONS as $s) {
+        if (in_array(strtolower($s['name']), $existing, true)) continue;
+        dbRun("INSERT INTO osm_sections (osm_section_id, section_name, section_type, source, sync_status) VALUES (?, ?, ?, 'local', 'ok')",
+            ['local-' . bin2hex(random_bytes(4)), $s['name'], $s['type']]);
+        $added++;
+    }
+    logAudit(['userId' => $admin['id'], 'action' => 'admin_section_seed_standard', 'entityType' => 'osm_section', 'ipAddress' => clientIp(), 'details' => ['added' => $added]]);
+    jsonResponse(['ok' => true, 'added' => $added]);
 });
 
 $router->post('/api/admin/sections', function ($params) {
