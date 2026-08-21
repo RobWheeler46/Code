@@ -333,6 +333,23 @@ textarea { min-height: 5rem; resize: vertical; }
 .modal-backdrop { position: fixed; inset: 0; background: rgba(23,36,42,0.55); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 1rem; }
 .modal-box { background: var(--card); border-radius: var(--radius-card); padding: 1.5rem; width: 100%; max-width: 520px; max-height: 88vh; overflow: auto; box-shadow: var(--shadow-lg); }
 .modal-box h2 { margin-top: 0; }
+/* Mobile-first (v1.1 restyle): on a phone a long modal form pushes its Save button
+   below the fold. Pin the action row to the bottom of the scrolling modal so the
+   primary action stays thumb-reachable. Only sets position/background/border — the
+   inline display/gap/margin the modals already carry are untouched, so it layers on
+   with no JS change. */
+@media (max-width: 640px) {
+  .modal-box { padding-bottom: 0.6rem; }
+  .modal-box .modal-actions,
+  .modal-box .eq-form-actions {
+    position: sticky; bottom: 0; z-index: 3;
+    background: var(--card);
+    padding-top: 0.7rem; padding-bottom: 0.35rem;
+    border-top: 1px solid var(--border);
+  }
+  .modal-box .modal-actions .btn,
+  .modal-box .eq-form-actions .btn { flex: 1 1 auto; text-align: center; }
+}
 
 /* Progressive Add/Edit Equipment form (FRD v2.4.4). */
 .eq-form .eq-track-opt { display: flex; gap: 0.5rem; align-items: flex-start; padding: 0.5rem 0.6rem; border: 1px solid var(--border); border-radius: 6px; margin: 0.35rem 0; cursor: pointer; }

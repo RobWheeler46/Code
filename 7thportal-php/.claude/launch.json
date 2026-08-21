@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "7thportal-php",
+      "runtimeExecutable": "php",
+      "runtimeArgs": ["-S", "localhost:8040", "-t", "C:/Users/rob/Code/7thportal-php/webroot", "C:/Users/rob/Code/7thportal-php/webroot/index.php"],
+      "port": 8040
+    }
+  ]
+}
