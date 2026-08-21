@@ -13,7 +13,7 @@
 import {
   type Aircraft,
   type AppConfig,
-  type AircraftCategory,
+  type AircraftSilhouette,
   haversineDistanceMiles,
   bearingDegrees,
   distanceBearingToEastNorth,
@@ -246,7 +246,7 @@ export class SkyRenderer {
       x: screen.x,
       y: screen.y,
       track: state.data.trackDegrees === undefined ? undefined : track,
-      category: state.data.aircraftCategory as AircraftCategory | undefined,
+      silhouette: (state.data.silhouette as AircraftSilhouette | undefined) ?? "generic",
       alpha,
     };
   }
@@ -272,7 +272,7 @@ export class SkyRenderer {
 
     ctx.save();
     ctx.globalAlpha = p.alpha;
-    this.drawIcon(p.x, p.y, p.track ?? 0, p.category ?? "unknown", highlight);
+    this.drawIcon(p.x, p.y, p.track ?? 0, p.silhouette, highlight);
     ctx.restore();
 
     // Labels stay horizontal (FRD §51).
@@ -331,14 +331,15 @@ export class SkyRenderer {
   }
 
   /**
-   * Type-aware silhouette, nose-up at zero rotation (FRD §51, §55, Phase 1.1).
-   * Unknown/jet categories share the generic swept-wing outline.
+   * Type-aware silhouette, nose-up at zero rotation (FRD §20, §51, §55).
+   * The classifier picks the most specific silhouette; "generic" (and anything
+   * unmatched) uses the swept-wing airliner outline.
    */
   private drawIcon(
     x: number,
     y: number,
     trackDegrees: number,
-    category: AircraftCategory,
+    silhouette: AircraftSilhouette,
     highlight = false,
   ): void {
     const ctx = this.ctx;
@@ -352,24 +353,36 @@ export class SkyRenderer {
     ctx.lineWidth = 1.6;
     ctx.strokeStyle = highlight ? INTEREST_COLOUR : "#f2f2f2";
     ctx.fillStyle = "rgba(10,12,16,0.55)";
-    switch (category) {
-      case "helicopter":
-        this.pathHelicopter();
-        break;
-      case "turboprop":
-        this.pathTurboprop();
-        break;
-      case "piston":
-        this.pathPiston();
-        break;
-      default:
-        this.pathJet();
+    switch (silhouette) {
+      case "a380": this.pathQuadWide(22, 19); break;
+      case "b747": this.pathQuadWide(19, 20); break;
+      case "c17": this.pathC17(); break;
+      case "a400m": this.pathA400m(); break;
+      case "fighter": this.pathFighter(); break;
+      case "military": this.pathMilitary(); break;
+      case "bizjet": this.pathBizjet(); break;
+      case "turboprop": this.pathTurboprop(); break;
+      case "helicopter": this.pathHelicopter(); break;
+      case "light": this.pathLight(); break;
+      case "b737": this.pathAirliner(true); break;
+      case "a320":
+      case "generic":
+      default: this.pathAirliner(false);
     }
     ctx.restore();
   }
 
-  /** Swept-wing airliner / jet (default). */
-  private pathJet(): void {
+  /** Short perpendicular tick marking an engine pod. */
+  private engineTick(x: number, y: number, len = 3): void {
+    const ctx = this.ctx;
+    ctx.beginPath();
+    ctx.moveTo(x, y - len / 2);
+    ctx.lineTo(x, y + len / 2);
+    ctx.stroke();
+  }
+
+  /** Swept-wing narrowbody airliner (a320 / b737 / generic). */
+  private pathAirliner(winglets: boolean): void {
     const ctx = this.ctx;
     ctx.beginPath();
     ctx.moveTo(0, -16);
@@ -390,6 +403,166 @@ export class SkyRenderer {
     ctx.lineTo(-2, -6);
     ctx.closePath();
     ctx.fill();
+    ctx.stroke();
+    this.engineTick(9, 1);
+    this.engineTick(-9, 1);
+    if (winglets) {
+      ctx.beginPath();
+      ctx.moveTo(16, 3.5);
+      ctx.lineTo(17.5, 0.5);
+      ctx.moveTo(-16, 3.5);
+      ctx.lineTo(-17.5, 0.5);
+      ctx.stroke();
+    }
+  }
+
+  /** Four-engine widebody. wing = half-span, nose = fuselage length (a380/b747). */
+  private pathQuadWide(wing: number, nose: number): void {
+    const ctx = this.ctx;
+    ctx.beginPath();
+    ctx.moveTo(0, -nose);
+    ctx.lineTo(2.6, -6);
+    ctx.lineTo(wing, 3);
+    ctx.lineTo(wing, 6);
+    ctx.lineTo(2.6, 3);
+    ctx.lineTo(2.6, 12);
+    ctx.lineTo(9, 16);
+    ctx.lineTo(9, 18);
+    ctx.lineTo(0, 15);
+    ctx.lineTo(-9, 18);
+    ctx.lineTo(-9, 16);
+    ctx.lineTo(-2.6, 12);
+    ctx.lineTo(-2.6, 3);
+    ctx.lineTo(-wing, 6);
+    ctx.lineTo(-wing, 3);
+    ctx.lineTo(-2.6, -6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    for (const x of [wing * 0.35, wing * 0.68]) {
+      this.engineTick(x, 1.5);
+      this.engineTick(-x, 1.5);
+    }
+  }
+
+  /** Four swept jets, broad fuselage, T-tail (Boeing C-17). */
+  private pathC17(): void {
+    const ctx = this.ctx;
+    ctx.beginPath();
+    ctx.moveTo(0, -16);
+    ctx.lineTo(3, -5);
+    ctx.lineTo(18, 4);
+    ctx.lineTo(18, 7);
+    ctx.lineTo(3, 4);
+    ctx.lineTo(3, 12);
+    ctx.lineTo(0, 14);
+    ctx.lineTo(-3, 12);
+    ctx.lineTo(-3, 4);
+    ctx.lineTo(-18, 7);
+    ctx.lineTo(-18, 4);
+    ctx.lineTo(-3, -5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    for (const x of [6.5, 13]) {
+      this.engineTick(x, 2);
+      this.engineTick(-x, 2);
+    }
+    ctx.beginPath(); // T-tail
+    ctx.moveTo(-7, 13);
+    ctx.lineTo(7, 13);
+    ctx.stroke();
+  }
+
+  /** Four turboprops, high straight wing, T-tail (Airbus A400M). */
+  private pathA400m(): void {
+    const ctx = this.ctx;
+    ctx.beginPath();
+    ctx.moveTo(0, -15);
+    ctx.lineTo(2.4, -5);
+    ctx.lineTo(19, -4);
+    ctx.lineTo(19, -1);
+    ctx.lineTo(2.4, 0);
+    ctx.lineTo(2.4, 11);
+    ctx.lineTo(0, 14);
+    ctx.lineTo(-2.4, 11);
+    ctx.lineTo(-2.4, 0);
+    ctx.lineTo(-19, -1);
+    ctx.lineTo(-19, -4);
+    ctx.lineTo(-2.4, -5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    for (const x of [6.5, 13]) {
+      this.engineTick(x, -2.5, 4);
+      this.engineTick(-x, -2.5, 4);
+    }
+    ctx.beginPath(); // T-tail
+    ctx.moveTo(-7, 13);
+    ctx.lineTo(7, 13);
+    ctx.stroke();
+  }
+
+  /** Sharp swept delta (fighter / fast jet). */
+  private pathFighter(): void {
+    const ctx = this.ctx;
+    ctx.beginPath();
+    ctx.moveTo(0, -16);
+    ctx.lineTo(2, -2);
+    ctx.lineTo(13, 10);
+    ctx.lineTo(11, 12);
+    ctx.lineTo(2, 8);
+    ctx.lineTo(3, 15);
+    ctx.lineTo(0, 13);
+    ctx.lineTo(-3, 15);
+    ctx.lineTo(-2, 8);
+    ctx.lineTo(-11, 12);
+    ctx.lineTo(-13, 10);
+    ctx.lineTo(-2, -2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  /** Broad chevron (generic military). */
+  private pathMilitary(): void {
+    const ctx = this.ctx;
+    ctx.beginPath();
+    ctx.moveTo(0, -15);
+    ctx.lineTo(16, 11);
+    ctx.lineTo(6, 11);
+    ctx.lineTo(0, 6);
+    ctx.lineTo(-6, 11);
+    ctx.lineTo(-16, 11);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  /** Slim fuselage, small swept wings, rear engines, T-tail (business jet). */
+  private pathBizjet(): void {
+    const ctx = this.ctx;
+    ctx.beginPath();
+    ctx.moveTo(0, -14);
+    ctx.lineTo(1.3, -3);
+    ctx.lineTo(11, 4);
+    ctx.lineTo(11, 6);
+    ctx.lineTo(1.3, 3);
+    ctx.lineTo(1.3, 10);
+    ctx.lineTo(0, 13);
+    ctx.lineTo(-1.3, 10);
+    ctx.lineTo(-1.3, 3);
+    ctx.lineTo(-11, 6);
+    ctx.lineTo(-11, 4);
+    ctx.lineTo(-1.3, -3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    this.engineTick(3, 9);
+    this.engineTick(-3, 9);
+    ctx.beginPath(); // T-tail
+    ctx.moveTo(-5, 13);
+    ctx.lineTo(5, 13);
     ctx.stroke();
   }
 
@@ -423,8 +596,8 @@ export class SkyRenderer {
     ctx.stroke();
   }
 
-  /** Small straight-wing single (light / piston). */
-  private pathPiston(): void {
+  /** Small straight-wing single (light aircraft). */
+  private pathLight(): void {
     const ctx = this.ctx;
     ctx.beginPath();
     ctx.moveTo(0, -12);
@@ -581,7 +754,7 @@ interface Placement {
   x: number;
   y: number;
   track: number | undefined;
-  category: AircraftCategory | undefined;
+  silhouette: AircraftSilhouette;
   alpha: number;
 }
 

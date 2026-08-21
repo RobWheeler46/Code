@@ -12,8 +12,8 @@ import { toRadians } from "@ast/shared";
 import type { AircraftProvider } from "./types.js";
 
 const MILES_PER_DEGREE_LAT = 69.0;
-const MIN_ACTIVE = 4;
-const MAX_ACTIVE = 7;
+const MIN_ACTIVE = 7;
+const MAX_ACTIVE = 12;
 
 interface Template {
   icaoHex: string;
@@ -39,6 +39,15 @@ const ROSTER: Template[] = [
   { icaoHex: "SIM007", registration: "G-ABCD", callsign: "PVT001", aircraftTypeCode: "C172", altitudeFeet: 2500, groundSpeedKnots: 110 },
   // No registration and no callsign -> displays ICAO hex (FRD §74).
   { icaoHex: "SIM008", aircraftTypeCode: "PA28", altitudeFeet: 1800, groundSpeedKnots: 95 },
+  // Distinct silhouettes / interesting aircraft (FRD v3.0 §20, §67).
+  { icaoHex: "SIM009", registration: "A6-EDA", callsign: "UAE7", aircraftTypeCode: "A388", altitudeFeet: 38000, groundSpeedKnots: 480 },
+  { icaoHex: "SIM010", registration: "G-CIVD", callsign: "BAW9", aircraftTypeCode: "B744", altitudeFeet: 34000, groundSpeedKnots: 470 },
+  { icaoHex: "SIM011", registration: "ZM406", callsign: "RRR406", aircraftTypeCode: "A400", altitudeFeet: 6000, groundSpeedKnots: 260 },
+  { icaoHex: "SIM012", registration: "ZZ173", callsign: "RRR73", aircraftTypeCode: "C17", altitudeFeet: 8000, groundSpeedKnots: 300 },
+  { icaoHex: "SIM013", registration: "ZK355", callsign: "TARTN1", aircraftTypeCode: "EUFI", altitudeFeet: 5000, groundSpeedKnots: 420 },
+  { icaoHex: "SIM014", registration: "G-BIZJ", callsign: "EJA123", aircraftTypeCode: "E55P", altitudeFeet: 28000, groundSpeedKnots: 400 },
+  { icaoHex: "SIM015", registration: "G-POLA", callsign: "NPAS01", aircraftTypeCode: "EC35", altitudeFeet: 1200, groundSpeedKnots: 120 },
+  { icaoHex: "SIM016", registration: "G-SPIT", aircraftTypeCode: "SPIT", altitudeFeet: 1500, groundSpeedKnots: 180 },
 ];
 
 interface SimFlight extends Template {

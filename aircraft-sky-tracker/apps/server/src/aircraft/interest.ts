@@ -9,6 +9,7 @@
  */
 
 import type { AircraftInterest, AircraftCategory } from "@ast/shared";
+import { isFighterType, isMilitaryType } from "@ast/shared";
 
 /** Default altitude below which a fixed-wing aircraft is "low" (FRD v3.0 §50). */
 export const DEFAULT_LOW_ALTITUDE_FEET = 3000;
@@ -72,8 +73,16 @@ export function evaluateInterest(
   const reasons: string[] = [];
   const flags = typeof input.providerFlags === "number" ? input.providerFlags : 0;
 
-  if (flags & FLAG_MILITARY) reasons.push("Military");
+  const militaryByFlag = (flags & FLAG_MILITARY) !== 0;
+  if (militaryByFlag) reasons.push("Military");
   else if (flags & FLAG_INTERESTING) reasons.push("Notable");
+
+  // Type-based military / fighter detection (FRD v3.0 §49).
+  if (isFighterType(input.aircraftTypeCode)) {
+    reasons.push("Fighter");
+  } else if (!militaryByFlag && isMilitaryType(input.aircraftTypeCode)) {
+    reasons.push("Military");
+  }
 
   const typeCode = input.aircraftTypeCode ? norm(input.aircraftTypeCode) : "";
   const notable = NOTABLE_TYPES[typeCode];

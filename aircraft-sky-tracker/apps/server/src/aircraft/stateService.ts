@@ -8,7 +8,7 @@
  */
 
 import type { Aircraft, ProviderAircraft } from "@ast/shared";
-import { aircraftCategoryFromType } from "@ast/shared";
+import { aircraftSilhouetteFromType, categoryFromSilhouette } from "@ast/shared";
 import { GeoService } from "../geo/geoService.js";
 import { RouteService } from "../routes/routeService.js";
 import {
@@ -102,7 +102,8 @@ export class AircraftStateService {
         trackDegrees: normalised.trackDegrees,
       });
 
-      const category = aircraftCategoryFromType(aircraftTypeCode);
+      const silhouette = aircraftSilhouetteFromType(aircraftTypeCode);
+      const category = categoryFromSilhouette(silhouette);
       const interest = evaluateInterest(
         {
           icaoHex: normalised.icaoHex,
@@ -131,6 +132,7 @@ export class AircraftStateService {
         bearingFromCentre: round(bearingFromCentre, 1),
         aircraftTypeCode,
         aircraftCategory: category,
+        silhouette,
         destination,
         interest,
         positionAgeSeconds: normalised.positionAgeSeconds,

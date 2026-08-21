@@ -34,6 +34,8 @@ const SIMULATION_ROUTES: Record<string, { icao: string; name: string }> = {
   KLM43F: { icao: "EHAM", name: "Amsterdam" },
   TOM7YT: { icao: "LPFR", name: "Faro" },
   EZY23UI: { icao: "EGAA", name: "Belfast" },
+  UAE7: { icao: "OMDB", name: "Dubai" },
+  BAW9: { icao: "KJFK", name: "New York" },
 };
 
 export interface AircraftContext {

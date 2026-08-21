@@ -276,10 +276,16 @@ automatic reconnection, Raspberry Pi kiosk deployment.
 **Out of scope for MVP** — street/satellite maps, airspace charts, weather, user
 accounts, aircraft photos/history, notifications.
 
-**Phase 1.1 (done)** — type-aware silhouettes (jet / turboprop / light /
-helicopter, chosen from the ICAO type code); aircraft photos in the detail
-overlay via a backend planespotters.net proxy (with attribution); optional
-**trails** and **destination arcs** (Settings toggles).
+**Phase 1.1 (done)** — type-aware silhouettes chosen from the ICAO type code;
+aircraft photos in the detail overlay via a backend planespotters.net proxy
+(with attribution); optional **trails** and **destination arcs** (Settings
+toggles).
+
+**Richer silhouettes (done, FRD v3.0 §20)** — a most-specific-first classifier
+draws distinct outlines for the A320 and 737 families, A380, 747, business jet,
+turboprop, helicopter, light aircraft, A400M, C-17, fighter/fast-jet, generic
+military and a generic fallback. Military and fighter **types** now also trigger
+interesting-aircraft detection.
 
 **Multi-provider failover (done)** — the default `failover` provider uses
 adsb.fi with OpenSky as an automatic backup (per-provider cooldown, auto

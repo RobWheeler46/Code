@@ -12,11 +12,19 @@ interface Photo {
   photographer?: string;
 }
 
-const CATEGORY_LABEL: Record<string, string> = {
-  jet: "Jet",
+const SILHOUETTE_LABEL: Record<string, string> = {
+  a320: "Airbus A320 family",
+  b737: "Boeing 737 family",
+  a380: "Airbus A380",
+  b747: "Boeing 747",
+  bizjet: "Business jet",
   turboprop: "Turboprop",
-  piston: "Light aircraft",
   helicopter: "Helicopter",
+  light: "Light aircraft",
+  a400m: "Airbus A400M",
+  c17: "Boeing C-17",
+  fighter: "Fighter / fast jet",
+  military: "Military",
 };
 
 /** Optional aircraft detail overlay with a photo (FRD §60, Phase 1.1). */
@@ -25,11 +33,10 @@ export function AircraftDetailsOverlay({ aircraft, onClose }: Props) {
   const destination = aircraft.destination?.displayName;
   const heading =
     aircraft.trackDegrees !== undefined ? compassDirection(aircraft.trackDegrees) : "—";
-  const typeLine =
-    (aircraft.aircraftTypeCode ? aircraft.aircraftTypeCode : "") +
-    (aircraft.aircraftCategory && CATEGORY_LABEL[aircraft.aircraftCategory]
-      ? `${aircraft.aircraftTypeCode ? " · " : ""}${CATEGORY_LABEL[aircraft.aircraftCategory]}`
-      : "");
+  const silLabel = aircraft.silhouette ? SILHOUETTE_LABEL[aircraft.silhouette] : undefined;
+  const typeLine = [aircraft.aircraftTypeCode, silLabel]
+    .filter((s): s is string => Boolean(s))
+    .join(" · ");
 
   const [photo, setPhoto] = useState<Photo | undefined>();
   const [photoLoaded, setPhotoLoaded] = useState(false);

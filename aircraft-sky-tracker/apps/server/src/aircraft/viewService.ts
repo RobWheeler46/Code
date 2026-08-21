@@ -15,7 +15,8 @@ import type { Aircraft, AppConfig } from "@ast/shared";
 import {
   haversineDistanceMiles,
   bearingDegrees,
-  aircraftCategoryFromType,
+  aircraftSilhouetteFromType,
+  categoryFromSilhouette,
 } from "@ast/shared";
 import { normaliseAircraft } from "./normaliser.js";
 import { evaluateInterest, parseWatchlist } from "./interest.js";
@@ -142,7 +143,8 @@ export class ViewService {
         trackDegrees: n.trackDegrees,
       });
 
-      const category = aircraftCategoryFromType(type);
+      const silhouette = aircraftSilhouetteFromType(type);
+      const category = categoryFromSilhouette(silhouette);
       const interest = evaluateInterest(
         {
           icaoHex: n.icaoHex,
@@ -171,6 +173,7 @@ export class ViewService {
         bearingFromCentre: round(bearing, 1),
         aircraftTypeCode: type,
         aircraftCategory: category,
+        silhouette,
         destination,
         interest,
         positionAgeSeconds: n.positionAgeSeconds,

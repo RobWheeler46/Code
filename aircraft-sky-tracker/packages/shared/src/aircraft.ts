@@ -41,6 +41,8 @@ export interface Aircraft {
   bearingFromCentre: number;
   aircraftTypeCode?: string;
   aircraftCategory?: string;
+  /** Display silhouette key (FRD v3.0 §20, §70). */
+  silhouette?: string;
   destination?: Destination;
   /** Set when the aircraft matches an interesting-aircraft rule (FRD Phase 3). */
   interest?: AircraftInterest;
