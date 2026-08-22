@@ -90,6 +90,9 @@ $router->get('/api/events/:id', function ($params) {
         'overview' => $isLeaderView ? eventCampOverview($hub) : null,
         // Adult rota is leader-only (FR-CAMP-OP: parents never see operational data).
         'rota' => $isLeaderView ? eventCampRota((int) $hub['id']) : null,
+        // Command Centre: per-area readiness rollup so the event acts as the
+        // operational spine - leader-only.
+        'commandCentre' => $isLeaderView ? eventCommandCentre($hub) : null,
         'locationMeta' => ['types' => EVENT_LOCATION_TYPES, 'visibilities' => EVENT_LOCATION_VISIBILITIES],
     ]));
 });

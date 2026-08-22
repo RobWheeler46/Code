@@ -191,6 +191,73 @@ function eventCampOverview(array $hub): array
     ];
 }
 
+// Command Centre readiness rollup: the event as the operational spine. Each area is
+// computed from real data linked to this event (no placeholders) and reports one of
+// ready / attention / blocked / none, with a plain summary and a deep link. Areas
+// whose modules don't yet link to an event (finance, transport, catering) are
+// deliberately omitted rather than shown as dead cards.
+function eventCommandCentre(array $hub): array
+{
+    $id = (int) $hub['id'];
+    $areas = [];
+
+    // Setup — the hub content-readiness tasks.
+    $r = eventHubReadiness($hub);
+    $areas[] = [
+        'key' => 'setup', 'label' => 'Event setup',
+        'status' => $r['rag'] === 'green' ? 'ready' : ($r['complete'] === 0 ? 'none' : 'attention'),
+        'summary' => $r['complete'] . ' of ' . $r['total'] . ' setup tasks done',
+        'link' => null,
+    ];
+
+    // Adults & ratios — from the rota (gap detection already flags unqualified/empty).
+    $rota = eventCampRota($id);
+    $adults = count($rota['adults']);
+    $areas[] = [
+        'key' => 'adults', 'label' => 'Adults & ratios',
+        'status' => $adults === 0 ? 'none' : ($rota['gaps'] > 0 ? 'attention' : 'ready'),
+        'summary' => $adults === 0 ? 'No adults on the rota yet' : ($rota['gaps'] > 0 ? $rota['gaps'] . ' gap' . ($rota['gaps'] === 1 ? '' : 's') . ' to fill' : $adults . ' adults, no gaps'),
+        'link' => null,
+    ];
+
+    // Equipment — QM bookings linked to this event (event_hub_id).
+    // A return that's past due is a real blocker; 'overdue' is derived from
+    // return_at (not a stored status), so compute it here.
+    $bk = dbAll("SELECT status, return_at FROM qm_bookings WHERE event_hub_id = ? AND status != 'cancelled'", [$id]);
+    $today = gmdate('Y-m-d');
+    $pending = count(array_filter($bk, fn($b) => in_array($b['status'], ['draft', 'submitted', 'partially_approved'], true)));
+    $overdue = count(array_filter($bk, fn($b) => $b['status'] === 'collected' && !empty($b['return_at']) && substr($b['return_at'], 0, 10) < $today));
+    $areas[] = [
+        'key' => 'equipment', 'label' => 'Equipment',
+        'status' => count($bk) === 0 ? 'none' : ($overdue > 0 ? 'blocked' : ($pending > 0 ? 'attention' : 'ready')),
+        'summary' => count($bk) === 0 ? 'No kit booked yet' : ($overdue > 0 ? $overdue . ' overdue to return' : ($pending > 0 ? $pending . ' awaiting the QM' : count($bk) . ' booking' . (count($bk) === 1 ? '' : 's') . ' approved')),
+        'link' => 'quartermaster.html',
+    ];
+
+    // Parent pack — published parent-visible content.
+    $items = dbAll('SELECT visibility, item_status FROM event_hub_items WHERE hub_id = ?', [$id]);
+    $parentItems = array_filter($items, fn($i) => $i['visibility'] === 'parents');
+    $published = count(array_filter($parentItems, fn($i) => $i['item_status'] === 'published'));
+    $areas[] = [
+        'key' => 'parentpack', 'label' => 'Parent pack',
+        'status' => $published > 0 ? 'ready' : (count($parentItems) > 0 ? 'attention' : 'none'),
+        'summary' => $published > 0 ? $published . ' shared with parents' : (count($parentItems) > 0 ? 'Drafted, not shared yet' : 'Nothing for parents yet'),
+        'link' => null,
+    ];
+
+    // Locations & emergency directory.
+    $locs = dbAll('SELECT location_type, visibility FROM event_locations WHERE hub_id = ?', [$id]);
+    $emergency = count(array_filter($locs, fn($l) => $l['visibility'] === 'emergency' || in_array($l['location_type'], EVENT_EMERGENCY_TYPES, true)));
+    $areas[] = [
+        'key' => 'locations', 'label' => 'Locations & emergency',
+        'status' => $emergency > 0 ? 'ready' : (count($locs) > 0 ? 'attention' : 'none'),
+        'summary' => $emergency > 0 ? $emergency . ' emergency contact' . ($emergency === 1 ? '' : 's') : (count($locs) > 0 ? 'No emergency contacts set' : 'No locations added yet'),
+        'link' => null,
+    ];
+
+    return $areas;
+}
+
 // Draft hubs a leader should finish setting up surface in the Action Centre
 // (FR-EVT-HUB-007 / journey "Action Centre shows a new camp hub").
 function eventHubActionItems(array $user): array

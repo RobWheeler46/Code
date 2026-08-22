@@ -82,6 +82,7 @@ function renderLeader(box) {
       <div class="cap-head"><h1 style="margin:0">${escapeHtml(HUB.title)}</h1><span class="cap-actions"><button class="btn btn-secondary" id="ev-edit">Edit details</button>${HUB.canManage ? '<button class="btn btn-secondary ev-delete" id="ev-delete">Delete</button>' : ''}</span></div>
       <p class="muted" style="margin:.3rem 0 0">${escapeHtml(HUB.eventTypeLabel)} &middot; ${escapeHtml(hubDates())}${HUB.location ? ' &middot; ' + escapeHtml(HUB.location) : ''}${HUB.sectionName ? ' &middot; ' + escapeHtml(HUB.sectionName) : ''}</p>
     </div>
+    ${commandCentreCard()}
     ${infoCards()}
     <div class="card">
       <div class="cap-head"><h2 style="margin:0">Hub items</h2><span class="cap-actions"><button class="btn" id="ev-add-item">Add item</button></span></div>
@@ -112,6 +113,32 @@ async function setHubStatus(status) {
 async function deleteHub() {
   if (!confirm('Delete this event hub and all its items?')) return;
   try { await Api.delete(`/api/events/${window.HUB_ID}`); location.href = 'events.html'; } catch (e) { alert(e.message); }
+}
+
+// Command Centre: per-area readiness rollup (the event as the operational spine).
+// Each area's status maps to the shared status pills.
+const CC_PILL = { ready: ['active', 'Ready'], attention: ['suspended', 'Needs attention'], blocked: ['deleted', 'Blocked'], none: ['draft', 'Not started'] };
+function commandCentreCard() {
+  const areas = HUB.commandCentre;
+  if (!areas || !areas.length) return '';
+  const cards = areas.map(a => {
+    const [st, lbl] = CC_PILL[a.status] || CC_PILL.none;
+    const inner = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem;">
+        <strong>${escapeHtml(a.label)}</strong>
+        <span class="badge" data-status="${st}">${lbl}</span>
+      </div>
+      <div class="muted" style="font-size:.88rem;margin-top:.3rem;">${escapeHtml(a.summary)}</div>`;
+    return a.link
+      ? `<a class="card clickable" href="${escapeHtml(a.link)}" style="margin:0;">${inner}</a>`
+      : `<div class="card" style="margin:0;">${inner}</div>`;
+  }).join('');
+  return `
+    <div class="card">
+      <h2 style="margin:0 0 .2rem;">Command centre</h2>
+      <p class="muted" style="margin:0 0 .8rem;">Readiness across the whole event at a glance &mdash; sort anything marked <span class="badge" data-status="deleted">Blocked</span> or <span class="badge" data-status="suspended">Needs attention</span> first.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:.8rem;">${cards}</div>
+    </div>`;
 }
 
 // Camp overview stat card (FR-CAMP-OP-003).

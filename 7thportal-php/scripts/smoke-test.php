@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -281,6 +281,34 @@ function scenario_logic_sections(): void
     check('sections: a local section feeds the QM picker', in_array('Beavers', array_column($list, 'name'), true));
     // once real rows exist, the demo fallback no longer applies
     check('sections: demo fallback drops once a section exists', count($list) === 1);
+}
+
+// Event/Camp Command Centre: per-area readiness computed from real event-linked
+// data (no placeholders); each area reports ready/attention/blocked/none.
+function scenario_logic_command_centre(): void
+{
+    useDb(tmpDb('cc')); boot(); loadLibs();
+    $uid = dbRun("INSERT INTO users (auth_type, first_name, last_name, portal_role) VALUES ('local','Cam','Lead','group_leadership')")['lastInsertId'];
+    $hubId = dbRun("INSERT INTO event_hubs (title, event_type, status) VALUES ('Summer Camp','camp','draft')")['lastInsertId'];
+    $hub = dbGet('SELECT * FROM event_hubs WHERE id = ?', [$hubId]);
+    $byKey = fn() => array_column(eventCommandCentre($hub), null, 'key');
+
+    $cc = $byKey();
+    check('cc: five readiness areas', count($cc) === 5);
+    check('cc: fresh equipment = none', $cc['equipment']['status'] === 'none');
+    check('cc: fresh parent pack = none', $cc['parentpack']['status'] === 'none');
+
+    // A submitted booking linked to the event -> equipment needs attention.
+    dbRun("INSERT INTO qm_bookings (requester_user_id, event_hub_id, status) VALUES (?, ?, 'submitted')", [$uid, $hubId]);
+    check('cc: submitted booking -> equipment attention', $byKey()['equipment']['status'] === 'attention');
+
+    // A collected booking overdue to return -> equipment blocked (derived from return_at).
+    dbRun("INSERT INTO qm_bookings (requester_user_id, event_hub_id, status, return_at) VALUES (?, ?, 'collected', '2000-01-01')", [$uid, $hubId]);
+    check('cc: overdue return -> equipment blocked', $byKey()['equipment']['status'] === 'blocked');
+
+    // A published parent item -> parent pack ready.
+    dbRun("INSERT INTO event_hub_items (hub_id, label, visibility, item_status) VALUES (?, 'Kit list', 'parents', 'published')", [$hubId]);
+    check('cc: published parent item -> parent pack ready', $byKey()['parentpack']['status'] === 'ready');
 }
 
 // QM kit completeness check: overall result derives from component statuses.
