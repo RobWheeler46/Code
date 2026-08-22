@@ -33,10 +33,17 @@ export interface ErrorStatusMessage {
   message: string;
 }
 
+/** An interesting aircraft has entered the tracking area (FRD v3.0 §52, §74). */
+export interface AircraftInterestingEnterMessage {
+  type: "aircraft.interesting.enter";
+  aircraft: Aircraft;
+}
+
 export type ServerMessage =
   | AircraftSnapshotMessage
   | ConfigUpdatedMessage
   | SourceStatusMessage
-  | ErrorStatusMessage;
+  | ErrorStatusMessage
+  | AircraftInterestingEnterMessage;
 
 export const WS_PATH = "/ws";

@@ -3,6 +3,8 @@ import type { Aircraft, AppConfig, SourceStatus } from "@ast/shared";
 import { AircraftCanvas } from "./AircraftCanvas.js";
 import { DisplayStatus } from "./DisplayStatus.js";
 import { AircraftDetailsOverlay } from "./AircraftDetailsOverlay.js";
+import { InterestingAlert } from "./InterestingAlert.js";
+import type { InterestingEntry } from "../hooks/useWebSocket.js";
 
 interface Props {
   aircraft: Aircraft[];
@@ -10,6 +12,7 @@ interface Props {
   config: AppConfig;
   sourceStatus: SourceStatus;
   connected: boolean;
+  interestingEntry?: InterestingEntry;
 }
 
 /** The main display: canvas + optional header + status (FRD §47, §56-59). */
@@ -19,6 +22,7 @@ export function SkyDisplay({
   config,
   sourceStatus,
   connected,
+  interestingEntry,
 }: Props) {
   const [selected, setSelected] = useState<Aircraft | null>(null);
 
@@ -64,6 +68,8 @@ export function SkyDisplay({
         )}
 
       <DisplayStatus sourceStatus={sourceStatus} connected={connected} />
+
+      <InterestingAlert entry={interestingEntry} config={config} />
 
       {selected && (
         <AircraftDetailsOverlay aircraft={selected} onClose={() => setSelected(null)} />

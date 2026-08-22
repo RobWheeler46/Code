@@ -26,6 +26,8 @@ interface SettingsRow {
   low_altitude_threshold: number;
   history_enabled: number;
   history_retention_days: number;
+  in_app_alerts: number;
+  browser_notifications: number;
   interpolation: number;
 }
 
@@ -57,6 +59,8 @@ function rowToConfig(row: SettingsRow): AppConfig {
     lowAltitudeThresholdFeet: row.low_altitude_threshold,
     historyEnabled: bool(row.history_enabled),
     historyRetentionDays: row.history_retention_days,
+    inAppAlerts: bool(row.in_app_alerts),
+    browserNotifications: bool(row.browser_notifications),
   };
 }
 
@@ -80,10 +84,10 @@ export class SettingsRepo {
           show_altitude, show_distance, show_centre_marker, show_range_ring,
           show_header, show_trails, show_destination_arcs,
           highlight_interesting, watchlist, low_altitude_threshold,
-          history_enabled, history_retention_days, interpolation,
-          created_at, updated_at
+          history_enabled, history_retention_days, in_app_alerts,
+          browser_notifications, interpolation, created_at, updated_at
         ) VALUES (
-          1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )`,
       )
       .run(
@@ -108,6 +112,8 @@ export class SettingsRepo {
         defaults.lowAltitudeThresholdFeet,
         Number(defaults.historyEnabled),
         defaults.historyRetentionDays,
+        Number(defaults.inAppAlerts),
+        Number(defaults.browserNotifications),
         Number(defaults.interpolationEnabled),
         now,
         now,
@@ -141,7 +147,8 @@ export class SettingsRepo {
           show_header = ?, show_trails = ?, show_destination_arcs = ?,
           highlight_interesting = ?, watchlist = ?,
           low_altitude_threshold = ?, history_enabled = ?,
-          history_retention_days = ?, interpolation = ?, updated_at = ?
+          history_retention_days = ?, in_app_alerts = ?,
+          browser_notifications = ?, interpolation = ?, updated_at = ?
         WHERE id = 1`,
       )
       .run(
@@ -166,6 +173,8 @@ export class SettingsRepo {
         config.lowAltitudeThresholdFeet,
         Number(config.historyEnabled),
         config.historyRetentionDays,
+        Number(config.inAppAlerts),
+        Number(config.browserNotifications),
         Number(config.interpolationEnabled),
         now,
       );

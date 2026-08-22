@@ -175,11 +175,14 @@ provider's dbFlags), **heavy/unusual types** (A380, 747, Antonov), **helicopters
 and **low** aircraft (< 1000 ft). Add your own **watchlist** of registrations or
 type codes in Settings (e.g. `G-EUUA, A388, SPIT`).
 
-For phone push notifications when something notable enters the area, set
-`NOTIFY_NTFY_TOPIC` to a private topic and subscribe to it in the
-[ntfy](https://ntfy.sh) app — you'll get alerts like
-*"Military: RRR2718 — 3.1 mi NW · 1,200 ft"*. Each aircraft alerts at most once
-per 30 minutes. Alerts fire only for the saved location, not per-viewer URLs.
+When an interesting aircraft **enters** the area you get an on-screen **in-app
+alert** banner (toggle in Settings) and, if you opt in, a permission-based
+**browser/OS notification** — plus a phone **push** via ntfy when
+`NOTIFY_NTFY_TOPIC` is set (subscribe to that topic in the [ntfy](https://ntfy.sh)
+app). Alerts read like *"Military: RRR2718 — 3.1 mi NW · 1,200 ft"*. Each
+aircraft alerts once per continuous visit (it must leave and genuinely re-enter
+to alert again), and alerts fire only for the saved location, not per-viewer
+URLs.
 
 ## Per-viewer postcode (URL override)
 

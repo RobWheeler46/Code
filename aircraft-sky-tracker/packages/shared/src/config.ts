@@ -31,6 +31,10 @@ export interface AppConfig {
   historyEnabled: boolean;
   /** Days to retain history passes (FRD v3.0 §62). */
   historyRetentionDays: number;
+  /** Show an on-screen banner when an interesting aircraft enters (FRD §54). */
+  inAppAlerts: boolean;
+  /** Fire a browser/OS notification on interesting entry, permission-based (FRD §54). */
+  browserNotifications: boolean;
 }
 
 export const DEFAULT_POSTCODE = "SN25 4TP";
@@ -63,6 +67,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   lowAltitudeThresholdFeet: 3000,
   historyEnabled: true,
   historyRetentionDays: 31,
+  inAppAlerts: true,
+  browserNotifications: false,
 };
 
 /** Configuration fields a client is permitted to update (FRD §39). */
@@ -89,5 +95,7 @@ export type ConfigUpdate = Partial<
     | "lowAltitudeThresholdFeet"
     | "historyEnabled"
     | "historyRetentionDays"
+    | "inAppAlerts"
+    | "browserNotifications"
   >
 >;

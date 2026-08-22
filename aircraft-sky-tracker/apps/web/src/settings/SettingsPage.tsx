@@ -101,6 +101,8 @@ export function SettingsPage({ onBack }: Props) {
         highlightInteresting: draft.highlightInteresting,
         watchlist: draft.watchlist,
         lowAltitudeThresholdFeet: draft.lowAltitudeThresholdFeet,
+        inAppAlerts: draft.inAppAlerts,
+        browserNotifications: draft.browserNotifications,
         historyEnabled: draft.historyEnabled,
         historyRetentionDays: draft.historyRetentionDays,
       };
@@ -239,6 +241,36 @@ export function SettingsPage({ onBack }: Props) {
           }}
         />
       </div>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={draft.inAppAlerts}
+          onChange={(e) => setToggle("inAppAlerts", e.target.checked)}
+        />
+        In-app alerts (on-screen banner)
+      </label>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={draft.browserNotifications}
+          onChange={(e) => {
+            const on = e.target.checked;
+            setToggle("browserNotifications", on);
+            if (on && typeof Notification !== "undefined" && Notification.permission === "default") {
+              void Notification.requestPermission();
+            }
+          }}
+        />
+        Browser notifications
+      </label>
+      {draft.browserNotifications &&
+        typeof Notification !== "undefined" &&
+        Notification.permission === "denied" && (
+          <div className="hint">
+            Notifications are blocked for this site — enable them in your browser
+            to receive alerts. The app works fine without them.
+          </div>
+        )}
 
       <h2>History</h2>
       <label className="check">

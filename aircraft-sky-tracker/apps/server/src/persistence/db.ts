@@ -72,6 +72,8 @@ function migrate(db: DatabaseSync): void {
       low_altitude_threshold INTEGER NOT NULL DEFAULT 3000,
       history_enabled     INTEGER NOT NULL DEFAULT 1,
       history_retention_days INTEGER NOT NULL DEFAULT 31,
+      in_app_alerts       INTEGER NOT NULL DEFAULT 1,
+      browser_notifications INTEGER NOT NULL DEFAULT 0,
       interpolation       INTEGER NOT NULL,
       created_at          TEXT    NOT NULL,
       updated_at          TEXT    NOT NULL
@@ -145,6 +147,8 @@ function migrate(db: DatabaseSync): void {
   ensureColumn(db, "settings", "low_altitude_threshold", "INTEGER NOT NULL DEFAULT 3000");
   ensureColumn(db, "settings", "history_enabled", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn(db, "settings", "history_retention_days", "INTEGER NOT NULL DEFAULT 31");
+  ensureColumn(db, "settings", "in_app_alerts", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db, "settings", "browser_notifications", "INTEGER NOT NULL DEFAULT 0");
 }
 
 /** Add a column to an existing table if it is not already present. */

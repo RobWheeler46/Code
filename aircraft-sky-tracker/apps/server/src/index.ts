@@ -121,8 +121,10 @@ async function main(): Promise<void> {
         timestamp: Date.now(),
         aircraft,
       });
-      // Push alerts for newly-arrived interesting aircraft (global location only).
-      alerts.process(aircraft);
+      // Interesting-aircraft entry alerts: in-app (WebSocket) + optional push.
+      alerts.onSnapshot(aircraft, Date.now(), (entered) => {
+        ws.broadcast({ type: "aircraft.interesting.enter", aircraft: entered });
+      });
       // Record aircraft pass history (global location only, FRD §56).
       history.ingest(aircraft);
       log.debug("poll processed", {
@@ -248,6 +250,8 @@ async function main(): Promise<void> {
         "interpolationEnabled",
         "highlightInteresting",
         "historyEnabled",
+        "inAppAlerts",
+        "browserNotifications",
       ] as const;
       for (const key of booleanKeys) {
         if (update[key] !== undefined) next[key] = Boolean(update[key]);

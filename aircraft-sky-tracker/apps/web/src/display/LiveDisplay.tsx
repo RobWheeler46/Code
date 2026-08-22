@@ -24,6 +24,7 @@ export function LiveDisplay() {
       config={config}
       sourceStatus={live.sourceStatus}
       connected={live.connected}
+      interestingEntry={live.interestingEntry}
     />
   );
 }

@@ -7,6 +7,12 @@ import {
   type SourceStatus,
 } from "@ast/shared";
 
+export interface InterestingEntry {
+  aircraft: Aircraft;
+  /** Monotonic id so consumers can react to each distinct entry event. */
+  id: number;
+}
+
 export interface LiveState {
   aircraft: Aircraft[];
   /** Server timestamp of the latest snapshot (ms) - used for interpolation. */
@@ -14,6 +20,8 @@ export interface LiveState {
   sourceStatus: SourceStatus;
   connected: boolean;
   config: AppConfig | undefined;
+  /** Latest interesting-aircraft entry event (FRD §52), or undefined. */
+  interestingEntry: InterestingEntry | undefined;
 }
 
 const MAX_BACKOFF_MS = 15_000;
@@ -29,9 +37,13 @@ export function useWebSocket(): LiveState {
   const [sourceStatus, setSourceStatus] = useState<SourceStatus>("disconnected");
   const [connected, setConnected] = useState(false);
   const [config, setConfig] = useState<AppConfig | undefined>(undefined);
+  const [interestingEntry, setInterestingEntry] = useState<InterestingEntry | undefined>(
+    undefined,
+  );
 
   const backoffRef = useRef(1000);
   const closedRef = useRef(false);
+  const entryIdRef = useRef(0);
 
   useEffect(() => {
     closedRef.current = false;
@@ -70,6 +82,10 @@ export function useWebSocket(): LiveState {
           case "source.status":
             setSourceStatus(message.status);
             break;
+          case "aircraft.interesting.enter":
+            entryIdRef.current += 1;
+            setInterestingEntry({ aircraft: message.aircraft, id: entryIdRef.current });
+            break;
           case "error.status":
             // Non-fatal; surfaced via source status in the UI.
             break;
@@ -99,5 +115,5 @@ export function useWebSocket(): LiveState {
     };
   }, []);
 
-  return { aircraft, snapshotTimestamp, sourceStatus, connected, config };
+  return { aircraft, snapshotTimestamp, sourceStatus, connected, config, interestingEntry };
 }
