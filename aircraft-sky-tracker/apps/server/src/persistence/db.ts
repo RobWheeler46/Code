@@ -113,6 +113,7 @@ function migrate(db: DatabaseSync): void {
       destination_longitude    REAL,
       airline                  TEXT,
       confidence               TEXT NOT NULL,
+      sources                  TEXT,
       updated_at               TEXT NOT NULL,
       expires_at               TEXT NOT NULL,
       source                   TEXT NOT NULL
@@ -153,6 +154,7 @@ function migrate(db: DatabaseSync): void {
   ensureColumn(db, "settings", "browser_notifications", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn(db, "aircraft_cache", "operator", "TEXT");
   ensureColumn(db, "aircraft_cache", "registered_country", "TEXT");
+  ensureColumn(db, "route_cache", "sources", "TEXT");
 }
 
 /** Add a column to an existing table if it is not already present. */

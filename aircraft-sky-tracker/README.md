@@ -26,6 +26,16 @@ destination.
    → normalised aircraft → WebSocket → HTML Canvas display
 ```
 
+> **Route confidence:** destinations run through a confidence engine (FRD
+> §22-40) — an identity gate (a reused/mismatched callsign is rejected rather
+> than shown), 0-100 scoring (identity + explicit route + geographic
+> plausibility + recency + provider agreement), classification
+> (Confirmed/High/Medium/Low/Unknown), conflict suppression and dropout
+> hysteresis. Only Confirmed/High/Medium show a destination; Low/Unknown show a
+> compass heading instead. adsbdb is the default source (combined
+> aircraft+callsign query with a callsign-only fallback); Airframes plugs in as a
+> second source to unlock "Confirmed" and conflict detection.
+
 > **Data-source note:** the spec named **airplanes.live** as the MVP provider,
 > but it has since restricted its public REST API to HTTP 403 for general
 > clients. The app therefore defaults to **`failover`** — **adsb.fi** primary
@@ -125,6 +135,7 @@ screen. Startup defaults come from the environment (see `.env.example`):
 | `AIRCRAFT_PROVIDER` | `failover` | `failover` \| `adsbfi` \| `opensky` \| `airplaneslive` \| `simulation` |
 | `AIRCRAFT_POLL_INTERVAL_MS` | `1100` | ~1 Hz, within provider limits |
 | `SITE_PASSWORD` | *(unset)* | When set, changing config / viewing diagnostics needs this password; the display stays open (FRD §79) |
+| `AIRFRAMES_API_KEY` | *(unset)* | Optional 2nd route source; enables "Confirmed" routes + conflict detection (FRD §24-26) |
 | `NOTIFY_NTFY_TOPIC` | *(unset)* | ntfy topic for interesting-aircraft push alerts; push is off until set |
 | `NOTIFY_NTFY_SERVER` | `https://ntfy.sh` | ntfy server for push alerts |
 | `PORT` | *(from host)* | Honoured for PaaS (Railway); falls back to `HTTP_PORT` |

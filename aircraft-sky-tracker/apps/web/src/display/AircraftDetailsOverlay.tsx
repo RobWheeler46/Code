@@ -37,9 +37,11 @@ function compass16(deg: number): string {
 }
 
 const CONFIDENCE_LABEL: Record<string, string> = {
+  confirmed: "Route confirmed",
   high: "High confidence",
   medium: "Medium confidence",
   low: "Low confidence",
+  unknown: "Unknown route",
 };
 
 const AUTO_CLOSE_MS = 30_000; // FRD §86
@@ -219,7 +221,13 @@ export function AircraftDetailsOverlay({ aircraft, onClose }: Props) {
                   {originCode ?? "—"} → {destCode ?? "—"}
                 </div>
               )}
-              {routeConf && <div className="route-conf">{routeConf}</div>}
+              {(routeConf || dest?.sources) && (
+                <div className="route-conf">
+                  {[routeConf, dest?.sources && dest.sources.length > 0 ? dest.sources.join(" + ") : undefined]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </div>
+              )}
             </>
           ) : (
             <div className="route-line">

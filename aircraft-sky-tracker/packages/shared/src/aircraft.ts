@@ -5,7 +5,8 @@
  * It only ever receives NORMALISED aircraft in this shape.
  */
 
-export type RouteConfidence = "high" | "medium" | "low";
+/** Route classification (FRD v3.0 §35). */
+export type RouteConfidence = "confirmed" | "high" | "medium" | "low" | "unknown";
 
 /** Why an aircraft is flagged as interesting (FRD Phase 3). */
 export interface AircraftInterest {
@@ -29,6 +30,8 @@ export interface Destination {
   originIata?: string;
   originIcao?: string;
   airline?: string;
+  /** Which intelligence sources contributed, e.g. ["adsbdb"] (FRD §42). */
+  sources?: string[];
 }
 
 /** Extended ADS-B fields shown in the detail drawer's technical section (FRD §46). */

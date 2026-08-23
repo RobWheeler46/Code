@@ -73,6 +73,9 @@ export interface Env {
   /** Push alerts (FRD Phase 3): ntfy topic + server. Push is off unless a topic is set. */
   notifyNtfyTopic: string | undefined;
   notifyNtfyServer: string;
+  /** Optional Airframes flight-intelligence provider (FRD §24-26). */
+  airframesApiKey: string | undefined;
+  airframesUrl: string;
 }
 
 const nodeEnv = str("NODE_ENV", "production");
@@ -98,4 +101,6 @@ export const env: Env = {
   localAdsbUrl: process.env["LOCAL_ADSB_URL"] || undefined,
   notifyNtfyTopic: process.env["NOTIFY_NTFY_TOPIC"] || undefined,
   notifyNtfyServer: str("NOTIFY_NTFY_SERVER", "https://ntfy.sh"),
+  airframesApiKey: process.env["AIRFRAMES_API_KEY"] || undefined,
+  airframesUrl: str("AIRFRAMES_URL", "https://api.airframes.io"),
 };

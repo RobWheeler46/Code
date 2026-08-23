@@ -41,6 +41,8 @@ export interface DiagnosticsReport {
   lastAlert: string | null;
   passesToday: number;
   interestingToday: number;
+  routeConfidence: { confirmed: number; high: number; medium: number; low: number; unknown: number };
+  flightIntelligenceSources: string[];
 }
 
 export class DiagnosticsService {
@@ -110,6 +112,8 @@ export class DiagnosticsService {
       lastAlert: this.alerts.lastAlert ?? null,
       passesToday: this.history.passesToday(),
       interestingToday: this.history.interestingToday(),
+      routeConfidence: this.routes.confidenceBreakdown(),
+      flightIntelligenceSources: this.routes.activeSources(),
     };
   }
 }

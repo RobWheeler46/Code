@@ -137,7 +137,10 @@ export class ViewService {
           type = type ?? meta.aircraftTypeCode;
         }
       }
-      const destination = this.routes.getDestination(n.callsign, {
+      const destination = this.routes.getDestination({
+        icaoHex: n.icaoHex,
+        registration,
+        callsign: n.callsign,
         latitude: n.latitude,
         longitude: n.longitude,
         trackDegrees: n.trackDegrees,

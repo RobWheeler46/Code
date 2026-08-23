@@ -30,6 +30,7 @@ export interface AdsbdbAircraftMeta {
   type?: string;
   manufacturer?: string;
   icaoTypeCode?: string;
+  modeS?: string;
   operator?: string;
   registeredCountry?: string;
 }
@@ -105,6 +106,69 @@ export class AdsbdbClient {
       airlineName: route.airline?.name,
       origin: mapAirport(route.origin),
       destination: mapAirport(route.destination),
+    };
+  }
+
+  /**
+   * Combined aircraft + callsign lookup (FRD §23):
+   *   GET /v0/aircraft/{ICAO}?callsign={CALLSIGN}
+   * Correlates the route with the specific aircraft, enabling the identity gate.
+   */
+  async lookupCombined(
+    icaoHex: string,
+    callsign: string,
+  ): Promise<{ aircraft?: AdsbdbAircraftMeta; route?: AdsbdbRoute } | Unknown> {
+    const url = `${BASE}/aircraft/${encodeURIComponent(icaoHex)}?callsign=${encodeURIComponent(callsign)}`;
+    const res = await fetch(url, {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    this.lastHttpStatus = res.status;
+    if (res.status === 404) return UNKNOWN;
+    if (res.status === 429) throw new Error("adsbdb rate limited (HTTP 429)");
+    if (!res.ok) throw new Error(`adsbdb combined HTTP ${res.status}`);
+
+    const body = (await res.json()) as {
+      response?: {
+        aircraft?: {
+          registration?: string;
+          type?: string;
+          manufacturer?: string;
+          icao_type?: string;
+          mode_s?: string;
+          registered_owner?: string;
+          registered_owner_country_name?: string;
+        };
+        flightroute?: {
+          airline?: { name?: string };
+          origin?: RawAirport;
+          destination?: RawAirport;
+        };
+      };
+    };
+    const r = body.response;
+    if (!r) return UNKNOWN;
+    const ac = r.aircraft;
+    const fr = r.flightroute;
+    return {
+      aircraft: ac
+        ? {
+            registration: ac.registration,
+            type: ac.type,
+            manufacturer: ac.manufacturer,
+            icaoTypeCode: ac.icao_type,
+            modeS: ac.mode_s,
+            operator: ac.registered_owner,
+            registeredCountry: ac.registered_owner_country_name,
+          }
+        : undefined,
+      route: fr
+        ? {
+            airlineName: fr.airline?.name,
+            origin: mapAirport(fr.origin),
+            destination: mapAirport(fr.destination),
+          }
+        : undefined,
     };
   }
 

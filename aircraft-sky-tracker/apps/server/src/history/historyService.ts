@@ -28,6 +28,8 @@ export function londonDate(now: number): string {
 
 function confidenceRank(c: string | undefined): number {
   switch (c) {
+    case "confirmed":
+      return 4;
     case "high":
       return 3;
     case "medium":

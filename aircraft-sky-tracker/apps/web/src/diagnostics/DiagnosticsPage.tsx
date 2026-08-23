@@ -28,6 +28,8 @@ interface DiagnosticsReport {
   lastAlert: string | null;
   passesToday: number;
   interestingToday: number;
+  routeConfidence: { confirmed: number; high: number; medium: number; low: number; unknown: number };
+  flightIntelligenceSources: string[];
 }
 
 /** System diagnostics screen (FRD §66-67). */
@@ -80,8 +82,30 @@ export function DiagnosticsPage({ onBack }: Props) {
             </span>
             <span className="k">Route data</span>
             <span className="v badge-ok">✓ {report.routeProvider}</span>
+            <span className="k">Flight intelligence</span>
+            <span className="v">{report.flightIntelligenceSources.join(", ") || "—"}</span>
+            <span className="k">Airframes</span>
+            <span className="v">
+              {report.flightIntelligenceSources.includes("airframes")
+                ? "Enabled"
+                : "Disabled (set AIRFRAMES_API_KEY)"}
+            </span>
             <span className="k">Last HTTP response</span>
             <span className="v">{report.lastHttpStatus ?? "—"}</span>
+          </div>
+
+          <h2>Route confidence</h2>
+          <div className="rows">
+            <span className="k">Confirmed</span>
+            <span className="v">{report.routeConfidence.confirmed}</span>
+            <span className="k">High</span>
+            <span className="v">{report.routeConfidence.high}</span>
+            <span className="k">Medium</span>
+            <span className="v">{report.routeConfidence.medium}</span>
+            <span className="k">Low</span>
+            <span className="v">{report.routeConfidence.low}</span>
+            <span className="k">Unknown</span>
+            <span className="v">{report.routeConfidence.unknown}</span>
           </div>
 
           <h2>Live aircraft</h2>

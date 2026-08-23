@@ -96,7 +96,10 @@ export class AircraftStateService {
         }
       }
 
-      const destination = this.routes.getDestination(normalised.callsign, {
+      const destination = this.routes.getDestination({
+        icaoHex: normalised.icaoHex,
+        registration,
+        callsign: normalised.callsign,
         latitude: normalised.latitude,
         longitude: normalised.longitude,
         trackDegrees: normalised.trackDegrees,
