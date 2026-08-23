@@ -7,6 +7,8 @@ let EV_META = { types: {}, statuses: {} };
 })();
 
 const RAG_STATUS = { green: 'active', amber: 'suspended', red: 'deleted' };
+// Camp Readiness checker: overall rollup status -> pill.
+const READY_PILL = { ready: ['active', 'Ready'], attention: ['suspended', 'Needs attention'], blocked: ['deleted', 'Needs sorting'], none: ['draft', 'Not started'] };
 
 async function loadEvents() {
   const box = document.getElementById('content');
@@ -22,14 +24,20 @@ async function loadEvents() {
   } else {
     box.innerHTML = `<div class="grid cols-2">${data.events.map(ev => {
       const dates = ev.startDate ? formatDate(ev.startDate) + (ev.endDate && ev.endDate !== ev.startDate ? ' - ' + formatDate(ev.endDate) : '') : 'Dates to confirm';
+      const rollup = data.isLeaderView && ev.rollup ? ev.rollup : null;
+      const readyPill = rollup ? (([st, lbl]) => ` <span class="badge" data-status="${st}">${lbl}</span>`)(READY_PILL[rollup.overall] || READY_PILL.none) : '';
       const badge = data.isLeaderView
         ? `<span class="badge" data-status="${ev.status === 'published' ? 'published' : (ev.status === 'archived' ? 'archived' : 'draft')}">${escapeHtml(ev.statusLabel)}</span>
-           ${ev.readiness ? ` <span class="badge" data-status="${RAG_STATUS[ev.readiness.rag]}">${ev.readiness.complete}/${ev.readiness.total} set up</span>` : ''}`
+           ${ev.readiness ? ` <span class="badge" data-status="${RAG_STATUS[ev.readiness.rag]}">${ev.readiness.complete}/${ev.readiness.total} set up</span>` : ''}${readyPill}`
+        : '';
+      const gaps = rollup && rollup.gaps.length
+        ? `<p class="muted" style="margin:.45rem 0 0;font-size:.85rem">&#9888; ${rollup.gaps.slice(0, 3).map(g => escapeHtml(g.label) + ' &mdash; ' + escapeHtml(g.summary)).join('; ')}</p>`
         : '';
       return `<a class="card clickable" href="event-hub.html?id=${ev.id}">
         <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap"><h2 style="margin:0">${escapeHtml(ev.title)}</h2></div>
         <p class="muted" style="margin:.3rem 0 0">${escapeHtml(EV_META.types[ev.eventType] || ev.eventType)} &middot; ${escapeHtml(dates)}${ev.location ? ' &middot; ' + escapeHtml(ev.location) : ''}${ev.sectionName ? ' &middot; ' + escapeHtml(ev.sectionName) : ''}</p>
         <div style="margin-top:.5rem">${badge}</div>
+        ${gaps}
       </a>`;
     }).join('')}</div>`;
   }

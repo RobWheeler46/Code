@@ -309,6 +309,11 @@ function scenario_logic_command_centre(): void
     // A published parent item -> parent pack ready.
     dbRun("INSERT INTO event_hub_items (hub_id, label, visibility, item_status) VALUES (?, 'Kit list', 'parents', 'published')", [$hubId]);
     check('cc: published parent item -> parent pack ready', $byKey()['parentpack']['status'] === 'ready');
+
+    // Readiness rollup: worst area wins, and gaps list the blocked/attention areas.
+    $roll = eventReadinessRollup($hub);
+    check('cc rollup: overall = blocked (worst area wins)', $roll['overall'] === 'blocked');
+    check('cc rollup: gaps include the equipment blocker', in_array('Equipment', array_column($roll['gaps'], 'label'), true));
 }
 
 // QM kit completeness check: overall result derives from component statuses.

@@ -191,6 +191,25 @@ function eventCampOverview(array $hub): array
     ];
 }
 
+// Camp Readiness checker: reduce the per-area Command Centre to one overall status
+// plus the actionable gaps (blocked/attention areas), for the events-list overview.
+// Rule-based, evidence-carrying, suggestions-only - no LLM, no approvals.
+function eventReadinessRollup(array $hub): array
+{
+    $areas = eventCommandCentre($hub);
+    $statuses = array_column($areas, 'status');
+    $overall = in_array('blocked', $statuses, true) ? 'blocked'
+        : (in_array('attention', $statuses, true) ? 'attention'
+        : (in_array('ready', $statuses, true) ? 'ready' : 'none'));
+    $gaps = [];
+    foreach ($areas as $a) {
+        if ($a['status'] === 'blocked' || $a['status'] === 'attention') {
+            $gaps[] = ['label' => $a['label'], 'status' => $a['status'], 'summary' => $a['summary']];
+        }
+    }
+    return ['overall' => $overall, 'gaps' => $gaps];
+}
+
 // Command Centre readiness rollup: the event as the operational spine. Each area is
 // computed from real data linked to this event (no placeholders) and reports one of
 // ready / attention / blocked / none, with a plain summary and a deep link. Areas

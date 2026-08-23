@@ -30,12 +30,20 @@ $router->get('/api/events', function ($params) {
     $user = requireAuth();
     requireEventHubEnabled();
     $isLeaderView = isLeaderRole($user['portal_role']);
+    $today = gmdate('Y-m-d');
     $rows = dbAll('SELECT * FROM event_hubs ORDER BY (status = \'archived\'), start_date IS NULL, start_date, id DESC');
     $out = [];
     foreach ($rows as $h) {
         if ($isLeaderView) {
             $r = eventHubReadiness($h);
-            $out[] = array_merge(serializeHub($h), ['readiness' => $r]);
+            $item = array_merge(serializeHub($h), ['readiness' => $r]);
+            // Camp Readiness checker: an operational rollup for events still ahead of
+            // us (not archived), so leaders see which camps have blockers/gaps at a
+            // glance without opening each one.
+            if ($h['status'] !== 'archived' && (empty($h['start_date']) || $h['start_date'] >= $today)) {
+                $item['rollup'] = eventReadinessRollup($h);
+            }
+            $out[] = $item;
         } elseif (eventHubVisibleToParent($user, $h)) {
             $out[] = serializeHub($h);
         }
