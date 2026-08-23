@@ -15,7 +15,7 @@ export interface AircraftInterest {
   reasons: string[];
 }
 
-/** Destination / route information for a flight (FRD §31). */
+/** Destination / route information for a flight (FRD §31, §44). */
 export interface Destination {
   airportName?: string;
   displayName?: string;
@@ -24,6 +24,38 @@ export interface Destination {
   latitude?: number;
   longitude?: number;
   confidence: RouteConfidence;
+  /** Origin + airline for the detail drawer (FRD §44). */
+  originName?: string;
+  originIata?: string;
+  originIcao?: string;
+  airline?: string;
+}
+
+/** Extended ADS-B fields shown in the detail drawer's technical section (FRD §46). */
+export interface TechnicalAdsb {
+  altitudeGeomFeet?: number;
+  indicatedAirspeedKnots?: number;
+  trueAirspeedKnots?: number;
+  mach?: number;
+  magHeadingDegrees?: number;
+  trueHeadingDegrees?: number;
+  navModes?: string[];
+  selectedAltitudeMcpFeet?: number;
+  selectedAltitudeFmsFeet?: number;
+  selectedHeadingDegrees?: number;
+  qnhHpa?: number;
+  outsideAirTempC?: number;
+  adsbVersion?: number;
+  navIntegrityCategory?: number;
+}
+
+/** Aircraft-registry metadata (FRD §45), fetched on demand for the drawer. */
+export interface AircraftMeta {
+  manufacturer?: string;
+  model?: string;
+  typeDescription?: string;
+  operator?: string;
+  registeredCountry?: string;
 }
 
 /** A fully normalised aircraft ready for display (FRD §30). */
@@ -46,6 +78,12 @@ export interface Aircraft {
   destination?: Destination;
   /** Set when the aircraft matches an interesting-aircraft rule (FRD Phase 3). */
   interest?: AircraftInterest;
+  /** Climb/descent rate, ft/min; positive = climbing (FRD §43). */
+  verticalRateFpm?: number;
+  squawk?: string;
+  emergency?: string;
+  /** Extended ADS-B fields for the detail drawer's technical section (FRD §46). */
+  technical?: TechnicalAdsb;
   positionAgeSeconds: number;
   lastUpdated: string;
   source: string;
@@ -67,4 +105,9 @@ export interface ProviderAircraft {
   trackDegrees?: number;
   positionAgeSeconds?: number;
   providerFlags?: unknown;
+  /** Extended ADS-B fields, where the provider supplies them (FRD §10, §43, §46). */
+  verticalRateFpm?: number;
+  squawk?: string;
+  emergency?: string;
+  technical?: TechnicalAdsb;
 }

@@ -8,7 +8,7 @@ import type { AppConfig, ConfigUpdate, Aircraft } from "@ast/shared";
 import type { HealthReport, DiagnosticsReport } from "../diagnostics/diagnosticsService.js";
 import type { PhotoResult } from "../routes/photoService.js";
 import type { ViewResult } from "../aircraft/viewService.js";
-import type { HistoryPass, HistoryDate } from "@ast/shared";
+import type { HistoryPass, HistoryDate, AircraftMeta } from "@ast/shared";
 import { basicAuthMiddleware, isAuthEnabled } from "./auth.js";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -37,6 +37,7 @@ export interface ApiContext {
   health(): HealthReport;
   diagnostics(): DiagnosticsReport;
   photo(registration?: string, icaoHex?: string): Promise<PhotoResult>;
+  aircraftDetail(icaoHex: string): Promise<{ aircraft: Aircraft | null; meta: AircraftMeta }>;
   view(postcode: string): Promise<ViewResult>;
   history(date?: string): { date: string; passes: HistoryPass[] };
   historyDates(): HistoryDate[];
@@ -136,6 +137,21 @@ export function createApiRouter(ctx: ApiContext): Router {
       res.json(await ctx.photo(reg, hex));
     } catch {
       res.json({});
+    }
+  });
+
+  // GET /api/aircraft/:icaoHex - detail (live aircraft + registry metadata,
+  // FRD §45, §72). Public: part of the open display's detail drawer.
+  router.get("/aircraft/:icaoHex", async (req: Request, res: Response) => {
+    const hex = req.params.icaoHex ?? "";
+    if (!/^[0-9A-Fa-f]{6}$/.test(hex) && !/^[A-Za-z0-9]{3,8}$/.test(hex)) {
+      res.status(400).json({ error: "invalid icaoHex" });
+      return;
+    }
+    try {
+      res.json(await ctx.aircraftDetail(hex.toUpperCase()));
+    } catch (err) {
+      res.status(502).json({ error: `Aircraft detail unavailable: ${String(err)}` });
     }
   });
 

@@ -9,6 +9,8 @@ export interface CachedAircraftMeta {
   aircraftType?: string;
   manufacturer?: string;
   model?: string;
+  operator?: string;
+  registeredCountry?: string;
   updatedAt: string;
   expiresAt: string;
   source: string;
@@ -20,6 +22,8 @@ interface AircraftRow {
   aircraft_type: string | null;
   manufacturer: string | null;
   model: string | null;
+  operator: string | null;
+  registered_country: string | null;
   updated_at: string;
   expires_at: string;
   source: string;
@@ -46,6 +50,8 @@ export class AircraftCacheRepo {
       aircraftType: row.aircraft_type ?? undefined,
       manufacturer: row.manufacturer ?? undefined,
       model: row.model ?? undefined,
+      operator: row.operator ?? undefined,
+      registeredCountry: row.registered_country ?? undefined,
       updatedAt: row.updated_at,
       expiresAt: row.expires_at,
       source: row.source,
@@ -59,13 +65,15 @@ export class AircraftCacheRepo {
       .prepare(
         `INSERT INTO aircraft_cache (
           icao_hex, registration, aircraft_type, manufacturer, model,
-          updated_at, expires_at, source
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          operator, registered_country, updated_at, expires_at, source
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(icao_hex) DO UPDATE SET
           registration = excluded.registration,
           aircraft_type = excluded.aircraft_type,
           manufacturer = excluded.manufacturer,
           model = excluded.model,
+          operator = excluded.operator,
+          registered_country = excluded.registered_country,
           updated_at = excluded.updated_at,
           expires_at = excluded.expires_at,
           source = excluded.source`,
@@ -76,6 +84,8 @@ export class AircraftCacheRepo {
         meta.aircraftType ?? null,
         meta.manufacturer ?? null,
         meta.model ?? null,
+        meta.operator ?? null,
+        meta.registeredCountry ?? null,
         now.toISOString(),
         expires.toISOString(),
         meta.source,

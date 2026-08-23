@@ -330,6 +330,146 @@ button.danger {
   margin: -0.25rem 0 0.5rem;
 }
 
+/* Aircraft detail drawer (FRD v3.0 §42-47). */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  justify-content: flex-end;
+  z-index: 20;
+}
+
+.drawer {
+  background: var(--panel);
+  border-left: 1px solid var(--panel-border);
+  width: min(380px, 100vw);
+  height: 100%;
+  overflow-y: auto;
+  padding: 1.25rem 1.4rem;
+  box-shadow: -20px 0 60px rgba(0, 0, 0, 0.55);
+  animation: drawer-in 0.28s ease;
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0.4;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.drawer h2 {
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--secondary);
+  margin: 1.3rem 0 0.6rem;
+  border-bottom: 1px solid var(--panel-border);
+  padding-bottom: 0.35rem;
+}
+
+.drawer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.drawer-id {
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.drawer-sub {
+  color: var(--secondary);
+  font-size: 0.85rem;
+  margin-top: 0.15rem;
+}
+
+.drawer-close {
+  background: none;
+  border: none;
+  color: var(--secondary);
+  font-size: 1.7rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.2rem;
+}
+.drawer-close:hover {
+  color: var(--primary);
+  border: none;
+}
+
+.drawer-route {
+  margin: 0.9rem 0 0.25rem;
+}
+
+.route-line {
+  font-size: 1.05rem;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.route-arrow {
+  color: var(--accent);
+}
+
+.route-codes {
+  color: var(--secondary);
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  margin-top: 0.2rem;
+}
+
+.route-conf {
+  color: var(--secondary);
+  font-size: 0.78rem;
+  margin-top: 0.25rem;
+}
+
+.collapsible {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--panel-border);
+  border-radius: 0;
+  color: var(--secondary);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 1.1rem 0 0.4rem;
+  cursor: pointer;
+}
+.collapsible:hover {
+  color: var(--primary);
+  border-color: var(--panel-border);
+}
+
+@media (max-width: 640px) {
+  .drawer-backdrop {
+    align-items: flex-end;
+  }
+  .drawer {
+    width: 100vw;
+    height: auto;
+    max-height: 88vh;
+    border-left: none;
+    border-top: 1px solid var(--panel-border);
+    border-radius: 14px 14px 0 0;
+  }
+}
+
 /* Interesting-aircraft entry alerts (FRD v3.0 §52-54). */
 .alert-stack {
   position: fixed;

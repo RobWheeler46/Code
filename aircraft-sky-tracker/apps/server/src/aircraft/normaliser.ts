@@ -6,7 +6,7 @@
  * is too old, are not displayable (FRD §13).
  */
 
-import type { ProviderAircraft } from "@ast/shared";
+import type { ProviderAircraft, TechnicalAdsb } from "@ast/shared";
 
 /** Max position age, in seconds, for an aircraft to be displayable (FRD §54). */
 export const MAX_POSITION_AGE_SECONDS = 30;
@@ -24,6 +24,10 @@ export interface NormalisedAircraft {
   aircraftTypeCode?: string;
   /** Provider dbFlags (military / interesting bits), when numeric. */
   providerFlags?: number;
+  verticalRateFpm?: number;
+  squawk?: string;
+  emergency?: string;
+  technical?: TechnicalAdsb;
   positionAgeSeconds: number;
   source: string;
 }
@@ -61,6 +65,10 @@ export function normaliseAircraft(
     trackDegrees: raw.trackDegrees,
     aircraftTypeCode: raw.aircraftTypeCode?.trim() || undefined,
     providerFlags: typeof raw.providerFlags === "number" ? raw.providerFlags : undefined,
+    verticalRateFpm: raw.verticalRateFpm,
+    squawk: raw.squawk,
+    emergency: raw.emergency,
+    technical: raw.technical,
     positionAgeSeconds: age,
     source,
   };

@@ -36,6 +36,25 @@ interface RawAircraft {
   track?: number;
   seen_pos?: number;
   dbFlags?: number;
+  // Extended fields for the detail drawer (FRD §10, §43, §46).
+  alt_geom?: number;
+  baro_rate?: number;
+  geom_rate?: number;
+  ias?: number;
+  tas?: number;
+  mach?: number;
+  mag_heading?: number;
+  true_heading?: number;
+  squawk?: string;
+  emergency?: string;
+  nav_modes?: string[];
+  nav_altitude_mcp?: number;
+  nav_altitude_fms?: number;
+  nav_heading?: number;
+  nav_qnh?: number;
+  oat?: number;
+  version?: number;
+  nic?: number;
 }
 
 export interface ReApiOptions {
@@ -99,9 +118,26 @@ export class ReApiProvider implements AircraftProvider {
     return mapped;
   }
 
-  /** Map re-api fields to the internal ProviderAircraft (FRD §12). */
+  /** Map re-api fields to the internal ProviderAircraft (FRD §12, §46). */
   private map(a: RawAircraft & { hex: string }): ProviderAircraft {
     const callsign = typeof a.flight === "string" ? a.flight.trim() : undefined;
+    const technical = {
+      altitudeGeomFeet: num(a.alt_geom),
+      indicatedAirspeedKnots: num(a.ias),
+      trueAirspeedKnots: num(a.tas),
+      mach: num(a.mach),
+      magHeadingDegrees: num(a.mag_heading),
+      trueHeadingDegrees: num(a.true_heading),
+      navModes: Array.isArray(a.nav_modes) && a.nav_modes.length > 0 ? a.nav_modes : undefined,
+      selectedAltitudeMcpFeet: num(a.nav_altitude_mcp),
+      selectedAltitudeFmsFeet: num(a.nav_altitude_fms),
+      selectedHeadingDegrees: num(a.nav_heading),
+      qnhHpa: num(a.nav_qnh),
+      outsideAirTempC: num(a.oat),
+      adsbVersion: num(a.version),
+      navIntegrityCategory: num(a.nic),
+    };
+    const hasTechnical = Object.values(technical).some((v) => v !== undefined);
     return {
       icaoHex: a.hex.trim().toUpperCase(),
       registration: a.r?.trim() || undefined,
@@ -114,6 +150,11 @@ export class ReApiProvider implements AircraftProvider {
       trackDegrees: num(a.track),
       positionAgeSeconds: num(a.seen_pos),
       providerFlags: a.dbFlags,
+      verticalRateFpm: num(a.baro_rate) ?? num(a.geom_rate),
+      squawk: typeof a.squawk === "string" ? a.squawk : undefined,
+      emergency:
+        typeof a.emergency === "string" && a.emergency !== "none" ? a.emergency : undefined,
+      technical: hasTechnical ? technical : undefined,
     };
   }
 }

@@ -93,6 +93,8 @@ function migrate(db: DatabaseSync): void {
       aircraft_type TEXT,
       manufacturer  TEXT,
       model         TEXT,
+      operator      TEXT,
+      registered_country TEXT,
       updated_at    TEXT NOT NULL,
       expires_at    TEXT NOT NULL,
       source        TEXT NOT NULL
@@ -149,6 +151,8 @@ function migrate(db: DatabaseSync): void {
   ensureColumn(db, "settings", "history_retention_days", "INTEGER NOT NULL DEFAULT 31");
   ensureColumn(db, "settings", "in_app_alerts", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn(db, "settings", "browser_notifications", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn(db, "aircraft_cache", "operator", "TEXT");
+  ensureColumn(db, "aircraft_cache", "registered_country", "TEXT");
 }
 
 /** Add a column to an existing table if it is not already present. */

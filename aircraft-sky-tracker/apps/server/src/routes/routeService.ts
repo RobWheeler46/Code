@@ -11,7 +11,7 @@
  * (new callsign, changed callsign, or expired cache - FRD §20).
  */
 
-import type { Destination, RouteConfidence } from "@ast/shared";
+import type { Destination, RouteConfidence, AircraftMeta } from "@ast/shared";
 import { bearingDegrees } from "@ast/shared";
 import { RouteCacheRepo, type CachedRoute } from "../persistence/routeCacheRepo.js";
 import { AircraftCacheRepo } from "../persistence/aircraftCacheRepo.js";
@@ -108,6 +108,10 @@ export class RouteService {
       latitude: cached.destinationLatitude,
       longitude: cached.destinationLongitude,
       confidence: cached.confidence,
+      originName: cached.originName,
+      originIata: cached.originIata,
+      originIcao: cached.originIcao,
+      airline: cached.airline,
     };
   }
 
@@ -254,6 +258,51 @@ export class RouteService {
     return undefined;
   }
 
+  /**
+   * Full aircraft-registry metadata for the detail drawer (FRD §45). Awaits an
+   * adsbdb lookup on a cache miss (this is an on-demand detail request, not the
+   * hot poll path).
+   */
+  async getAircraftMeta(icaoHex: string): Promise<AircraftMeta> {
+    const cached = this.aircraftMeta.get(icaoHex);
+    if (cached) {
+      return {
+        manufacturer: cached.manufacturer,
+        model: cached.model,
+        typeDescription: cached.aircraftType,
+        operator: cached.operator,
+        registeredCountry: cached.registeredCountry,
+      };
+    }
+    try {
+      const result = await this.gate.run(() => this.client.lookupAircraft(icaoHex));
+      if (result === UNKNOWN) {
+        this.aircraftMeta.put({ icaoHex, source: "adsbdb" });
+        return {};
+      }
+      this.aircraftMeta.put({
+        icaoHex,
+        registration: result.registration,
+        aircraftType: result.icaoTypeCode ?? result.type,
+        manufacturer: result.manufacturer,
+        model: result.type,
+        operator: result.operator,
+        registeredCountry: result.registeredCountry,
+        source: "adsbdb",
+      });
+      return {
+        manufacturer: result.manufacturer,
+        model: result.type,
+        typeDescription: result.icaoTypeCode ?? result.type,
+        operator: result.operator,
+        registeredCountry: result.registeredCountry,
+      };
+    } catch (err) {
+      log.warn("aircraft meta lookup failed", { icaoHex, error: String(err) });
+      return {};
+    }
+  }
+
   private scheduleMetaLookup(icaoHex: string): void {
     if (this.inflightMeta.has(icaoHex)) return;
     this.inflightMeta.add(icaoHex);
@@ -269,6 +318,9 @@ export class RouteService {
           registration: result.registration,
           aircraftType: result.icaoTypeCode ?? result.type,
           manufacturer: result.manufacturer,
+          model: result.type,
+          operator: result.operator,
+          registeredCountry: result.registeredCountry,
           source: "adsbdb",
         });
       })

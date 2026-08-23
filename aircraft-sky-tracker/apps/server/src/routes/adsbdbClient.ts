@@ -30,6 +30,8 @@ export interface AdsbdbAircraftMeta {
   type?: string;
   manufacturer?: string;
   icaoTypeCode?: string;
+  operator?: string;
+  registeredCountry?: string;
 }
 
 interface CallsignResponse {
@@ -58,6 +60,8 @@ interface AircraftResponse {
           type?: string;
           manufacturer?: string;
           icao_type?: string;
+          registered_owner?: string;
+          registered_owner_country_name?: string;
         };
       }
     | string;
@@ -125,6 +129,8 @@ export class AdsbdbClient {
       type: ac.type,
       manufacturer: ac.manufacturer,
       icaoTypeCode: ac.icao_type,
+      operator: ac.registered_owner,
+      registeredCountry: ac.registered_owner_country_name,
     };
   }
 }

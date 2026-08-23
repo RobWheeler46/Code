@@ -326,6 +326,11 @@ async function main(): Promise<void> {
     health: () => diagnostics.health(),
     diagnostics: () => diagnostics.report(),
     photo: (registration, icaoHex) => photos.getPhoto(registration, icaoHex),
+    aircraftDetail: async (icaoHex) => {
+      const aircraft = state.snapshot().find((a) => a.icaoHex === icaoHex) ?? null;
+      const meta = await routes.getAircraftMeta(icaoHex);
+      return { aircraft, meta };
+    },
     view: (postcode) => viewService.getView(postcode),
 
     history: (date) => {

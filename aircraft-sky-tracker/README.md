@@ -148,6 +148,7 @@ The browser talks only to the backend (FRD §39):
 | `POST` | `/api/location/validate` | Validate a UK postcode + resolve coordinates |
 | `GET` | `/api/aircraft` | Current aircraft snapshot (diagnostics/dev) |
 | `GET` | `/api/aircraft/photo?reg=&hex=` | Aircraft photo (proxies planespotters.net) |
+| `GET` | `/api/aircraft/{icaoHex}` | Aircraft detail + registry metadata (adsbdb) |
 | `GET` | `/api/view?postcode=` | Per-viewer snapshot for any postcode (read-only) |
 | `GET` | `/api/history?date=` | Aircraft pass history for a date (default today) |
 | `GET` | `/api/history/dates` | Retained dates with pass counts |
