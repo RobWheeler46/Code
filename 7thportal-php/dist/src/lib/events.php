@@ -196,6 +196,41 @@ function eventCampTransport(int $hubId): array
     ];
 }
 
+// Programme matrix & activity allocation (FR-CAMP-OP-009..017). A day/session
+// schedule of activities allocated to groups; a group in two activities in the same
+// day+session is a clash.
+function serializeProgrammeSlot(array $s): array
+{
+    return [
+        'id' => (int) $s['id'], 'dayLabel' => $s['day_label'],
+        'session' => $s['session'], 'sessionLabel' => CAMP_ROTA_SESSIONS[$s['session']] ?? $s['session'],
+        'activity' => $s['activity'], 'group' => $s['group_label'], 'location' => $s['location'],
+        'lead' => $s['lead_name'], 'notes' => $s['notes'],
+    ];
+}
+function eventCampProgramme(int $hubId): array
+{
+    $slots = array_map('serializeProgrammeSlot', dbAll('SELECT * FROM camp_programme_slots WHERE hub_id = ? ORDER BY sort_order, id', [$hubId]));
+    // Clash = the same named group in two slots in one day+session. Blank / "All"
+    // groups run in parallel legitimately and are never clashed.
+    $seen = [];
+    foreach ($slots as $i => $sl) {
+        $slots[$i]['clash'] = false;
+        $g = strtolower(trim((string) $sl['group']));
+        if ($g === '' || $g === 'all') continue;
+        $seen[strtolower(trim($sl['dayLabel'])) . '|' . $sl['session'] . '|' . $g][] = $i;
+    }
+    foreach ($seen as $idxs) {
+        if (count($idxs) > 1) foreach ($idxs as $i) $slots[$i]['clash'] = true;
+    }
+    return [
+        'slots' => $slots,
+        'total' => count($slots),
+        'clashes' => count(array_filter($slots, fn($s) => $s['clash'])),
+        'meta' => ['sessions' => CAMP_ROTA_SESSIONS],
+    ];
+}
+
 // Camp overview summary for the leader dashboard (FR-CAMP-OP-003). Honest about the
 // data we hold in this slice - no attendee/leader counts (that's the deferred
 // programme/allocation module); dates, status, readiness, item + location tallies.
@@ -315,6 +350,15 @@ function eventCommandCentre(array $hub): array
         'key' => 'transport', 'label' => 'Transport',
         'status' => $vc === 0 ? 'none' : ($t['issues'] > 0 ? 'attention' : 'ready'),
         'summary' => $vc === 0 ? 'No transport planned yet' : ($t['issues'] > 0 ? plural($t['issues'], 'vehicle') . ($t['issues'] === 1 ? ' needs' : ' need') . ' a driver or seat' : plural($vc, 'vehicle') . ', ' . plural($t['totalPassengers'], 'passenger') . ' seated'),
+        'link' => null,
+    ];
+
+    // Programme.
+    $prog = eventCampProgramme($id);
+    $areas[] = [
+        'key' => 'programme', 'label' => 'Programme',
+        'status' => $prog['total'] === 0 ? 'none' : ($prog['clashes'] > 0 ? 'attention' : 'ready'),
+        'summary' => $prog['total'] === 0 ? 'No activities planned yet' : ($prog['clashes'] > 0 ? $prog['clashes'] . ' clash' . ($prog['clashes'] === 1 ? '' : 'es') . ' to resolve' : $prog['total'] . ' activit' . ($prog['total'] === 1 ? 'y' : 'ies') . ' scheduled'),
         'link' => null,
     ];
 

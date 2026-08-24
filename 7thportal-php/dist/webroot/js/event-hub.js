@@ -91,6 +91,7 @@ function renderLeader(box) {
     </div>
     ${locationsLeader()}
     ${rotaLeader()}
+    ${programmeLeader()}
     ${transportLeader()}`;
 
   document.getElementById('ev-camp-pack').addEventListener('click', printCampPack);
@@ -113,6 +114,8 @@ function renderLeader(box) {
     try { await Api.delete(`/api/events/${window.HUB_ID}/transport/passengers/${b.dataset.pid}`); loadHub(); } catch (e) { alert(e.message); }
   }));
   const trPrint = document.getElementById('tr-print'); if (trPrint) trPrint.addEventListener('click', printManifests);
+  const progAdd = document.getElementById('prog-add'); if (progAdd) progAdd.addEventListener('click', () => openProgrammeSlotForm(null));
+  box.querySelectorAll('.prog-edit').forEach(b => b.addEventListener('click', () => openProgrammeSlotForm((HUB.programme.slots || []).find(s => s.id == b.dataset.id))));
   document.getElementById('ev-preview').addEventListener('click', () => { PARENT_PREVIEW = true; loadHub(); });
   const pub = document.getElementById('ev-publish'); if (pub) pub.addEventListener('click', () => setHubStatus('published'));
   const unpub = document.getElementById('ev-unpublish'); if (unpub) unpub.addEventListener('click', () => setHubStatus('draft'));
@@ -298,6 +301,12 @@ function printCampPack() {
     rota = Object.entries(byDay).map(([day, es]) => `<h3>${esc(day)}</h3><table>${es.map(e => `<tr><td>${esc(e.sessionLabel)}</td><td><b>${esc(e.roleLabel)}</b></td><td>${e.adultName ? esc(e.adultName) : '<span class="g">&mdash; gap &mdash;</span>'}</td><td class="m">${esc(e.activity || '')}</td></tr>`).join('')}</table>`).join('');
   }
 
+  let programme = '';
+  if (HUB.programme && (HUB.programme.slots || []).length) {
+    const byDayP = {}; for (const s of HUB.programme.slots) (byDayP[s.dayLabel] ||= []).push(s);
+    programme = Object.entries(byDayP).map(([day, ss]) => `<h3>${esc(day)}</h3><table>${ss.slice().sort((a, b) => a.session.localeCompare(b.session)).map(s => `<tr><td>${esc(s.sessionLabel)}</td><td><b>${esc(s.activity)}</b></td><td>${esc(s.group || '')}</td><td class="m">${esc([s.location, s.lead].filter(Boolean).join(' · '))}</td></tr>`).join('')}</table>`).join('');
+  }
+
   let transport = '';
   if (HUB.transport && (HUB.transport.vehicles || []).length) {
     transport = HUB.transport.vehicles.map(v => `<h3>${esc(v.name)} <span class="m">${esc(v.vehicleTypeLabel)}${v.capacity != null ? ` &middot; ${v.assigned}/${v.capacity}` : ''}</span></h3><p class="m">Driver: ${v.driverName ? esc(v.driverName) : '&mdash;'}${v.departAt ? ' &middot; departs ' + esc(v.departAt) : ''}</p><ol>${(v.passengers || []).map(p => `<li>${esc(p.name)}</li>`).join('') || '<li class="m">No passengers listed</li>'}</ol>`).join('');
@@ -326,6 +335,7 @@ function printCampPack() {
     ${sec('What to bring', HUB.whatToBring ? nl2br(HUB.whatToBring) : '')}
     ${sec('Programme highlights', HUB.programmeHighlights ? nl2br(HUB.programmeHighlights) : '')}
     ${sec('Locations', locations)}
+    ${sec('Programme', programme)}
     ${sec('Adult rota', adults + rota)}
     ${sec('Transport &amp; manifests', transport)}
     ${sec('Packs &amp; hub items', items)}
@@ -334,6 +344,57 @@ function printCampPack() {
 
   const w = window.open('', '_blank'); if (!w) { alert('Please allow pop-ups to open the camp pack.'); return; }
   w.document.write(html); w.document.close();
+}
+
+// ── Programme matrix & activity allocation (FR-CAMP-OP-009..017) ─────────────────
+function programmeLeader() {
+  const p = HUB.programme; if (!p) return '';
+  const slots = p.slots || [];
+  const clashBadge = p.clashes > 0 ? `<span class="badge" data-status="deleted">${p.clashes} clash${p.clashes === 1 ? '' : 'es'}</span>` : (slots.length ? '<span class="badge" data-status="active">No clashes</span>' : '');
+  const byDay = {};
+  for (const s of slots) (byDay[s.dayLabel] ||= []).push(s);
+  const daysHtml = Object.keys(byDay).length ? Object.entries(byDay).map(([day, ss]) => `
+    <h3 style="margin:.8rem 0 .3rem">${escapeHtml(day)}</h3>
+    <table class="data-table rcards"><thead><tr><th>Session</th><th>Activity</th><th>Group</th><th>Where / lead</th><th></th></tr></thead>
+    <tbody>${ss.slice().sort((a, b) => a.session.localeCompare(b.session)).map(s => `<tr${s.clash ? ' style="box-shadow:inset 3px 0 0 #c62828"' : ''}>
+        <td data-label="Session">${escapeHtml(s.sessionLabel)}</td>
+        <td data-label="Activity" class="rcard-title"><strong>${escapeHtml(s.activity)}</strong></td>
+        <td data-label="Group">${s.group ? escapeHtml(s.group) : '<span class="muted">&mdash;</span>'}${s.clash ? ' <span class="badge" data-status="deleted">clash</span>' : ''}</td>
+        <td data-label="Where / lead" class="muted">${escapeHtml([s.location, s.lead].filter(Boolean).join(' · ')) || '&mdash;'}</td>
+        <td class="rcard-actions"><button class="btn btn-secondary btn-sm prog-edit" data-id="${s.id}">Edit</button></td>
+      </tr>`).join('')}</tbody></table>`).join('') : '<p class="muted">No activities scheduled yet. Add activities per day/session and allocate a group.</p>';
+  return `<div class="card">
+    <div class="cap-head"><h2 style="margin:0">Programme</h2><span class="cap-actions">${clashBadge}<button class="btn btn-sm" id="prog-add">Add activity</button></span></div>
+    <p class="muted">Schedule activities by day and session, and allocate a group (patrol, team or section). A group double-booked in the same session is flagged as a clash. Leader-only.</p>
+    ${daysHtml}
+  </div>`;
+}
+
+function openProgrammeSlotForm(s) {
+  const isEdit = !!s; const x = s || { session: 'am' };
+  const sessOpts = Object.entries((HUB.programme.meta || {}).sessions || { am: 'Morning' }).map(([k, l]) => `<option value="${k}"${k === (x.session || 'am') ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('');
+  const m = modal(`<h2>${isEdit ? 'Edit activity' : 'Add activity'}</h2><div id="pg-msg"></div>
+    <div class="cap-actions">${field('Day', `<input id="pg-day" value="${escapeHtml(x.dayLabel || '')}" placeholder="e.g. Saturday">`)}${field('Session', `<select id="pg-session">${sessOpts}</select>`)}</div>
+    ${field('Activity', `<input id="pg-activity" value="${escapeHtml(x.activity || '')}" placeholder="e.g. Climbing">`)}
+    <div class="cap-actions">${field('Group (optional)', `<input id="pg-group" value="${escapeHtml(x.group || '')}" placeholder="e.g. Kestrel Patrol, All">`)}${field('Location (optional)', `<input id="pg-location" value="${escapeHtml(x.location || '')}">`)}</div>
+    ${field('Lead (optional)', `<input id="pg-lead" value="${escapeHtml(x.lead || '')}">`)}
+    <div class="modal-actions" style="display:flex;gap:.5rem;margin-top:1rem"><button class="btn" id="pg-save">${isEdit ? 'Save' : 'Add'}</button><button class="btn btn-secondary" id="pg-cancel">Cancel</button>${isEdit ? '<button class="btn btn-secondary" id="pg-delete" style="margin-left:auto">Delete</button>' : ''}</div>`);
+  m.querySelector('#pg-cancel').addEventListener('click', () => m.remove());
+  m.querySelector('#pg-save').addEventListener('click', async () => {
+    const payload = {
+      dayLabel: document.getElementById('pg-day').value.trim(), session: document.getElementById('pg-session').value,
+      activity: document.getElementById('pg-activity').value.trim(), group: document.getElementById('pg-group').value.trim(),
+      location: document.getElementById('pg-location').value.trim(), lead: document.getElementById('pg-lead').value.trim(),
+    };
+    if (!payload.dayLabel || !payload.activity) { document.getElementById('pg-msg').innerHTML = '<div class="alert alert-error">A day and activity are required.</div>'; return; }
+    try { if (isEdit) await Api.patch(`/api/events/${window.HUB_ID}/programme/${s.id}`, payload); else await Api.post(`/api/events/${window.HUB_ID}/programme`, payload); m.remove(); loadHub(); }
+    catch (e) { document.getElementById('pg-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
+  const del = document.getElementById('pg-delete');
+  if (del) del.addEventListener('click', async () => {
+    try { await Api.delete(`/api/events/${window.HUB_ID}/programme/${s.id}`); m.remove(); loadHub(); }
+    catch (e) { document.getElementById('pg-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
 }
 
 // ── Transport & manifests (FR-CAMP-OP-023..028) ─────────────────────────────────

@@ -571,6 +571,26 @@ CREATE TABLE IF NOT EXISTS camp_transport_passengers (
 );
 CREATE INDEX IF NOT EXISTS idx_camp_transport_passengers_vehicle ON camp_transport_passengers(vehicle_id);
 
+-- Programme matrix & activity allocation (FR-CAMP-OP-009..017 / FRD-CAMP-003). A
+-- day/session schedule of activities allocated to a group (patrol, temporary team,
+-- section or "All"), with an optional location and lead. A group booked into two
+-- activities in the same day+session is flagged as a clash. Leader-only planning.
+CREATE TABLE IF NOT EXISTS camp_programme_slots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  hub_id INTEGER NOT NULL REFERENCES event_hubs(id) ON DELETE CASCADE,
+  day_label TEXT NOT NULL,
+  session TEXT NOT NULL DEFAULT 'am' CHECK(session IN ('am','pm','evening','night','all_day')),
+  activity TEXT NOT NULL,
+  group_label TEXT,
+  location TEXT,
+  lead_name TEXT,
+  notes TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_camp_programme_slots_hub ON camp_programme_slots(hub_id);
+
 -- Incident and near-miss logging (FRD FR-INC). Safeguarding-sensitive: this does
 -- NOT replace formal Scouts safeguarding/accident reporting - the module signposts
 -- to those and restricts access. Ships off by default. Restricted records
