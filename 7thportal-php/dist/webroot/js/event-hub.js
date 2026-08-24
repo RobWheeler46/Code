@@ -90,7 +90,8 @@ function renderLeader(box) {
       ${(HUB.items || []).length ? `<table class="data-table"><thead><tr><th>Hub item</th><th>Status</th><th>Visibility</th><th>Owner</th><th></th></tr></thead><tbody>${itemRows}</tbody></table>` : '<p class="muted">No items yet.</p>'}
     </div>
     ${locationsLeader()}
-    ${rotaLeader()}`;
+    ${rotaLeader()}
+    ${transportLeader()}`;
 
   document.getElementById('ev-edit').addEventListener('click', openHubEdit);
   document.getElementById('ev-add-item').addEventListener('click', () => openItemForm(null));
@@ -100,6 +101,17 @@ function renderLeader(box) {
   const entryAdd = document.getElementById('rota-entry-add'); if (entryAdd) entryAdd.addEventListener('click', () => openRotaEntryForm(null));
   box.querySelectorAll('.rota-adult-edit').forEach(b => b.addEventListener('click', () => openAdultForm((HUB.rota.adults || []).find(a => a.id == b.dataset.id))));
   box.querySelectorAll('.rota-entry-edit').forEach(b => b.addEventListener('click', () => openRotaEntryForm((HUB.rota.entries || []).find(e => e.id == b.dataset.id))));
+  const trAdd = document.getElementById('tr-vehicle-add'); if (trAdd) trAdd.addEventListener('click', () => openVehicleForm(null));
+  box.querySelectorAll('.tr-vehicle-edit').forEach(b => b.addEventListener('click', () => openVehicleForm((HUB.transport.vehicles || []).find(v => v.id == b.dataset.id))));
+  box.querySelectorAll('.tr-pax-add').forEach(b => b.addEventListener('click', async () => {
+    const inp = document.getElementById('tr-pax-input-' + b.dataset.vid);
+    const name = inp.value.trim(); if (!name) { inp.focus(); return; }
+    try { await Api.post(`/api/events/${window.HUB_ID}/transport/vehicles/${b.dataset.vid}/passengers`, { name }); loadHub(); } catch (e) { alert(e.message); }
+  }));
+  box.querySelectorAll('.tr-pax-remove').forEach(b => b.addEventListener('click', async () => {
+    try { await Api.delete(`/api/events/${window.HUB_ID}/transport/passengers/${b.dataset.pid}`); loadHub(); } catch (e) { alert(e.message); }
+  }));
+  const trPrint = document.getElementById('tr-print'); if (trPrint) trPrint.addEventListener('click', printManifests);
   document.getElementById('ev-preview').addEventListener('click', () => { PARENT_PREVIEW = true; loadHub(); });
   const pub = document.getElementById('ev-publish'); if (pub) pub.addEventListener('click', () => setHubStatus('published'));
   const unpub = document.getElementById('ev-unpublish'); if (unpub) unpub.addEventListener('click', () => setHubStatus('draft'));
@@ -259,6 +271,84 @@ function rotaLeader() {
       <div class="cap-head" style="margin-bottom:.3rem"><strong>Rota</strong><button class="btn btn-sm" id="rota-entry-add">Add entry</button></div>
       ${daysHtml}
     </div>`;
+}
+
+// ── Transport & manifests (FR-CAMP-OP-023..028) ─────────────────────────────────
+function transportLeader() {
+  const t = HUB.transport; if (!t) return '';
+  const vehicles = t.vehicles || [];
+  const issuesBadge = t.issues > 0
+    ? `<span class="badge" data-status="suspended">${t.issues} to check</span>`
+    : (vehicles.length ? '<span class="badge" data-status="active">All set</span>' : '');
+  const vehHtml = vehicles.length ? vehicles.map(v => {
+    const cap = v.capacity != null
+      ? `<span class="badge" data-status="${v.overCapacity ? 'deleted' : 'active'}">${v.assigned}/${v.capacity} seats${v.overCapacity ? ' — over' : ''}</span>`
+      : `<span class="muted">${v.assigned} aboard</span>`;
+    const driver = v.driverName ? escapeHtml(v.driverName) : '<span class="badge" data-status="suspended">No driver</span>';
+    const pax = (v.passengers || []).map(p => `<li style="margin:.15rem 0">${escapeHtml(p.name)}${p.notes ? ` <span class="muted">&middot; ${escapeHtml(p.notes)}</span>` : ''} <button class="tr-pax-remove" data-pid="${p.id}" title="Remove" style="border:0;background:none;cursor:pointer;color:var(--muted);font-size:.9rem">&times;</button></li>`).join('');
+    return `<div class="card" style="margin:.6rem 0 0">
+      <div class="cap-head"><div><strong>${escapeHtml(v.name)}</strong> <span class="muted">&middot; ${escapeHtml(v.vehicleTypeLabel)}</span></div>
+        <button class="btn btn-secondary btn-sm tr-vehicle-edit" data-id="${v.id}">Edit</button></div>
+      <div class="muted" style="margin:.2rem 0 .4rem;font-size:.9rem">Driver: ${driver} &middot; ${cap}${v.departAt ? ' &middot; departs ' + escapeHtml(v.departAt) : ''}</div>
+      <ul style="margin:.2rem 0;padding-left:1.1rem">${pax || '<li class="muted">No passengers yet.</li>'}</ul>
+      <div class="inline-form" style="margin-top:.3rem"><input id="tr-pax-input-${v.id}" placeholder="Add passenger name"><button class="btn btn-sm tr-pax-add" data-vid="${v.id}">Add</button></div>
+    </div>`;
+  }).join('') : '<p class="muted">No vehicles yet. Add minibuses and cars, then list who travels in each.</p>';
+
+  return `<div class="card">
+    <div class="cap-head"><h2 style="margin:0">Transport &amp; manifests</h2><span class="cap-actions">${issuesBadge}<button class="btn btn-sm" id="tr-vehicle-add">Add vehicle</button>${vehicles.length ? '<button class="btn btn-secondary btn-sm" id="tr-print">Print manifests</button>' : ''}</span></div>
+    <p class="muted">Minibuses and cars with a driver and seats, plus who travels in each. Leader-only &mdash; a manifest is a safety record for emergencies.</p>
+    ${vehHtml}
+  </div>`;
+}
+
+function openVehicleForm(v) {
+  const isEdit = !!v; const x = v || { vehicleType: 'car' };
+  const typeOpts = Object.entries((HUB.transport.meta || {}).types || { car: 'Car' }).map(([k, l]) => `<option value="${k}"${k === (x.vehicleType || 'car') ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('');
+  const m = modal(`<h2>${isEdit ? 'Edit vehicle' : 'Add vehicle'}</h2><div id="tv-msg"></div>
+    ${field('Name', `<input id="tv-name" value="${escapeHtml(x.name || '')}" placeholder="e.g. Minibus A, Rob's car">`)}
+    <div class="cap-actions">
+      ${field('Type', `<select id="tv-type">${typeOpts}</select>`)}
+      ${field('Seats (passengers)', `<input id="tv-cap" type="number" min="0" value="${x.capacity ?? ''}" style="width:120px">`)}
+    </div>
+    ${field('Driver', `<input id="tv-driver" value="${escapeHtml(x.driverName || '')}">`)}
+    ${field('Departs (optional)', `<input id="tv-depart" value="${escapeHtml(x.departAt || '')}" placeholder="e.g. Sat 9am from the hut">`)}
+    ${field('Notes (optional)', `<textarea id="tv-notes" rows="2">${escapeHtml(x.notes || '')}</textarea>`)}
+    <div class="modal-actions" style="display:flex;gap:.5rem;margin-top:1rem"><button class="btn" id="tv-save">${isEdit ? 'Save' : 'Add'}</button><button class="btn btn-secondary" id="tv-cancel">Cancel</button>${isEdit ? '<button class="btn btn-secondary" id="tv-delete" style="margin-left:auto">Delete</button>' : ''}</div>`);
+  m.querySelector('#tv-cancel').addEventListener('click', () => m.remove());
+  m.querySelector('#tv-save').addEventListener('click', async () => {
+    const payload = {
+      name: document.getElementById('tv-name').value.trim(), vehicleType: document.getElementById('tv-type').value,
+      capacity: document.getElementById('tv-cap').value, driverName: document.getElementById('tv-driver').value.trim(),
+      departAt: document.getElementById('tv-depart').value.trim(), notes: document.getElementById('tv-notes').value.trim(),
+    };
+    if (!payload.name) { document.getElementById('tv-msg').innerHTML = '<div class="alert alert-error">A name is required.</div>'; return; }
+    try { if (isEdit) await Api.patch(`/api/events/${window.HUB_ID}/transport/vehicles/${v.id}`, payload); else await Api.post(`/api/events/${window.HUB_ID}/transport/vehicles`, payload); m.remove(); loadHub(); }
+    catch (e) { document.getElementById('tv-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
+  const del = document.getElementById('tv-delete');
+  if (del) del.addEventListener('click', async () => {
+    try { await Api.delete(`/api/events/${window.HUB_ID}/transport/vehicles/${v.id}`); m.remove(); loadHub(); }
+    catch (e) { document.getElementById('tv-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
+}
+
+function printManifests() {
+  const t = HUB.transport; if (!t) return;
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const body = (t.vehicles || []).map(v => `<h2>${esc(v.name)} <span class="t">${esc(v.vehicleTypeLabel)}${v.capacity != null ? ` &middot; ${v.assigned}/${v.capacity} seats` : ''}</span></h2>
+    <p class="d">Driver: ${v.driverName ? esc(v.driverName) : '&mdash;'}${v.departAt ? ' &middot; departs ' + esc(v.departAt) : ''}</p>
+    <ol>${(v.passengers || []).map(p => `<li>${esc(p.name)}${p.notes ? ' &mdash; ' + esc(p.notes) : ''}</li>`).join('') || '<li class="m">No passengers listed</li>'}</ol>`).join('');
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Transport manifest &mdash; ${esc(HUB.title)}</title><style>
+    body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:720px;margin:0 auto;padding:24px;color:#1a1420;line-height:1.5}
+    h1{font-size:1.4rem;margin:0}.sub{color:#555;margin:.2rem 0 1rem}
+    h2{font-size:1.05rem;margin:1.2rem 0 .1rem;border-bottom:2px solid #6d28d9;padding-bottom:.15rem;color:#4c1d95}h2 .t{font-weight:400;font-size:.85rem;color:#666}
+    .d{color:#555;margin:.1rem 0 .3rem;font-size:.9rem}ol{margin:.2rem 0}li{margin:.15rem 0}.m{color:#999;list-style:none}
+    .bar{display:flex;justify-content:flex-end;margin-bottom:1rem}.bar button{font:inherit;padding:.5rem 1rem;border:0;border-radius:999px;background:#6d28d9;color:#fff;cursor:pointer}@media print{.bar{display:none}}
+  </style></head><body><div class="bar"><button onclick="window.print()">Print / Save as PDF</button></div>
+    <h1>Transport manifest</h1><p class="sub">${esc(HUB.title)} &middot; generated ${new Date().toLocaleString('en-GB')} &middot; leader-only</p>${body || '<p>No vehicles yet.</p>'}</body></html>`;
+  const w = window.open('', '_blank'); if (!w) { alert('Please allow pop-ups to open the manifest.'); return; }
+  w.document.write(html); w.document.close();
 }
 
 function openAdultForm(a) {

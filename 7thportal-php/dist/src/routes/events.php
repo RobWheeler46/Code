@@ -98,6 +98,8 @@ $router->get('/api/events/:id', function ($params) {
         'overview' => $isLeaderView ? eventCampOverview($hub) : null,
         // Adult rota is leader-only (FR-CAMP-OP: parents never see operational data).
         'rota' => $isLeaderView ? eventCampRota((int) $hub['id']) : null,
+        // Transport & manifests - leader-only operational data.
+        'transport' => $isLeaderView ? eventCampTransport((int) $hub['id']) : null,
         // Command Centre: per-area readiness rollup so the event acts as the
         // operational spine - leader-only.
         'commandCentre' => $isLeaderView ? eventCommandCentre($hub) : null,
@@ -294,6 +296,79 @@ $router->delete('/api/events/:id/rota/entries/:eid', function ($params) {
     if (!$e) jsonResponse(['error' => 'Entry not found.'], 404);
     dbRun('DELETE FROM camp_rota_entries WHERE id = ?', [$e['id']]);
     logAudit(['userId' => $user['id'], 'action' => 'camp_rota_entry_delete', 'entityType' => 'event_hub', 'entityId' => (string) $params['id'], 'ipAddress' => clientIp()]);
+    jsonResponse(['ok' => true]);
+});
+
+// -- Transport & manifests (FR-CAMP-OP-023..028) --
+function eventTransportVehicleFields(array $b, array $existing = []): array
+{
+    return [
+        'name' => trim((string) ($b['name'] ?? $existing['name'] ?? '')),
+        'vehicle_type' => array_key_exists($b['vehicleType'] ?? null, CAMP_TRANSPORT_TYPES) ? $b['vehicleType'] : ($existing['vehicle_type'] ?? 'car'),
+        'driver_name' => array_key_exists('driverName', $b) ? (trim((string) $b['driverName']) ?: null) : ($existing['driver_name'] ?? null),
+        'capacity' => array_key_exists('capacity', $b) ? (($b['capacity'] === '' || $b['capacity'] === null) ? null : max(0, (int) $b['capacity'])) : (isset($existing['capacity']) ? $existing['capacity'] : null),
+        'depart_at' => array_key_exists('departAt', $b) ? (trim((string) $b['departAt']) ?: null) : ($existing['depart_at'] ?? null),
+        'notes' => array_key_exists('notes', $b) ? (trim((string) $b['notes']) ?: null) : ($existing['notes'] ?? null),
+    ];
+}
+$router->post('/api/events/:id/transport/vehicles', function ($params) {
+    $user = requireAuth();
+    requireEventHubEnabled();
+    if (!eventHubCanManage($user)) jsonResponse(['error' => 'Not permitted.'], 403);
+    $hub = eventHubForManage($params['id']);
+    $f = eventTransportVehicleFields(requestBody());
+    if ($f['name'] === '') jsonResponse(['error' => 'A vehicle name is required.'], 400);
+    $cols = array_keys($f);
+    $result = dbRun('INSERT INTO camp_transport_vehicles (hub_id, ' . implode(',', $cols) . ') VALUES (?, ' . implode(',', array_fill(0, count($cols), '?')) . ')', [$hub['id'], ...array_values($f)]);
+    logAudit(['userId' => $user['id'], 'action' => 'camp_transport_vehicle_add', 'entityType' => 'event_hub', 'entityId' => (string) $hub['id'], 'ipAddress' => clientIp()]);
+    jsonResponse(serializeTransportVehicle(dbGet('SELECT * FROM camp_transport_vehicles WHERE id = ?', [$result['lastInsertId']]), []), 201);
+});
+$router->patch('/api/events/:id/transport/vehicles/:vid', function ($params) {
+    $user = requireAuth();
+    requireEventHubEnabled();
+    if (!eventHubCanManage($user)) jsonResponse(['error' => 'Not permitted.'], 403);
+    $v = dbGet('SELECT * FROM camp_transport_vehicles WHERE id = ? AND hub_id = ?', [$params['vid'], $params['id']]);
+    if (!$v) jsonResponse(['error' => 'Vehicle not found.'], 404);
+    $f = eventTransportVehicleFields(requestBody(), $v);
+    if ($f['name'] === '') jsonResponse(['error' => 'A vehicle name is required.'], 400);
+    $set = implode(', ', array_map(fn($c) => "$c = ?", array_keys($f)));
+    dbRun("UPDATE camp_transport_vehicles SET $set WHERE id = ?", [...array_values($f), $v['id']]);
+    $pax = dbAll('SELECT * FROM camp_transport_passengers WHERE vehicle_id = ? ORDER BY sort_order, id', [$v['id']]);
+    jsonResponse(serializeTransportVehicle(dbGet('SELECT * FROM camp_transport_vehicles WHERE id = ?', [$v['id']]), $pax));
+});
+$router->delete('/api/events/:id/transport/vehicles/:vid', function ($params) {
+    $user = requireAuth();
+    requireEventHubEnabled();
+    if (!eventHubCanManage($user)) jsonResponse(['error' => 'Not permitted.'], 403);
+    $v = dbGet('SELECT * FROM camp_transport_vehicles WHERE id = ? AND hub_id = ?', [$params['vid'], $params['id']]);
+    if (!$v) jsonResponse(['error' => 'Vehicle not found.'], 404);
+    dbRun('DELETE FROM camp_transport_vehicles WHERE id = ?', [$v['id']]); // passengers cascade
+    logAudit(['userId' => $user['id'], 'action' => 'camp_transport_vehicle_delete', 'entityType' => 'event_hub', 'entityId' => (string) $params['id'], 'ipAddress' => clientIp()]);
+    jsonResponse(['ok' => true]);
+});
+$router->post('/api/events/:id/transport/vehicles/:vid/passengers', function ($params) {
+    $user = requireAuth();
+    requireEventHubEnabled();
+    if (!eventHubCanManage($user)) jsonResponse(['error' => 'Not permitted.'], 403);
+    $v = dbGet('SELECT * FROM camp_transport_vehicles WHERE id = ? AND hub_id = ?', [$params['vid'], $params['id']]);
+    if (!$v) jsonResponse(['error' => 'Vehicle not found.'], 404);
+    $b = requestBody();
+    $name = trim((string) ($b['name'] ?? ''));
+    if ($name === '') jsonResponse(['error' => 'A passenger name is required.'], 400);
+    dbRun('INSERT INTO camp_transport_passengers (vehicle_id, hub_id, passenger_name, notes) VALUES (?, ?, ?, ?)',
+        [$v['id'], $v['hub_id'], $name, trim((string) ($b['notes'] ?? '')) ?: null]);
+    logAudit(['userId' => $user['id'], 'action' => 'camp_transport_passenger_add', 'entityType' => 'event_hub', 'entityId' => (string) $params['id'], 'ipAddress' => clientIp()]);
+    $pax = dbAll('SELECT * FROM camp_transport_passengers WHERE vehicle_id = ? ORDER BY sort_order, id', [$v['id']]);
+    jsonResponse(serializeTransportVehicle(dbGet('SELECT * FROM camp_transport_vehicles WHERE id = ?', [$v['id']]), $pax), 201);
+});
+$router->delete('/api/events/:id/transport/passengers/:pid', function ($params) {
+    $user = requireAuth();
+    requireEventHubEnabled();
+    if (!eventHubCanManage($user)) jsonResponse(['error' => 'Not permitted.'], 403);
+    $p = dbGet('SELECT * FROM camp_transport_passengers WHERE id = ? AND hub_id = ?', [$params['pid'], $params['id']]);
+    if (!$p) jsonResponse(['error' => 'Passenger not found.'], 404);
+    dbRun('DELETE FROM camp_transport_passengers WHERE id = ?', [$p['id']]);
+    logAudit(['userId' => $user['id'], 'action' => 'camp_transport_passenger_delete', 'entityType' => 'event_hub', 'entityId' => (string) $params['id'], 'ipAddress' => clientIp()]);
     jsonResponse(['ok' => true]);
 });
 

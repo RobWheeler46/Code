@@ -294,9 +294,13 @@ function scenario_logic_command_centre(): void
     $byKey = fn() => array_column(eventCommandCentre($hub), null, 'key');
 
     $cc = $byKey();
-    check('cc: five readiness areas', count($cc) === 5);
+    check('cc: six readiness areas', count($cc) === 6);
     check('cc: fresh equipment = none', $cc['equipment']['status'] === 'none');
     check('cc: fresh parent pack = none', $cc['parentpack']['status'] === 'none');
+    check('cc: fresh transport = none', $cc['transport']['status'] === 'none');
+    // a vehicle with no driver -> transport needs attention.
+    dbRun("INSERT INTO camp_transport_vehicles (hub_id, name, vehicle_type, capacity) VALUES (?, 'Minibus A', 'minibus', 12)", [$hubId]);
+    check('cc: vehicle without driver -> transport attention', $byKey()['transport']['status'] === 'attention');
 
     // A submitted booking linked to the event -> equipment needs attention.
     dbRun("INSERT INTO qm_bookings (requester_user_id, event_hub_id, status) VALUES (?, ?, 'submitted')", [$uid, $hubId]);

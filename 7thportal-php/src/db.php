@@ -543,6 +543,34 @@ CREATE TABLE IF NOT EXISTS camp_rota_entries (
 );
 CREATE INDEX IF NOT EXISTS idx_camp_rota_entries_hub ON camp_rota_entries(hub_id);
 
+-- Transport & manifests (FR-CAMP-OP-023..028). Minibuses/own vehicles with a driver
+-- and seat capacity, each carrying a passenger manifest. Leader-only operational
+-- data (never parent-visible); a manifest of who is in which vehicle is a genuine
+-- safety/emergency record, like the attendance register.
+CREATE TABLE IF NOT EXISTS camp_transport_vehicles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  hub_id INTEGER NOT NULL REFERENCES event_hubs(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  vehicle_type TEXT NOT NULL DEFAULT 'car' CHECK(vehicle_type IN ('minibus','car','coach','other')),
+  driver_name TEXT,
+  capacity INTEGER,
+  depart_at TEXT,
+  notes TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_camp_transport_vehicles_hub ON camp_transport_vehicles(hub_id);
+CREATE TABLE IF NOT EXISTS camp_transport_passengers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  vehicle_id INTEGER NOT NULL REFERENCES camp_transport_vehicles(id) ON DELETE CASCADE,
+  hub_id INTEGER NOT NULL REFERENCES event_hubs(id) ON DELETE CASCADE,
+  passenger_name TEXT NOT NULL,
+  notes TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_camp_transport_passengers_vehicle ON camp_transport_passengers(vehicle_id);
+
 -- Incident and near-miss logging (FRD FR-INC). Safeguarding-sensitive: this does
 -- NOT replace formal Scouts safeguarding/accident reporting - the module signposts
 -- to those and restricts access. Ships off by default. Restricted records

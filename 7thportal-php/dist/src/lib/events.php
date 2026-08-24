@@ -28,6 +28,7 @@ const CAMP_ROTA_SESSIONS = ['am' => 'Morning', 'pm' => 'Afternoon', 'evening' =>
 // Roles that require a specifically-qualified adult, for gap detection.
 const CAMP_ROTA_ROLES_NEED_DRIVER = ['driver'];
 const CAMP_ROTA_ROLES_NEED_FIRST_AID = ['first_aid'];
+const CAMP_TRANSPORT_TYPES = ['minibus' => 'Minibus', 'car' => 'Car', 'coach' => 'Coach', 'other' => 'Other'];
 
 function eventHubEnabled(): bool
 {
@@ -162,6 +163,39 @@ function eventCampRota(int $hubId): array
     ];
 }
 
+// Transport & manifests (FR-CAMP-OP-023..028). Vehicles with a driver + seat
+// capacity, each carrying a passenger manifest; flags over-capacity and no-driver.
+function serializeTransportVehicle(array $v, array $passengers): array
+{
+    $cap = $v['capacity'] !== null && $v['capacity'] !== '' ? (int) $v['capacity'] : null;
+    $assigned = count($passengers);
+    return [
+        'id' => (int) $v['id'], 'name' => $v['name'],
+        'vehicleType' => $v['vehicle_type'], 'vehicleTypeLabel' => CAMP_TRANSPORT_TYPES[$v['vehicle_type']] ?? $v['vehicle_type'],
+        'driverName' => $v['driver_name'], 'capacity' => $cap, 'departAt' => $v['depart_at'], 'notes' => $v['notes'],
+        'passengers' => array_map(fn($p) => ['id' => (int) $p['id'], 'name' => $p['passenger_name'], 'notes' => $p['notes']], $passengers),
+        'assigned' => $assigned,
+        'seatsLeft' => $cap !== null ? $cap - $assigned : null,
+        'overCapacity' => $cap !== null && $assigned > $cap,
+        'noDriver' => trim((string) $v['driver_name']) === '',
+    ];
+}
+function eventCampTransport(int $hubId): array
+{
+    $vehicles = dbAll('SELECT * FROM camp_transport_vehicles WHERE hub_id = ? ORDER BY sort_order, id', [$hubId]);
+    $pax = dbAll('SELECT * FROM camp_transport_passengers WHERE hub_id = ? ORDER BY sort_order, id', [$hubId]);
+    $byVeh = [];
+    foreach ($pax as $p) $byVeh[(int) $p['vehicle_id']][] = $p;
+    $out = array_map(fn($v) => serializeTransportVehicle($v, $byVeh[(int) $v['id']] ?? []), $vehicles);
+    return [
+        'vehicles' => $out,
+        'totalSeats' => array_sum(array_map(fn($v) => $v['capacity'] ?? 0, $out)),
+        'totalPassengers' => count($pax),
+        'issues' => count(array_filter($out, fn($v) => $v['overCapacity'] || $v['noDriver'])),
+        'meta' => ['types' => CAMP_TRANSPORT_TYPES],
+    ];
+}
+
 // Camp overview summary for the leader dashboard (FR-CAMP-OP-003). Honest about the
 // data we hold in this slice - no attendee/leader counts (that's the deferred
 // programme/allocation module); dates, status, readiness, item + location tallies.
@@ -274,8 +308,21 @@ function eventCommandCentre(array $hub): array
         'link' => null,
     ];
 
+    // Transport & manifests.
+    $t = eventCampTransport($id);
+    $vc = count($t['vehicles']);
+    $areas[] = [
+        'key' => 'transport', 'label' => 'Transport',
+        'status' => $vc === 0 ? 'none' : ($t['issues'] > 0 ? 'attention' : 'ready'),
+        'summary' => $vc === 0 ? 'No transport planned yet' : ($t['issues'] > 0 ? plural($t['issues'], 'vehicle') . ($t['issues'] === 1 ? ' needs' : ' need') . ' a driver or seat' : plural($vc, 'vehicle') . ', ' . plural($t['totalPassengers'], 'passenger') . ' seated'),
+        'link' => null,
+    ];
+
     return $areas;
 }
+
+// tiny pluraliser for readiness summaries.
+function plural(int $n, string $s): string { return $n . ' ' . $s . ($n === 1 ? '' : ($s[-1] === 's' ? 'es' : 's')); }
 
 // Draft hubs a leader should finish setting up surface in the Action Centre
 // (FR-EVT-HUB-007 / journey "Action Centre shows a new camp hub").
