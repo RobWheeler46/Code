@@ -79,7 +79,7 @@ function renderLeader(box) {
       ${overviewCard()}
     </div>
     <div class="card">
-      <div class="cap-head"><h1 style="margin:0">${escapeHtml(HUB.title)}</h1><span class="cap-actions"><button class="btn btn-secondary" id="ev-edit">Edit details</button>${HUB.canManage ? '<button class="btn btn-secondary ev-delete" id="ev-delete">Delete</button>' : ''}</span></div>
+      <div class="cap-head"><h1 style="margin:0">${escapeHtml(HUB.title)}</h1><span class="cap-actions"><button class="btn" id="ev-camp-pack">Camp pack (print)</button><button class="btn btn-secondary" id="ev-edit">Edit details</button>${HUB.canManage ? '<button class="btn btn-secondary ev-delete" id="ev-delete">Delete</button>' : ''}</span></div>
       <p class="muted" style="margin:.3rem 0 0">${escapeHtml(HUB.eventTypeLabel)} &middot; ${escapeHtml(hubDates())}${HUB.location ? ' &middot; ' + escapeHtml(HUB.location) : ''}${HUB.sectionName ? ' &middot; ' + escapeHtml(HUB.sectionName) : ''}</p>
     </div>
     ${commandCentreCard()}
@@ -93,6 +93,7 @@ function renderLeader(box) {
     ${rotaLeader()}
     ${transportLeader()}`;
 
+  document.getElementById('ev-camp-pack').addEventListener('click', printCampPack);
   document.getElementById('ev-edit').addEventListener('click', openHubEdit);
   document.getElementById('ev-add-item').addEventListener('click', () => openItemForm(null));
   const locAdd = document.getElementById('loc-add'); if (locAdd) locAdd.addEventListener('click', () => openLocationForm(null));
@@ -271,6 +272,68 @@ function rotaLeader() {
       <div class="cap-head" style="margin-bottom:.3rem"><strong>Rota</strong><button class="btn btn-sm" id="rota-entry-add">Add entry</button></div>
       ${daysHtml}
     </div>`;
+}
+
+// ── Offline camp pack (FR-CAMP-OP-031..033): one printable operational leader pack
+// assembled from everything already loaded on the hub - to take to camp where there
+// is no signal. Leader-only; reuses the loaded HUB data, no extra fetch.
+function printCampPack() {
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const nl2br = s => esc(s).replace(/\n/g, '<br>');
+  const sec = (title, html) => html ? `<section><h2>${title}</h2>${html}</section>` : '';
+
+  const gaps = (HUB.commandCentre || []).filter(a => a.status === 'blocked' || a.status === 'attention');
+  const readiness = `<div class="rk">${gaps.length ? `<strong>Still to sort:</strong><ul>${gaps.map(a => `<li><b>${esc(a.label)}</b> &mdash; ${esc(a.summary)}</li>`).join('')}</ul>` : '<strong class="ok">Everything is ready for this event.</strong>'}</div>`;
+
+  const emg = (HUB.locations || []).filter(l => l.isEmergency);
+  const emergency = emg.length ? `<table>${emg.map(l => `<tr><td><b>${esc(l.typeLabel)}: ${esc(l.name)}</b>${l.address ? `<br><span class="m">${esc(l.address)}</span>` : ''}${l.openingTimes ? `<br><span class="m">${esc(l.openingTimes)}</span>` : ''}</td><td class="ph">${l.phone ? esc(l.phone) : ''}</td></tr>`).join('')}</table>` : '<p class="m">No emergency contacts recorded.</p>';
+
+  const locs = HUB.locations || [];
+  const locations = locs.length ? `<table>${locs.map(l => `<tr><td><b>${esc(l.name)}</b> <span class="m">(${esc(l.typeLabel)})</span>${l.address ? `<br><span class="m">${esc(l.address)}</span>` : ''}${l.openingTimes ? `<br><span class="m">${esc(l.openingTimes)}</span>` : ''}</td><td class="ph">${l.phone ? esc(l.phone) : ''}</td></tr>`).join('')}</table>` : '';
+
+  let rota = '';
+  const adults = HUB.rota && (HUB.rota.adults || []).length ? `<p><b>Adult team:</b> ${HUB.rota.adults.map(a => esc(a.name) + (a.isDriver ? ' (driver)' : '') + (a.isFirstAider ? ' (first aid)' : '')).join(', ')}</p>` : '';
+  if (HUB.rota && (HUB.rota.entries || []).length) {
+    const byDay = {}; for (const e of HUB.rota.entries) (byDay[e.dayLabel] ||= []).push(e);
+    rota = Object.entries(byDay).map(([day, es]) => `<h3>${esc(day)}</h3><table>${es.map(e => `<tr><td>${esc(e.sessionLabel)}</td><td><b>${esc(e.roleLabel)}</b></td><td>${e.adultName ? esc(e.adultName) : '<span class="g">&mdash; gap &mdash;</span>'}</td><td class="m">${esc(e.activity || '')}</td></tr>`).join('')}</table>`).join('');
+  }
+
+  let transport = '';
+  if (HUB.transport && (HUB.transport.vehicles || []).length) {
+    transport = HUB.transport.vehicles.map(v => `<h3>${esc(v.name)} <span class="m">${esc(v.vehicleTypeLabel)}${v.capacity != null ? ` &middot; ${v.assigned}/${v.capacity}` : ''}</span></h3><p class="m">Driver: ${v.driverName ? esc(v.driverName) : '&mdash;'}${v.departAt ? ' &middot; departs ' + esc(v.departAt) : ''}</p><ol>${(v.passengers || []).map(p => `<li>${esc(p.name)}</li>`).join('') || '<li class="m">No passengers listed</li>'}</ol>`).join('');
+  }
+
+  const items = (HUB.items || []).length ? `<table>${HUB.items.map(i => `<tr><td><b>${esc(i.label)}</b></td><td class="m">${esc(i.itemStatusLabel)} &middot; ${esc(i.visibilityLabel)}</td></tr>`).join('')}</table>` : '';
+
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Camp pack &mdash; ${esc(HUB.title)}</title><style>
+    *{box-sizing:border-box}body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:760px;margin:0 auto;padding:24px 30px;color:#1a1420;line-height:1.5}
+    h1{font-size:1.5rem;margin:0}.sub{color:#555;margin:.2rem 0 1rem}
+    section{margin-top:1.1rem;page-break-inside:avoid}
+    h2{font-size:1.1rem;border-bottom:2px solid #6d28d9;padding-bottom:.2rem;margin:0 0 .4rem;color:#4c1d95}
+    h3{font-size:.98rem;margin:.7rem 0 .15rem}
+    table{width:100%;border-collapse:collapse;font-size:.92rem}td{padding:.28rem .4rem .28rem 0;border-bottom:1px solid #eee;vertical-align:top}td.ph{text-align:right;font-weight:700;white-space:nowrap}
+    ol{margin:.15rem 0 .15rem 1.2rem}li{margin:.12rem 0}.m{color:#666}.g{color:#b3261e;font-weight:600}.ok{color:#0a5f49}
+    .rk{background:#f8f4ff;border:1px solid #e3ddf0;border-radius:8px;padding:.7rem .9rem;margin:.6rem 0}.rk ul{margin:.3rem 0 0 1.1rem}
+    .emg h2{color:#b3261e;border-color:#b3261e}
+    .bar{display:flex;justify-content:flex-end;margin-bottom:1rem}.bar button{font:inherit;padding:.5rem 1rem;border:0;border-radius:999px;background:#6d28d9;color:#fff;cursor:pointer}@media print{.bar{display:none}}
+  </style></head><body>
+    <div class="bar"><button onclick="window.print()">Print / Save as PDF</button></div>
+    <h1>${esc(HUB.title)} &mdash; camp pack</h1>
+    <p class="sub">${esc(HUB.eventTypeLabel)} &middot; ${esc(hubDates())}${HUB.location ? ' &middot; ' + esc(HUB.location) : ''}${HUB.sectionName ? ' &middot; ' + esc(HUB.sectionName) : ''} &middot; leader-only &middot; generated ${new Date().toLocaleString('en-GB')}</p>
+    ${readiness}
+    <section class="emg"><h2>Emergency directory</h2>${emergency}</section>
+    ${sec('Key information', HUB.keyInformation ? nl2br(HUB.keyInformation) : '')}
+    ${sec('What to bring', HUB.whatToBring ? nl2br(HUB.whatToBring) : '')}
+    ${sec('Programme highlights', HUB.programmeHighlights ? nl2br(HUB.programmeHighlights) : '')}
+    ${sec('Locations', locations)}
+    ${sec('Adult rota', adults + rota)}
+    ${sec('Transport &amp; manifests', transport)}
+    ${sec('Packs &amp; hub items', items)}
+    <p class="m" style="margin-top:1.6rem;border-top:1px solid #eee;padding-top:.6rem;font-size:.78rem">7thPortal camp pack. Point-in-time snapshot &mdash; check the portal for the latest before you travel.</p>
+    </body></html>`;
+
+  const w = window.open('', '_blank'); if (!w) { alert('Please allow pop-ups to open the camp pack.'); return; }
+  w.document.write(html); w.document.close();
 }
 
 // ── Transport & manifests (FR-CAMP-OP-023..028) ─────────────────────────────────
