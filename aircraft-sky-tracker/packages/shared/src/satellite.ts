@@ -40,3 +40,33 @@ export interface Satellite {
 }
 
 export const DEFAULT_SATELLITE_MIN_ELEVATION_DEG = 15;
+
+/**
+ * An upcoming (or in-progress) overhead pass of a satellite (FRD v3.2 §59-60).
+ * A pass is only "meaningful" if its maximum elevation exceeds the configured
+ * minimum elevation (§60). Times are ISO-8601 UTC.
+ */
+export interface SatellitePass {
+  catalogNumber: string;
+  name: string;
+  category: SatelliteCategory;
+  /** Rise: satellite crosses the minimum elevation on the way up. */
+  riseTime: string;
+  /** Time of maximum elevation ("best view"). */
+  maxTime: string;
+  /** Set: satellite drops back below the minimum elevation. */
+  setTime: string;
+  maxElevationDegrees: number;
+  riseAzimuthDegrees: number;
+  setAzimuthDegrees: number;
+  /** Compass path across the sky, e.g. "SW → NE". */
+  direction: string;
+  durationSeconds: number;
+  /** Any part of the pass is likely naked-eye visible (sunlit + dark sky). */
+  potentiallyVisible: boolean;
+  /** True once riseTime is in the past but setTime is still ahead (in progress). */
+  inProgress: boolean;
+}
+
+/** Default look-ahead window for pass prediction (FRD §59). */
+export const DEFAULT_SATELLITE_PASS_WINDOW_HOURS = 24;

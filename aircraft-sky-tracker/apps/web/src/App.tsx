@@ -4,9 +4,10 @@ import { OverrideDisplay } from "./display/OverrideDisplay.js";
 import { SettingsPage } from "./settings/SettingsPage.js";
 import { DiagnosticsPage } from "./diagnostics/DiagnosticsPage.js";
 import { HistoryPage } from "./history/HistoryPage.js";
+import { PassesPage } from "./satellites/PassesPage.js";
 import { AuthGate } from "./components/AuthGate.js";
 
-type View = "display" | "settings" | "diagnostics" | "history";
+type View = "display" | "settings" | "diagnostics" | "history" | "passes";
 
 function toggleFullscreen(): void {
   if (document.fullscreenElement) {
@@ -46,6 +47,9 @@ export function App() {
         case "h":
           setView((v) => (v === "history" ? "display" : "history"));
           break;
+        case "p":
+          setView((v) => (v === "passes" ? "display" : "passes"));
+          break;
         case "f":
           toggleFullscreen();
           break;
@@ -74,6 +78,9 @@ export function App() {
   }
   if (view === "history") {
     return <HistoryPage onBack={() => setView("display")} />;
+  }
+  if (view === "passes") {
+    return <PassesPage onBack={() => setView("display")} />;
   }
 
   // A ?postcode= URL shows that area for this tab only (per-viewer override).

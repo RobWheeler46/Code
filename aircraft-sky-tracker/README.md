@@ -181,6 +181,7 @@ The browser talks only to the backend (FRD §39):
 | `DELETE` | `/api/history/{date}` | Clear a date's history (needs the password) |
 | `GET` | `/api/satellites` | Current overhead-satellite snapshot |
 | `GET` | `/api/satellites/{catalogNumber}` | Satellite detail by NORAD catalog number |
+| `GET` | `/api/satellite-passes` | Upcoming overhead passes (next 24 h) |
 | `GET` | `/api/orbital-status` | Orbital-element source status + satellite counts |
 | `GET` | `/api/health` | Source/route health |
 | `GET` | `/api/diagnostics` | Counts, timings, provider status |
@@ -240,6 +241,7 @@ Kiosk mode needs no interaction. On a desktop:
 | `S` | Settings |
 | `D` | Diagnostics |
 | `H` | History |
+| `P` | Upcoming satellite passes |
 | `F` | Toggle full screen |
 
 ## Tests
@@ -336,10 +338,17 @@ orbital elements, SGP4-propagated to observer az/el/range with naked-eye
 visibility (sunlit satellite + observer in darkness). Rendered on the
 observer-sky projection with a click-through detail drawer; group + minimum-
 elevation toggles in Settings; `/api/satellites`, `/api/orbital-status` and a
-Diagnostics panel. Satellite **pass prediction / history / alerts** (§59-64) and
-adaptive display (§7-13) are noted as future follow-ups.
+Diagnostics panel.
+
+**Satellite pass prediction (done, FRD v3.2 §59-60)** — a pure SGP4 engine scans
+a 24 h look-ahead window for each enabled satellite and reports every *meaningful*
+pass (one whose maximum elevation clears the configured minimum): rise / maximum /
+set times, peak elevation, rise→set compass direction, duration and whether it is
+potentially naked-eye visible (sunlit satellite over a dark sky). Served at
+`/api/satellite-passes` and shown on an **Upcoming passes** screen (keyboard `P`).
+Satellite **history / alerts** (§61-64) and adaptive display (§7-13) remain future
+follow-ups.
 
 **Future phases** — local RTL-SDR ADS-B (`LocalReadsbProvider`) and hybrid
-local+internet source; satellite pass prediction/alerts; projector/ceiling
-features. The core "minimal" display philosophy stays unchanged.
-```
+local+internet source; satellite history + advance-warning alerts (§61-64);
+projector/ceiling features. The core "minimal" display philosophy stays unchanged.

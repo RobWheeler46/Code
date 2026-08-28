@@ -603,3 +603,65 @@ button.danger {
     text-align: left;
   }
 }
+
+/* Upcoming satellite passes (FRD v3.2 §59-60) - dedicated two-line layout. */
+.sat-pass {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr auto;
+  column-gap: 1rem;
+  row-gap: 0.15rem;
+  align-items: baseline;
+  padding: 0.6rem 0.25rem;
+  border-bottom: 1px solid var(--panel-border);
+}
+.sat-pass-time {
+  grid-row: 1 / span 2;
+  align-self: center;
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--primary);
+}
+.sat-pass-name {
+  font-weight: 600;
+  color: var(--primary);
+}
+.sat-pass.visible .sat-pass-name {
+  color: #8fe3ff;
+}
+.sat-pass-now {
+  margin-left: 0.4rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #8fe3ff;
+}
+.sat-pass-max {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--secondary);
+}
+.sat-pass-max strong {
+  color: var(--primary);
+  font-weight: 600;
+}
+.sat-pass-sub {
+  grid-column: 2 / span 2;
+  color: var(--secondary);
+  font-size: 0.85rem;
+}
+.sat-pass-sub .vis {
+  color: #8fe3ff;
+}
+@media (max-width: 720px) {
+  .sat-pass {
+    grid-template-columns: 4rem 1fr;
+  }
+  .sat-pass-max {
+    grid-column: 2;
+    text-align: left;
+  }
+  .sat-pass-sub {
+    grid-column: 1 / span 2;
+  }
+}

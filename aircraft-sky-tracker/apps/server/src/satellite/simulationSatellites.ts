@@ -4,7 +4,7 @@
  * above the horizon but not currently visible.
  */
 
-import { type Satellite, compassDirection } from "@ast/shared";
+import { type Satellite, type SatellitePass, compassDirection } from "@ast/shared";
 
 interface SimSpec {
   catalogNumber: string;
@@ -57,6 +57,50 @@ export function simulationSatellites(now: number, darkSky: boolean): Satellite[]
       potentiallyVisible,
       direction: compassDirection(skyBearing(cur, next)),
       dataTimestamp: iso,
+    };
+  });
+}
+
+interface SimPassSpec {
+  catalogNumber: string;
+  name: string;
+  category: Satellite["category"];
+  /** Minutes from "now" until the pass rises. */
+  risesInMinutes: number;
+  durationMinutes: number;
+  maxElevationDeg: number;
+  riseAzimuthDeg: number;
+  setAzimuthDeg: number;
+  potentiallyVisible: boolean;
+}
+
+const SIM_PASSES: SimPassSpec[] = [
+  { catalogNumber: "25544", name: "ISS", category: "station", risesInMinutes: 9, durationMinutes: 6, maxElevationDeg: 67, riseAzimuthDeg: 225, setAzimuthDeg: 45, potentiallyVisible: true },
+  { catalogNumber: "20580", name: "HST", category: "bright", risesInMinutes: 48, durationMinutes: 4, maxElevationDeg: 32, riseAzimuthDeg: 200, setAzimuthDeg: 110, potentiallyVisible: false },
+  { catalogNumber: "25338", name: "NOAA 15", category: "bright", risesInMinutes: 96, durationMinutes: 12, maxElevationDeg: 78, riseAzimuthDeg: 350, setAzimuthDeg: 170, potentiallyVisible: false },
+  { catalogNumber: "25544", name: "ISS", category: "station", risesInMinutes: 99, durationMinutes: 5, maxElevationDeg: 24, riseAzimuthDeg: 250, setAzimuthDeg: 20, potentiallyVisible: true },
+];
+
+/** Generate a plausible set of upcoming simulated passes (FRD §59-60). */
+export function simulationPasses(now: number, minElevationDeg: number): SatellitePass[] {
+  return SIM_PASSES.filter((p) => p.maxElevationDeg >= minElevationDeg).map((p) => {
+    const rise = now + p.risesInMinutes * 60_000;
+    const set = rise + p.durationMinutes * 60_000;
+    const max = rise + (p.durationMinutes / 2) * 60_000;
+    return {
+      catalogNumber: p.catalogNumber,
+      name: p.name,
+      category: p.category,
+      riseTime: new Date(rise).toISOString(),
+      maxTime: new Date(max).toISOString(),
+      setTime: new Date(set).toISOString(),
+      maxElevationDegrees: p.maxElevationDeg,
+      riseAzimuthDegrees: p.riseAzimuthDeg,
+      setAzimuthDegrees: p.setAzimuthDeg,
+      direction: `${compassDirection(p.riseAzimuthDeg)} → ${compassDirection(p.setAzimuthDeg)}`,
+      durationSeconds: p.durationMinutes * 60,
+      potentiallyVisible: p.potentiallyVisible,
+      inProgress: false,
     };
   });
 }

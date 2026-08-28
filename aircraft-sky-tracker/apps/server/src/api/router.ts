@@ -8,7 +8,7 @@ import type { AppConfig, ConfigUpdate, Aircraft } from "@ast/shared";
 import type { HealthReport, DiagnosticsReport } from "../diagnostics/diagnosticsService.js";
 import type { PhotoResult } from "../routes/photoService.js";
 import type { ViewResult } from "../aircraft/viewService.js";
-import type { HistoryPass, HistoryDate, AircraftMeta, Satellite } from "@ast/shared";
+import type { HistoryPass, HistoryDate, AircraftMeta, Satellite, SatellitePass } from "@ast/shared";
 import { basicAuthMiddleware, isAuthEnabled } from "./auth.js";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -45,6 +45,7 @@ export interface ApiContext {
   satellites(): { generatedAt: string; satellites: Satellite[] };
   satellite(catalogNumber: string): Satellite | null;
   orbitalStatus(): unknown;
+  satellitePasses(): { generatedAt: string; windowHours: number; passes: SatellitePass[] };
 }
 
 export function createApiRouter(ctx: ApiContext): Router {
@@ -195,6 +196,11 @@ export function createApiRouter(ctx: ApiContext): Router {
   // GET /api/orbital-status - orbital-data source + counts (FRD §76).
   router.get("/orbital-status", (_req: Request, res: Response) => {
     res.json(ctx.orbitalStatus());
+  });
+
+  // GET /api/satellite-passes - upcoming overhead passes (FRD §59-60).
+  router.get("/satellite-passes", (_req: Request, res: Response) => {
+    res.json(ctx.satellitePasses());
   });
 
   // GET /api/satellites/:catalogNumber - one satellite's current detail.

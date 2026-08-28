@@ -38,6 +38,7 @@ import { WebSocketService } from "./websocket/wsService.js";
 import { AlertService } from "./alerts/alertService.js";
 import { HistoryService } from "./history/historyService.js";
 import { SatelliteService, type SatelliteConfigView } from "./satellite/satelliteService.js";
+import { PassPredictionService } from "./satellite/passPredictionService.js";
 import { CelesTrakProvider } from "./satellite/orbitalProvider.js";
 import { DiagnosticsService } from "./diagnostics/diagnosticsService.js";
 import { createAircraftProvider } from "./providers/index.js";
@@ -124,6 +125,11 @@ async function main(): Promise<void> {
     new CelesTrakProvider(),
     satelliteConfigView,
     (sats) => ws.broadcast({ type: "satellite.snapshot", timestamp: Date.now(), satellites: sats }),
+    env.aircraftProvider === "simulation",
+  );
+  const satellitePasses = new PassPredictionService(
+    () => satellites.getElements(),
+    satelliteConfigView,
     env.aircraftProvider === "simulation",
   );
 
@@ -381,6 +387,7 @@ async function main(): Promise<void> {
     }),
     satellite: (catalogNumber) => satellites.getSatellite(catalogNumber) ?? null,
     orbitalStatus: () => satellites.diagnostics(),
+    satellitePasses: () => satellitePasses.getPasses(),
   };
 
   // HTTP application.
@@ -424,6 +431,7 @@ async function main(): Promise<void> {
     if (haveCoordinates) {
       polling.start();
       void satellites.start(); // FRD §36 - independent of aircraft; never blocks
+      satellitePasses.start();
     } else {
       log.warn("aircraft polling not started - settings screen available for diagnosis (FRD §85)");
     }
@@ -441,6 +449,7 @@ async function main(): Promise<void> {
     clearInterval(historyPruneTimer);
     history.flush();
     satellites.stop();
+    satellitePasses.stop();
     polling.stop();
     ws.close();
     server.close();

@@ -89,6 +89,11 @@ export class SatelliteService {
     return this.snapshot.find((s) => s.catalogNumber === catalogNumber);
   }
 
+  /** The currently-loaded orbital elements (shared with pass prediction). */
+  getElements(): OrbitalElement[] {
+    return this.elements;
+  }
+
   diagnostics(): {
     provider: string;
     status: OrbitalSourceStatus;
