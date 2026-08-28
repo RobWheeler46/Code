@@ -88,6 +88,7 @@ export function SettingsPage({ onBack }: Props) {
       const patch: ConfigUpdate = {
         radiusMiles: draft.radiusMiles,
         aircraftSource: draft.aircraftSource,
+        viewMode: draft.viewMode,
         showRegistration: draft.showRegistration,
         showDestination: draft.showDestination,
         showFlightNumber: draft.showFlightNumber,
@@ -196,6 +197,21 @@ export function SettingsPage({ onBack }: Props) {
       </div>
 
       <h2>Display</h2>
+      <div className="field">
+        <label htmlFor="viewmode">View mode</label>
+        <select
+          id="viewmode"
+          value={draft.viewMode}
+          onChange={(e) => setDraft({ ...draft, viewMode: e.target.value as AppConfig["viewMode"] })}
+        >
+          <option value="ceiling">Ceiling — pure sky view (projector)</option>
+          <option value="screen">Screen — with range rings &amp; compass</option>
+        </select>
+        <p className="hint">
+          Screen mode adds a schematic backdrop (range rings, compass rose and cardinal
+          directions) for use on a desk monitor. Ceiling mode is the clean look-up view.
+        </p>
+      </div>
       {DISPLAY_TOGGLES.map((toggle) => (
         <label className="check" key={toggle.key}>
           <input

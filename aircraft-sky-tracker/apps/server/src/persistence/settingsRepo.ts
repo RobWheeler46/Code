@@ -33,6 +33,7 @@ interface SettingsRow {
   satellite_show_stations: number;
   satellite_show_bright: number;
   satellite_show_starlink: number;
+  view_mode: string;
   interpolation: number;
 }
 
@@ -48,6 +49,7 @@ function rowToConfig(row: SettingsRow): AppConfig {
     radiusMiles: row.radius_miles,
     aircraftSource: row.aircraft_source as AppConfig["aircraftSource"],
     displayMode: row.display_mode as AppConfig["displayMode"],
+    viewMode: (row.view_mode as AppConfig["viewMode"]) ?? "ceiling",
     showRegistration: bool(row.show_registration),
     showDestination: bool(row.show_destination),
     showFlightNumber: bool(row.show_flight_number),
@@ -97,9 +99,9 @@ export class SettingsRepo {
           history_enabled, history_retention_days, in_app_alerts,
           browser_notifications, show_satellites, satellite_min_elevation,
           satellite_show_stations, satellite_show_bright, satellite_show_starlink,
-          interpolation, created_at, updated_at
+          view_mode, interpolation, created_at, updated_at
         ) VALUES (
-          1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )`,
       )
       .run(
@@ -131,6 +133,7 @@ export class SettingsRepo {
         Number(defaults.satelliteShowStations),
         Number(defaults.satelliteShowBright),
         Number(defaults.satelliteShowStarlink),
+        defaults.viewMode,
         Number(defaults.interpolationEnabled),
         now,
         now,
@@ -168,7 +171,7 @@ export class SettingsRepo {
           browser_notifications = ?, show_satellites = ?,
           satellite_min_elevation = ?, satellite_show_stations = ?,
           satellite_show_bright = ?, satellite_show_starlink = ?,
-          interpolation = ?, updated_at = ?
+          view_mode = ?, interpolation = ?, updated_at = ?
         WHERE id = 1`,
       )
       .run(
@@ -200,6 +203,7 @@ export class SettingsRepo {
         Number(config.satelliteShowStations),
         Number(config.satelliteShowBright),
         Number(config.satelliteShowStarlink),
+        config.viewMode,
         Number(config.interpolationEnabled),
         now,
       );

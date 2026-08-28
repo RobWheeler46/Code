@@ -264,6 +264,12 @@ async function main(): Promise<void> {
         }
         next.displayMode = update.displayMode;
       }
+      if (update.viewMode !== undefined) {
+        if (!["ceiling", "screen"].includes(update.viewMode)) {
+          return { ok: false, status: 400, error: "Invalid view mode" };
+        }
+        next.viewMode = update.viewMode;
+      }
 
       const booleanKeys = [
         "showRegistration",

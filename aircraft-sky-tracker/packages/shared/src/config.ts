@@ -2,6 +2,12 @@
 
 export type AircraftSource = "internet" | "local" | "hybrid";
 export type DisplayMode = "minimal" | "informative";
+/**
+ * Overall display layout (FRD v3.2 - screen vs ceiling). "ceiling" is the pure
+ * look-up sky view for a projector; "screen" adds a schematic geographic
+ * backdrop (range rings + compass rose + cardinal labels) for a desk monitor.
+ */
+export type ViewMode = "ceiling" | "screen";
 
 export interface AppConfig {
   postcode: string;
@@ -10,6 +16,8 @@ export interface AppConfig {
   radiusMiles: number;
   aircraftSource: AircraftSource;
   displayMode: DisplayMode;
+  /** Ceiling (pure sky) vs screen (with a schematic geographic backdrop). */
+  viewMode: ViewMode;
   showRegistration: boolean;
   showDestination: boolean;
   showFlightNumber: boolean;
@@ -61,6 +69,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   radiusMiles: DEFAULT_RADIUS_MILES,
   aircraftSource: "internet",
   displayMode: "minimal",
+  viewMode: "ceiling",
   showRegistration: true,
   showDestination: true,
   showFlightNumber: false,
@@ -94,6 +103,7 @@ export type ConfigUpdate = Partial<
     | "radiusMiles"
     | "aircraftSource"
     | "displayMode"
+    | "viewMode"
     | "showRegistration"
     | "showDestination"
     | "showFlightNumber"

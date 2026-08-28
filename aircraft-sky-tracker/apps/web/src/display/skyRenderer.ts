@@ -197,7 +197,11 @@ export class SkyRenderer {
     const h = this.cssHeight;
     this.scale = projectionScale(w, h, config.radiusMiles);
 
-    this.drawReference(config, w / 2, h / 2);
+    if (config.viewMode === "screen") {
+      this.drawScreenBackdrop(config, w / 2, h / 2);
+    } else {
+      this.drawReference(config, w / 2, h / 2);
+    }
 
     const occupied: Rect[] = [];
 
@@ -337,6 +341,84 @@ export class SkyRenderer {
 
   getSatelliteHitTargets(): HitTarget[] {
     return this.satHitTargets;
+  }
+
+  /**
+   * Schematic geographic backdrop for on-screen (desk) use (FRD v3.2 screen
+   * mode): concentric range rings, an 8-point compass rose with cardinal
+   * labels, and a labelled centre (home) marker. Purely orientation chrome -
+   * self-contained, no map tiles - so aircraft/satellites still stand out.
+   */
+  private drawScreenBackdrop(config: AppConfig, cx: number, cy: number): void {
+    const ctx = this.ctx;
+    const R = config.radiusMiles * this.scale; // outer ring = configured radius
+    const fracs = [0.25, 0.5, 0.75, 1];
+
+    ctx.save();
+    ctx.lineWidth = 1;
+
+    // Compass spokes (cardinals brighter than intercardinals).
+    for (let deg = 0; deg < 360; deg += 45) {
+      const rad = (deg * Math.PI) / 180;
+      ctx.strokeStyle = deg % 90 === 0 ? "rgba(120,140,170,0.22)" : "rgba(120,140,170,0.10)";
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.sin(rad) * R, cy - Math.cos(rad) * R);
+      ctx.stroke();
+    }
+
+    // Range rings.
+    for (const f of fracs) {
+      ctx.strokeStyle = f === 1 ? "rgba(120,140,170,0.38)" : "rgba(120,140,170,0.18)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, R * f, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Ring distance labels along a NNE diagonal, clear of the north spoke/label.
+    ctx.font = font(Math.max(10, Math.min(13, this.cssHeight / 70)), false);
+    ctx.fillStyle = "rgba(150,165,190,0.6)";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    const labelRad = (22 * Math.PI) / 180;
+    for (const f of fracs) {
+      const rr = R * f;
+      ctx.fillText(
+        `${fmtMiles(config.radiusMiles * f)} mi`,
+        cx + Math.sin(labelRad) * rr + 3,
+        cy - Math.cos(labelRad) * rr,
+      );
+    }
+
+    // Cardinal labels just inside the outer ring, centred on each axis so they
+    // stay on-canvas whichever dimension the ring fills (portrait or landscape).
+    ctx.fillStyle = "rgba(190,205,230,0.85)";
+    ctx.font = font(Math.max(12, Math.min(16, this.cssHeight / 55)), true);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const rInner = R - Math.max(14, R * 0.05);
+    ctx.fillText("N", cx, cy - rInner);
+    ctx.fillText("S", cx, cy + rInner);
+    ctx.fillText("E", cx + rInner, cy);
+    ctx.fillText("W", cx - rInner, cy);
+
+    // Centre (home) marker: small plus + postcode label.
+    ctx.strokeStyle = "rgba(160,175,200,0.8)";
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(cx - 5, cy);
+    ctx.lineTo(cx + 5, cy);
+    ctx.moveTo(cx, cy - 5);
+    ctx.lineTo(cx, cy + 5);
+    ctx.stroke();
+    if (config.postcode) {
+      ctx.fillStyle = "rgba(150,165,190,0.7)";
+      ctx.font = font(Math.max(10, Math.min(13, this.cssHeight / 70)), false);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.fillText(config.postcode, cx, cy + 8);
+    }
+    ctx.restore();
   }
 
   private drawReference(config: AppConfig, cx: number, cy: number): void {
@@ -910,6 +992,11 @@ interface LabelLine {
 
 function font(size: number, bold: boolean): string {
   return `${bold ? "600" : "400"} ${size}px Inter, Arial, sans-serif`;
+}
+
+/** Compact miles: integer when whole, else one decimal (e.g. 2.5). */
+function fmtMiles(d: number): string {
+  return Number.isInteger(d) ? String(d) : d.toFixed(1);
 }
 
 function clamp(v: number, min: number, max: number): number {

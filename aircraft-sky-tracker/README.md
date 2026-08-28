@@ -308,8 +308,9 @@ with confidence + caching, normalised WebSocket stream, Canvas display with
 rotation / interpolation / fade, settings, diagnostics, simulation provider,
 automatic reconnection, Raspberry Pi kiosk deployment.
 
-**Out of scope for MVP** — street/satellite maps, airspace charts, weather, user
-accounts, aircraft photos/history, notifications.
+**Out of scope for MVP** — street/satellite map *tiles*, airspace charts, weather,
+user accounts, aircraft photos/history, notifications. (Screen mode later added a
+tile-free schematic backdrop; see below.)
 
 **Phase 1.1 (done)** — type-aware silhouettes chosen from the ICAO type code;
 aircraft photos in the detail overlay via a backend planespotters.net proxy
@@ -349,6 +350,16 @@ potentially naked-eye visible (sunlit satellite over a dark sky). Served at
 Satellite **history / alerts** (§61-64) and adaptive display (§7-13) remain future
 follow-ups.
 
+**Screen mode (done, FRD v3.2)** — a **View mode** setting (Settings → Display)
+switches between *Ceiling* (the pure look-up sky view for a projector) and
+*Screen* (a schematic geographic backdrop for a desk monitor): concentric range
+rings labelled in miles, an 8-point compass rose with N/E/S/W cardinals, and a
+labelled centre (home) marker. It is orientation chrome only — **no map tiles**,
+so the app stays fully self-contained — and aircraft/satellites render over it
+unchanged (both already share the north-up bearing/azimuth convention). Defaults
+to Ceiling, so existing displays are untouched.
+
 **Future phases** — local RTL-SDR ADS-B (`LocalReadsbProvider`) and hybrid
 local+internet source; satellite history + advance-warning alerts (§61-64);
-projector/ceiling features. The core "minimal" display philosophy stays unchanged.
+optional real map tiles behind the aircraft layer. The core "minimal" display
+philosophy stays unchanged.
