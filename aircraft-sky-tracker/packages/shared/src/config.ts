@@ -3,11 +3,13 @@
 export type AircraftSource = "internet" | "local" | "hybrid";
 export type DisplayMode = "minimal" | "informative";
 /**
- * Overall display layout (FRD v3.2 - screen vs ceiling). "ceiling" is the pure
- * look-up sky view for a projector; "screen" adds a schematic geographic
- * backdrop (range rings + compass rose + cardinal labels) for a desk monitor.
+ * Overall display layout (FRD v3.2). "ceiling" is the pure look-up sky view for
+ * a projector; "screen" adds a schematic geographic backdrop (range rings +
+ * compass rose + cardinal labels) for a desk monitor; "map" plots aircraft on a
+ * real slippy map (tiles fetched from the internet) with satellites shown in a
+ * small observer-sky inset.
  */
-export type ViewMode = "ceiling" | "screen";
+export type ViewMode = "ceiling" | "screen" | "map";
 
 export interface AppConfig {
   postcode: string;

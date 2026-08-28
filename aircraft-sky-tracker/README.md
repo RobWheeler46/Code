@@ -71,7 +71,7 @@ ADS-B receiver or another API is an implementation detail behind the
 | Layer | Technology |
 | --- | --- |
 | Backend | Node.js 22+, TypeScript, Express, `ws` (WebSocket), `node:sqlite`, `satellite.js` (SGP4) |
-| Frontend | React, TypeScript, Vite, HTML Canvas 2D |
+| Frontend | React, TypeScript, Vite, HTML Canvas 2D, Leaflet (map mode) |
 | Persistence | SQLite (settings, location / route / aircraft caches) |
 | Tests | `node:test` |
 
@@ -308,9 +308,9 @@ with confidence + caching, normalised WebSocket stream, Canvas display with
 rotation / interpolation / fade, settings, diagnostics, simulation provider,
 automatic reconnection, Raspberry Pi kiosk deployment.
 
-**Out of scope for MVP** — street/satellite map *tiles*, airspace charts, weather,
-user accounts, aircraft photos/history, notifications. (Screen mode later added a
-tile-free schematic backdrop; see below.)
+**Out of scope for MVP** — airspace charts, weather, user accounts,
+aircraft photos/history, notifications. (Later releases added optional screen and
+map view modes — see below.)
 
 **Phase 1.1 (done)** — type-aware silhouettes chosen from the ICAO type code;
 aircraft photos in the detail overlay via a backend planespotters.net proxy
@@ -350,16 +350,24 @@ potentially naked-eye visible (sunlit satellite over a dark sky). Served at
 Satellite **history / alerts** (§61-64) and adaptive display (§7-13) remain future
 follow-ups.
 
-**Screen mode (done, FRD v3.2)** — a **View mode** setting (Settings → Display)
-switches between *Ceiling* (the pure look-up sky view for a projector) and
-*Screen* (a schematic geographic backdrop for a desk monitor): concentric range
-rings labelled in miles, an 8-point compass rose with N/E/S/W cardinals, and a
-labelled centre (home) marker. It is orientation chrome only — **no map tiles**,
-so the app stays fully self-contained — and aircraft/satellites render over it
-unchanged (both already share the north-up bearing/azimuth convention). Defaults
-to Ceiling, so existing displays are untouched.
+**View modes (done, FRD v3.2)** — a **View mode** setting (Settings → Display)
+offers three layouts, defaulting to *Ceiling* so existing displays are untouched:
+
+- **Ceiling** — the pure look-up sky view for a projector.
+- **Screen** — a schematic geographic backdrop for a desk monitor: concentric
+  range rings labelled in miles, an 8-point compass rose with N/E/S/W cardinals,
+  and a labelled centre (home) marker. Orientation chrome only — **no map
+  tiles**, so it stays self-contained — with aircraft/satellites drawn over it
+  unchanged (both already share the north-up bearing/azimuth convention).
+- **Map** — aircraft plotted on a **real slippy map** (Leaflet + CARTO dark
+  raster tiles) at true lat/lon, auto-fitted to the postcode + radius. The
+  aircraft canvas becomes a transparent overlay whose lat/lon projection is
+  driven by the map, so icons, trails and labels stay aligned. Satellites can't
+  sit at a ground position, so they move to a small **observer-sky inset**
+  (top-right), keeping the two projection models separate (§65, §68). This is
+  the one mode that fetches from the internet: map tiles load in the browser
+  from CARTO/OpenStreetMap (attribution shown).
 
 **Future phases** — local RTL-SDR ADS-B (`LocalReadsbProvider`) and hybrid
-local+internet source; satellite history + advance-warning alerts (§61-64);
-optional real map tiles behind the aircraft layer. The core "minimal" display
-philosophy stays unchanged.
+local+internet source; satellite history + advance-warning alerts (§61-64). The
+core "minimal" display philosophy stays unchanged.

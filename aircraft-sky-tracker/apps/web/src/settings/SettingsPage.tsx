@@ -206,10 +206,13 @@ export function SettingsPage({ onBack }: Props) {
         >
           <option value="ceiling">Ceiling — pure sky view (projector)</option>
           <option value="screen">Screen — with range rings &amp; compass</option>
+          <option value="map">Map — real street map tiles</option>
         </select>
         <p className="hint">
-          Screen mode adds a schematic backdrop (range rings, compass rose and cardinal
-          directions) for use on a desk monitor. Ceiling mode is the clean look-up view.
+          Ceiling is the clean look-up view. Screen adds a schematic backdrop (range rings,
+          compass rose and cardinal directions) for a desk monitor. Map plots aircraft on a
+          real street map (tiles are fetched from the internet) with satellites in a small
+          sky inset.
         </p>
       </div>
       {DISPLAY_TOGGLES.map((toggle) => (

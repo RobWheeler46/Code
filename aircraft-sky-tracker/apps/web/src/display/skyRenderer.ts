@@ -84,6 +84,9 @@ export class SkyRenderer {
   private cssWidth = 0;
   private cssHeight = 0;
   private scale = 1;
+  /** When set (map mode), lat/lon are projected by the map instead of the
+   * built-in observer-centred projection. */
+  private projectionOverride: ((lat: number, lon: number) => { x: number; y: number }) | undefined;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -95,6 +98,21 @@ export class SkyRenderer {
 
   setConfig(config: AppConfig): void {
     this.config = config;
+  }
+
+  /**
+   * Supply a map projection (map mode) or clear it (`undefined`). While set,
+   * aircraft/trails/arcs are placed by the map so they align with the tiles.
+   */
+  setProjectionOverride(
+    fn: ((lat: number, lon: number) => { x: number; y: number }) | undefined,
+  ): void {
+    this.projectionOverride = fn;
+  }
+
+  /** True only when map mode is active AND the map projection is ready. */
+  private get mapMode(): boolean {
+    return this.config?.viewMode === "map" && this.projectionOverride !== undefined;
   }
 
   /** Match the backing store to the CSS size and device pixel ratio. */
@@ -165,6 +183,7 @@ export class SkyRenderer {
   private projectLatLon(latitude: number, longitude: number): { x: number; y: number } {
     const config = this.config;
     if (!config) return { x: 0, y: 0 };
+    if (this.projectionOverride) return this.projectionOverride(latitude, longitude);
     const distance = haversineDistanceMiles(
       config.latitude,
       config.longitude,
@@ -187,26 +206,39 @@ export class SkyRenderer {
     // Recover if the first measurement happened before layout (0-sized mount).
     if (this.cssWidth === 0 || this.cssHeight === 0) this.resize();
     ctx.clearRect(0, 0, this.cssWidth, this.cssHeight);
-    ctx.fillStyle = "#000000";
-    ctx.fillRect(0, 0, this.cssWidth, this.cssHeight);
     this.hitTargets = [];
     this.satHitTargets = [];
     if (!config) return;
 
     const w = this.cssWidth;
     const h = this.cssHeight;
+    const mapMode = this.mapMode;
+
+    // In map mode the canvas is a transparent overlay above the map tiles;
+    // otherwise the display is a black sky.
+    if (!mapMode) {
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, 0, w, h);
+    }
+
     this.scale = projectionScale(w, h, config.radiusMiles);
 
-    if (config.viewMode === "screen") {
-      this.drawScreenBackdrop(config, w / 2, h / 2);
-    } else {
-      this.drawReference(config, w / 2, h / 2);
+    if (!mapMode) {
+      if (config.viewMode === "screen") {
+        this.drawScreenBackdrop(config, w / 2, h / 2);
+      } else {
+        this.drawReference(config, w / 2, h / 2);
+      }
     }
 
     const occupied: Rect[] = [];
 
-    // Satellites are a secondary layer, drawn under aircraft (FRD §69).
-    if (config.showSatellites) this.drawSatellites(config, now, occupied);
+    // Satellites are a secondary layer, drawn under aircraft (FRD §69). On a map
+    // they cannot sit at a ground position, so they move to a sky inset (§65).
+    if (config.showSatellites) this.drawSatellites(config, now, occupied, mapMode);
+
+    // Map mode needs the map projection to be ready before aircraft can align.
+    if (config.viewMode === "map" && !mapMode) return;
 
     // Compute drawable placements, closest-to-centre first (label priority §72).
     const placements = [...this.states.values()]
@@ -230,15 +262,14 @@ export class SkyRenderer {
     azimuthDeg: number,
     elevationDeg: number,
     minElevationDeg: number,
+    cx = this.cssWidth / 2,
+    cy = this.cssHeight / 2,
+    maxR = (Math.min(this.cssWidth, this.cssHeight) / 2) * 0.92,
   ): { x: number; y: number } {
-    const maxR = (Math.min(this.cssWidth, this.cssHeight) / 2) * 0.92;
     const span = Math.max(1, 90 - minElevationDeg);
     const r = maxR * clamp((90 - elevationDeg) / span, 0, 1);
     const az = (azimuthDeg * Math.PI) / 180;
-    return {
-      x: this.cssWidth / 2 + r * Math.sin(az),
-      y: this.cssHeight / 2 - r * Math.cos(az),
-    };
+    return { x: cx + r * Math.sin(az), y: cy - r * Math.cos(az) };
   }
 
   /** Merge a satellite snapshot into the interpolation state. */
@@ -265,8 +296,19 @@ export class SkyRenderer {
     }
   }
 
-  private drawSatellites(config: AppConfig, now: number, occupied: Rect[]): void {
-    const ctx = this.ctx;
+  private drawSatellites(config: AppConfig, now: number, occupied: Rect[], mapMode: boolean): void {
+    // On a map, satellites live in a compact observer-sky inset (top-right) so
+    // they are never implied to be at a ground position (FRD §65, §68).
+    let cx = this.cssWidth / 2;
+    let cy = this.cssHeight / 2;
+    let maxR = (Math.min(this.cssWidth, this.cssHeight) / 2) * 0.92;
+    if (mapMode) {
+      maxR = clamp(Math.min(this.cssWidth, this.cssHeight) * 0.16, 78, 150);
+      cx = this.cssWidth - maxR - 20;
+      cy = maxR + 20;
+      this.drawSkyInsetChrome(cx, cy, maxR);
+    }
+
     for (const st of this.satStates.values()) {
       const frac =
         config.interpolationEnabled && st.cur.ts > st.prev.ts
@@ -274,12 +316,49 @@ export class SkyRenderer {
           : 1;
       const az = angleLerp(st.prev.az, st.cur.az, frac);
       const el = lerp(st.prev.el, st.cur.el, frac);
-      const p = this.projectSky(az, el, config.satelliteMinElevationDeg);
+      const p = this.projectSky(az, el, config.satelliteMinElevationDeg, cx, cy, maxR);
       const fadeIn = clamp((now - st.firstSeenMs) / 400, 0, 1);
       this.drawSatelliteMarker(st.data, p.x, p.y, fadeIn);
-      this.drawSatelliteLabel(st.data, p.x, p.y, fadeIn, occupied);
+      if (mapMode) {
+        // Compact: label only potentially-visible satellites to avoid clutter.
+        if (st.data.potentiallyVisible) this.drawSatelliteLabel(st.data, p.x, p.y, fadeIn, occupied);
+      } else {
+        this.drawSatelliteLabel(st.data, p.x, p.y, fadeIn, occupied);
+      }
       this.satHitTargets.push({ id: st.data.catalogNumber, x: p.x, y: p.y });
     }
+  }
+
+  /** The ring, zenith dot, north tick and caption for the map-mode sky inset. */
+  private drawSkyInsetChrome(cx: number, cy: number, r: number): void {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(6,10,18,0.72)";
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(120,140,170,0.45)";
+    ctx.stroke();
+    // North tick + zenith dot.
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r);
+    ctx.lineTo(cx, cy - r + 6);
+    ctx.moveTo(cx - 2, cy);
+    ctx.lineTo(cx + 2, cy);
+    ctx.moveTo(cx, cy - 2);
+    ctx.lineTo(cx, cy + 2);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(160,175,200,0.8)";
+    ctx.font = font(10, true);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.fillText("N", cx, cy - r - 2);
+    ctx.fillStyle = "rgba(150,165,190,0.65)";
+    ctx.font = font(10, false);
+    ctx.textBaseline = "top";
+    ctx.fillText("sky", cx, cy + r + 3);
+    ctx.restore();
   }
 
   private drawSatelliteMarker(sat: Satellite, x: number, y: number, alpha: number): void {

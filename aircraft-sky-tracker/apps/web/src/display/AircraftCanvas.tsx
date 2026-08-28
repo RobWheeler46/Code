@@ -1,4 +1,6 @@
 import { useEffect, useRef } from "react";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import type { Aircraft, AppConfig, Satellite } from "@ast/shared";
 import { SkyRenderer } from "./skyRenderer.js";
 
@@ -14,6 +16,16 @@ interface Props {
 
 const CLICK_RADIUS = 40;
 
+/** Approximate a radius (miles) around a point as a lat/lon bounding box. */
+function radiusBounds(lat: number, lon: number, miles: number): L.LatLngBoundsExpression {
+  const dLat = miles / 69;
+  const dLon = miles / (69 * Math.max(0.2, Math.cos((lat * Math.PI) / 180)));
+  return [
+    [lat - dLat, lon - dLon],
+    [lat + dLat, lon + dLon],
+  ];
+}
+
 /** Hosts the canvas and drives the requestAnimationFrame render loop (FRD §52). */
 export function AircraftCanvas({
   aircraft,
@@ -25,7 +37,9 @@ export function AircraftCanvas({
   onSelectSatellite,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mapDivRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<SkyRenderer | null>(null);
+  const leafletRef = useRef<L.Map | null>(null);
   const aircraftRef = useRef<Aircraft[]>(aircraft);
   aircraftRef.current = aircraft;
   const satellitesRef = useRef<Satellite[]>(satellites);
@@ -46,10 +60,10 @@ export function AircraftCanvas({
     };
     raf = requestAnimationFrame(loop);
 
-    // Track the element's real size so the canvas is correct even if it mounts
-    // hidden/0-sized (e.g. a kiosk that starts before the display is shown) and
-    // adapts to any viewport change / rotation (FRD §49, §76).
-    const observer = new ResizeObserver(() => renderer.resize());
+    const observer = new ResizeObserver(() => {
+      renderer.resize();
+      leafletRef.current?.invalidateSize(false);
+    });
     observer.observe(canvas);
 
     return () => {
@@ -57,7 +71,6 @@ export function AircraftCanvas({
       observer.disconnect();
       rendererRef.current = null;
     };
-    // Renderer is created once; config/data changes are pushed via other effects.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -72,6 +85,67 @@ export function AircraftCanvas({
   useEffect(() => {
     rendererRef.current?.ingestSatellites(satellites, satelliteTimestamp);
   }, [satellites, satelliteTimestamp]);
+
+  // Manage the Leaflet base map (map mode only). Aircraft are projected through
+  // the map so they align with the tiles; leaving map mode tears it down.
+  useEffect(() => {
+    const renderer = rendererRef.current;
+    const div = mapDivRef.current;
+    const wantMap =
+      config.viewMode === "map" && config.latitude !== 0 && config.longitude !== 0 && div !== null;
+
+    if (!wantMap) {
+      if (leafletRef.current) {
+        leafletRef.current.remove();
+        leafletRef.current = null;
+      }
+      renderer?.setProjectionOverride(undefined);
+      return;
+    }
+
+    let map = leafletRef.current;
+    if (!map) {
+      map = L.map(div, {
+        zoomControl: false,
+        attributionControl: true,
+        dragging: false,
+        scrollWheelZoom: false,
+        doubleClickZoom: false,
+        boxZoom: false,
+        keyboard: false,
+        touchZoom: false,
+        fadeAnimation: false,
+      });
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+        subdomains: "abcd",
+        maxZoom: 19,
+        attribution:
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      }).addTo(map);
+      leafletRef.current = map;
+      renderer?.setProjectionOverride((lat, lon) => {
+        const pt = leafletRef.current!.latLngToContainerPoint([lat, lon]);
+        return { x: pt.x, y: pt.y };
+      });
+    }
+
+    map.invalidateSize(false);
+    map.fitBounds(radiusBounds(config.latitude, config.longitude, config.radiusMiles), {
+      animate: false,
+      padding: [16, 16],
+    });
+  }, [config.viewMode, config.latitude, config.longitude, config.radiusMiles]);
+
+  // Remove the map on unmount.
+  useEffect(
+    () => () => {
+      if (leafletRef.current) {
+        leafletRef.current.remove();
+        leafletRef.current = null;
+      }
+    },
+    [],
+  );
 
   const handleClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const renderer = rendererRef.current;
@@ -114,5 +188,10 @@ export function AircraftCanvas({
     }
   };
 
-  return <canvas ref={canvasRef} onClick={handleClick} />;
+  return (
+    <>
+      <div ref={mapDivRef} className="sky-map" />
+      <canvas ref={canvasRef} onClick={handleClick} />
+    </>
+  );
 }

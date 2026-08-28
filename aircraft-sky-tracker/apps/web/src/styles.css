@@ -36,8 +36,31 @@ body,
 
 .sky canvas {
   display: block;
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
+  z-index: 1;
+}
+
+/* Map-mode base layer (Leaflet), behind the transparent aircraft canvas. */
+.sky-map {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--bg);
+}
+.sky-map .leaflet-container {
+  background: #0a0f18;
+  font-family: inherit;
+}
+.leaflet-control-attribution {
+  font-size: 10px;
+  background: rgba(0, 0, 0, 0.55) !important;
+  color: #9aa0a6 !important;
+}
+.leaflet-control-attribution a {
+  color: #b9c2d0 !important;
 }
 
 .display-status {
