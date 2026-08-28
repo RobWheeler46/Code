@@ -105,6 +105,11 @@ export function SettingsPage({ onBack }: Props) {
         browserNotifications: draft.browserNotifications,
         historyEnabled: draft.historyEnabled,
         historyRetentionDays: draft.historyRetentionDays,
+        showSatellites: draft.showSatellites,
+        satelliteMinElevationDeg: draft.satelliteMinElevationDeg,
+        satelliteShowStations: draft.satelliteShowStations,
+        satelliteShowBright: draft.satelliteShowBright,
+        satelliteShowStarlink: draft.satelliteShowStarlink,
       };
       // Only change the active location once a new postcode is entered (FRD §63).
       const normalised = postcodeInput.trim().toUpperCase().replace(/\s+/g, " ");
@@ -296,6 +301,60 @@ export function SettingsPage({ onBack }: Props) {
             </option>
           ))}
         </select>
+      </div>
+
+      <h2>Satellites</h2>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={draft.showSatellites}
+          onChange={(e) => setToggle("showSatellites", e.target.checked)}
+        />
+        Show satellites
+      </label>
+      <div className="field">
+        <label htmlFor="satelev">Minimum elevation</label>
+        <select
+          id="satelev"
+          value={draft.satelliteMinElevationDeg}
+          onChange={(e) =>
+            setDraft({ ...draft, satelliteMinElevationDeg: Number(e.target.value) })
+          }
+        >
+          {[5, 10, 15, 30, 45].map((d) => (
+            <option key={d} value={d}>
+              {d}°
+            </option>
+          ))}
+        </select>
+      </div>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={draft.satelliteShowStations}
+          onChange={(e) => setToggle("satelliteShowStations", e.target.checked)}
+        />
+        Space stations (ISS, Tiangong)
+      </label>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={draft.satelliteShowBright}
+          onChange={(e) => setToggle("satelliteShowBright", e.target.checked)}
+        />
+        Bright satellites
+      </label>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={draft.satelliteShowStarlink}
+          onChange={(e) => setToggle("satelliteShowStarlink", e.target.checked)}
+        />
+        Bright Starlink passes
+      </label>
+      <div className="hint">
+        Satellite positions come from CelesTrak orbital data propagated with SGP4;
+        the centre of the display is directly overhead (zenith).
       </div>
 
       {saveError && <div className="status-line err">{saveError}</div>}

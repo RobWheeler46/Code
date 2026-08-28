@@ -2,6 +2,7 @@
 
 import type { Aircraft } from "./aircraft.js";
 import type { AppConfig } from "./config.js";
+import type { Satellite } from "./satellite.js";
 
 export type SourceStatus =
   | "connected"
@@ -39,11 +40,19 @@ export interface AircraftInterestingEnterMessage {
   aircraft: Aircraft;
 }
 
+/** Full satellite snapshot (FRD v3.2 §82-83). Logically separate from aircraft. */
+export interface SatelliteSnapshotMessage {
+  type: "satellite.snapshot";
+  timestamp: number;
+  satellites: Satellite[];
+}
+
 export type ServerMessage =
   | AircraftSnapshotMessage
   | ConfigUpdatedMessage
   | SourceStatusMessage
   | ErrorStatusMessage
-  | AircraftInterestingEnterMessage;
+  | AircraftInterestingEnterMessage
+  | SatelliteSnapshotMessage;
 
 export const WS_PATH = "/ws";

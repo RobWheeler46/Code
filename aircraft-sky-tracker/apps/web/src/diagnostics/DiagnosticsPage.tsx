@@ -32,9 +32,23 @@ interface DiagnosticsReport {
   flightIntelligenceSources: string[];
 }
 
+interface OrbitalStatus {
+  provider: string;
+  status: string;
+  elementCacheAgeMs: number | null;
+  counts: {
+    loaded: number;
+    aboveHorizon: number;
+    aboveMinElevation: number;
+    potentiallyVisible: number;
+    displayed: number;
+  };
+}
+
 /** System diagnostics screen (FRD §66-67). */
 export function DiagnosticsPage({ onBack }: Props) {
   const [report, setReport] = useState<DiagnosticsReport | undefined>();
+  const [orbital, setOrbital] = useState<OrbitalStatus | undefined>();
   const [error, setError] = useState<string | undefined>();
 
   const load = useCallback(async () => {
@@ -45,6 +59,12 @@ export function DiagnosticsPage({ onBack }: Props) {
       setError(undefined);
     } catch (err) {
       setError(String(err));
+    }
+    try {
+      const res = await fetch("/api/orbital-status");
+      if (res.ok) setOrbital((await res.json()) as OrbitalStatus);
+    } catch {
+      /* satellites are optional */
     }
   }, []);
 
@@ -149,6 +169,30 @@ export function DiagnosticsPage({ onBack }: Props) {
             <span className="k">Last alert</span>
             <span className="v">{report.lastAlert ?? "—"}</span>
           </div>
+
+          {orbital && (
+            <>
+              <h2>Satellites</h2>
+              <div className="rows">
+                <span className="k">Orbital source</span>
+                <span className={`v ${orbital.status === "connected" ? "badge-ok" : "badge-warn"}`}>
+                  {orbital.status} ({orbital.provider})
+                </span>
+                <span className="k">Element cache age</span>
+                <span className="v">{formatAgeMinutes(orbital.elementCacheAgeMs)}</span>
+                <span className="k">Loaded</span>
+                <span className="v">{orbital.counts.loaded}</span>
+                <span className="k">Above horizon</span>
+                <span className="v">{orbital.counts.aboveHorizon}</span>
+                <span className="k">Above minimum</span>
+                <span className="v">{orbital.counts.aboveMinElevation}</span>
+                <span className="k">Potentially visible</span>
+                <span className="v">{orbital.counts.potentiallyVisible}</span>
+                <span className="k">Displayed</span>
+                <span className="v">{orbital.counts.displayed}</span>
+              </div>
+            </>
+          )}
         </>
       )}
 
@@ -175,6 +219,13 @@ function statusLabel(status: string): string {
 function formatAgo(ms: number | null): string {
   if (ms === null) return "—";
   return `${(ms / 1000).toFixed(1)} sec ago`;
+}
+
+function formatAgeMinutes(ms: number | null): string {
+  if (ms === null) return "—";
+  const min = Math.floor(ms / 60000);
+  const h = Math.floor(min / 60);
+  return h > 0 ? `${h} hr ${min % 60} min` : `${min} min`;
 }
 
 function formatUptime(seconds: number): string {

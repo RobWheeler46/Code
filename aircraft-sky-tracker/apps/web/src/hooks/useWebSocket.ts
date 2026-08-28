@@ -5,6 +5,7 @@ import {
   type AppConfig,
   type ServerMessage,
   type SourceStatus,
+  type Satellite,
 } from "@ast/shared";
 
 export interface InterestingEntry {
@@ -22,6 +23,8 @@ export interface LiveState {
   config: AppConfig | undefined;
   /** Latest interesting-aircraft entry event (FRD §52), or undefined. */
   interestingEntry: InterestingEntry | undefined;
+  satellites: Satellite[];
+  satelliteTimestamp: number;
 }
 
 const MAX_BACKOFF_MS = 15_000;
@@ -40,6 +43,8 @@ export function useWebSocket(): LiveState {
   const [interestingEntry, setInterestingEntry] = useState<InterestingEntry | undefined>(
     undefined,
   );
+  const [satellites, setSatellites] = useState<Satellite[]>([]);
+  const [satelliteTimestamp, setSatelliteTimestamp] = useState<number>(0);
 
   const backoffRef = useRef(1000);
   const closedRef = useRef(false);
@@ -82,6 +87,10 @@ export function useWebSocket(): LiveState {
           case "source.status":
             setSourceStatus(message.status);
             break;
+          case "satellite.snapshot":
+            setSatellites(message.satellites);
+            setSatelliteTimestamp(message.timestamp);
+            break;
           case "aircraft.interesting.enter":
             entryIdRef.current += 1;
             setInterestingEntry({ aircraft: message.aircraft, id: entryIdRef.current });
@@ -115,5 +124,14 @@ export function useWebSocket(): LiveState {
     };
   }, []);
 
-  return { aircraft, snapshotTimestamp, sourceStatus, connected, config, interestingEntry };
+  return {
+    aircraft,
+    snapshotTimestamp,
+    sourceStatus,
+    connected,
+    config,
+    interestingEntry,
+    satellites,
+    satelliteTimestamp,
+  };
 }

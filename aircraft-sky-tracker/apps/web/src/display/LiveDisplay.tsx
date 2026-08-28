@@ -25,6 +25,8 @@ export function LiveDisplay() {
       sourceStatus={live.sourceStatus}
       connected={live.connected}
       interestingEntry={live.interestingEntry}
+      satellites={live.satellites}
+      satelliteTimestamp={live.satelliteTimestamp}
     />
   );
 }

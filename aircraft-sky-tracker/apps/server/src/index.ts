@@ -37,6 +37,8 @@ import { AircraftPollingService } from "./aircraft/pollingService.js";
 import { WebSocketService } from "./websocket/wsService.js";
 import { AlertService } from "./alerts/alertService.js";
 import { HistoryService } from "./history/historyService.js";
+import { SatelliteService, type SatelliteConfigView } from "./satellite/satelliteService.js";
+import { CelesTrakProvider } from "./satellite/orbitalProvider.js";
 import { DiagnosticsService } from "./diagnostics/diagnosticsService.js";
 import { createAircraftProvider } from "./providers/index.js";
 import {
@@ -105,6 +107,26 @@ async function main(): Promise<void> {
   history.configure(config.historyEnabled, config.historyRetentionDays);
   history.pruneExpired();
 
+  // Satellite layer (FRD v3.2 §36-84) - independent of aircraft tracking.
+  const satelliteConfigView = (): SatelliteConfigView => {
+    const c = settings.get();
+    return {
+      showSatellites: c.showSatellites,
+      minElevationDeg: c.satelliteMinElevationDeg,
+      showStations: c.satelliteShowStations,
+      showBright: c.satelliteShowBright,
+      showStarlink: c.satelliteShowStarlink,
+      latitude: c.latitude,
+      longitude: c.longitude,
+    };
+  };
+  const satellites = new SatelliteService(
+    new CelesTrakProvider(),
+    satelliteConfigView,
+    (sats) => ws.broadcast({ type: "satellite.snapshot", timestamp: Date.now(), satellites: sats }),
+    env.aircraftProvider === "simulation",
+  );
+
   const polling = new AircraftPollingService(provider, env.aircraftPollIntervalMs, {
     onResult: (raw, meta) => {
       const cfg = settings.get();
@@ -167,6 +189,7 @@ async function main(): Promise<void> {
       const messages: ServerMessage[] = [
         { type: "config.updated", config: settings.get() },
         { type: "aircraft.snapshot", timestamp: Date.now(), aircraft: state.snapshot() },
+        { type: "satellite.snapshot", timestamp: Date.now(), satellites: satellites.getSnapshot() },
         { type: "source.status", status: polling.getStatus() },
       ];
       return messages;
@@ -252,6 +275,10 @@ async function main(): Promise<void> {
         "historyEnabled",
         "inAppAlerts",
         "browserNotifications",
+        "showSatellites",
+        "satelliteShowStations",
+        "satelliteShowBright",
+        "satelliteShowStarlink",
       ] as const;
       for (const key of booleanKeys) {
         if (update[key] !== undefined) next[key] = Boolean(update[key]);
@@ -278,6 +305,14 @@ async function main(): Promise<void> {
           return { ok: false, status: 400, error: "History retention must be 1-365 days" };
         }
         next.historyRetentionDays = Math.round(days);
+      }
+
+      if (update.satelliteMinElevationDeg !== undefined) {
+        const deg = Number(update.satelliteMinElevationDeg);
+        if (!Number.isFinite(deg) || deg < 0 || deg > 89) {
+          return { ok: false, status: 400, error: "Satellite minimum elevation must be 0-89°" };
+        }
+        next.satelliteMinElevationDeg = Math.round(deg);
       }
 
       const saved = settings.save(next);
@@ -339,6 +374,13 @@ async function main(): Promise<void> {
     },
     historyDates: () => history.listDates(),
     deleteHistory: (date) => ({ deleted: history.deleteByDate(date) }),
+
+    satellites: () => ({
+      generatedAt: new Date().toISOString(),
+      satellites: satellites.getSnapshot(),
+    }),
+    satellite: (catalogNumber) => satellites.getSatellite(catalogNumber) ?? null,
+    orbitalStatus: () => satellites.diagnostics(),
   };
 
   // HTTP application.
@@ -381,6 +423,7 @@ async function main(): Promise<void> {
     log.info("http server listening", { port: env.httpPort, url: `http://localhost:${env.httpPort}` });
     if (haveCoordinates) {
       polling.start();
+      void satellites.start(); // FRD §36 - independent of aircraft; never blocks
     } else {
       log.warn("aircraft polling not started - settings screen available for diagnosis (FRD §85)");
     }
@@ -397,6 +440,7 @@ async function main(): Promise<void> {
     clearInterval(historyFlushTimer);
     clearInterval(historyPruneTimer);
     history.flush();
+    satellites.stop();
     polling.stop();
     ws.close();
     server.close();

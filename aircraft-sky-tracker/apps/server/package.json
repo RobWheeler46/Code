@@ -13,6 +13,7 @@
   "dependencies": {
     "@ast/shared": "*",
     "express": "^4.21.2",
+    "satellite.js": "^7.1.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {

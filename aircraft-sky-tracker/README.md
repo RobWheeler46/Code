@@ -51,11 +51,26 @@ normalised aircraft over a single WebSocket. Swapping Airplanes.live for a local
 ADS-B receiver or another API is an implementation detail behind the
 `AircraftProvider` interface.
 
+> **Satellite layer (FRD v3.2 §41-58):** alongside aircraft, the same sky view
+> plots overhead satellites. The backend fetches orbital elements (TLEs) from
+> **CelesTrak** (`stations`, `visual`, and — optionally — `starlink` groups,
+> refreshed every 8 h), propagates each one with **SGP4** (`satellite.js`) every
+> 2 s, and computes observer-relative azimuth/elevation, range, sub-point,
+> altitude and velocity for the configured postcode. A cylindrical Earth-shadow
+> test against the Sun's position marks whether a satellite is sunlit and, with
+> the observer in darkness, **potentially visible** to the naked eye. Only
+> satellites above the minimum elevation (default 15°) in enabled groups are
+> broadcast, over the same WebSocket as `satellite.snapshot`. The Canvas renders
+> them on an **observer-sky projection** (zenith at centre, horizon at the edge):
+> ◇ stations, ◆ bright/interesting, · Starlink — cyan when potentially visible —
+> and clicking one opens a detail drawer. Runs against live CelesTrak data, or a
+> synthetic set (ISS/HST/…) under `AIRCRAFT_PROVIDER=simulation`.
+
 ## Tech stack
 
 | Layer | Technology |
 | --- | --- |
-| Backend | Node.js 22+, TypeScript, Express, `ws` (WebSocket), `node:sqlite` |
+| Backend | Node.js 22+, TypeScript, Express, `ws` (WebSocket), `node:sqlite`, `satellite.js` (SGP4) |
 | Frontend | React, TypeScript, Vite, HTML Canvas 2D |
 | Persistence | SQLite (settings, location / route / aircraft caches) |
 | Tests | `node:test` |
@@ -164,9 +179,12 @@ The browser talks only to the backend (FRD §39):
 | `GET` | `/api/history?date=` | Aircraft pass history for a date (default today) |
 | `GET` | `/api/history/dates` | Retained dates with pass counts |
 | `DELETE` | `/api/history/{date}` | Clear a date's history (needs the password) |
+| `GET` | `/api/satellites` | Current overhead-satellite snapshot |
+| `GET` | `/api/satellites/{catalogNumber}` | Satellite detail by NORAD catalog number |
+| `GET` | `/api/orbital-status` | Orbital-element source status + satellite counts |
 | `GET` | `/api/health` | Source/route health |
 | `GET` | `/api/diagnostics` | Counts, timings, provider status |
-| `WS` | `/ws` | Live `aircraft.snapshot` / `source.status` / `config.updated` |
+| `WS` | `/ws` | Live `aircraft.snapshot` / `satellite.snapshot` / `source.status` / `config.updated` |
 
 ## Aircraft history
 
@@ -313,7 +331,15 @@ highlight on the display, and opt-in ntfy push notifications.
 **Aircraft history (done, FRD v3.0)** — per-aircraft pass records, `/history`
 view with date filter + clear, configurable retention.
 
+**Satellite layer (done, FRD v3.2 §41-58)** — overhead satellites from CelesTrak
+orbital elements, SGP4-propagated to observer az/el/range with naked-eye
+visibility (sunlit satellite + observer in darkness). Rendered on the
+observer-sky projection with a click-through detail drawer; group + minimum-
+elevation toggles in Settings; `/api/satellites`, `/api/orbital-status` and a
+Diagnostics panel. Satellite **pass prediction / history / alerts** (§59-64) and
+adaptive display (§7-13) are noted as future follow-ups.
+
 **Future phases** — local RTL-SDR ADS-B (`LocalReadsbProvider`) and hybrid
-local+internet source; optional aircraft history; projector/ceiling features.
-The core "minimal" display philosophy stays unchanged.
+local+internet source; satellite pass prediction/alerts; projector/ceiling
+features. The core "minimal" display philosophy stays unchanged.
 ```

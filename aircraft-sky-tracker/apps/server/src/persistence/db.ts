@@ -74,6 +74,11 @@ function migrate(db: DatabaseSync): void {
       history_retention_days INTEGER NOT NULL DEFAULT 31,
       in_app_alerts       INTEGER NOT NULL DEFAULT 1,
       browser_notifications INTEGER NOT NULL DEFAULT 0,
+      show_satellites     INTEGER NOT NULL DEFAULT 1,
+      satellite_min_elevation INTEGER NOT NULL DEFAULT 15,
+      satellite_show_stations INTEGER NOT NULL DEFAULT 1,
+      satellite_show_bright INTEGER NOT NULL DEFAULT 1,
+      satellite_show_starlink INTEGER NOT NULL DEFAULT 0,
       interpolation       INTEGER NOT NULL,
       created_at          TEXT    NOT NULL,
       updated_at          TEXT    NOT NULL
@@ -155,6 +160,11 @@ function migrate(db: DatabaseSync): void {
   ensureColumn(db, "aircraft_cache", "operator", "TEXT");
   ensureColumn(db, "aircraft_cache", "registered_country", "TEXT");
   ensureColumn(db, "route_cache", "sources", "TEXT");
+  ensureColumn(db, "settings", "show_satellites", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db, "settings", "satellite_min_elevation", "INTEGER NOT NULL DEFAULT 15");
+  ensureColumn(db, "settings", "satellite_show_stations", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db, "settings", "satellite_show_bright", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db, "settings", "satellite_show_starlink", "INTEGER NOT NULL DEFAULT 0");
 }
 
 /** Add a column to an existing table if it is not already present. */

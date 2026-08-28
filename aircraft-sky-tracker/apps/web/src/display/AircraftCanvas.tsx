@@ -1,22 +1,35 @@
 import { useEffect, useRef } from "react";
-import type { Aircraft, AppConfig } from "@ast/shared";
+import type { Aircraft, AppConfig, Satellite } from "@ast/shared";
 import { SkyRenderer } from "./skyRenderer.js";
 
 interface Props {
   aircraft: Aircraft[];
   snapshotTimestamp: number;
   config: AppConfig;
+  satellites: Satellite[];
+  satelliteTimestamp: number;
   onSelect: (aircraft: Aircraft) => void;
+  onSelectSatellite: (satellite: Satellite) => void;
 }
 
 const CLICK_RADIUS = 40;
 
 /** Hosts the canvas and drives the requestAnimationFrame render loop (FRD §52). */
-export function AircraftCanvas({ aircraft, snapshotTimestamp, config, onSelect }: Props) {
+export function AircraftCanvas({
+  aircraft,
+  snapshotTimestamp,
+  config,
+  satellites,
+  satelliteTimestamp,
+  onSelect,
+  onSelectSatellite,
+}: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<SkyRenderer | null>(null);
   const aircraftRef = useRef<Aircraft[]>(aircraft);
   aircraftRef.current = aircraft;
+  const satellitesRef = useRef<Satellite[]>(satellites);
+  satellitesRef.current = satellites;
 
   // Create the renderer once and run the animation loop.
   useEffect(() => {
@@ -56,6 +69,10 @@ export function AircraftCanvas({ aircraft, snapshotTimestamp, config, onSelect }
     rendererRef.current?.ingest(aircraft, snapshotTimestamp);
   }, [aircraft, snapshotTimestamp]);
 
+  useEffect(() => {
+    rendererRef.current?.ingestSatellites(satellites, satelliteTimestamp);
+  }, [satellites, satelliteTimestamp]);
+
   const handleClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const renderer = rendererRef.current;
     const canvas = canvasRef.current;
@@ -64,6 +81,7 @@ export function AircraftCanvas({ aircraft, snapshotTimestamp, config, onSelect }
     const px = event.clientX - rect.left;
     const py = event.clientY - rect.top;
 
+    // Aircraft take priority (primary layer, FRD §69).
     let bestId: string | undefined;
     let bestDist = CLICK_RADIUS;
     for (const target of renderer.getHitTargets()) {
@@ -75,7 +93,24 @@ export function AircraftCanvas({ aircraft, snapshotTimestamp, config, onSelect }
     }
     if (bestId) {
       const found = aircraftRef.current.find((a) => a.id === bestId);
-      if (found) onSelect(found);
+      if (found) {
+        onSelect(found);
+        return;
+      }
+    }
+
+    let bestSat: string | undefined;
+    bestDist = CLICK_RADIUS;
+    for (const target of renderer.getSatelliteHitTargets()) {
+      const d = Math.hypot(target.x - px, target.y - py);
+      if (d <= bestDist) {
+        bestDist = d;
+        bestSat = target.id;
+      }
+    }
+    if (bestSat) {
+      const found = satellitesRef.current.find((s) => s.catalogNumber === bestSat);
+      if (found) onSelectSatellite(found);
     }
   };
 

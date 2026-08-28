@@ -35,6 +35,16 @@ export interface AppConfig {
   inAppAlerts: boolean;
   /** Fire a browser/OS notification on interesting entry, permission-based (FRD §54). */
   browserNotifications: boolean;
+  /** Show the satellite layer (FRD v3.2 §36, §73). */
+  showSatellites: boolean;
+  /** Minimum elevation (deg) for a satellite to be displayed (FRD §43-44). */
+  satelliteMinElevationDeg: number;
+  /** Include space stations (ISS, Tiangong) in the satellite layer (FRD §49). */
+  satelliteShowStations: boolean;
+  /** Include curated bright satellites (FRD §50). */
+  satelliteShowBright: boolean;
+  /** Include bright Starlink passes (FRD §51). */
+  satelliteShowStarlink: boolean;
 }
 
 export const DEFAULT_POSTCODE = "SN25 4TP";
@@ -69,6 +79,11 @@ export const DEFAULT_CONFIG: AppConfig = {
   historyRetentionDays: 31,
   inAppAlerts: true,
   browserNotifications: false,
+  showSatellites: true,
+  satelliteMinElevationDeg: 15,
+  satelliteShowStations: true,
+  satelliteShowBright: true,
+  satelliteShowStarlink: false,
 };
 
 /** Configuration fields a client is permitted to update (FRD §39). */
@@ -97,5 +112,10 @@ export type ConfigUpdate = Partial<
     | "historyRetentionDays"
     | "inAppAlerts"
     | "browserNotifications"
+    | "showSatellites"
+    | "satelliteMinElevationDeg"
+    | "satelliteShowStations"
+    | "satelliteShowBright"
+    | "satelliteShowStarlink"
   >
 >;

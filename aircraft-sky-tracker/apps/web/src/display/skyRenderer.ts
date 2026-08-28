@@ -14,6 +14,7 @@ import {
   type Aircraft,
   type AppConfig,
   type AircraftSilhouette,
+  type Satellite,
   haversineDistanceMiles,
   bearingDegrees,
   distanceBearingToEastNorth,
@@ -46,6 +47,19 @@ interface RenderState {
   history: { latitude: number; longitude: number }[];
 }
 
+interface SatFix {
+  az: number;
+  el: number;
+  ts: number;
+}
+
+interface SatState {
+  prev: SatFix;
+  cur: SatFix;
+  data: Satellite;
+  firstSeenMs: number;
+}
+
 export interface HitTarget {
   id: string;
   x: number;
@@ -64,7 +78,9 @@ export class SkyRenderer {
   private readonly ctx: CanvasRenderingContext2D;
   private config: AppConfig | undefined;
   private states = new Map<string, RenderState>();
+  private satStates = new Map<string, SatState>();
   private hitTargets: HitTarget[] = [];
+  private satHitTargets: HitTarget[] = [];
   private cssWidth = 0;
   private cssHeight = 0;
   private scale = 1;
@@ -174,6 +190,7 @@ export class SkyRenderer {
     ctx.fillStyle = "#000000";
     ctx.fillRect(0, 0, this.cssWidth, this.cssHeight);
     this.hitTargets = [];
+    this.satHitTargets = [];
     if (!config) return;
 
     const w = this.cssWidth;
@@ -182,17 +199,144 @@ export class SkyRenderer {
 
     this.drawReference(config, w / 2, h / 2);
 
+    const occupied: Rect[] = [];
+
+    // Satellites are a secondary layer, drawn under aircraft (FRD §69).
+    if (config.showSatellites) this.drawSatellites(config, now, occupied);
+
     // Compute drawable placements, closest-to-centre first (label priority §72).
     const placements = [...this.states.values()]
       .map((s) => this.place(s, config, now))
       .filter((p): p is Placement => p !== undefined)
       .sort((a, b) => a.data.distanceMiles - b.data.distanceMiles);
 
-    const occupied: Rect[] = [];
     for (const p of placements) {
       this.drawAircraft(p, config, occupied);
       this.hitTargets.push({ id: p.id, x: p.x, y: p.y });
     }
+  }
+
+  /**
+   * Observer-sky projection (FRD §66-67): zenith at centre, the configured
+   * minimum elevation at the outer boundary; azimuth is the compass angle
+   * (north up). This is deliberately different from the aircraft geographic
+   * projection - satellites are not within the aircraft radius (FRD §68).
+   */
+  private projectSky(
+    azimuthDeg: number,
+    elevationDeg: number,
+    minElevationDeg: number,
+  ): { x: number; y: number } {
+    const maxR = (Math.min(this.cssWidth, this.cssHeight) / 2) * 0.92;
+    const span = Math.max(1, 90 - minElevationDeg);
+    const r = maxR * clamp((90 - elevationDeg) / span, 0, 1);
+    const az = (azimuthDeg * Math.PI) / 180;
+    return {
+      x: this.cssWidth / 2 + r * Math.sin(az),
+      y: this.cssHeight / 2 - r * Math.cos(az),
+    };
+  }
+
+  /** Merge a satellite snapshot into the interpolation state. */
+  ingestSatellites(satellites: Satellite[], _timestamp: number): void {
+    const now = performance.now();
+    const seen = new Set<string>();
+    for (const s of satellites) {
+      seen.add(s.catalogNumber);
+      const existing = this.satStates.get(s.catalogNumber);
+      const fix: SatFix = { az: s.azimuthDegrees, el: s.elevationDegrees, ts: now };
+      if (!existing) {
+        this.satStates.set(s.catalogNumber, { prev: fix, cur: fix, data: s, firstSeenMs: now });
+      } else {
+        existing.prev = existing.cur;
+        existing.cur = fix;
+        existing.data = s;
+      }
+    }
+    for (const [id, st] of this.satStates) {
+      if (!seen.has(id)) {
+        // Fade out quickly, then drop.
+        if (now - st.cur.ts > 4000) this.satStates.delete(id);
+      }
+    }
+  }
+
+  private drawSatellites(config: AppConfig, now: number, occupied: Rect[]): void {
+    const ctx = this.ctx;
+    for (const st of this.satStates.values()) {
+      const frac =
+        config.interpolationEnabled && st.cur.ts > st.prev.ts
+          ? clamp((now - st.cur.ts) / (st.cur.ts - st.prev.ts), 0, 1)
+          : 1;
+      const az = angleLerp(st.prev.az, st.cur.az, frac);
+      const el = lerp(st.prev.el, st.cur.el, frac);
+      const p = this.projectSky(az, el, config.satelliteMinElevationDeg);
+      const fadeIn = clamp((now - st.firstSeenMs) / 400, 0, 1);
+      this.drawSatelliteMarker(st.data, p.x, p.y, fadeIn);
+      this.drawSatelliteLabel(st.data, p.x, p.y, fadeIn, occupied);
+      this.satHitTargets.push({ id: st.data.catalogNumber, x: p.x, y: p.y });
+    }
+  }
+
+  private drawSatelliteMarker(sat: Satellite, x: number, y: number, alpha: number): void {
+    const ctx = this.ctx;
+    const size = sat.category === "station" ? 7 : sat.category === "bright" ? 5.5 : 3.5;
+    const colour = sat.potentiallyVisible ? "#8fe3ff" : "rgba(150,170,200,0.85)";
+    ctx.save();
+    ctx.globalAlpha = alpha * (sat.category === "starlink" ? 0.8 : 1);
+    ctx.strokeStyle = colour;
+    ctx.fillStyle = "rgba(10,16,26,0.6)";
+    ctx.lineWidth = 1.4;
+    if (sat.category === "starlink") {
+      // Small dot.
+      ctx.beginPath();
+      ctx.arc(x, y, 2, 0, Math.PI * 2);
+      ctx.fillStyle = colour;
+      ctx.fill();
+    } else {
+      // Diamond, distinct from aircraft outlines (FRD §52).
+      ctx.beginPath();
+      ctx.moveTo(x, y - size);
+      ctx.lineTo(x + size, y);
+      ctx.lineTo(x, y + size);
+      ctx.lineTo(x - size, y);
+      ctx.closePath();
+      if (sat.category === "station") ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  private drawSatelliteLabel(
+    sat: Satellite,
+    x: number,
+    y: number,
+    alpha: number,
+    occupied: Rect[],
+  ): void {
+    const ctx = this.ctx;
+    const size = Math.max(11, Math.min(15, this.cssHeight / 65));
+    const text = sat.name;
+    ctx.font = font(size, sat.category === "station");
+    const w = ctx.measureText(text).width;
+    let top = y + 10;
+    const rect: Rect = { x: x - w / 2, y: top, w, h: size * 1.2 };
+    for (let i = 0; i < 4 && occupied.some((r) => overlaps(r, rect)); i++) {
+      top += size * 1.25;
+      rect.y = top;
+    }
+    occupied.push(rect);
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.85;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = sat.potentiallyVisible ? "#8fe3ff" : "#9aa0a6";
+    ctx.fillText(text, x, top);
+    ctx.restore();
+  }
+
+  getSatelliteHitTargets(): HitTarget[] {
+    return this.satHitTargets;
   }
 
   private drawReference(config: AppConfig, cx: number, cy: number): void {

@@ -28,6 +28,11 @@ interface SettingsRow {
   history_retention_days: number;
   in_app_alerts: number;
   browser_notifications: number;
+  show_satellites: number;
+  satellite_min_elevation: number;
+  satellite_show_stations: number;
+  satellite_show_bright: number;
+  satellite_show_starlink: number;
   interpolation: number;
 }
 
@@ -61,6 +66,11 @@ function rowToConfig(row: SettingsRow): AppConfig {
     historyRetentionDays: row.history_retention_days,
     inAppAlerts: bool(row.in_app_alerts),
     browserNotifications: bool(row.browser_notifications),
+    showSatellites: bool(row.show_satellites),
+    satelliteMinElevationDeg: row.satellite_min_elevation,
+    satelliteShowStations: bool(row.satellite_show_stations),
+    satelliteShowBright: bool(row.satellite_show_bright),
+    satelliteShowStarlink: bool(row.satellite_show_starlink),
   };
 }
 
@@ -85,9 +95,11 @@ export class SettingsRepo {
           show_header, show_trails, show_destination_arcs,
           highlight_interesting, watchlist, low_altitude_threshold,
           history_enabled, history_retention_days, in_app_alerts,
-          browser_notifications, interpolation, created_at, updated_at
+          browser_notifications, show_satellites, satellite_min_elevation,
+          satellite_show_stations, satellite_show_bright, satellite_show_starlink,
+          interpolation, created_at, updated_at
         ) VALUES (
-          1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )`,
       )
       .run(
@@ -114,6 +126,11 @@ export class SettingsRepo {
         defaults.historyRetentionDays,
         Number(defaults.inAppAlerts),
         Number(defaults.browserNotifications),
+        Number(defaults.showSatellites),
+        defaults.satelliteMinElevationDeg,
+        Number(defaults.satelliteShowStations),
+        Number(defaults.satelliteShowBright),
+        Number(defaults.satelliteShowStarlink),
         Number(defaults.interpolationEnabled),
         now,
         now,
@@ -148,7 +165,10 @@ export class SettingsRepo {
           highlight_interesting = ?, watchlist = ?,
           low_altitude_threshold = ?, history_enabled = ?,
           history_retention_days = ?, in_app_alerts = ?,
-          browser_notifications = ?, interpolation = ?, updated_at = ?
+          browser_notifications = ?, show_satellites = ?,
+          satellite_min_elevation = ?, satellite_show_stations = ?,
+          satellite_show_bright = ?, satellite_show_starlink = ?,
+          interpolation = ?, updated_at = ?
         WHERE id = 1`,
       )
       .run(
@@ -175,6 +195,11 @@ export class SettingsRepo {
         config.historyRetentionDays,
         Number(config.inAppAlerts),
         Number(config.browserNotifications),
+        Number(config.showSatellites),
+        config.satelliteMinElevationDeg,
+        Number(config.satelliteShowStations),
+        Number(config.satelliteShowBright),
+        Number(config.satelliteShowStarlink),
         Number(config.interpolationEnabled),
         now,
       );

@@ -8,7 +8,7 @@ import type { AppConfig, ConfigUpdate, Aircraft } from "@ast/shared";
 import type { HealthReport, DiagnosticsReport } from "../diagnostics/diagnosticsService.js";
 import type { PhotoResult } from "../routes/photoService.js";
 import type { ViewResult } from "../aircraft/viewService.js";
-import type { HistoryPass, HistoryDate, AircraftMeta } from "@ast/shared";
+import type { HistoryPass, HistoryDate, AircraftMeta, Satellite } from "@ast/shared";
 import { basicAuthMiddleware, isAuthEnabled } from "./auth.js";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -42,6 +42,9 @@ export interface ApiContext {
   history(date?: string): { date: string; passes: HistoryPass[] };
   historyDates(): HistoryDate[];
   deleteHistory(date: string): { deleted: number };
+  satellites(): { generatedAt: string; satellites: Satellite[] };
+  satellite(catalogNumber: string): Satellite | null;
+  orbitalStatus(): unknown;
 }
 
 export function createApiRouter(ctx: ApiContext): Router {
@@ -180,6 +183,28 @@ export function createApiRouter(ctx: ApiContext): Router {
       return;
     }
     res.json(ctx.history(date));
+  });
+
+  // --- Satellites (FRD v3.2 §81). Public: part of the open sky display. ---
+
+  // GET /api/satellites - current satellite snapshot.
+  router.get("/satellites", (_req: Request, res: Response) => {
+    res.json(ctx.satellites());
+  });
+
+  // GET /api/orbital-status - orbital-data source + counts (FRD §76).
+  router.get("/orbital-status", (_req: Request, res: Response) => {
+    res.json(ctx.orbitalStatus());
+  });
+
+  // GET /api/satellites/:catalogNumber - one satellite's current detail.
+  router.get("/satellites/:catalogNumber", (req: Request, res: Response) => {
+    const sat = ctx.satellite(req.params.catalogNumber ?? "");
+    if (!sat) {
+      res.status(404).json({ error: "satellite not currently visible" });
+      return;
+    }
+    res.json(sat);
   });
 
   // DELETE /api/history/:date - clear a date (destructive -> requires auth).
