@@ -443,6 +443,32 @@ function eventCommandCentre(array $hub): array
         }
     }
 
+    // Attendance — registers taken for this event (source_type='event'). Only shown
+    // once at least one register is linked, like finance.
+    if (function_exists('attendanceEnabled') && attendanceEnabled() && function_exists('eventCampAttendance')) {
+        $att = eventCampAttendance($id);
+        if ($att['status'] !== 'none') {
+            $areas[] = [
+                'key' => 'attendance', 'label' => 'Attendance',
+                'status' => $att['status'], 'summary' => $att['summary'],
+                'link' => 'attendance.html',
+            ];
+        }
+    }
+
+    // Safety — incident/near-miss records tied to this event. Count-only (never any
+    // restricted detail); appears once a record is linked.
+    if (function_exists('incidentLoggingEnabled') && incidentLoggingEnabled() && function_exists('eventCampSafety')) {
+        $safe = eventCampSafety($id);
+        if ($safe['status'] !== 'none') {
+            $areas[] = [
+                'key' => 'safety', 'label' => 'Safety',
+                'status' => $safe['status'], 'summary' => $safe['summary'],
+                'link' => 'incidents.html',
+            ];
+        }
+    }
+
     return $areas;
 }
 

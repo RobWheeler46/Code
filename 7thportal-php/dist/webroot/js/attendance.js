@@ -51,6 +51,10 @@ async function getSections() {
 
 async function newRegister() {
   const sections = await getSections();
+  // Events are optional context: a register for an event/camp links to it (source_ref_id)
+  // so the event Command Centre can roll up attendance. Module off -> 404 -> no picker.
+  let events = [];
+  try { events = (await Api.get('/api/events')).events || []; } catch { events = []; }
   const field = (label, html) => `<div class="field"><label>${label}</label>${html}</div>`;
   const today = new Date().toISOString().slice(0, 10);
   const secOpts = sections.length
@@ -60,10 +64,16 @@ async function newRegister() {
     ${sections.length ? field('Section', `<select id="ar-section">${secOpts}</select>`) : '<div class="alert alert-error">No sections found for your account. You can only take attendance for a section you lead.</div>'}
     ${field('Session date', `<input id="ar-date" type="date" value="${today}">`)}
     ${field('Type', `<select id="ar-type">${Object.entries(META.sourceTypes).map(([k, v]) => `<option value="${k}">${escapeHtml(v)}</option>`).join('')}</select>`)}
+    ${events.length ? `<div class="field" id="ar-event-wrap" style="display:none"><label>Event / camp</label><select id="ar-event"><option value="">Choose an event&hellip;</option>${events.map(e => `<option value="${e.id}">${escapeHtml(e.title)}</option>`).join('')}</select></div>` : ''}
     ${field('Title (optional)', `<input id="ar-title" placeholder="e.g. Pack meeting">`)}
     ${field('Linked session / note (optional)', `<input id="ar-label" placeholder="e.g. Programme: Pioneering night">`)}
     <div class="modal-actions" style="display:flex;gap:.5rem;margin-top:1rem"><button class="btn" id="ar-save"${sections.length ? '' : ' disabled'}>Create &amp; load roster</button><button class="btn btn-secondary" id="ar-cancel">Cancel</button></div>`);
   document.getElementById('ar-cancel').addEventListener('click', closeModal);
+  // Show the event picker only when the register is for an event/camp.
+  const typeSel = document.getElementById('ar-type');
+  const evWrap = document.getElementById('ar-event-wrap');
+  const syncEv = () => { if (evWrap) evWrap.style.display = typeSel.value === 'event' ? '' : 'none'; };
+  typeSel.addEventListener('change', syncEv); syncEv();
   const saveBtn = document.getElementById('ar-save');
   if (saveBtn && sections.length) saveBtn.addEventListener('click', async () => {
     const sel = document.getElementById('ar-section');
@@ -75,6 +85,11 @@ async function newRegister() {
       title: document.getElementById('ar-title').value.trim(),
       sourceLabel: document.getElementById('ar-label').value.trim(),
     };
+    const evSel = document.getElementById('ar-event');
+    if (payload.sourceType === 'event' && evSel && evSel.value) {
+      payload.sourceRefId = Number(evSel.value);
+      if (!payload.sourceLabel) payload.sourceLabel = evSel.options[evSel.selectedIndex].text;
+    }
     saveBtn.disabled = true; saveBtn.textContent = 'Loading roster…';
     try {
       const res = await Api.post('/api/attendance/registers', payload);

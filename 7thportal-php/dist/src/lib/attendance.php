@@ -77,6 +77,20 @@ function serializeRegister(array $r, bool $withCounts = false): array
     return $out;
 }
 
+// Event Command Centre attendance rollup (FR-NOT / Command Centre). Registers taken
+// for this event carry source_type='event' + source_ref_id = the hub id. Reduces them
+// to one status: 'none' when nothing is linked (caller omits the card), 'attention'
+// while any register is still open (unsubmitted), 'ready' once all are submitted.
+function eventCampAttendance(int $hubId): array
+{
+    $rows = dbAll("SELECT status FROM attendance_registers WHERE source_type = 'event' AND source_ref_id = ?", [$hubId]);
+    $n = count($rows);
+    if ($n === 0) return ['status' => 'none', 'summary' => 'No registers linked yet', 'count' => 0, 'open' => 0];
+    $open = count(array_filter($rows, fn($r) => $r['status'] !== 'submitted'));
+    if ($open > 0) return ['status' => 'attention', 'summary' => $open . ' register' . ($open === 1 ? '' : 's') . ' to submit', 'count' => $n, 'open' => $open];
+    return ['status' => 'ready', 'summary' => $n . ' register' . ($n === 1 ? '' : 's') . ' submitted', 'count' => $n, 'open' => 0];
+}
+
 function serializeMark(array $m): array
 {
     return [

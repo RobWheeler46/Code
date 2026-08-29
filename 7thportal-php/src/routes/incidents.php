@@ -32,6 +32,9 @@ function incidentFieldsFromBody(array $body, array $existing = []): array
         'osm_section_id' => $val('sectionId', 'osm_section_id'),
         'section_name' => $val('sectionName', 'section_name'),
         'event_name' => $val('eventName', 'event_name'),
+        'event_hub_id' => array_key_exists('eventHubId', $body)
+            ? (($body['eventHubId'] && dbGet('SELECT id FROM event_hubs WHERE id = ?', [(int) $body['eventHubId']])) ? (int) $body['eventHubId'] : null)
+            : ($existing['event_hub_id'] ?? null),
         'occurred_at' => $val('occurredAt', 'occurred_at'),
         'location' => $val('location', 'location'),
         'what_happened' => $val('whatHappened', 'what_happened'),

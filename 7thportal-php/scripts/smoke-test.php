@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_feature_matrix', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -32,7 +32,7 @@ function useDb(string $file): void { putenv('SEVENTHPORTAL_DB=' . $file); }
 function boot(): void { require dirname(__DIR__) . '/src/db.php'; }
 function loadLibs(): void
 {
-    foreach (['helpers', 'notifications', 'finance', 'incidents', 'patrolpoints', 'events', 'equipment', 'actions', 'quartermaster', 'prepare', 'features'] as $lib) {
+    foreach (['helpers', 'notifications', 'finance', 'incidents', 'patrolpoints', 'events', 'equipment', 'actions', 'quartermaster', 'prepare', 'features', 'attendance'] as $lib) {
         require_once dirname(__DIR__) . '/src/lib/' . $lib . '.php';
     }
 }
@@ -510,6 +510,43 @@ function scenario_logic_feature_matrix(): void
     $last = featureLastChanged('galleryEnabled');
     check('feat: last-changed attributes the audited settings change', $last['at'] !== null && $last['by'] === 'Ada Admin');
     check('feat: last-changed is null for an untouched flag', featureLastChanged('calendarEnabled')['at'] === null);
+}
+
+// Event Command Centre attendance & safety areas (FR-NOT / Command Centre). Attendance
+// registers taken for an event (source_type='event') and incident records tied to it
+// roll up to their own areas, which appear only when their module is on and something
+// is linked.
+function scenario_logic_camp_attendance_safety(): void
+{
+    useDb(tmpDb('attsafe')); boot(); loadLibs();
+    $hub = dbRun("INSERT INTO event_hubs (title, event_type, status) VALUES ('Camp','camp','draft')")['lastInsertId'];
+
+    // Attendance rollup.
+    check('att: no registers -> none', eventCampAttendance($hub)['status'] === 'none');
+    $reg = dbRun("INSERT INTO attendance_registers (osm_section_id, title, session_date, source_type, source_ref_id, status) VALUES ('123','Camp reg','2026-09-12','event', ?, 'open')", [$hub])['lastInsertId'];
+    check('att: open event register -> attention', eventCampAttendance($hub)['status'] === 'attention');
+    dbRun("UPDATE attendance_registers SET status = 'submitted' WHERE id = ?", [$reg]);
+    check('att: all submitted -> ready', eventCampAttendance($hub)['status'] === 'ready');
+    check('att: a register on another hub is ignored', eventCampAttendance(99999)['status'] === 'none');
+
+    // Safety rollup (count-only; overdue open follow-up is a blocker).
+    check('safe: no records -> none', eventCampSafety($hub)['status'] === 'none');
+    $inc = dbRun("INSERT INTO incidents (record_type, sensitivity, summary, event_hub_id, status) VALUES ('near_miss','standard','Trip hazard', ?, 'open')", [$hub])['lastInsertId'];
+    check('safe: open record -> attention', eventCampSafety($hub)['status'] === 'attention');
+    dbRun("UPDATE incidents SET due_date = '2000-01-01' WHERE id = ?", [$inc]);
+    check('safe: overdue follow-up -> blocked', eventCampSafety($hub)['status'] === 'blocked');
+    dbRun("UPDATE incidents SET status = 'closed' WHERE id = ?", [$inc]);
+    check('safe: all closed -> ready', eventCampSafety($hub)['status'] === 'ready');
+
+    // Command Centre integration: areas appear only with the module on AND data linked.
+    dbRun("INSERT INTO settings (key, value) VALUES ('attendance_enabled', 'true')");
+    dbRun("INSERT INTO settings (key, value) VALUES ('incident_logging_enabled', 'true')");
+    $keys = array_column(eventCommandCentre(dbGet('SELECT * FROM event_hubs WHERE id = ?', [$hub])), 'key');
+    check('cc: attendance area present when a register is linked', in_array('attendance', $keys, true));
+    check('cc: safety area present when a record is linked', in_array('safety', $keys, true));
+    $hub2 = dbRun("INSERT INTO event_hubs (title, event_type, status) VALUES ('Trip','trip','draft')")['lastInsertId'];
+    $keys2 = array_column(eventCommandCentre(dbGet('SELECT * FROM event_hubs WHERE id = ?', [$hub2])), 'key');
+    check('cc: no attendance/safety cards when nothing is linked', !in_array('attendance', $keys2, true) && !in_array('safety', $keys2, true));
 }
 
 // QM kit completeness check: overall result derives from component statuses.

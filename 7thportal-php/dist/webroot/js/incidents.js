@@ -1,9 +1,13 @@
 let INC = { meta: { types: {}, statuses: {}, restrictedTypes: [] }, safeguarding: {}, leaders: [], canCreate: false };
+let INC_EVENTS = [];
 const incFilters = { status: '', type: '' };
 
 (async () => {
   const me = await requireUserNav();
   if (!me) return;
+  // Events are optional context for linking a record to the camp it happened at.
+  // If the module is off the request 404s - swallow it and keep the free-text field.
+  try { INC_EVENTS = (await Api.get('/api/events')).events || []; } catch { INC_EVENTS = []; }
   loadIncidents();
 })();
 
@@ -98,7 +102,9 @@ function openIncidentForm(inc) {
     ${field('Short summary', `<input id="if-summary" ${ro} value="${escapeHtml(a.summary || '')}" placeholder="One line - avoid sensitive detail">`)}
     <div class="cap-actions">
       ${field('Section', `<input id="if-section" ${ro} value="${escapeHtml(a.sectionName || '')}">`)}
-      ${field('Event (optional)', `<input id="if-event" ${ro} value="${escapeHtml(a.eventName || '')}">`)}
+      ${field('Event / camp (optional)', INC_EVENTS.length
+        ? `<select id="if-event-hub" ${ro}><option value="">Not linked / other</option>${INC_EVENTS.map(e => `<option value="${e.id}"${a.eventHubId === e.id ? ' selected' : ''}>${escapeHtml(e.title)}</option>`).join('')}</select>`
+        : `<input id="if-event" ${ro} value="${escapeHtml(a.eventName || '')}">`)}
     </div>
     <div class="cap-actions">
       ${field('Date &amp; time', `<input id="if-when" type="datetime-local" ${ro} value="${(a.occurredAt || '').replace(' ', 'T').slice(0, 16)}">`)}
@@ -134,7 +140,12 @@ function openIncidentForm(inc) {
       recordType: document.getElementById('if-type').value,
       summary: document.getElementById('if-summary').value.trim(),
       sectionName: document.getElementById('if-section').value.trim(),
-      eventName: document.getElementById('if-event').value.trim(),
+      ...(() => {
+        const sel = document.getElementById('if-event-hub');
+        if (sel) return { eventHubId: sel.value || null, eventName: sel.value ? sel.options[sel.selectedIndex].text : '' };
+        const txt = document.getElementById('if-event');
+        return { eventName: txt ? txt.value.trim() : '' };
+      })(),
       occurredAt: document.getElementById('if-when').value,
       location: document.getElementById('if-location').value.trim(),
       whatHappened: document.getElementById('if-what').value.trim(),

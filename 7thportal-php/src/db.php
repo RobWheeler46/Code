@@ -654,6 +654,9 @@ CREATE TABLE IF NOT EXISTS incidents (
   osm_section_id TEXT,
   section_name TEXT,
   event_name TEXT,
+  -- Optional structured link to the event/camp this record relates to, so the event
+  -- Command Centre can roll up its safety picture. Nullable; enforced in code.
+  event_hub_id INTEGER,
   occurred_at TEXT,
   location TEXT,
   what_happened TEXT,
@@ -1291,6 +1294,14 @@ if ($eciSql2 && !str_contains($eciSql2, 'approver_assigned_by_user_id')) {
 $claimsSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='expense_claims'")['sql'] ?? '';
 if ($claimsSql && !str_contains($claimsSql, 'event_hub_id')) {
     db()->exec('ALTER TABLE expense_claims ADD COLUMN event_hub_id INTEGER');
+}
+
+// Migration: incidents gained an optional event_hub_id, so a near-miss/accident record
+// can be tied to the event/camp it happened at and the event Command Centre can roll
+// up its safety picture. Plain INTEGER (no inline REFERENCES); link enforced in code.
+$incidentsSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='incidents'")['sql'] ?? '';
+if ($incidentsSql && !str_contains($incidentsSql, 'event_hub_id')) {
+    db()->exec('ALTER TABLE incidents ADD COLUMN event_hub_id INTEGER');
 }
 
 // Migration: activity_forms gained conditional-insurance flags (improved-flow

@@ -66,10 +66,31 @@ function serializeIncident(array $i, bool $full = true): array
     if (!$full) return $base;
     return array_merge($base, [
         'eventName' => $i['event_name'], 'occurredAt' => $i['occurred_at'], 'location' => $i['location'],
+        'eventHubId' => isset($i['event_hub_id']) && $i['event_hub_id'] !== null ? (int) $i['event_hub_id'] : null,
+        'eventTitle' => (isset($i['event_hub_id']) && $i['event_hub_id'] !== null)
+            ? (dbGet('SELECT title FROM event_hubs WHERE id = ?', [$i['event_hub_id']])['title'] ?? null) : null,
         'whatHappened' => $i['what_happened'], 'immediateAction' => $i['immediate_action'], 'followUpActions' => $i['follow_up_actions'],
         'closedNote' => $i['closed_note'], 'reportedBy' => $i['reported_by'] !== null ? (int) $i['reported_by'] : null,
         'osmSectionId' => $i['osm_section_id'], 'createdAt' => $i['created_at'], 'updatedAt' => $i['updated_at'],
     ]);
+}
+
+// Event Command Centre safety rollup (FR-NOT / Command Centre). Reduces the incident
+// records tied to an event to one status + count-only summary (never any restricted
+// free-text). 'none' when nothing is linked so the caller omits the card. An overdue
+// open follow-up is a genuine blocker; other open records are attention.
+function eventCampSafety(int $hubId): array
+{
+    $rows = dbAll('SELECT status, due_date FROM incidents WHERE event_hub_id = ?', [$hubId]);
+    $n = count($rows);
+    if ($n === 0) return ['status' => 'none', 'summary' => 'No safety records linked', 'count' => 0, 'open' => 0, 'overdue' => 0];
+    $today = gmdate('Y-m-d');
+    $open = array_filter($rows, fn($r) => $r['status'] !== 'closed');
+    $overdue = count(array_filter($open, fn($r) => $r['due_date'] && $r['due_date'] < $today));
+    $openN = count($open);
+    if ($overdue > 0) return ['status' => 'blocked', 'summary' => $overdue . ' overdue follow-up' . ($overdue === 1 ? '' : 's'), 'count' => $n, 'open' => $openN, 'overdue' => $overdue];
+    if ($openN > 0) return ['status' => 'attention', 'summary' => $openN . ' open safety record' . ($openN === 1 ? '' : 's'), 'count' => $n, 'open' => $openN, 'overdue' => 0];
+    return ['status' => 'ready', 'summary' => $n . ' record' . ($n === 1 ? '' : 's') . ', all closed', 'count' => $n, 'open' => 0, 'overdue' => 0];
 }
 
 // A notification body for an incident that never leaks restricted free-text
