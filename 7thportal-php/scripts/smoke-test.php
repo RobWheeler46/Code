@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -369,6 +369,51 @@ function scenario_logic_camp_versions(): void
     check('ver: latest no longer needs my ack', $list2['latestNeedsMyAck'] === false);
     // The older version is still unacknowledged by me.
     check('ver: older version still unacked by me', $list2['versions'][1]['acknowledgedByMe'] === null);
+}
+
+// Critical readiness exceptions (FR-NOT / Command Centre). The scan pushes each
+// blocked area once, dedups on re-scan, resolves cleared ones, and re-notifies on
+// recurrence.
+function scenario_logic_exception_scan(): void
+{
+    useDb(tmpDb('exc')); boot(); loadLibs();
+    dbRun("INSERT INTO settings (key, value) VALUES ('event_hub_enabled', 'true')");
+    $leader = dbRun("INSERT INTO users (auth_type, first_name, last_name, portal_role, account_status) VALUES ('local','Cam','Lead','group_leadership','active')")['lastInsertId'];
+    $hubId = dbRun("INSERT INTO event_hubs (title, event_type, status) VALUES ('Summer Camp','camp','draft')")['lastInsertId'];
+    // A collected booking overdue to return -> equipment area is blocked (critical).
+    $bk = dbRun("INSERT INTO qm_bookings (requester_user_id, event_hub_id, status, return_at) VALUES (?, ?, 'collected', '2000-01-01')", [$leader, $hubId])['lastInsertId'];
+
+    $r1 = scanEventCriticalExceptions();
+    check('exc: first scan finds the new exception', $r1['new'] === 1 && $r1['open'] === 1);
+    check('exc: leader was notified once', (int) dbGet("SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND type = 'exception'", [$leader])['n'] === 1);
+    check('exc: an open state row exists', (int) dbGet("SELECT COUNT(*) AS n FROM event_exception_state WHERE status = 'open'")['n'] === 1);
+
+    $r2 = scanEventCriticalExceptions();
+    check('exc: re-scan does not re-notify (deduped)', $r2['new'] === 0 && $r2['open'] === 1);
+    check('exc: still only one notification', (int) dbGet("SELECT COUNT(*) AS n FROM notifications WHERE type = 'exception'")['n'] === 1);
+    check('exc: open exceptions list surfaces it', count(eventOpenExceptions()) === 1);
+
+    // Clear the blocker (return the kit) -> next scan resolves it silently.
+    dbRun("UPDATE qm_bookings SET status = 'returned' WHERE id = ?", [$bk]);
+    $r3 = scanEventCriticalExceptions();
+    check('exc: cleared exception is resolved', $r3['resolved'] === 1 && $r3['open'] === 0);
+    check('exc: no open exceptions remain', count(eventOpenExceptions()) === 0);
+    check('exc: still no extra notification on resolve', (int) dbGet("SELECT COUNT(*) AS n FROM notifications WHERE type = 'exception'")['n'] === 1);
+
+    // Recurrence: the blocker comes back -> notify again.
+    dbRun("UPDATE qm_bookings SET status = 'collected' WHERE id = ?", [$bk]);
+    $r4 = scanEventCriticalExceptions();
+    check('exc: recurrence re-notifies', $r4['new'] === 1);
+    check('exc: second notification recorded', (int) dbGet("SELECT COUNT(*) AS n FROM notifications WHERE type = 'exception'")['n'] === 2);
+
+    // A muted leader is not notified (respects notification prefs).
+    $muted = dbRun("INSERT INTO users (auth_type, first_name, last_name, portal_role, account_status) VALUES ('local','Mu','Ted','section_leader','active')")['lastInsertId'];
+    dbRun("INSERT INTO notification_prefs (user_id, muted_types) VALUES (?, ?)", [$muted, json_encode(['exception'])]);
+    // Force a fresh exception by adding a second overdue booking on a new hub.
+    $hub2 = dbRun("INSERT INTO event_hubs (title, event_type, status) VALUES ('Autumn Camp','camp','draft')")['lastInsertId'];
+    dbRun("INSERT INTO qm_bookings (requester_user_id, event_hub_id, status, return_at) VALUES (?, ?, 'collected', '2000-01-01')", [$leader, $hub2]);
+    scanEventCriticalExceptions();
+    check('exc: muted leader gets no exception notification', (int) dbGet("SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND type = 'exception'", [$muted])['n'] === 0);
 }
 
 // QM kit completeness check: overall result derives from component statuses.

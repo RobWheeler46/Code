@@ -54,6 +54,7 @@ const NOTIFICATION_TYPES = [
     'incident' => 'Incident and near-miss actions',
     'equipment' => 'Equipment checks due',
     'patrol_points' => 'Patrol Points approvals',
+    'exception' => 'Critical readiness exceptions',
     'admin' => 'Admin and sync alerts',
 ];
 

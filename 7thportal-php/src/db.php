@@ -619,6 +619,25 @@ CREATE TABLE IF NOT EXISTS camp_plan_acks (
 );
 CREATE INDEX IF NOT EXISTS idx_camp_plan_acks_version ON camp_plan_acks(version_id);
 
+-- Critical readiness exception state (FR-NOT / Command Centre). Dedup memory for the
+-- exception scan: one row per (hub, blocked area). A blocked Command Centre area is a
+-- "critical exception" pushed to managing leaders as a notification exactly once; the
+-- row keeps it from re-firing on every scan. When the area clears it is marked
+-- resolved, so a later recurrence notifies again. Leader-only operational signal.
+CREATE TABLE IF NOT EXISTS event_exception_state (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  hub_id INTEGER NOT NULL REFERENCES event_hubs(id) ON DELETE CASCADE,
+  area_key TEXT NOT NULL,
+  label TEXT,
+  summary TEXT,
+  status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','resolved')),
+  first_seen TEXT NOT NULL DEFAULT (datetime('now')),
+  notified_at TEXT,
+  resolved_at TEXT,
+  UNIQUE(hub_id, area_key)
+);
+CREATE INDEX IF NOT EXISTS idx_event_exception_state_hub ON event_exception_state(hub_id, status);
+
 -- Incident and near-miss logging (FRD FR-INC). Safeguarding-sensitive: this does
 -- NOT replace formal Scouts safeguarding/accident reporting - the module signposts
 -- to those and restricts access. Ships off by default. Restricted records

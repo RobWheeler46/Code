@@ -30,6 +30,9 @@ $router->get('/api/events', function ($params) {
     $user = requireAuth();
     requireEventHubEnabled();
     $isLeaderView = isLeaderRole($user['portal_role']);
+    // Managing leaders landing here is a natural, low-frequency touchpoint to refresh
+    // the critical-exception notifications (debounced, so it runs at most every 10 min).
+    if (eventHubCanManage($user)) maybeScanEventCriticalExceptions();
     $today = gmdate('Y-m-d');
     $rows = dbAll('SELECT * FROM event_hubs ORDER BY (status = \'archived\'), start_date IS NULL, start_date, id DESC');
     $out = [];
@@ -52,8 +55,22 @@ $router->get('/api/events', function ($params) {
         'events' => $out,
         'isLeaderView' => $isLeaderView,
         'canManage' => eventHubCanManage($user),
+        // Open critical exceptions (blocked Command Centre areas on live events) for
+        // the events-list banner - leader-only, mirrors what was pushed as notifications.
+        'exceptions' => $isLeaderView ? eventOpenExceptions() : [],
         'meta' => ['types' => EVENT_TYPES, 'statuses' => EVENT_HUB_STATUSES, 'itemStatuses' => EVENT_ITEM_STATUSES, 'visibilities' => EVENT_ITEM_VISIBILITIES],
     ]);
+});
+
+// Admin / cron "check now": run the critical-exception scan on demand and report the
+// counts. Suitable for a scheduled call as well as a manual admin trigger.
+$router->post('/api/events/exceptions/scan', function ($params) {
+    $user = requireAuth();
+    requireEventHubEnabled();
+    if (!eventHubCanManage($user)) jsonResponse(['error' => 'Not permitted.'], 403);
+    $result = scanEventCriticalExceptions();
+    logAudit(['userId' => $user['id'], 'action' => 'event_exception_scan', 'entityType' => 'event_hub', 'entityId' => null, 'ipAddress' => clientIp(), 'details' => $result]);
+    jsonResponse(array_merge(['ok' => true], $result, ['exceptions' => eventOpenExceptions()]));
 });
 
 $router->post('/api/events', function ($params) {

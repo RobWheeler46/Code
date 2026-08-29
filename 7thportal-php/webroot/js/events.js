@@ -19,10 +19,23 @@ async function loadEvents() {
 
   document.getElementById('events-actions').innerHTML = data.canManage ? '<button class="btn" id="new-event">New event</button>' : '';
 
+  // Critical readiness exceptions (blocked Command Centre areas on live events) - the
+  // same signal pushed to leaders as notifications, surfaced here as a banner so it's
+  // actionable the moment they land. Leader-only.
+  const exc = (data.isLeaderView && data.exceptions) ? data.exceptions : [];
+  const excBanner = exc.length ? `<div class="card" style="border-left:4px solid #c62828;margin-bottom:1rem">
+    <h2 style="margin:0 0 .4rem;color:#c62828">&#9888; ${exc.length} critical exception${exc.length === 1 ? '' : 's'}</h2>
+    <p class="muted" style="margin:0 0 .5rem;font-size:.85rem">Blocked readiness on live events &mdash; sort these first. Leaders have been notified.</p>
+    ${exc.map(x => `<div style="padding:.4rem 0;border-bottom:1px solid var(--border)">
+      <a href="${escapeHtml(x.link)}"><strong>${escapeHtml(x.hubTitle || 'Event')}</strong></a> &middot; ${escapeHtml(x.area)}
+      <div class="muted" style="font-size:.85rem">${escapeHtml(x.summary)}</div>
+    </div>`).join('')}
+  </div>` : '';
+
   if (!data.events.length) {
-    box.innerHTML = `<div class="empty-state">${data.isLeaderView ? 'No events yet. Create one to get started.' : 'No event or camp pages are published for you right now.'}</div>`;
+    box.innerHTML = excBanner + `<div class="empty-state">${data.isLeaderView ? 'No events yet. Create one to get started.' : 'No event or camp pages are published for you right now.'}</div>`;
   } else {
-    box.innerHTML = `<div class="grid cols-2">${data.events.map(ev => {
+    box.innerHTML = excBanner + `<div class="grid cols-2">${data.events.map(ev => {
       const dates = ev.startDate ? formatDate(ev.startDate) + (ev.endDate && ev.endDate !== ev.startDate ? ' - ' + formatDate(ev.endDate) : '') : 'Dates to confirm';
       const rollup = data.isLeaderView && ev.rollup ? ev.rollup : null;
       const readyPill = rollup ? (([st, lbl]) => ` <span class="badge" data-status="${st}">${lbl}</span>`)(READY_PILL[rollup.overall] || READY_PILL.none) : '';

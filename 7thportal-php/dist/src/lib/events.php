@@ -447,3 +447,81 @@ function eventHubActionItems(array $user): array
     }
     return $items;
 }
+
+// ── Critical readiness exceptions (FR-NOT / Command Centre) ──────────────────────
+// A blocked Command Centre area on a live event is a "critical exception" - something
+// that will bite on the day (kit overdue back, a hard readiness blocker). The scan
+// pushes each one to managing leaders as a notification exactly once, using
+// event_exception_state as dedup memory, and marks cleared ones resolved so a later
+// recurrence notifies again. Rule-based; no LLM, no auto-actions beyond the alert.
+const EVENT_EXCEPTION_MANAGE_ROLES = ['section_leader', 'assistant_leader', 'group_leadership', 'admin'];
+
+function scanEventCriticalExceptions(): array
+{
+    if (!eventHubEnabled()) return ['new' => 0, 'resolved' => 0, 'open' => 0];
+    $today = gmdate('Y-m-d');
+    // Live events only: not archived, and not already finished (end date, or start
+    // date when there's no end, is today or later; undated hubs always count).
+    $hubs = dbAll(
+        "SELECT * FROM event_hubs WHERE status != 'archived' AND (COALESCE(end_date, start_date) IS NULL OR COALESCE(end_date, start_date) >= ?) ORDER BY id",
+        [$today]
+    );
+    $new = 0; $resolved = 0; $open = 0;
+    foreach ($hubs as $hub) {
+        $blocked = [];
+        foreach (eventCommandCentre($hub) as $a) {
+            if ($a['status'] === 'blocked') $blocked[$a['key']] = $a;
+        }
+        $existing = array_column(dbAll("SELECT * FROM event_exception_state WHERE hub_id = ? AND status = 'open'", [$hub['id']]), null, 'area_key');
+        // Newly blocked (or recurring after resolution) -> record + notify once.
+        foreach ($blocked as $key => $a) {
+            $open++;
+            if (isset($existing[$key])) continue;
+            dbRun(
+                "INSERT INTO event_exception_state (hub_id, area_key, label, summary, status, first_seen, notified_at)
+                 VALUES (?, ?, ?, ?, 'open', datetime('now'), datetime('now'))
+                 ON CONFLICT(hub_id, area_key) DO UPDATE SET status = 'open', label = excluded.label, summary = excluded.summary, first_seen = datetime('now'), notified_at = datetime('now'), resolved_at = NULL",
+                [$hub['id'], $key, $a['label'], $a['summary']]
+            );
+            notifyRoles(
+                EVENT_EXCEPTION_MANAGE_ROLES, 'exception',
+                'Critical: ' . $a['label'] . ' — ' . ($hub['title'] ?: 'event'),
+                $a['summary'], 'event-hub.html?id=' . $hub['id']
+            );
+            $new++;
+        }
+        // Previously open, now clear -> resolve silently (recurrence re-notifies).
+        foreach ($existing as $key => $row) {
+            if (!isset($blocked[$key])) {
+                dbRun("UPDATE event_exception_state SET status = 'resolved', resolved_at = datetime('now') WHERE id = ?", [$row['id']]);
+                $resolved++;
+            }
+        }
+    }
+    dbRun("INSERT INTO settings (key, value) VALUES ('exceptions_last_scan', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", [gmdate('c')]);
+    return ['new' => $new, 'resolved' => $resolved, 'open' => $open];
+}
+
+// Debounced trigger: run the scan at most once every 10 minutes regardless of how
+// many leaders load a page, so there's no cron dependency and no double-notifying in
+// a burst of concurrent requests. Best-effort - a failed scan never blocks the page.
+function maybeScanEventCriticalExceptions(): void
+{
+    if (!eventHubEnabled()) return;
+    $last = dbGet("SELECT value FROM settings WHERE key = 'exceptions_last_scan'");
+    if ($last && $last['value'] && (time() - strtotime($last['value'])) < 600) return;
+    try { scanEventCriticalExceptions(); } catch (Throwable $e) { /* never break the page on a scan */ }
+}
+
+// Currently-open critical exceptions across live events, for the events-list banner.
+function eventOpenExceptions(): array
+{
+    $rows = dbAll(
+        "SELECT e.*, h.title AS hub_title FROM event_exception_state e JOIN event_hubs h ON h.id = e.hub_id WHERE e.status = 'open' ORDER BY e.first_seen DESC"
+    );
+    return array_map(fn($r) => [
+        'hubId' => (int) $r['hub_id'], 'hubTitle' => $r['hub_title'],
+        'area' => $r['label'], 'summary' => $r['summary'], 'since' => $r['first_seen'],
+        'link' => 'event-hub.html?id=' . $r['hub_id'],
+    ], $rows);
+}
