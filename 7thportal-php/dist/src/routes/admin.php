@@ -409,6 +409,14 @@ $router->get('/api/admin/settings', function ($params) {
     ]);
 });
 
+// Consolidated feature availability matrix (FRD v1.3 wireframe s6): every optional
+// module's status + metadata + last-changed, for the admin "Feature availability" tab.
+$router->get('/api/admin/feature-availability', function ($params) {
+    $user = requireAuth();
+    requireAdmin($user);
+    jsonResponse(featureAvailabilityMatrix());
+});
+
 $router->put('/api/admin/settings', function ($params) {
     $user = requireAuth();
     requireAdmin($user);

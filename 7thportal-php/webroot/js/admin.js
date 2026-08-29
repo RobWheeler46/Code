@@ -9,6 +9,7 @@ const ADMIN_TABS = [
   { tab: 'parents', label: 'Parent accounts' },
   { tab: 'gallery', label: 'Photo gallery' },
   { tab: 'finance', label: 'Finance' },
+  { tab: 'features', label: 'Feature availability' },
   { tab: 'settings', label: 'Settings' },
   { tab: 'audit', label: 'Audit log' },
 ];
@@ -43,7 +44,7 @@ const ADMIN_TABS = [
 
 function selectTab(tab) {
   document.querySelectorAll('.admin-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-  const renderers = { health: renderHealth, capacity: renderCapacity, notices: renderNotices, users: renderUsers, parents: renderParents, gallery: renderGallery, finance: renderFinance, settings: renderSettings, audit: renderAudit };
+  const renderers = { health: renderHealth, capacity: renderCapacity, notices: renderNotices, users: renderUsers, parents: renderParents, gallery: renderGallery, finance: renderFinance, features: renderFeatures, settings: renderSettings, audit: renderAudit };
   renderers[tab]();
 }
 
@@ -679,6 +680,53 @@ async function renderParents() {
 }
 
 // ── Settings ───────────────────────────────────────────────────────────────
+// Feature availability matrix (FRD v1.3 wireframe s6): a consolidated at-a-glance view
+// of every optional module - status, who it reaches, what it needs, and when it was
+// last changed - with inline enable/disable toggles that reuse the audited settings PUT.
+async function renderFeatures() {
+  const box = document.getElementById('tab-content');
+  box.innerHTML = '<p class="muted">Loading&hellip;</p>';
+  let data;
+  try { data = await Api.get('/api/admin/feature-availability'); }
+  catch (e) { box.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; return; }
+
+  const rows = data.features.map(f => `
+    <tr>
+      <td data-label="Feature" class="rcard-title"><strong>${escapeHtml(f.label)}</strong></td>
+      <td data-label="Status">
+        <label class="feature-toggle">
+          <input type="checkbox" class="feature-switch" data-flag="${f.flag}" ${f.enabled ? 'checked' : ''}>
+          <span class="badge" data-status="${f.enabled ? 'active' : 'draft'}">${f.enabled ? 'Enabled' : 'Disabled'}</span>
+        </label>
+      </td>
+      <td data-label="Visible to" class="muted">${escapeHtml(f.visibleTo)}</td>
+      <td data-label="Depends on" class="muted">${escapeHtml(f.dependsOn)}${f.dependencyWarning ? `<br><span style="color:var(--red, #b3261e)">&#9888; ${escapeHtml(f.dependencyWarning)}</span>` : ''}</td>
+      <td data-label="Last changed" class="muted">${f.lastChangedAt ? `${escapeHtml(f.lastChangedBy || 'Admin')}<br><span style="font-size:.82rem">${escapeHtml(formatDateTime(f.lastChangedAt))}</span>` : '&mdash;'}</td>
+    </tr>`).join('');
+
+  box.innerHTML = `
+    <div class="card">
+      <div class="cap-head"><h2 style="margin:0">Feature availability</h2><span class="badge" data-status="${data.enabledCount === data.total ? 'active' : 'suspended'}">${data.enabledCount} of ${data.total} enabled</span></div>
+      <p class="muted">Turn optional modules on or off. A disabled module is hidden from every menu, dashboard, search and its direct link, and its data stays sealed. Changes are audited.</p>
+      <div id="feature-msg"></div>
+      <table class="data-table rcards"><thead><tr><th>Feature</th><th>Status</th><th>Visible to</th><th>Depends on</th><th>Last changed</th></tr></thead>
+        <tbody>${rows}</tbody></table>
+      <p class="muted" style="font-size:.82rem;margin-top:.8rem">${escapeHtml(data.sharedWithDemoNote)}</p>
+    </div>`;
+
+  box.querySelectorAll('.feature-switch').forEach(sw => sw.addEventListener('change', async () => {
+    const flag = sw.dataset.flag;
+    sw.disabled = true;
+    try {
+      await Api.put('/api/admin/settings', { [flag]: sw.checked });
+      renderFeatures();
+    } catch (e) {
+      sw.checked = !sw.checked; sw.disabled = false;
+      document.getElementById('feature-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`;
+    }
+  }));
+}
+
 async function renderSettings() {
   const box = document.getElementById('tab-content');
   box.innerHTML = '<p class="muted">Loading&hellip;</p>';

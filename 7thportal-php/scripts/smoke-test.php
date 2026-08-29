@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_feature_matrix', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -32,7 +32,7 @@ function useDb(string $file): void { putenv('SEVENTHPORTAL_DB=' . $file); }
 function boot(): void { require dirname(__DIR__) . '/src/db.php'; }
 function loadLibs(): void
 {
-    foreach (['helpers', 'notifications', 'finance', 'incidents', 'patrolpoints', 'events', 'equipment', 'actions', 'quartermaster', 'prepare'] as $lib) {
+    foreach (['helpers', 'notifications', 'finance', 'incidents', 'patrolpoints', 'events', 'equipment', 'actions', 'quartermaster', 'prepare', 'features'] as $lib) {
         require_once dirname(__DIR__) . '/src/lib/' . $lib . '.php';
     }
 }
@@ -479,6 +479,37 @@ function scenario_logic_camp_finance(): void
     $hub2 = dbRun("INSERT INTO event_hubs (title, event_type, status) VALUES ('Trip','trip','draft')")['lastInsertId'];
     $keys2 = array_column(eventCommandCentre(dbGet('SELECT * FROM event_hubs WHERE id = ?', [$hub2])), 'key');
     check('fin: no finance card on an event with nothing linked', !in_array('finance', $keys2, true));
+}
+
+// Feature availability matrix (FRD v1.3 wireframe s6). Rows mirror settings, and a
+// module enabled while the module it depends on is off raises a dependency warning.
+function scenario_logic_feature_matrix(): void
+{
+    useDb(tmpDb('feat')); boot(); loadLibs();
+    $m = featureAvailabilityMatrix();
+    check('feat: one row per catalogue entry', $m['total'] === count(FEATURE_CATALOGUE) && count($m['features']) === $m['total']);
+    check('feat: fresh install has nothing enabled', $m['enabledCount'] === 0);
+    $byFlag = array_column($m['features'], null, 'flag');
+    check('feat: gallery row reflects disabled status', $byFlag['galleryEnabled']['enabled'] === false);
+
+    // Enable QM bookings but NOT its equipment-register dependency -> warning.
+    dbRun("INSERT INTO settings (key, value) VALUES ('qm_booking_enabled', 'true')");
+    $m2 = array_column(featureAvailabilityMatrix()['features'], null, 'flag');
+    check('feat: QM shows enabled', $m2['qmBookingEnabled']['enabled'] === true);
+    check('feat: QM warns when its dependency is off', $m2['qmBookingEnabled']['dependencyWarning'] !== null);
+
+    // Turn the dependency on -> warning clears.
+    dbRun("INSERT INTO settings (key, value) VALUES ('equipment_register_enabled', 'true')");
+    $m3 = array_column(featureAvailabilityMatrix()['features'], null, 'flag');
+    check('feat: dependency warning clears once equipment is on', $m3['qmBookingEnabled']['dependencyWarning'] === null);
+    check('feat: enabled count reflects two modules on', featureAvailabilityMatrix()['enabledCount'] === 2);
+
+    // Last-changed is read from the settings audit trail.
+    dbRun("INSERT INTO users (auth_type, first_name, last_name, portal_role) VALUES ('local','Ada','Admin','admin')");
+    dbRun("INSERT INTO audit_log (user_id, action, details) VALUES (1, 'admin_update_settings', ?)", [json_encode(['galleryEnabled' => true])]);
+    $last = featureLastChanged('galleryEnabled');
+    check('feat: last-changed attributes the audited settings change', $last['at'] !== null && $last['by'] === 'Ada Admin');
+    check('feat: last-changed is null for an untouched flag', featureLastChanged('calendarEnabled')['at'] === null);
 }
 
 // QM kit completeness check: overall result derives from component statuses.

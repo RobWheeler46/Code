@@ -397,6 +397,10 @@ textarea { min-height: 5rem; resize: vertical; }
 .nav-drawer nav a:active { background: #efe9fb; }
 .nav-drawer-logout { margin-top: auto; padding: 0.75rem; color: var(--purple); text-decoration: none; font-weight: 600; }
 
+/* Admin feature-availability toggle: checkbox + status pill on one line. */
+.feature-toggle { display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+.feature-toggle input { width: auto; margin: 0; }
+
 /* Mobile bottom navigation (FRD v1.3): hidden on desktop, shown below the sidebar
    breakpoint. See the .bottom-nav rules inside the max-width:899px block below. */
 .bottom-nav { display: none; }
