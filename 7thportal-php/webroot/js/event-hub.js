@@ -115,6 +115,7 @@ function renderLeader(box) {
   }));
   const trPrint = document.getElementById('tr-print'); if (trPrint) trPrint.addEventListener('click', printManifests);
   const progAdd = document.getElementById('prog-add'); if (progAdd) progAdd.addEventListener('click', () => openProgrammeSlotForm(null));
+  const progImport = document.getElementById('prog-import'); if (progImport) progImport.addEventListener('click', openProgrammeImport);
   box.querySelectorAll('.prog-edit').forEach(b => b.addEventListener('click', () => openProgrammeSlotForm((HUB.programme.slots || []).find(s => s.id == b.dataset.id))));
   document.getElementById('ev-preview').addEventListener('click', () => { PARENT_PREVIEW = true; loadHub(); });
   const pub = document.getElementById('ev-publish'); if (pub) pub.addEventListener('click', () => setHubStatus('published'));
@@ -364,7 +365,7 @@ function programmeLeader() {
         <td class="rcard-actions"><button class="btn btn-secondary btn-sm prog-edit" data-id="${s.id}">Edit</button></td>
       </tr>`).join('')}</tbody></table>`).join('') : '<p class="muted">No activities scheduled yet. Add activities per day/session and allocate a group.</p>';
   return `<div class="card">
-    <div class="cap-head"><h2 style="margin:0">Programme</h2><span class="cap-actions">${clashBadge}<button class="btn btn-sm" id="prog-add">Add activity</button></span></div>
+    <div class="cap-head"><h2 style="margin:0">Programme</h2><span class="cap-actions">${clashBadge}<button class="btn btn-sm" id="prog-add">Add activity</button><button class="btn btn-secondary btn-sm" id="prog-import">Import</button></span></div>
     <p class="muted">Schedule activities by day and session, and allocate a group (patrol, team or section). A group double-booked in the same session is flagged as a clash. Leader-only.</p>
     ${daysHtml}
   </div>`;
@@ -394,6 +395,29 @@ function openProgrammeSlotForm(s) {
   if (del) del.addEventListener('click', async () => {
     try { await Api.delete(`/api/events/${window.HUB_ID}/programme/${s.id}`); m.remove(); loadHub(); }
     catch (e) { document.getElementById('pg-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
+}
+
+function openProgrammeImport() {
+  const m = modal(`<h2>Import programme</h2><div id="pi-msg"></div>
+    <p class="muted" style="margin:0 0 .5rem">Paste rows from a spreadsheet (keep the header row). Columns: <strong>Day, Session, Activity, Group, Location, Lead</strong> &mdash; only Day and Activity are required.</p>
+    <textarea id="pi-csv" rows="7" placeholder="Day,Session,Activity,Group,Location,Lead&#10;Saturday,Morning,Climbing,Kestrels,Crag,Rob&#10;Saturday,Afternoon,Canoeing,Otters,Lake,Sam" style="width:100%;font-family:monospace;font-size:.85rem"></textarea>
+    <div id="pi-preview"></div>
+    <div class="modal-actions" style="display:flex;gap:.5rem;margin-top:1rem"><button class="btn btn-secondary" id="pi-preview-btn">Preview</button><button class="btn" id="pi-import" disabled>Import</button><button class="btn btn-secondary" id="pi-cancel" style="margin-left:auto">Cancel</button></div>`);
+  m.querySelector('#pi-cancel').addEventListener('click', () => m.remove());
+  const csv = () => document.getElementById('pi-csv').value;
+  document.getElementById('pi-preview-btn').addEventListener('click', async () => {
+    try {
+      const r = await Api.post(`/api/events/${window.HUB_ID}/programme/import`, { csv: csv(), dryRun: true });
+      const rows = (r.preview || []).map(p => `<tr><td>${escapeHtml(p.day)}</td><td>${escapeHtml(p.session)}</td><td>${escapeHtml(p.activity)}</td><td>${escapeHtml(p.group || '')}</td></tr>`).join('');
+      document.getElementById('pi-preview').innerHTML = `<p class="muted" style="margin:.6rem 0 .2rem">${r.readyCount} to import${r.errors.length ? `, ${r.errors.length} skipped` : ''}.</p>${rows ? `<table class="data-table"><thead><tr><th>Day</th><th>Session</th><th>Activity</th><th>Group</th></tr></thead><tbody>${rows}</tbody></table>` : ''}`;
+      document.getElementById('pi-import').disabled = r.readyCount === 0;
+      document.getElementById('pi-msg').innerHTML = '';
+    } catch (e) { document.getElementById('pi-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
+  document.getElementById('pi-import').addEventListener('click', async () => {
+    try { await Api.post(`/api/events/${window.HUB_ID}/programme/import`, { csv: csv() }); m.remove(); loadHub(); }
+    catch (e) { document.getElementById('pi-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
   });
 }
 

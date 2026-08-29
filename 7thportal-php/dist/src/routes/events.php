@@ -423,6 +423,62 @@ $router->delete('/api/events/:id/programme/:sid', function ($params) {
     jsonResponse(['ok' => true]);
 });
 
+// Import a programme from a pasted spreadsheet/CSV (FR-CAMP-OP-029..030). Columns:
+// Day, Session, Activity, Group, Location, Lead (case-insensitive, with aliases).
+// dryRun previews without writing; clashes surface once imported (eventCampProgramme).
+$router->post('/api/events/:id/programme/import', function ($params) {
+    $user = requireAuth();
+    requireEventHubEnabled();
+    if (!eventHubCanManage($user)) jsonResponse(['error' => 'Not permitted.'], 403);
+    $hub = eventHubForManage($params['id']);
+    $b = requestBody();
+    $csv = trim((string) ($b['csv'] ?? ''));
+    $dryRun = !empty($b['dryRun']);
+    if ($csv === '') jsonResponse(['error' => 'Paste some spreadsheet rows first.'], 422);
+    $lines = preg_split('/\r\n|\r|\n/', $csv);
+    $rows = array_values(array_filter(array_map('str_getcsv', $lines), fn($r) => count(array_filter($r, fn($c) => trim((string) $c) !== '')) > 0));
+    if (count($rows) < 2) jsonResponse(['error' => 'Needs a header row and at least one activity row.'], 422);
+    $aliases = [
+        'day' => ['day', 'date'], 'session' => ['session', 'time', 'slot'],
+        'activity' => ['activity', 'session name', 'item', 'what'],
+        'group' => ['group', 'patrol', 'team', 'section', 'six'],
+        'location' => ['location', 'where', 'place'], 'lead' => ['lead', 'leader', 'adult', 'in charge'],
+    ];
+    $header = array_map(fn($h) => strtolower(trim((string) $h)), array_shift($rows));
+    $col = [];
+    foreach ($aliases as $f => $names) { foreach ($names as $n) { $i = array_search($n, $header, true); if ($i !== false) { $col[$f] = $i; break; } } }
+    if (!isset($col['day']) || !isset($col['activity'])) jsonResponse(['error' => 'The sheet needs at least "Day" and "Activity" columns.'], 422);
+    $cell = fn($row, $f) => isset($col[$f]) ? trim((string) ($row[$col[$f]] ?? '')) : '';
+    $normSession = function ($v) {
+        $v = strtolower(trim((string) $v));
+        if ($v === '' || str_contains($v, 'morn') || $v === 'am') return 'am';
+        if (str_contains($v, 'after') || $v === 'pm') return 'pm';
+        if (str_contains($v, 'eve')) return 'evening';
+        if (str_contains($v, 'night') || str_contains($v, 'overnight')) return 'night';
+        if (str_contains($v, 'all')) return 'all_day';
+        return 'am';
+    };
+    $ready = []; $errors = [];
+    foreach ($rows as $n => $row) {
+        $rowNo = $n + 2;
+        $day = $cell($row, 'day'); $act = $cell($row, 'activity');
+        if ($day === '' || $act === '') { $errors[] = ['row' => $rowNo, 'error' => 'Missing day or activity']; continue; }
+        $ready[] = ['day_label' => $day, 'session' => $normSession($cell($row, 'session')), 'activity' => $act,
+            'group_label' => $cell($row, 'group') ?: null, 'location' => $cell($row, 'location') ?: null, 'lead_name' => $cell($row, 'lead') ?: null];
+    }
+    if ($dryRun) {
+        jsonResponse(['dryRun' => true, 'readyCount' => count($ready), 'errors' => $errors,
+            'preview' => array_map(fn($r) => ['day' => $r['day_label'], 'session' => CAMP_ROTA_SESSIONS[$r['session']], 'activity' => $r['activity'], 'group' => $r['group_label']], array_slice($ready, 0, 15))]);
+    }
+    if (!$ready) jsonResponse(['error' => 'No importable activities found.'], 422);
+    foreach ($ready as $r) {
+        dbRun('INSERT INTO camp_programme_slots (hub_id, day_label, session, activity, group_label, location, lead_name) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [$hub['id'], $r['day_label'], $r['session'], $r['activity'], $r['group_label'], $r['location'], $r['lead_name']]);
+    }
+    logAudit(['userId' => $user['id'], 'action' => 'camp_programme_import', 'entityType' => 'event_hub', 'entityId' => (string) $hub['id'], 'ipAddress' => clientIp(), 'details' => ['added' => count($ready), 'skipped' => count($errors)]]);
+    jsonResponse(['ok' => true, 'added' => count($ready), 'skipped' => count($errors), 'errors' => $errors]);
+});
+
 // ── Hub items ──────────────────────────────────────────────────────────────
 function eventItemFieldsFromBody(array $body, array $existing = []): array
 {
