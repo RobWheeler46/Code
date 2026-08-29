@@ -144,6 +144,54 @@ function wireViewSwitcher(root = document) {
   }));
 }
 
+// Feature-flag deep-link guard (FRD v1.3 Responsive & Feature-Flag pack). Each module
+// page maps to the /api/config flag its module needs. If someone opens a disabled
+// module's URL directly, we show a friendly "Feature unavailable" screen with a way
+// back, instead of a broken shell or a raw API error. The module's APIs already refuse
+// to return data when the flag is off, so this is the UI half of "no dead links".
+const PAGE_FEATURE_MAP = {
+  'gallery.html': 'galleryEnabled', 'leader-gallery.html': 'galleryEnabled', 'album-edit.html': 'galleryEnabled',
+  'expenses.html': 'financeEnabled', 'claim-edit.html': 'financeEnabled', 'treasurer.html': 'financeEnabled',
+  'documents.html': 'documentLibraryEnabled', 'document-edit.html': 'documentLibraryEnabled',
+  'equipment.html': 'equipmentRegisterEnabled', 'equipment-labels.html': 'equipmentRegisterEnabled',
+  'quartermaster.html': 'qmBookingEnabled',
+  'incidents.html': 'incidentLoggingEnabled',
+  'events.html': 'eventHubEnabled', 'event-hub.html': 'eventHubEnabled',
+  'calendar.html': 'calendarEnabled',
+  'attendance.html': 'attendanceEnabled',
+  'activity-forms.html': 'activityFormsEnabled', 'activity-form.html': 'activityFormsEnabled',
+  'patrol-points.html': 'patrolPointsEnabled', 'patrol-point.html': 'patrolPointsEnabled',
+  'patrol-leaderboard.html': 'patrolPointsEnabled', 'patrol-score.html': 'patrolPointsEnabled',
+};
+
+// The config flag the current page needs, or null. A page can override the map with
+// <meta name="requires-feature" content="flagName"> so future pages can self-declare.
+function currentPageFeature() {
+  const meta = document.querySelector('meta[name="requires-feature"]');
+  if (meta && meta.content) return meta.content;
+  const page = location.pathname.split('/').pop() || 'index.html';
+  return PAGE_FEATURE_MAP[page] || null;
+}
+
+// Replace the page body with the standard "Feature unavailable" screen, keeping the
+// nav chrome so the user can move on. Returns false so callers can halt the page.
+function renderFeatureUnavailable(me) {
+  const today = (me && (me.activeView === 'parent' || (me.role === 'parent' && me.activeView !== 'leader'))) ? 'parent-dashboard.html' : 'leader-dashboard.html';
+  const host = document.querySelector('main.app-main') || document.getElementById('content') || document.body;
+  const inner = `
+    <div class="container">
+      <div class="card" style="max-width:560px;margin:2rem auto;text-align:center">
+        <div style="font-size:2.2rem;line-height:1">&#128274;</div>
+        <h1 style="margin:.4rem 0 .3rem">Feature unavailable</h1>
+        <p>This feature isn&rsquo;t currently enabled for 7thPortal or for your role.</p>
+        <p class="muted">No action is needed &mdash; head back to your dashboard to carry on with what&rsquo;s available.</p>
+        <div style="margin-top:1rem"><a class="btn" href="${today}">Back to Today</a></div>
+      </div>
+    </div>`;
+  if (host.tagName === 'MAIN') host.innerHTML = inner; else host.innerHTML = inner;
+  return false;
+}
+
 // Loads the current user, redirects to login if not authenticated, and
 // renders the top nav + role-specific left sidebar. Returns the user object.
 // pageView ('parent'|'leader') lets a page (the two dashboards) declare which view
@@ -190,6 +238,15 @@ async function requireUserNav(pageView) {
   }
   renderSidebar(me, cfg);
   renderFeedbackWidget(cfg);
+  // Deep-link guard: if this page's module is switched off, show the unavailable
+  // screen and return null so the page's own JS halts (it already does `if (!me)
+  // return;`). Only block when cfg loaded and the flag is explicitly false - a
+  // transient config failure fails open, since the module APIs still refuse data.
+  const feature = currentPageFeature();
+  if (cfg && feature && cfg[feature] === false) {
+    renderFeatureUnavailable(me);
+    return null;
+  }
   return me;
 }
 
