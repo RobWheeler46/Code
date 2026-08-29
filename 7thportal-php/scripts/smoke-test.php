@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -326,6 +326,49 @@ function scenario_logic_command_centre(): void
     $roll = eventReadinessRollup($hub);
     check('cc rollup: overall = blocked (worst area wins)', $roll['overall'] === 'blocked');
     check('cc rollup: gaps include the equipment blocker', in_array('Equipment', array_column($roll['gaps'], 'label'), true));
+}
+
+// Camp plan version history & acknowledgements (FRD-CAMP-010). Snapshot freezes the
+// plan's shape; versions number sequentially; acks are per-user and idempotent.
+function scenario_logic_camp_versions(): void
+{
+    useDb(tmpDb('ver')); boot(); loadLibs();
+    $u1 = dbRun("INSERT INTO users (auth_type, first_name, last_name, portal_role) VALUES ('local','Cam','Lead','group_leadership')")['lastInsertId'];
+    $u2 = dbRun("INSERT INTO users (auth_type, first_name, last_name, portal_role) VALUES ('local','Sam','Second','section_leader')")['lastInsertId'];
+    $hubId = dbRun("INSERT INTO event_hubs (title, event_type, status) VALUES ('Summer Camp','camp','draft')")['lastInsertId'];
+    $hub = dbGet('SELECT * FROM event_hubs WHERE id = ?', [$hubId]);
+    dbRun("INSERT INTO camp_programme_slots (hub_id, day_label, session, activity, group_label) VALUES (?, 'Sat', 'am', 'Climbing', 'Kestrels')", [$hubId]);
+
+    // Snapshot reflects current plan content.
+    $snap = campPlanSnapshot($hub);
+    check('ver: snapshot captures programme count', $snap['programme']['activities'] === 1);
+    check('ver: snapshot carries a readiness verdict', isset($snap['readiness']));
+
+    // Capture two versions the way the route does (sequential version_no).
+    $cap = function ($summary) use ($hubId, $hub, $u1) {
+        $n = (int) dbGet('SELECT COALESCE(MAX(version_no),0)+1 AS n FROM camp_plan_versions WHERE hub_id = ?', [$hubId])['n'];
+        dbRun('INSERT INTO camp_plan_versions (hub_id, version_no, summary, snapshot_json, created_by, created_by_name) VALUES (?,?,?,?,?,?)',
+            [$hubId, $n, $summary, json_encode(campPlanSnapshot($hub)), $u1, 'Cam Lead']);
+        return $n;
+    };
+    check('ver: first version is v1', $cap('Initial plan') === 1);
+    check('ver: second version is v2', $cap('Added Sunday') === 2);
+
+    $list = eventCampVersions($hubId, (int) $u2);
+    check('ver: two versions, newest first', $list['total'] === 2 && $list['versions'][0]['versionNo'] === 2);
+    check('ver: latest needs my ack when unacknowledged', $list['latestNeedsMyAck'] === true);
+    check('ver: fresh version has no acks', $list['versions'][0]['ackCount'] === 0);
+
+    // Acknowledge latest as u2 (idempotent via UNIQUE + INSERT OR IGNORE).
+    $vid = $list['versions'][0]['id'];
+    dbRun('INSERT OR IGNORE INTO camp_plan_acks (version_id, hub_id, user_id, user_name) VALUES (?,?,?,?)', [$vid, $hubId, $u2, 'Sam Second']);
+    dbRun('INSERT OR IGNORE INTO camp_plan_acks (version_id, hub_id, user_id, user_name) VALUES (?,?,?,?)', [$vid, $hubId, $u2, 'Sam Second']);
+    $list2 = eventCampVersions($hubId, (int) $u2);
+    check('ver: ack is idempotent (one row)', $list2['versions'][0]['ackCount'] === 1);
+    check('ver: my ack recorded', $list2['versions'][0]['acknowledgedByMe'] !== null);
+    check('ver: latest no longer needs my ack', $list2['latestNeedsMyAck'] === false);
+    // The older version is still unacknowledged by me.
+    check('ver: older version still unacked by me', $list2['versions'][1]['acknowledgedByMe'] === null);
 }
 
 // QM kit completeness check: overall result derives from component statuses.

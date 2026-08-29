@@ -231,6 +231,74 @@ function eventCampProgramme(int $hubId): array
     ];
 }
 
+// Camp plan version history & acknowledgements (FRD-CAMP-010). Capturing a version
+// freezes a snapshot of the plan's current shape - the counts that matter plus the
+// readiness verdict - so each numbered version is an honest record of what the plan
+// looked like when it was shared, and leaders can acknowledge they've read it.
+
+// Build the frozen snapshot stored against a version. Deliberately a summary of the
+// operational content (not a full data dump): enough to see at a glance what changed
+// between versions without re-reading every table.
+function campPlanSnapshot(array $hub): array
+{
+    $id = (int) $hub['id'];
+    $prog = eventCampProgramme($id);
+    $trans = eventCampTransport($id);
+    $rota = eventCampRota($id);
+    $roll = eventReadinessRollup($hub);
+    return [
+        'capturedFor' => $hub['title'] ?? '',
+        'dates' => trim(($hub['start_date'] ?? '') . (!empty($hub['end_date']) && $hub['end_date'] !== ($hub['start_date'] ?? '') ? ' – ' . $hub['end_date'] : '')),
+        'status' => $hub['status'] ?? null,
+        'readiness' => $roll['overall'],
+        'programme' => ['activities' => $prog['total'], 'clashes' => $prog['clashes']],
+        'transport' => ['vehicles' => count($trans['vehicles']), 'seats' => $trans['totalSeats'], 'passengers' => $trans['totalPassengers']],
+        'rota' => ['adults' => count($rota['adults']), 'entries' => count($rota['entries']), 'gaps' => $rota['gaps']],
+    ];
+}
+
+function serializeCampVersion(array $row, array $acks, ?int $forUserId = null): array
+{
+    $mine = null;
+    $list = [];
+    foreach ($acks as $a) {
+        $list[] = ['userName' => $a['user_name'] ?: 'A leader', 'at' => $a['acknowledged_at']];
+        if ($forUserId !== null && (int) $a['user_id'] === $forUserId) $mine = $a['acknowledged_at'];
+    }
+    return [
+        'id' => (int) $row['id'],
+        'versionNo' => (int) $row['version_no'],
+        'label' => $row['label'],
+        'summary' => $row['summary'],
+        'snapshot' => json_decode($row['snapshot_json'] ?: '{}', true) ?: [],
+        'createdByName' => $row['created_by_name'] ?: 'A leader',
+        'createdAt' => $row['created_at'],
+        'ackCount' => count($acks),
+        'acks' => $list,
+        'acknowledgedByMe' => $mine,
+    ];
+}
+
+// Version list, newest first, each carrying its acknowledgements. $forUserId flags the
+// current leader's own acknowledgement so the UI can show a tick or an ask.
+function eventCampVersions(int $hubId, ?int $forUserId = null): array
+{
+    $rows = dbAll('SELECT * FROM camp_plan_versions WHERE hub_id = ? ORDER BY version_no DESC', [$hubId]);
+    $acks = dbAll('SELECT * FROM camp_plan_acks WHERE hub_id = ? ORDER BY acknowledged_at', [$hubId]);
+    $byVer = [];
+    foreach ($acks as $a) $byVer[(int) $a['version_id']][] = $a;
+    $out = array_map(fn($r) => serializeCampVersion($r, $byVer[(int) $r['id']] ?? [], $forUserId), $rows);
+    $latest = $out[0] ?? null;
+    return [
+        'versions' => $out,
+        'total' => count($out),
+        // How many still owe an acknowledgement is a per-person question we can't answer
+        // without a defined leader roster; instead we surface the latest version and
+        // whether the current leader has acknowledged it, which drives the call-to-action.
+        'latestNeedsMyAck' => $latest ? ($latest['acknowledgedByMe'] === null) : false,
+    ];
+}
+
 // Camp overview summary for the leader dashboard (FR-CAMP-OP-003). Honest about the
 // data we hold in this slice - no attendee/leader counts (that's the deferred
 // programme/allocation module); dates, status, readiness, item + location tallies.

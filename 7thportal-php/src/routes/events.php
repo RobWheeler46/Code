@@ -105,6 +105,8 @@ $router->get('/api/events/:id', function ($params) {
         // Command Centre: per-area readiness rollup so the event acts as the
         // operational spine - leader-only.
         'commandCentre' => $isLeaderView ? eventCommandCentre($hub) : null,
+        // Plan version history & acknowledgements (FRD-CAMP-010) - leader-only.
+        'versions' => $isLeaderView ? eventCampVersions((int) $hub['id'], (int) $user['id']) : null,
         'locationMeta' => ['types' => EVENT_LOCATION_TYPES, 'visibilities' => EVENT_LOCATION_VISIBILITIES],
     ]));
 });
@@ -477,6 +479,55 @@ $router->post('/api/events/:id/programme/import', function ($params) {
     }
     logAudit(['userId' => $user['id'], 'action' => 'camp_programme_import', 'entityType' => 'event_hub', 'entityId' => (string) $hub['id'], 'ipAddress' => clientIp(), 'details' => ['added' => count($ready), 'skipped' => count($errors)]]);
     jsonResponse(['ok' => true, 'added' => count($ready), 'skipped' => count($errors), 'errors' => $errors]);
+});
+
+// ── Plan version history & acknowledgements (FRD-CAMP-010) ───────────────────
+// Capture a snapshot of the plan's current shape as a numbered version. The snapshot
+// freezes the counts/readiness at this moment so the history is an honest record.
+// Capturing is a manage action; acknowledging is open to any leader who can view it.
+$router->post('/api/events/:id/versions', function ($params) {
+    $user = requireAuth();
+    requireEventHubEnabled();
+    if (!eventHubCanManage($user)) jsonResponse(['error' => 'Not permitted.'], 403);
+    $hub = dbGet('SELECT * FROM event_hubs WHERE id = ?', [$params['id']]);
+    if (!$hub) jsonResponse(['error' => 'Event not found.'], 404);
+    $b = requestBody();
+    $label = trim((string) ($b['label'] ?? ''));
+    $summary = trim((string) ($b['summary'] ?? ''));
+    if ($summary === '') jsonResponse(['error' => 'Add a short note on what changed in this version.'], 422);
+    $next = (int) (dbGet('SELECT COALESCE(MAX(version_no), 0) + 1 AS n FROM camp_plan_versions WHERE hub_id = ?', [$hub['id']])['n']);
+    $byName = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')) ?: null;
+    $result = dbRun(
+        'INSERT INTO camp_plan_versions (hub_id, version_no, label, summary, snapshot_json, created_by, created_by_name) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [$hub['id'], $next, $label ?: null, $summary, json_encode(campPlanSnapshot($hub)), $user['id'], $byName]
+    );
+    logAudit(['userId' => $user['id'], 'action' => 'camp_plan_version_capture', 'entityType' => 'event_hub', 'entityId' => (string) $hub['id'], 'ipAddress' => clientIp(), 'details' => ['versionNo' => $next]]);
+    jsonResponse(eventCampVersions((int) $hub['id'], (int) $user['id']), 201);
+});
+
+// Acknowledge a version - any leader who can view the event may record that they've
+// read it (INSERT OR IGNORE keeps it idempotent, so re-acknowledging is harmless).
+$router->post('/api/events/:id/versions/:vid/ack', function ($params) {
+    $user = requireAuth();
+    requireEventHubEnabled();
+    if (!isLeaderRole($user['portal_role'])) jsonResponse(['error' => 'Not permitted.'], 403);
+    $v = dbGet('SELECT * FROM camp_plan_versions WHERE id = ? AND hub_id = ?', [$params['vid'], $params['id']]);
+    if (!$v) jsonResponse(['error' => 'Version not found.'], 404);
+    $byName = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')) ?: null;
+    dbRun('INSERT OR IGNORE INTO camp_plan_acks (version_id, hub_id, user_id, user_name) VALUES (?, ?, ?, ?)', [$v['id'], $params['id'], $user['id'], $byName]);
+    logAudit(['userId' => $user['id'], 'action' => 'camp_plan_version_ack', 'entityType' => 'event_hub', 'entityId' => (string) $params['id'], 'ipAddress' => clientIp(), 'details' => ['versionNo' => (int) $v['version_no']]]);
+    jsonResponse(eventCampVersions((int) $params['id'], (int) $user['id']));
+});
+
+$router->delete('/api/events/:id/versions/:vid', function ($params) {
+    $user = requireAuth();
+    requireEventHubEnabled();
+    if (!eventHubCanManage($user)) jsonResponse(['error' => 'Not permitted.'], 403);
+    $v = dbGet('SELECT * FROM camp_plan_versions WHERE id = ? AND hub_id = ?', [$params['vid'], $params['id']]);
+    if (!$v) jsonResponse(['error' => 'Version not found.'], 404);
+    dbRun('DELETE FROM camp_plan_versions WHERE id = ?', [$v['id']]);
+    logAudit(['userId' => $user['id'], 'action' => 'camp_plan_version_delete', 'entityType' => 'event_hub', 'entityId' => (string) $params['id'], 'ipAddress' => clientIp(), 'details' => ['versionNo' => (int) $v['version_no']]]);
+    jsonResponse(eventCampVersions((int) $params['id'], (int) $user['id']));
 });
 
 // ── Hub items ──────────────────────────────────────────────────────────────

@@ -591,6 +591,34 @@ CREATE TABLE IF NOT EXISTS camp_programme_slots (
 );
 CREATE INDEX IF NOT EXISTS idx_camp_programme_slots_hub ON camp_programme_slots(hub_id);
 
+-- Camp plan version history & acknowledgements (FRD-CAMP-010). A leader captures the
+-- current state of the camp plan as a numbered, timestamped snapshot with a change
+-- summary; the snapshot_json freezes the counts/content at that moment so the record
+-- is a genuine "this is what was published" audit trail, not just a label. Other
+-- leaders acknowledge a version ("I've read this"), tracked per user. Leader-only.
+CREATE TABLE IF NOT EXISTS camp_plan_versions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  hub_id INTEGER NOT NULL REFERENCES event_hubs(id) ON DELETE CASCADE,
+  version_no INTEGER NOT NULL,
+  label TEXT,
+  summary TEXT,
+  snapshot_json TEXT NOT NULL DEFAULT '{}',
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_by_name TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_camp_plan_versions_hub ON camp_plan_versions(hub_id);
+CREATE TABLE IF NOT EXISTS camp_plan_acks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  version_id INTEGER NOT NULL REFERENCES camp_plan_versions(id) ON DELETE CASCADE,
+  hub_id INTEGER NOT NULL REFERENCES event_hubs(id) ON DELETE CASCADE,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  user_name TEXT,
+  acknowledged_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(version_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_camp_plan_acks_version ON camp_plan_acks(version_id);
+
 -- Incident and near-miss logging (FRD FR-INC). Safeguarding-sensitive: this does
 -- NOT replace formal Scouts safeguarding/accident reporting - the module signposts
 -- to those and restricts access. Ships off by default. Restricted records

@@ -92,7 +92,8 @@ function renderLeader(box) {
     ${locationsLeader()}
     ${rotaLeader()}
     ${programmeLeader()}
-    ${transportLeader()}`;
+    ${transportLeader()}
+    ${versionsLeader()}`;
 
   document.getElementById('ev-camp-pack').addEventListener('click', printCampPack);
   document.getElementById('ev-edit').addEventListener('click', openHubEdit);
@@ -117,6 +118,9 @@ function renderLeader(box) {
   const progAdd = document.getElementById('prog-add'); if (progAdd) progAdd.addEventListener('click', () => openProgrammeSlotForm(null));
   const progImport = document.getElementById('prog-import'); if (progImport) progImport.addEventListener('click', openProgrammeImport);
   box.querySelectorAll('.prog-edit').forEach(b => b.addEventListener('click', () => openProgrammeSlotForm((HUB.programme.slots || []).find(s => s.id == b.dataset.id))));
+  const verCapture = document.getElementById('ver-capture'); if (verCapture) verCapture.addEventListener('click', openVersionCapture);
+  box.querySelectorAll('.ver-ack').forEach(b => b.addEventListener('click', () => ackVersion(b.dataset.id)));
+  box.querySelectorAll('.ver-delete').forEach(b => b.addEventListener('click', () => deleteVersion(b.dataset.id, b.dataset.no)));
   document.getElementById('ev-preview').addEventListener('click', () => { PARENT_PREVIEW = true; loadHub(); });
   const pub = document.getElementById('ev-publish'); if (pub) pub.addEventListener('click', () => setHubStatus('published'));
   const unpub = document.getElementById('ev-unpublish'); if (unpub) unpub.addEventListener('click', () => setHubStatus('draft'));
@@ -419,6 +423,72 @@ function openProgrammeImport() {
     try { await Api.post(`/api/events/${window.HUB_ID}/programme/import`, { csv: csv() }); m.remove(); loadHub(); }
     catch (e) { document.getElementById('pi-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
   });
+}
+
+// ── Plan version history & acknowledgements (FRD-CAMP-010) ───────────────────────
+// A short local datetime for stored UTC "YYYY-MM-DD HH:MM:SS" timestamps.
+function fmtStamp(s) {
+  if (!s) return '';
+  const d = new Date(String(s).replace(' ', 'T') + 'Z');
+  return isNaN(d) ? escapeHtml(s) : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+function versionsLeader() {
+  const v = HUB.versions; if (!v) return '';
+  const list = v.versions || [];
+  const rows = list.map((ver, i) => {
+    const snap = ver.snapshot || {};
+    const facts = [];
+    if (snap.programme) facts.push(`${snap.programme.activities} activit${snap.programme.activities === 1 ? 'y' : 'ies'}${snap.programme.clashes ? `, ${snap.programme.clashes} clash${snap.programme.clashes === 1 ? '' : 'es'}` : ''}`);
+    if (snap.transport && snap.transport.vehicles) facts.push(`${snap.transport.vehicles} vehicle${snap.transport.vehicles === 1 ? '' : 's'}, ${snap.transport.passengers} passenger${snap.transport.passengers === 1 ? '' : 's'}`);
+    if (snap.rota && snap.rota.adults) facts.push(`${snap.rota.adults} adult${snap.rota.adults === 1 ? '' : 's'}${snap.rota.gaps ? `, ${snap.rota.gaps} rota gap${snap.rota.gaps === 1 ? '' : 's'}` : ''}`);
+    if (snap.readiness) facts.push(`readiness: ${escapeHtml(snap.readiness)}`);
+    const ackList = ver.ackCount
+      ? `<span class="badge" data-status="active">${ver.ackCount} acknowledged</span> <span class="muted" style="font-size:.82rem">${ver.acks.map(a => escapeHtml(a.userName)).join(', ')}</span>`
+      : '<span class="muted" style="font-size:.82rem">No acknowledgements yet</span>';
+    const ackBtn = ver.acknowledgedByMe
+      ? `<span class="badge" data-status="active" title="You acknowledged on ${escapeHtml(fmtStamp(ver.acknowledgedByMe))}">You&rsquo;ve read this</span>`
+      : `<button class="btn btn-sm ver-ack" data-id="${ver.id}">I&rsquo;ve read this</button>`;
+    return `<div class="card" style="margin:0 0 .6rem">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem;flex-wrap:wrap">
+        <div><strong>v${ver.versionNo}${ver.label ? ' &middot; ' + escapeHtml(ver.label) : ''}</strong>${i === 0 ? ' <span class="badge" data-status="published">Latest</span>' : ''}
+          <div class="muted" style="font-size:.82rem">${escapeHtml(ver.createdByName)} &middot; ${fmtStamp(ver.createdAt)}</div></div>
+        <div style="display:flex;gap:.4rem;align-items:center">${ackBtn}${HUB.canManage ? `<button class="btn btn-secondary btn-sm ver-delete" data-id="${ver.id}" data-no="${ver.versionNo}">Delete</button>` : ''}</div>
+      </div>
+      ${ver.summary ? `<p style="margin:.5rem 0 .2rem">${escapeHtml(ver.summary)}</p>` : ''}
+      ${facts.length ? `<div class="muted" style="font-size:.82rem">${facts.join(' &middot; ')}</div>` : ''}
+      <div style="margin-top:.4rem">${ackList}</div>
+    </div>`;
+  }).join('');
+  const banner = v.latestNeedsMyAck && list.length
+    ? '<div class="alert" style="margin:0 0 .6rem">There&rsquo;s a plan version you haven&rsquo;t acknowledged yet.</div>' : '';
+  return `<div class="card">
+    <div class="cap-head"><h2 style="margin:0">Plan versions</h2><span class="cap-actions">${HUB.canManage ? '<button class="btn btn-sm" id="ver-capture">Capture version</button>' : ''}</span></div>
+    <p class="muted">Freeze the plan as a numbered version with a note on what changed, so leaders can see the history and confirm they&rsquo;ve read the current one. Leader-only.</p>
+    ${banner}
+    ${list.length ? rows : '<p class="muted">No versions captured yet. Capture one once the plan is worth sharing.</p>'}
+  </div>`;
+}
+
+function openVersionCapture() {
+  const m = modal(`<h2>Capture plan version</h2><div id="vc-msg"></div>
+    <p class="muted" style="margin:0 0 .5rem">This freezes a snapshot of the current plan (programme, transport, rota and readiness counts) as version ${(HUB.versions.total || 0) + 1}.</p>
+    ${field('Label (optional)', `<input id="vc-label" placeholder="e.g. Final pre-camp plan" maxlength="120">`)}
+    ${field('What changed', `<textarea id="vc-summary" rows="3" placeholder="e.g. Added Sunday programme, confirmed minibus drivers"></textarea>`)}
+    <div class="modal-actions" style="display:flex;gap:.5rem;margin-top:1rem"><button class="btn" id="vc-save">Capture</button><button class="btn btn-secondary" id="vc-cancel">Cancel</button></div>`);
+  m.querySelector('#vc-cancel').addEventListener('click', () => m.remove());
+  m.querySelector('#vc-save').addEventListener('click', async () => {
+    const summary = document.getElementById('vc-summary').value.trim();
+    if (!summary) { document.getElementById('vc-msg').innerHTML = '<div class="alert alert-error">Add a short note on what changed.</div>'; return; }
+    try { await Api.post(`/api/events/${window.HUB_ID}/versions`, { label: document.getElementById('vc-label').value.trim(), summary }); m.remove(); loadHub(); }
+    catch (e) { document.getElementById('vc-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
+}
+async function ackVersion(id) {
+  try { await Api.post(`/api/events/${window.HUB_ID}/versions/${id}/ack`, {}); loadHub(); } catch (e) { alert(e.message); }
+}
+async function deleteVersion(id, no) {
+  if (!confirm(`Delete version ${no}? This removes the snapshot and its acknowledgements.`)) return;
+  try { await Api.delete(`/api/events/${window.HUB_ID}/versions/${id}`); loadHub(); } catch (e) { alert(e.message); }
 }
 
 // ── Transport & manifests (FR-CAMP-OP-023..028) ─────────────────────────────────
