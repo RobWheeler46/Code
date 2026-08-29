@@ -89,6 +89,7 @@ try {
     require_once __DIR__ . '/../src/lib/patrolpoints.php';
     require_once __DIR__ . '/../src/lib/demoseed.php';
     require_once __DIR__ . '/../src/lib/actions.php';
+    require_once __DIR__ . '/../src/lib/prepare.php';
 } catch (Throwable $e) {
     @file_put_contents($bootErrorLog, date('c') . '  THROW: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine() . "\n" . $e->getTraceAsString() . "\n", FILE_APPEND);
     error_log('[bootstrap] init failed: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());

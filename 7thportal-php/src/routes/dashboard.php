@@ -91,3 +91,13 @@ $router->get('/api/leader/dashboard', function ($params) {
     $sectionIds = array_column($sections, 'sectionId');
     jsonResponse(['sections' => $sections, 'notices' => array_map('serializeNotice', listNoticesForUser($user, $sectionIds))]);
 });
+
+// Prepare Tonight (FRD-IA): a focused, time-based view for the leader's next section
+// night. Reuses the OSM meeting metadata cached at login (no live OSM call) to work
+// out which section is on tonight, then pulls today's calendar, the forms/equipment
+// to sort and the top actions from the modules that are enabled.
+$router->get('/api/leader/prepare-tonight', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    jsonResponse(buildPrepareTonight($user, leaderYouthSections($user)));
+});

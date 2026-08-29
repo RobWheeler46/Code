@@ -53,6 +53,7 @@ function sidebarLinksForRole(me, cfg) {
     return links;
   }
   const links = [{ href: 'leader-dashboard.html', label: 'Dashboard' }];
+  links.push({ href: 'prepare-tonight.html', label: 'Prepare Tonight' });
   links.push({ href: 'action-centre.html', label: 'Action Centre' });
   links.push({ href: 'search.html', label: 'Search' });
   if (cfg && cfg.eventHubEnabled) links.push({ href: 'events.html', label: 'Events & camps' });

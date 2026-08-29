@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -32,7 +32,7 @@ function useDb(string $file): void { putenv('SEVENTHPORTAL_DB=' . $file); }
 function boot(): void { require dirname(__DIR__) . '/src/db.php'; }
 function loadLibs(): void
 {
-    foreach (['helpers', 'notifications', 'finance', 'incidents', 'patrolpoints', 'events', 'equipment', 'actions', 'quartermaster'] as $lib) {
+    foreach (['helpers', 'notifications', 'finance', 'incidents', 'patrolpoints', 'events', 'equipment', 'actions', 'quartermaster', 'prepare'] as $lib) {
         require_once dirname(__DIR__) . '/src/lib/' . $lib . '.php';
     }
 }
@@ -414,6 +414,33 @@ function scenario_logic_exception_scan(): void
     dbRun("INSERT INTO qm_bookings (requester_user_id, event_hub_id, status, return_at) VALUES (?, ?, 'collected', '2000-01-01')", [$leader, $hub2]);
     scanEventCriticalExceptions();
     check('exc: muted leader gets no exception notification', (int) dbGet("SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND type = 'exception'", [$muted])['n'] === 0);
+}
+
+// Prepare Tonight (FRD-IA): the pure "which section is on tonight" classifier - maps
+// each section's OSM meeting day to a distance from today and sorts soonest-first,
+// with unknown meeting days last.
+function scenario_logic_prepare_tonight(): void
+{
+    useDb(tmpDb('prep')); boot(); loadLibs();
+    $secs = [
+        ['sectionId' => '1', 'sectionName' => 'Beavers', 'meetingDay' => 'Monday', 'meetingTime' => '18:00'],
+        ['sectionId' => '2', 'sectionName' => 'Cubs', 'meetingDay' => 'Wednesday'],
+        ['sectionId' => '3', 'sectionName' => 'Scouts', 'meetingDay' => null],
+        ['sectionId' => '4', 'sectionName' => 'Squirrels', 'meetingDay' => 'Tue'],
+    ];
+    // Pretend today is Monday (idx 1).
+    $mon = prepareTonightSections($secs, 1);
+    check('prep: Monday section is on tonight and sorts first', $mon[0]['sectionName'] === 'Beavers' && $mon[0]['meetsToday'] === true && $mon[0]['daysUntil'] === 0 && $mon[0]['nextMeetingLabel'] === 'Tonight');
+    check('prep: abbreviated Tuesday is tomorrow', $mon[1]['sectionName'] === 'Squirrels' && $mon[1]['daysUntil'] === 1 && $mon[1]['nextMeetingLabel'] === 'Tomorrow');
+    $cubs = array_values(array_filter($mon, fn($s) => $s['sectionName'] === 'Cubs'))[0];
+    check('prep: Wednesday is two days out with weekday label', $cubs['daysUntil'] === 2 && $cubs['meetsToday'] === false && $cubs['nextMeetingLabel'] === 'Wednesday');
+    check('prep: unknown meeting day sorts last with null distance', end($mon)['sectionName'] === 'Scouts' && end($mon)['daysUntil'] === null && end($mon)['nextMeetingLabel'] === null);
+
+    // On Wednesday (idx 3) the on-tonight section changes to Cubs.
+    $wed = prepareTonightSections($secs, 3);
+    check('prep: Wednesday makes Cubs the tonight section', $wed[0]['sectionName'] === 'Cubs' && $wed[0]['meetsToday'] === true);
+    // Weekday parsing helper.
+    check('prep: weekday index parsing', prepareWeekdayIndex('Fridays') === 5 && prepareWeekdayIndex('sun') === 0 && prepareWeekdayIndex('') === null && prepareWeekdayIndex(null) === null);
 }
 
 // QM kit completeness check: overall result derives from component statuses.
