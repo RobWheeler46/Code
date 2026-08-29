@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -617,6 +617,33 @@ function scenario_logic_ical_feed(): void
     check('ical: camp appears as an all-day DATE', str_contains($ics, 'DTSTART;VALUE=DATE:20260919'));
     check('ical: all-day end is exclusive (+1 day)', str_contains($ics, 'DTEND;VALUE=DATE:20260922'));
     check('ical: uses CRLF line endings', str_contains($ics, "\r\n"));
+}
+
+// Parent-safe search (v2). The parent search leans on eventHubVisibleToParent to gate
+// events, and on the parent's own child links - so verify a parent can only ever reach
+// published events for their section (or group-wide) and only their own children.
+function scenario_logic_parent_search(): void
+{
+    useDb(tmpDb('psearch')); boot(); loadLibs();
+    $parent = (int) dbRun("INSERT INTO users (auth_type, first_name, last_name, portal_role) VALUES ('local','Pat','Parent','parent')")['lastInsertId'];
+    dbRun("INSERT INTO parent_child_links (parent_user_id, osm_member_id, osm_section_id, osm_section_name, child_display_name) VALUES (?, 'm1', 'sectA', 'Beavers', 'Kit Parent')", [$parent]);
+    $user = dbGet('SELECT * FROM users WHERE id = ?', [$parent]);
+    $hub = fn($sql, $args = []) => dbGet('SELECT * FROM event_hubs WHERE id = ?', [dbRun($sql, $args)['lastInsertId']]);
+
+    $draft = $hub("INSERT INTO event_hubs (title, event_type, status) VALUES ('Internal plan','camp','draft')");
+    check('psearch: a draft hub is never visible to a parent', eventHubVisibleToParent($user, $draft) === false);
+    $group = $hub("INSERT INTO event_hubs (title, event_type, status) VALUES ('Group fun day','event','published')");
+    check('psearch: a published group-wide hub is visible', eventHubVisibleToParent($user, $group) === true);
+    $secA = $hub("INSERT INTO event_hubs (title, event_type, osm_section_id, status) VALUES ('Beaver camp','camp','sectA','published')");
+    check('psearch: a published hub for the child\'s section is visible', eventHubVisibleToParent($user, $secA) === true);
+    $secB = $hub("INSERT INTO event_hubs (title, event_type, osm_section_id, status) VALUES ('Cub camp','camp','sectB','published')");
+    check('psearch: a hub for another section is NOT visible', eventHubVisibleToParent($user, $secB) === false);
+
+    // Another family's child never appears in this parent's child search.
+    $other = (int) dbRun("INSERT INTO users (auth_type, first_name, last_name, portal_role) VALUES ('local','Other','Parent','parent')")['lastInsertId'];
+    dbRun("INSERT INTO parent_child_links (parent_user_id, osm_member_id, osm_section_id, osm_section_name, child_display_name) VALUES (?, 'm2', 'sectA', 'Beavers', 'Kit Other')", [$other]);
+    $mine = dbAll("SELECT child_display_name FROM parent_child_links WHERE parent_user_id = ? AND child_display_name LIKE '%Kit%'", [$parent]);
+    check('psearch: a parent finds only their own child', count($mine) === 1 && $mine[0]['child_display_name'] === 'Kit Parent');
 }
 
 // QM kit completeness check: overall result derives from component statuses.

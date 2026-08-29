@@ -1,22 +1,24 @@
-// Global search (v1, leader-only): live debounced find across the enabled modules
-// a leader can access. Results are grouped by type and deep-link to their page.
+// Global search (v2): live debounced find across what the signed-in user can access.
+// Leaders search their operational modules; parents get a parent-safe search of their
+// children, visible events and notices. Results are grouped by type and deep-link out.
 (async () => {
   const me = await requireUserNav();
   if (!me) return;
   const input = document.getElementById('search-input');
   const content = document.getElementById('content');
-
-  if (!(me.capabilities && me.capabilities.leader)) {
-    content.innerHTML = '<div class="alert alert-warning">Search is available to leaders. Parents can find their information from the My Children dashboard.</div>';
-    input.disabled = true;
-    return;
-  }
+  const isParent = !(me.capabilities && me.capabilities.leader);
+  const placeholder = isParent
+    ? 'Type at least 2 characters to search your children, events and notices.'
+    : 'Type at least 2 characters to search across everything you can access.';
+  // Tune the input hint + starting message to what this role can actually search.
+  input.placeholder = isParent ? 'Find your child, an event or a notice…' : 'Find an event, kit, document, notice, section or claim…';
+  content.innerHTML = `<p class="muted">${placeholder}</p>`;
 
   let seq = 0;
   async function run(q) {
     q = q.trim();
     if (q.length < 2) {
-      content.innerHTML = '<p class="muted">Type at least 2 characters to search across everything you can access.</p>';
+      content.innerHTML = `<p class="muted">${placeholder}</p>`;
       return;
     }
     const mine = ++seq;

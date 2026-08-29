@@ -43,6 +43,7 @@ function sidebarLinksForRole(me, cfg) {
   if (view === 'parent') {
     const links = [{ href: 'parent-dashboard.html', label: 'Dashboard' }];
     links.push({ href: 'action-centre.html', label: 'Action Centre' });
+    links.push({ href: 'search.html', label: 'Search' });
     if (cfg && cfg.eventHubEnabled) links.push({ href: 'events.html', label: 'Events & camps' });
     if (cfg && cfg.calendarEnabled) links.push({ href: 'calendar.html', label: 'Calendar' });
     if (cfg && cfg.patrolPointsEnabled) links.push({ href: 'patrol-leaderboard.html', label: 'Patrol Points' });

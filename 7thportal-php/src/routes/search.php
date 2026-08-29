@@ -1,13 +1,12 @@
 <?php
-// Global search (v1, leader-only): a quick permission-aware find across the
-// operational entities a leader can already reach. Only ENABLED modules are
-// searched, so a result can never surface from a module that's turned off, and
-// each category reuses that module's own visibility rules (published-only notices/
-// documents, the leader's own claims, etc.). Parents get 403 - a parent-safe search
-// is a later increment.
+// Global search (v2): a permission-aware find that adapts to the searcher's role.
+// Only ENABLED modules are searched, so a result can never surface from a module
+// that's turned off, and each category reuses that module's own visibility rules
+// (published-only notices/documents, the leader's own claims, etc.). Parents get a
+// parent-safe search - only their children, the events they can see and the notices
+// meant for them - so it never leaks leader-only or other families' data.
 $router->get('/api/search', function ($params) {
     $user = requireAuth();
-    requireLeader($user);
     $q = trim((string) queryParam('q'));
     if (mb_strlen($q) < 2) {
         jsonResponse(['q' => $q, 'results' => [], 'total' => 0]);
@@ -17,6 +16,43 @@ $router->get('/api/search', function ($params) {
     $add = function (string $type, string $typeLabel, string $label, string $sublabel, string $link) use (&$results) {
         $results[] = ['type' => $type, 'typeLabel' => $typeLabel, 'label' => $label, 'sublabel' => $sublabel, 'link' => $link];
     };
+
+    // ── Parent-safe search ──────────────────────────────────────────────────────
+    // Scoped to exactly what a parent may already see: their own linked children,
+    // events/camps published to them, and notices addressed to them. Nothing else.
+    if ($user['portal_role'] === 'parent') {
+        $sectionIds = array_column(dbAll('SELECT DISTINCT osm_section_id FROM parent_child_links WHERE parent_user_id = ?', [$user['id']]), 'osm_section_id');
+        // The parent's own children.
+        foreach (dbAll('SELECT id, child_display_name, osm_section_name FROM parent_child_links WHERE parent_user_id = ? AND child_display_name LIKE ? ORDER BY child_display_name LIMIT 5', [$user['id'], $like]) as $r) {
+            $add('child', 'My children', $r['child_display_name'] ?: 'Your child', $r['osm_section_name'] ?: '', 'child.html?id=' . $r['id']);
+        }
+        // Events/camps published to this parent (section-scoped or group-wide).
+        if (function_exists('eventHubEnabled') && eventHubEnabled()) {
+            $hubs = dbAll("SELECT * FROM event_hubs WHERE status = 'published' AND (title LIKE ? OR location LIKE ?) ORDER BY start_date DESC LIMIT 10", [$like, $like]);
+            $shown = 0;
+            foreach ($hubs as $h) {
+                if (!eventHubVisibleToParent($user, $h)) continue;
+                $sub = (EVENT_TYPES[$h['event_type']] ?? 'Event') . ($h['start_date'] ? ' · ' . $h['start_date'] : '') . ($h['location'] ? ' · ' . $h['location'] : '');
+                $add('event', 'Events & camps', $h['title'], $sub, 'event-hub.html?id=' . $h['id']);
+                if (++$shown >= 5) break;
+            }
+        }
+        // Notices addressed to this parent (reuses the same visibility rules as the
+        // notices list), then matched against the query.
+        if (function_exists('listNoticesForUser')) {
+            $matched = 0;
+            foreach (listNoticesForUser($user, $sectionIds) as $n) {
+                if (mb_stripos((string) $n['title'], $q) === false && mb_stripos((string) $n['body'], $q) === false) continue;
+                $add('notice', 'Notices', $n['title'], $n['section_name'] ?: 'All', 'notices.html');
+                if (++$matched >= 5) break;
+            }
+        }
+        logAudit(['userId' => $user['id'], 'action' => 'search', 'ipAddress' => clientIp(), 'details' => ['q' => $q, 'results' => count($results), 'role' => 'parent']]);
+        jsonResponse(['q' => $q, 'results' => $results, 'total' => count($results)]);
+    }
+
+    // ── Leader search ───────────────────────────────────────────────────────────
+    requireLeader($user);
 
     if (eventHubEnabled()) {
         foreach (dbAll("SELECT id, title, event_type, section_name, location, start_date FROM event_hubs WHERE title LIKE ? OR location LIKE ? OR section_name LIKE ? ORDER BY (status = 'published') DESC, start_date DESC LIMIT 5", [$like, $like, $like]) as $r) {
