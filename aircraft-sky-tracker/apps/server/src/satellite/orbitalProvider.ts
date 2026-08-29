@@ -22,6 +22,8 @@ export interface OrbitalElement {
   name: string;
   category: SatelliteCategory;
   satrec: satellite.SatRec;
+  /** International designator from TLE line 1, e.g. "1998-067A". */
+  intlDesignator?: string;
 }
 
 export interface OrbitalDataProvider {
@@ -71,6 +73,15 @@ export class CelesTrakProvider implements OrbitalDataProvider {
   }
 }
 
+/** Expand a TLE international designator "98067A" into "1998-067A". */
+function formatIntlDesignator(raw: string): string | undefined {
+  const m = /^(\d{2})(\d{3})([A-Z]{1,3})$/.exec(raw);
+  if (!m) return undefined;
+  const yy = Number(m[1]);
+  const year = yy < 57 ? 2000 + yy : 1900 + yy; // space age began 1957
+  return `${year}-${m[2]}${m[3]}`;
+}
+
 /** Parse 3-line TLE text (name + two element lines) into records. */
 export function parseTle(text: string, category: SatelliteCategory): OrbitalElement[] {
   const lines = text
@@ -86,7 +97,13 @@ export function parseTle(text: string, category: SatelliteCategory): OrbitalElem
     try {
       const satrec = satellite.twoline2satrec(l1, l2);
       const catalogNumber = l1.slice(2, 7).trim();
-      out.push({ catalogNumber, name: name.trim(), category, satrec });
+      out.push({
+        catalogNumber,
+        name: name.trim(),
+        category,
+        satrec,
+        intlDesignator: formatIntlDesignator(l1.slice(9, 17).trim()),
+      });
     } catch {
       /* skip malformed element set */
     }

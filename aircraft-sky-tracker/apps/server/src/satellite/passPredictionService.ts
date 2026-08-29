@@ -13,7 +13,7 @@ import {
 } from "@ast/shared";
 import type { OrbitalElement } from "./orbitalProvider.js";
 import { observerFrom } from "./sgp4Service.js";
-import { predictPasses } from "./passPrediction.js";
+import { predictPasses, type PredictedPass } from "./passPrediction.js";
 import { simulationPasses } from "./simulationSatellites.js";
 import type { SatelliteConfigView } from "./satelliteService.js";
 import { createLogger } from "../logging/logger.js";
@@ -116,24 +116,7 @@ export class PassPredictionService {
       } catch {
         continue; // one bad element set never breaks the whole prediction
       }
-      for (const p of predicted) {
-        const durationSeconds = Math.round((p.setTime.getTime() - p.riseTime.getTime()) / 1000);
-        out.push({
-          catalogNumber: el.catalogNumber,
-          name: el.name,
-          category: el.category,
-          riseTime: p.riseTime.toISOString(),
-          maxTime: p.maxTime.toISOString(),
-          setTime: p.setTime.toISOString(),
-          maxElevationDegrees: Math.round(p.maxElevationDeg),
-          riseAzimuthDegrees: Math.round(p.riseAzimuthDeg),
-          setAzimuthDegrees: Math.round(p.setAzimuthDeg),
-          direction: `${compassDirection(p.riseAzimuthDeg)} → ${compassDirection(p.setAzimuthDeg)}`,
-          durationSeconds,
-          potentiallyVisible: p.potentiallyVisible,
-          inProgress: p.riseTime.getTime() <= now.getTime() && p.setTime.getTime() > now.getTime(),
-        });
-      }
+      for (const p of predicted) out.push(this.toPass(el, p, now));
     }
 
     log.debug("pass prediction computed", {
@@ -142,5 +125,47 @@ export class PassPredictionService {
       durationMs: Date.now() - started,
     });
     return out;
+  }
+
+  private toPass(el: OrbitalElement, p: PredictedPass, now: Date): SatellitePass {
+    return {
+      catalogNumber: el.catalogNumber,
+      name: el.name,
+      category: el.category,
+      riseTime: p.riseTime.toISOString(),
+      maxTime: p.maxTime.toISOString(),
+      setTime: p.setTime.toISOString(),
+      maxElevationDegrees: Math.round(p.maxElevationDeg),
+      riseAzimuthDegrees: Math.round(p.riseAzimuthDeg),
+      setAzimuthDegrees: Math.round(p.setAzimuthDeg),
+      direction: `${compassDirection(p.riseAzimuthDeg)} → ${compassDirection(p.setAzimuthDeg)}`,
+      durationSeconds: Math.round((p.setTime.getTime() - p.riseTime.getTime()) / 1000),
+      potentiallyVisible: p.potentiallyVisible,
+      inProgress: p.riseTime.getTime() <= now.getTime() && p.setTime.getTime() > now.getTime(),
+    };
+  }
+
+  /** The next upcoming pass of one satellite (for the detail drawer). */
+  nextPassFor(catalogNumber: string): SatellitePass | undefined {
+    if (this.simulation) {
+      return this.getPasses().passes
+        .filter((p) => p.catalogNumber === catalogNumber)
+        .sort((a, b) => a.riseTime.localeCompare(b.riseTime))[0];
+    }
+    const el = this.getElements().find((e) => e.catalogNumber === catalogNumber);
+    if (!el) return undefined;
+    const cfg = this.getConfig();
+    const now = new Date();
+    try {
+      const predicted = predictPasses(el.satrec, observerFrom(cfg.latitude, cfg.longitude), {
+        start: now,
+        windowMs: this.windowHours * 60 * 60 * 1000,
+        minElevationDeg: cfg.minElevationDeg,
+        maxPasses: 1,
+      });
+      return predicted[0] ? this.toPass(el, predicted[0], now) : undefined;
+    } catch {
+      return undefined;
+    }
   }
 }

@@ -5,10 +5,14 @@
  */
 
 import * as satellite from "satellite.js";
-import { sunEci, type Vec3 } from "./astro.js";
+import type { SatelliteOrbit } from "@ast/shared";
+import { sunEci, EARTH_RADIUS_KM, type Vec3 } from "./astro.js";
+import type { OrbitalElement } from "./orbitalProvider.js";
 
 const RAD2DEG = 180 / Math.PI;
 const DEG2RAD = Math.PI / 180;
+/** Days between the Julian epoch and the Unix epoch (1970-01-01). */
+const JD_UNIX_EPOCH = 2440587.5;
 
 export interface ObserverGd {
   /** Radians. */
@@ -64,6 +68,27 @@ export function observe(
     subLon: satellite.degreesLong(geo.longitude),
     velocityKmPerSec: Math.hypot(velocity.x, velocity.y, velocity.z),
     eci: { x: position.x, y: position.y, z: position.z },
+  };
+}
+
+/**
+ * Derive orbital characteristics from an element set (FRD §57-58 detail).
+ * `no` is the mean motion in radians/minute; alta/altp are apogee/perigee
+ * altitudes in Earth radii; jdsatepoch is the element-set epoch (Julian date).
+ */
+export function orbitFrom(el: OrbitalElement, now: Date): SatelliteOrbit {
+  const rec = el.satrec;
+  const periodMinutes = rec.no > 0 ? (2 * Math.PI) / rec.no : 0;
+  const epochMs = (rec.jdsatepoch - JD_UNIX_EPOCH) * 86_400_000;
+  return {
+    periodMinutes,
+    inclinationDegrees: rec.inclo * RAD2DEG,
+    apogeeKm: rec.alta * EARTH_RADIUS_KM,
+    perigeeKm: rec.altp * EARTH_RADIUS_KM,
+    eccentricity: rec.ecco,
+    intlDesignator: el.intlDesignator,
+    elementEpoch: new Date(epochMs).toISOString(),
+    elementAgeHours: (now.getTime() - epochMs) / 3_600_000,
   };
 }
 

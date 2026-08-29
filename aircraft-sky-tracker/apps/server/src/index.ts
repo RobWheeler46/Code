@@ -41,6 +41,7 @@ import { SatelliteService, type SatelliteConfigView } from "./satellite/satellit
 import { PassPredictionService } from "./satellite/passPredictionService.js";
 import { SatelliteAlertService } from "./satellite/satelliteAlertService.js";
 import { CelesTrakProvider } from "./satellite/orbitalProvider.js";
+import { orbitFrom } from "./satellite/sgp4Service.js";
 import { DiagnosticsService } from "./diagnostics/diagnosticsService.js";
 import { createAircraftProvider } from "./providers/index.js";
 import {
@@ -432,6 +433,14 @@ async function main(): Promise<void> {
       satellites: satellites.getSnapshot(),
     }),
     satellite: (catalogNumber) => satellites.getSatellite(catalogNumber) ?? null,
+    satelliteDetail: (catalogNumber) => {
+      const element = satellites.getElement(catalogNumber);
+      return {
+        satellite: satellites.getSatellite(catalogNumber) ?? null,
+        orbit: element ? orbitFrom(element, new Date()) : undefined,
+        nextPass: satellitePasses.nextPassFor(catalogNumber),
+      };
+    },
     orbitalStatus: () => satellites.diagnostics(),
     satellitePasses: () => satellitePasses.getPasses(),
   };

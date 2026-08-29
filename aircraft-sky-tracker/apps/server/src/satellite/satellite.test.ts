@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseTle } from "./orbitalProvider.js";
 import { isSunlit, sunEci, EARTH_RADIUS_KM } from "./astro.js";
-import { observe, observerFrom } from "./sgp4Service.js";
+import { observe, observerFrom, orbitFrom } from "./sgp4Service.js";
 import { skyBearing } from "./simulationSatellites.js";
 
 const ISS_TLE = `ISS (ZARYA)
@@ -24,6 +24,28 @@ test("parseTle extracts catalog number, name and a usable satrec", () => {
 
 test("parseTle ignores malformed blocks", () => {
   assert.equal(parseTle("garbage\nmore garbage", "bright").length, 0);
+});
+
+test("parseTle captures the international designator", () => {
+  const els = parseTle(ISS_TLE, "station");
+  assert.equal(els[0]?.intlDesignator, "1998-067A");
+});
+
+test("orbitFrom derives ISS orbital characteristics", () => {
+  const el = parseTle(ISS_TLE, "station")[0]!;
+  const orbit = orbitFrom(el, new Date("2024-08-27T12:00:00Z"));
+  // ISS orbits roughly every 92-93 minutes at ~51.6° inclination, ~420 km.
+  assert.ok(orbit.periodMinutes > 90 && orbit.periodMinutes < 95, `period ${orbit.periodMinutes}`);
+  assert.ok(
+    orbit.inclinationDegrees > 51 && orbit.inclinationDegrees < 52,
+    `inclination ${orbit.inclinationDegrees}`,
+  );
+  assert.ok(orbit.apogeeKm > 380 && orbit.apogeeKm < 460, `apogee ${orbit.apogeeKm}`);
+  assert.ok(orbit.perigeeKm > 380 && orbit.perigeeKm < 460, `perigee ${orbit.perigeeKm}`);
+  assert.ok(orbit.apogeeKm >= orbit.perigeeKm);
+  assert.equal(orbit.intlDesignator, "1998-067A");
+  // Epoch is day 240.5 of 2024 = 2024-08-27T12:00Z, so age is ~0 here.
+  assert.ok(Math.abs(orbit.elementAgeHours) < 1, `age ${orbit.elementAgeHours}`);
 });
 
 test("isSunlit: a satellite on the sunward side is lit", () => {

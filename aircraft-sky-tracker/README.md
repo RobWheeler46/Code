@@ -181,6 +181,7 @@ The browser talks only to the backend (FRD §39):
 | `DELETE` | `/api/history/{date}` | Clear a date's history (needs the password) |
 | `GET` | `/api/satellites` | Current overhead-satellite snapshot |
 | `GET` | `/api/satellites/{catalogNumber}` | Satellite detail by NORAD catalog number |
+| `GET` | `/api/satellites/{catalogNumber}/detail` | Live state + orbit characteristics + next pass |
 | `GET` | `/api/satellite-passes` | Upcoming overhead passes (next 24 h) |
 | `GET` | `/api/orbital-status` | Orbital-element source status + satellite counts |
 | `GET` | `/api/health` | Source/route health |
@@ -356,6 +357,13 @@ naked-eye-visible passes. Each alert shows an on-screen banner (and, when enable
 a browser/OS notification), plus a phone push when a ntfy topic is configured on
 the server. Off by default; Settings has the toggle, lead time and visible-only
 option. Satellite **history** (§63-64) remains a future follow-up.
+
+**Satellite detail drawer — orbit + next pass (done, FRD v3.2 §57-58)** — clicking
+a satellite now also shows, alongside the live look-angles, an **Orbit** section
+(period, inclination, apogee/perigee altitude, international designator, and how
+old the orbital elements are) derived from the TLE, and the satellite's **next
+pass** (rise time, max elevation, direction, visibility). Served by
+`/api/satellites/{catalogNumber}/detail` and fetched when the drawer opens.
 
 **View modes (done, FRD v3.2)** — a **View mode** setting (Settings → Display)
 offers three layouts, defaulting to *Ceiling* so existing displays are untouched:

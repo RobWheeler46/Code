@@ -70,3 +70,29 @@ export interface SatellitePass {
 
 /** Default look-ahead window for pass prediction (FRD §59). */
 export const DEFAULT_SATELLITE_PASS_WINDOW_HOURS = 24;
+
+/**
+ * Orbital characteristics of a satellite, derived from its element set (TLE).
+ * Static per element set - computed on demand for the detail drawer, not
+ * broadcast in every snapshot.
+ */
+export interface SatelliteOrbit {
+  /** Orbital period in minutes. */
+  periodMinutes: number;
+  inclinationDegrees: number;
+  apogeeKm: number;
+  perigeeKm: number;
+  eccentricity: number;
+  /** International designator, e.g. "1998-067A" (launch year + piece). */
+  intlDesignator?: string;
+  /** Element-set epoch (ISO) and its age in hours - how fresh the orbit is. */
+  elementEpoch: string;
+  elementAgeHours: number;
+}
+
+/** Extended satellite detail for the drawer: live state + orbit + next pass. */
+export interface SatelliteDetail {
+  satellite: Satellite | null;
+  orbit?: SatelliteOrbit;
+  nextPass?: SatellitePass;
+}

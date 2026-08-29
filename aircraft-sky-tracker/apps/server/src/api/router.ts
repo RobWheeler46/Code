@@ -8,7 +8,14 @@ import type { AppConfig, ConfigUpdate, Aircraft } from "@ast/shared";
 import type { HealthReport, DiagnosticsReport } from "../diagnostics/diagnosticsService.js";
 import type { PhotoResult } from "../routes/photoService.js";
 import type { ViewResult } from "../aircraft/viewService.js";
-import type { HistoryPass, HistoryDate, AircraftMeta, Satellite, SatellitePass } from "@ast/shared";
+import type {
+  HistoryPass,
+  HistoryDate,
+  AircraftMeta,
+  Satellite,
+  SatellitePass,
+  SatelliteDetail,
+} from "@ast/shared";
 import { basicAuthMiddleware, isAuthEnabled } from "./auth.js";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -44,6 +51,7 @@ export interface ApiContext {
   deleteHistory(date: string): { deleted: number };
   satellites(): { generatedAt: string; satellites: Satellite[] };
   satellite(catalogNumber: string): Satellite | null;
+  satelliteDetail(catalogNumber: string): SatelliteDetail;
   orbitalStatus(): unknown;
   satellitePasses(): { generatedAt: string; windowHours: number; passes: SatellitePass[] };
 }
@@ -201,6 +209,11 @@ export function createApiRouter(ctx: ApiContext): Router {
   // GET /api/satellite-passes - upcoming overhead passes (FRD §59-60).
   router.get("/satellite-passes", (_req: Request, res: Response) => {
     res.json(ctx.satellitePasses());
+  });
+
+  // GET /api/satellites/:catalogNumber/detail - live state + orbit + next pass.
+  router.get("/satellites/:catalogNumber/detail", (req: Request, res: Response) => {
+    res.json(ctx.satelliteDetail(req.params.catalogNumber ?? ""));
   });
 
   // GET /api/satellites/:catalogNumber - one satellite's current detail.

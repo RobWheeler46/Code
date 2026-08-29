@@ -94,6 +94,11 @@ export class SatelliteService {
     return this.elements;
   }
 
+  /** One satellite's orbital element set, if loaded. */
+  getElement(catalogNumber: string): OrbitalElement | undefined {
+    return this.elements.find((e) => e.catalogNumber === catalogNumber);
+  }
+
   diagnostics(): {
     provider: string;
     status: OrbitalSourceStatus;
