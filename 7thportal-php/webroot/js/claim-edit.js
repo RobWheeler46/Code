@@ -2,6 +2,7 @@ let ME = null;
 let ACCOUNTS = [];
 let CATEGORIES = [];
 let RATES = [];
+let EVENTS = [];
 const claimId = new URLSearchParams(location.search).get('id');
 const VEHICLE_LABELS = { car: 'Car/van', motorcycle: 'Motorcycle', bicycle: 'Bicycle', other: 'Other' };
 
@@ -12,6 +13,9 @@ const VEHICLE_LABELS = { car: 'Car/van', motorcycle: 'Motorcycle', bicycle: 'Bic
   [ACCOUNTS, CATEGORIES, RATES] = await Promise.all([
     Api.get('/api/finance/accounts'), Api.get('/api/finance/categories'), Api.get('/api/finance/mileage-rates'),
   ]);
+  // Events are optional context: a claim can be tagged to the event/camp it's for.
+  // If the module is off the request 404s - swallow it and just hide the picker.
+  try { EVENTS = (await Api.get('/api/events')).events || []; } catch { EVENTS = []; }
   await load();
 })();
 
@@ -37,6 +41,21 @@ function claimStatusNote(claim) {
   return notes[claim.status] ? `<div class="alert alert-info">${escapeHtml(notes[claim.status])}</div>` : '';
 }
 
+// Optional "which event/camp is this claim for" picker. Hidden entirely when the
+// events module is off (no events fetched) and the claim isn't already linked, so it
+// never adds noise where it can't be used. Read-only once the claim leaves draft.
+function eventPickerField(claim, editable) {
+  if (!EVENTS.length && !claim.eventHubId) return '';
+  if (!editable) {
+    return `<div class="field"><label>Event / camp</label><input type="text" value="${escapeHtml(claim.eventTitle || 'Not linked')}" disabled></div>`;
+  }
+  const opts = ['<option value="">Not linked to an event</option>']
+    .concat(EVENTS.map(e => `<option value="${e.id}"${claim.eventHubId === e.id ? ' selected' : ''}>${escapeHtml(e.title)}</option>`))
+    .join('');
+  return `<div class="field"><label>Event / camp (optional)</label><select id="h-event">${opts}</select>
+    <p class="muted" style="font-size:.82rem;margin:.25rem 0 0">Tagging a claim to an event lets its leaders see the spend in the event Command Centre.</p></div>`;
+}
+
 function render(claim) {
   const content = document.getElementById('content');
   const isOwner = claim.claimant && ME.id === claim.claimant.id;
@@ -52,6 +71,7 @@ function render(claim) {
       <h2>Claim details</h2>
       <form id="header-form">
         <div class="field"><label>Title</label><input type="text" id="h-title" value="${escapeHtml(claim.title)}" ${headerEditable ? '' : 'disabled'}></div>
+        ${eventPickerField(claim, headerEditable)}
         <div class="field"><label>Notes for approvers/Treasurer (optional)</label><textarea id="h-notes" ${headerEditable ? '' : 'disabled'}>${escapeHtml(claim.notes || '')}</textarea></div>
         ${headerEditable ? '<button class="btn btn-secondary" type="submit">Save</button>' : ''}
         <div id="header-error"></div>
@@ -87,7 +107,10 @@ function render(claim) {
   document.getElementById('header-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     try {
-      await Api.patch(`/api/finance/claims/${claim.id}`, { title: document.getElementById('h-title').value, notes: document.getElementById('h-notes').value });
+      const evSel = document.getElementById('h-event');
+      const payload = { title: document.getElementById('h-title').value, notes: document.getElementById('h-notes').value };
+      if (evSel) payload.eventHubId = evSel.value || null;
+      await Api.patch(`/api/finance/claims/${claim.id}`, payload);
       load();
     } catch (err) {
       document.getElementById('header-error').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;

@@ -378,6 +378,11 @@ function serializeClaim(array $claim): array
         'title' => $claim['title'],
         'notes' => $claim['notes'],
         'status' => $claim['status'],
+        // Optional link to the event/camp this claim is for (Command Centre finance).
+        'eventHubId' => isset($claim['event_hub_id']) && $claim['event_hub_id'] !== null ? (int) $claim['event_hub_id'] : null,
+        'eventTitle' => (isset($claim['event_hub_id']) && $claim['event_hub_id'] !== null)
+            ? (dbGet('SELECT title FROM event_hubs WHERE id = ?', [$claim['event_hub_id']])['title'] ?? null)
+            : null,
         'claimTotalAmount' => round($claimedTotal, 2),
         'approvedTotalAmount' => round($approvedTotal, 2),
         'payableTotalAmount' => round($payableTotal, 2),
@@ -387,6 +392,57 @@ function serializeClaim(array $claim): array
         'createdAt' => $claim['created_at'],
         'updatedAt' => $claim['updated_at'],
     ];
+}
+
+// Event Command Centre finance rollup (FR-NOT / Command Centre). Reduces the expense
+// claims tagged to an event to one status + plain summary, so leaders see money owed
+// against the camp at a glance. Status is 'none' when nothing is linked (the caller
+// omits the card then, keeping the Command Centre free of dead cards).
+function eventCampFinance(int $hubId): array
+{
+    $claims = dbAll('SELECT status FROM expense_claims WHERE event_hub_id = ?', [$hubId]);
+    $n = count($claims);
+    if ($n === 0) return ['status' => 'none', 'summary' => 'No expense claims linked yet', 'count' => 0, 'outstanding' => 0.0];
+    // Item-level signal: money outstanding and 'needs the claimant' blockers.
+    $items = dbAll(
+        'SELECT i.status, i.claimed_amount, i.approved_amount FROM expense_claim_items i JOIN expense_claims c ON c.id = i.claim_id WHERE c.event_hub_id = ?',
+        [$hubId]
+    );
+    $sumClaimed = fn($statuses) => array_sum(array_map(
+        fn($i) => (float) ($i['claimed_amount'] ?? 0),
+        array_filter($items, fn($i) => in_array($i['status'], $statuses, true))
+    ));
+    $sumPayable = fn($statuses) => array_sum(array_map(
+        fn($i) => (float) ($i['approved_amount'] ?? $i['claimed_amount'] ?? 0),
+        array_filter($items, fn($i) => in_array($i['status'], $statuses, true))
+    ));
+    $moreInfo = count(array_filter($items, fn($i) => $i['status'] === 'more_info_requested'));
+    $awaiting = count(array_filter($items, fn($i) => in_array($i['status'], ['submitted', 'pending_second_approval'], true)));
+    $unpaid = count(array_filter($items, fn($i) => in_array($i['status'], ['approved', 'ready_for_payment'], true)));
+    $money = fn($amt) => '£' . number_format($amt, 2);
+    $plural = fn($k) => $n . ' claim' . ($n === 1 ? '' : 's');
+
+    // Blocked: an item bounced back to the claimant for more information - the claim
+    // can't progress until they act.
+    if ($moreInfo > 0) {
+        return ['status' => 'blocked', 'summary' => $moreInfo . ' item' . ($moreInfo === 1 ? '' : 's') . ' need more information', 'count' => $n, 'outstanding' => round($sumClaimed(['more_info_requested']), 2)];
+    }
+    // Attention: money is owed - awaiting an approver, or approved but not yet paid.
+    if ($awaiting > 0) {
+        $amt = $sumClaimed(['submitted', 'pending_second_approval']);
+        return ['status' => 'attention', 'summary' => $money($amt) . ' awaiting approval', 'count' => $n, 'outstanding' => round($amt, 2)];
+    }
+    if ($unpaid > 0) {
+        $amt = $sumPayable(['approved', 'ready_for_payment']);
+        return ['status' => 'attention', 'summary' => $money($amt) . ' approved, awaiting payment', 'count' => $n, 'outstanding' => round($amt, 2)];
+    }
+    // Ready: every linked claim is settled one way or another (paid or rejected).
+    $settled = count(array_filter($claims, fn($c) => in_array($c['status'], ['paid', 'rejected'], true)));
+    if ($settled === $n) {
+        return ['status' => 'ready', 'summary' => $plural($n) . ' settled', 'count' => $n, 'outstanding' => 0.0];
+    }
+    // Otherwise it's still being put together (drafts not yet submitted).
+    return ['status' => 'attention', 'summary' => $plural($n) . ' not submitted yet', 'count' => $n, 'outstanding' => 0.0];
 }
 
 // ── Claim status derivation (Database Schema doc "Recommended status

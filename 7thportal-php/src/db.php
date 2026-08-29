@@ -233,6 +233,9 @@ CREATE TABLE IF NOT EXISTS expense_claims (
   status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN (
     'draft','submitted','partially_approved','approved','rejected','partially_paid','paid'
   )),
+  -- Optional link to the event/camp this claim is for, so the event Command Centre
+  -- can roll up its finances. Nullable; enforced in code (see db migration note).
+  event_hub_id INTEGER,
   submitted_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -1278,6 +1281,16 @@ $eciSql2 = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='exp
 if ($eciSql2 && !str_contains($eciSql2, 'approver_assigned_by_user_id')) {
     db()->exec('ALTER TABLE expense_claim_items ADD COLUMN approver_assigned_by_user_id INTEGER');
     db()->exec('ALTER TABLE expense_claim_items ADD COLUMN approver_assignment_reason TEXT');
+}
+
+// Migration: expense_claims gained an optional event_hub_id, so a claim can be tagged
+// to the event/camp it belongs to. This is what lets the event Command Centre roll up
+// its finances (money awaiting approval or payment) instead of leaving a dead card.
+// Plain INTEGER (no inline REFERENCES) - see the account migration above; the link is
+// enforced in code and the claim keeps working if the module is off.
+$claimsSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='expense_claims'")['sql'] ?? '';
+if ($claimsSql && !str_contains($claimsSql, 'event_hub_id')) {
+    db()->exec('ALTER TABLE expense_claims ADD COLUMN event_hub_id INTEGER');
 }
 
 // Migration: activity_forms gained conditional-insurance flags (improved-flow

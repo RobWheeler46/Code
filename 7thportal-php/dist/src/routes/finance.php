@@ -11,6 +11,17 @@ function loadClaimOr404(int $claimId): array
     return $claim;
 }
 
+// Validate an optional event/camp link on a claim. Empty/null clears the link; any
+// other value must be a real event hub id, otherwise it's ignored (stored as null) so
+// a stale id can never point a claim at a non-existent event.
+function financeResolveEventHubId($raw): ?int
+{
+    if ($raw === null || $raw === '' || $raw === 0 || $raw === '0') return null;
+    $id = (int) $raw;
+    if ($id <= 0) return null;
+    return dbGet('SELECT id FROM event_hubs WHERE id = ?', [$id]) ? $id : null;
+}
+
 function loadOwnDraftItem(array $user, int $itemId): array
 {
     $item = loadItemWithClaim($itemId);
@@ -107,9 +118,10 @@ $router->post('/api/finance/claims', function ($params) {
     requireFinanceEnabled();
     $body = requestBody();
     if (empty($body['title'])) jsonResponse(['error' => 'A claim title is required.'], 400);
+    $eventHubId = financeResolveEventHubId($body['eventHubId'] ?? null);
     $result = dbRun(
-        'INSERT INTO expense_claims (claim_number, claimant_user_id, title, notes) VALUES (?, ?, ?, ?)',
-        [generateClaimNumber(), $user['id'], $body['title'], $body['notes'] ?? null]
+        'INSERT INTO expense_claims (claim_number, claimant_user_id, title, notes, event_hub_id) VALUES (?, ?, ?, ?, ?)',
+        [generateClaimNumber(), $user['id'], $body['title'], $body['notes'] ?? null, $eventHubId]
     );
     logAudit(['userId' => $user['id'], 'action' => 'finance_create_claim', 'entityType' => 'expense_claim', 'entityId' => (string) $result['lastInsertId'], 'ipAddress' => clientIp()]);
     jsonResponse(serializeClaim(dbGet('SELECT * FROM expense_claims WHERE id = ?', [$result['lastInsertId']])));
@@ -123,9 +135,10 @@ $router->patch('/api/finance/claims/:id', function ($params) {
     if ((int) $claim['claimant_user_id'] !== (int) $user['id']) jsonResponse(['error' => 'Claim not found.'], 404);
     if ($claim['status'] !== 'draft') jsonResponse(['error' => 'Only a draft claim header can be edited.'], 400);
     $body = requestBody();
+    $eventHubId = array_key_exists('eventHubId', $body) ? financeResolveEventHubId($body['eventHubId']) : $claim['event_hub_id'];
     dbRun(
-        "UPDATE expense_claims SET title = ?, notes = ?, updated_at = datetime('now') WHERE id = ?",
-        [$body['title'] ?? $claim['title'], array_key_exists('notes', $body) ? $body['notes'] : $claim['notes'], $claim['id']]
+        "UPDATE expense_claims SET title = ?, notes = ?, event_hub_id = ?, updated_at = datetime('now') WHERE id = ?",
+        [$body['title'] ?? $claim['title'], array_key_exists('notes', $body) ? $body['notes'] : $claim['notes'], $eventHubId, $claim['id']]
     );
     jsonResponse(serializeClaim(dbGet('SELECT * FROM expense_claims WHERE id = ?', [$claim['id']])));
 });

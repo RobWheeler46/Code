@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -441,6 +441,44 @@ function scenario_logic_prepare_tonight(): void
     check('prep: Wednesday makes Cubs the tonight section', $wed[0]['sectionName'] === 'Cubs' && $wed[0]['meetsToday'] === true);
     // Weekday parsing helper.
     check('prep: weekday index parsing', prepareWeekdayIndex('Fridays') === 5 && prepareWeekdayIndex('sun') === 0 && prepareWeekdayIndex('') === null && prepareWeekdayIndex(null) === null);
+}
+
+// Event Command Centre finance area (FR-NOT / Command Centre). The rollup over claims
+// tagged to an event moves none -> attention -> blocked -> ready by item state, and the
+// area appears in the Command Centre only when finance is on and a claim is linked.
+function scenario_logic_camp_finance(): void
+{
+    useDb(tmpDb('fin2')); boot(); loadLibs();
+    $uid = dbRun("INSERT INTO users (auth_type, first_name, last_name, portal_role) VALUES ('local','Cam','Lead','group_leadership')")['lastInsertId'];
+    $acct = dbRun("INSERT INTO expense_accounts (name) VALUES ('Camp budget')")['lastInsertId'];
+    $hub = dbRun("INSERT INTO event_hubs (title, event_type, status) VALUES ('Camp','camp','draft')")['lastInsertId'];
+
+    check('fin: no claims linked -> none', eventCampFinance($hub)['status'] === 'none');
+
+    $c1 = dbRun("INSERT INTO expense_claims (claim_number, claimant_user_id, title, status, event_hub_id) VALUES ('C1', ?, 'Food', 'submitted', ?)", [$uid, $hub])['lastInsertId'];
+    dbRun("INSERT INTO expense_claim_items (claim_id, item_number, item_type, title, account_id, status, claimed_amount) VALUES (?, 1, 'receipt', 'Food', ?, 'submitted', 40.00)", [$c1, $acct]);
+    $r = eventCampFinance($hub);
+    check('fin: submitted item -> attention awaiting approval', $r['status'] === 'attention' && str_contains($r['summary'], 'awaiting approval') && abs($r['outstanding'] - 40.0) < 0.001);
+
+    dbRun("UPDATE expense_claim_items SET status = 'more_info_requested' WHERE claim_id = ?", [$c1]);
+    check('fin: more-info item -> blocked', eventCampFinance($hub)['status'] === 'blocked');
+
+    dbRun("UPDATE expense_claim_items SET status = 'approved', approved_amount = 35.00 WHERE claim_id = ?", [$c1]);
+    dbRun("UPDATE expense_claims SET status = 'approved' WHERE id = ?", [$c1]);
+    $r2 = eventCampFinance($hub);
+    check('fin: approved unpaid -> attention awaiting payment', $r2['status'] === 'attention' && str_contains($r2['summary'], 'awaiting payment') && abs($r2['outstanding'] - 35.0) < 0.001);
+
+    dbRun("UPDATE expense_claim_items SET status = 'paid' WHERE claim_id = ?", [$c1]);
+    dbRun("UPDATE expense_claims SET status = 'paid' WHERE id = ?", [$c1]);
+    check('fin: all settled -> ready', eventCampFinance($hub)['status'] === 'ready');
+
+    // Command Centre integration: finance area appears only with finance on + a link.
+    dbRun("INSERT INTO settings (key, value) VALUES ('finance_enabled', 'true')");
+    $keys = array_column(eventCommandCentre(dbGet('SELECT * FROM event_hubs WHERE id = ?', [$hub])), 'key');
+    check('fin: Command Centre shows finance area when a claim is linked', in_array('finance', $keys, true));
+    $hub2 = dbRun("INSERT INTO event_hubs (title, event_type, status) VALUES ('Trip','trip','draft')")['lastInsertId'];
+    $keys2 = array_column(eventCommandCentre(dbGet('SELECT * FROM event_hubs WHERE id = ?', [$hub2])), 'key');
+    check('fin: no finance card on an event with nothing linked', !in_array('finance', $keys2, true));
 }
 
 // QM kit completeness check: overall result derives from component statuses.

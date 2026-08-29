@@ -349,9 +349,9 @@ function eventReadinessRollup(array $hub): array
 
 // Command Centre readiness rollup: the event as the operational spine. Each area is
 // computed from real data linked to this event (no placeholders) and reports one of
-// ready / attention / blocked / none, with a plain summary and a deep link. Areas
-// whose modules don't yet link to an event (finance, transport, catering) are
-// deliberately omitted rather than shown as dead cards.
+// ready / attention / blocked / none, with a plain summary and a deep link. Finance
+// appears only once a claim is tagged to the event; areas whose modules still don't
+// link to an event (catering) are omitted rather than shown as dead cards.
 function eventCommandCentre(array $hub): array
 {
     $id = (int) $hub['id'];
@@ -429,6 +429,19 @@ function eventCommandCentre(array $hub): array
         'summary' => $prog['total'] === 0 ? 'No activities planned yet' : ($prog['clashes'] > 0 ? $prog['clashes'] . ' clash' . ($prog['clashes'] === 1 ? '' : 'es') . ' to resolve' : $prog['total'] . ' activit' . ($prog['total'] === 1 ? 'y' : 'ies') . ' scheduled'),
         'link' => null,
     ];
+
+    // Finance — expense claims tagged to this event (only when the finance module is on
+    // AND at least one claim is linked, so events with no claims don't get a dead card).
+    if (function_exists('financeEnabled') && financeEnabled() && function_exists('eventCampFinance')) {
+        $fin = eventCampFinance($id);
+        if ($fin['status'] !== 'none') {
+            $areas[] = [
+                'key' => 'finance', 'label' => 'Finance',
+                'status' => $fin['status'], 'summary' => $fin['summary'],
+                'link' => 'expenses.html',
+            ];
+        }
+    }
 
     return $areas;
 }
