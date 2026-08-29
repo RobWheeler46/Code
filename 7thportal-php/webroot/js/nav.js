@@ -128,6 +128,41 @@ function renderMobileDrawer(me, cfg, pillLabel) {
   wireViewSwitcher(drawer); // wire only the drawer's switcher (top bar wired separately)
 }
 
+// Mobile bottom navigation (FRD v1.3 wireframes s3): a fixed, task-led bar on phones
+// carrying the primary destinations - Today, Actions, a context slot (Events/Calendar)
+// and More (which opens the same drawer). Built from the resolved nav model so it
+// respects role, active context and feature flags. Hidden on desktop, where the
+// left sidebar already serves. One source of nav truth: More reuses the drawer.
+function renderBottomNav(me, cfg) {
+  document.getElementById('bottom-nav')?.remove();
+  const view = me.activeView || (me.role === 'parent' ? 'parent' : 'leader');
+  const current = location.pathname.split('/').pop() || 'index.html';
+  const today = view === 'parent' ? 'parent-dashboard.html' : 'leader-dashboard.html';
+  const items = [
+    { href: today, label: 'Today', icon: '\u{1F3E0}', match: [today] },
+    { href: 'action-centre.html', label: 'Actions', icon: '✅', match: ['action-centre.html'] },
+  ];
+  // Third slot: the primary planning surface enabled for this context.
+  if (cfg && cfg.eventHubEnabled) items.push({ href: 'events.html', label: 'Events', icon: '\u{1F3D5}️', match: ['events.html', 'event-hub.html'] });
+  else if (cfg && cfg.calendarEnabled) items.push({ href: 'calendar.html', label: 'Calendar', icon: '\u{1F4C5}', match: ['calendar.html'] });
+  else if (view === 'leader') items.push({ href: 'prepare-tonight.html', label: 'Tonight', icon: '\u{1F4CB}', match: ['prepare-tonight.html'] });
+  else items.push({ href: 'notices.html', label: 'Notices', icon: '\u{1F4E3}', match: ['notices.html'] });
+
+  const primaryActive = items.some(it => it.match.includes(current));
+  const link = (it) => `<a class="bottom-nav-item${it.match.includes(current) ? ' active' : ''}" href="${it.href}"><span class="bn-icon" aria-hidden="true">${it.icon}</span><span class="bn-label">${escapeHtml(it.label)}</span></a>`;
+  const moreBtn = `<button type="button" class="bottom-nav-item${primaryActive ? '' : ' active'}" id="bottom-nav-more" aria-label="More menu"><span class="bn-icon" aria-hidden="true">☰</span><span class="bn-label">More</span></button>`;
+
+  const bar = document.createElement('nav');
+  bar.id = 'bottom-nav';
+  bar.className = 'bottom-nav';
+  bar.setAttribute('aria-label', 'Primary');
+  bar.innerHTML = items.map(link).join('') + moreBtn;
+  document.body.appendChild(bar);
+  document.body.classList.add('has-bottom-nav');
+  // "More" opens the existing drawer, reusing its wiring via the header burger.
+  document.getElementById('bottom-nav-more').addEventListener('click', () => document.getElementById('nav-burger')?.click());
+}
+
 // A dual-role user's Parent/Leader toggle. Switching stores the view server-side
 // (audited) then lands on that view's dashboard.
 function viewSwitcherHtml(me) {
@@ -237,6 +272,7 @@ async function requireUserNav(pageView) {
     renderMobileDrawer(me, cfg, pillLabel);
   }
   renderSidebar(me, cfg);
+  renderBottomNav(me, cfg);
   renderFeedbackWidget(cfg);
   // Deep-link guard: if this page's module is switched off, show the unavailable
   // screen and return null so the page's own JS halts (it already does `if (!me)
