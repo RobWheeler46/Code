@@ -21,6 +21,8 @@ import {
   projectionScale,
   projectToScreen,
   compassDirection,
+  resolveDisplayScale,
+  isCompactDisplay,
 } from "@ast/shared";
 
 const FADE_IN_MS = 500; // FRD §53
@@ -84,6 +86,9 @@ export class SkyRenderer {
   private cssWidth = 0;
   private cssHeight = 0;
   private scale = 1;
+  /** Adaptive element-size multiplier (FRD §12-13), recomputed each frame. */
+  private sizeScale = 1;
+  private compact = false;
   /** When set (map mode), lat/lon are projected by the map instead of the
    * built-in observer-centred projection. */
   private projectionOverride: ((lat: number, lon: number) => { x: number; y: number }) | undefined;
@@ -113,6 +118,16 @@ export class SkyRenderer {
   /** True only when map mode is active AND the map projection is ready. */
   private get mapMode(): boolean {
     return this.config?.viewMode === "map" && this.projectionOverride !== undefined;
+  }
+
+  /** Current adaptive size multiplier (used for canvas hit-test/touch targets). */
+  getSizeScale(): number {
+    return this.sizeScale;
+  }
+
+  /** Scaled aircraft icon size in CSS px (FRD §12-13). */
+  private get iconSize(): number {
+    return ICON_SIZE * this.sizeScale;
   }
 
   /** Match the backing store to the CSS size and device pixel ratio. */
@@ -212,6 +227,13 @@ export class SkyRenderer {
 
     const w = this.cssWidth;
     const h = this.cssHeight;
+    this.sizeScale = resolveDisplayScale({
+      displayScale: config.displayScale,
+      viewingDistance: config.viewingDistance,
+      width: w,
+      height: h,
+    });
+    this.compact = isCompactDisplay(w, this.sizeScale);
     const mapMode = this.mapMode;
 
     // In map mode the canvas is a transparent overlay above the map tiles;
@@ -363,7 +385,8 @@ export class SkyRenderer {
 
   private drawSatelliteMarker(sat: Satellite, x: number, y: number, alpha: number): void {
     const ctx = this.ctx;
-    const size = sat.category === "station" ? 7 : sat.category === "bright" ? 5.5 : 3.5;
+    const base = sat.category === "station" ? 7 : sat.category === "bright" ? 5.5 : 3.5;
+    const size = base * this.sizeScale;
     const colour = sat.potentiallyVisible ? "#8fe3ff" : "rgba(150,170,200,0.85)";
     ctx.save();
     ctx.globalAlpha = alpha * (sat.category === "starlink" ? 0.8 : 1);
@@ -373,7 +396,7 @@ export class SkyRenderer {
     if (sat.category === "starlink") {
       // Small dot.
       ctx.beginPath();
-      ctx.arc(x, y, 2, 0, Math.PI * 2);
+      ctx.arc(x, y, 2 * this.sizeScale, 0, Math.PI * 2);
       ctx.fillStyle = colour;
       ctx.fill();
     } else {
@@ -398,8 +421,9 @@ export class SkyRenderer {
     occupied: Rect[],
   ): void {
     const ctx = this.ctx;
-    const size = Math.max(11, Math.min(15, this.cssHeight / 65));
-    const text = sat.name;
+    const size = Math.max(11, Math.min(15, this.cssHeight / 65)) * this.sizeScale;
+    // Compact displays shorten satellite labels, e.g. "ISS (ZARYA)" -> "ISS" (§72).
+    const text = this.compact ? shortSatelliteName(sat.name) : sat.name;
     ctx.font = font(size, sat.category === "station");
     const w = ctx.measureText(text).width;
     let top = y + 10;
@@ -570,7 +594,7 @@ export class SkyRenderer {
       ctx.strokeStyle = INTEREST_COLOUR;
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, ICON_SIZE * 0.8, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, this.iconSize * 0.8, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
     }
@@ -648,7 +672,7 @@ export class SkyRenderer {
     highlight = false,
   ): void {
     const ctx = this.ctx;
-    const s = ICON_SIZE / 34;
+    const s = this.iconSize / 34;
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate((trackDegrees * Math.PI) / 180); // 0=N,90=E (FRD §51)
@@ -993,8 +1017,8 @@ export class SkyRenderer {
 
   private drawLabels(p: Placement, lines: LabelLine[], occupied: Rect[]): void {
     const ctx = this.ctx;
-    const regSize = Math.max(14, Math.min(20, this.cssHeight / 45));
-    const subSize = Math.max(12, Math.min(16, this.cssHeight / 60));
+    const regSize = Math.max(14, Math.min(20, this.cssHeight / 45)) * this.sizeScale;
+    const subSize = Math.max(12, Math.min(16, this.cssHeight / 60)) * this.sizeScale;
     const lineHeight = regSize * 1.25;
 
     // Measure widest line for the collision box.
@@ -1005,7 +1029,7 @@ export class SkyRenderer {
     }
 
     const blockH = lines.length * lineHeight;
-    const topBase = p.y + ICON_SIZE * 0.75;
+    const topBase = p.y + this.iconSize * 0.75;
 
     // Nudge down to avoid collisions; drop trailing lines if still blocked (§71-72).
     let visibleLines = lines;
@@ -1027,7 +1051,7 @@ export class SkyRenderer {
       ctx.strokeStyle = "#9aa0a6";
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(p.x, p.y + ICON_SIZE * 0.5);
+      ctx.moveTo(p.x, p.y + this.iconSize * 0.5);
       ctx.lineTo(p.x, top);
       ctx.stroke();
       ctx.restore();
@@ -1076,6 +1100,12 @@ function font(size: number, bold: boolean): string {
 /** Compact miles: integer when whole, else one decimal (e.g. 2.5). */
 function fmtMiles(d: number): string {
   return Number.isInteger(d) ? String(d) : d.toFixed(1);
+}
+
+/** Shorten a satellite name for compact displays: drop any "(...)" suffix (§72). */
+function shortSatelliteName(name: string): string {
+  const cut = name.indexOf(" (");
+  return cut > 0 ? name.slice(0, cut) : name;
 }
 
 function clamp(v: number, min: number, max: number): number {

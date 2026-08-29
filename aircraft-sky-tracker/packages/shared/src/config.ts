@@ -10,6 +10,10 @@ export type DisplayMode = "minimal" | "informative";
  * small observer-sky inset.
  */
 export type ViewMode = "ceiling" | "screen" | "map";
+/** How far the viewer sits from the display (FRD v3.2 §12); scales sizes. */
+export type ViewingDistance = "close" | "normal" | "across-room";
+/** Overall element-size profile (FRD v3.2 §13). "automatic" adapts to the screen. */
+export type DisplayScale = "automatic" | "compact" | "standard" | "large";
 
 export interface AppConfig {
   postcode: string;
@@ -18,8 +22,12 @@ export interface AppConfig {
   radiusMiles: number;
   aircraftSource: AircraftSource;
   displayMode: DisplayMode;
-  /** Ceiling (pure sky) vs screen (with a schematic geographic backdrop). */
+  /** Ceiling (pure sky) vs screen (schematic backdrop) vs map (real tiles). */
   viewMode: ViewMode;
+  /** Viewer distance from the display; scales element sizes (FRD §12). */
+  viewingDistance: ViewingDistance;
+  /** Element-size profile; "automatic" adapts to the screen (FRD §13). */
+  displayScale: DisplayScale;
   showRegistration: boolean;
   showDestination: boolean;
   showFlightNumber: boolean;
@@ -72,6 +80,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   aircraftSource: "internet",
   displayMode: "minimal",
   viewMode: "ceiling",
+  viewingDistance: "normal",
+  displayScale: "automatic",
   showRegistration: true,
   showDestination: true,
   showFlightNumber: false,
@@ -106,6 +116,8 @@ export type ConfigUpdate = Partial<
     | "aircraftSource"
     | "displayMode"
     | "viewMode"
+    | "viewingDistance"
+    | "displayScale"
     | "showRegistration"
     | "showDestination"
     | "showFlightNumber"

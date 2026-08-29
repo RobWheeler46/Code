@@ -368,6 +368,16 @@ offers three layouts, defaulting to *Ceiling* so existing displays are untouched
   the one mode that fetches from the internet: map tiles load in the browser
   from CARTO/OpenStreetMap (attribution shown).
 
+**Adaptive display sizing (done, FRD v3.2 §12-13, §71-72)** — the canvas already
+follows any resolution + device-pixel-ratio and re-lays out on resize; on top of
+that, a **Display scale** setting (Automatic / Compact / Standard / Large — where
+*Automatic* scales with the screen's smaller dimension) and a **Viewing distance**
+setting (Close / Normal / Across room) combine into one multiplier that resizes
+aircraft icons, satellite markers, registration/destination fonts, touch targets
+and the detail/alert overlays. Satellite labels shorten on compact displays
+(`ISS (ZARYA)` → `ISS`). The sizing maths live in `@ast/shared`
+(`resolveDisplayScale`) and are unit-tested.
+
 **Future phases** — local RTL-SDR ADS-B (`LocalReadsbProvider`) and hybrid
 local+internet source; satellite history + advance-warning alerts (§61-64). The
 core "minimal" display philosophy stays unchanged.

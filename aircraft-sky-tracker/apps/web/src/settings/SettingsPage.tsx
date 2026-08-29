@@ -89,6 +89,8 @@ export function SettingsPage({ onBack }: Props) {
         radiusMiles: draft.radiusMiles,
         aircraftSource: draft.aircraftSource,
         viewMode: draft.viewMode,
+        viewingDistance: draft.viewingDistance,
+        displayScale: draft.displayScale,
         showRegistration: draft.showRegistration,
         showDestination: draft.showDestination,
         showFlightNumber: draft.showFlightNumber,
@@ -213,6 +215,41 @@ export function SettingsPage({ onBack }: Props) {
           compass rose and cardinal directions) for a desk monitor. Map plots aircraft on a
           real street map (tiles are fetched from the internet) with satellites in a small
           sky inset.
+        </p>
+      </div>
+
+      <div className="field">
+        <label htmlFor="displayscale">Display scale</label>
+        <select
+          id="displayscale"
+          value={draft.displayScale}
+          onChange={(e) =>
+            setDraft({ ...draft, displayScale: e.target.value as AppConfig["displayScale"] })
+          }
+        >
+          <option value="automatic">Automatic — fit to screen</option>
+          <option value="compact">Compact</option>
+          <option value="standard">Standard</option>
+          <option value="large">Large</option>
+        </select>
+      </div>
+
+      <div className="field">
+        <label htmlFor="viewingdistance">Viewing distance</label>
+        <select
+          id="viewingdistance"
+          value={draft.viewingDistance}
+          onChange={(e) =>
+            setDraft({ ...draft, viewingDistance: e.target.value as AppConfig["viewingDistance"] })
+          }
+        >
+          <option value="close">Close</option>
+          <option value="normal">Normal</option>
+          <option value="across-room">Across room</option>
+        </select>
+        <p className="hint">
+          Automatic scale adapts icons, markers and text to the screen size; viewing distance
+          nudges everything larger for a TV/projector across the room, or smaller up close.
         </p>
       </div>
       {DISPLAY_TOGGLES.map((toggle) => (

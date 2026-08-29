@@ -270,6 +270,18 @@ async function main(): Promise<void> {
         }
         next.viewMode = update.viewMode;
       }
+      if (update.viewingDistance !== undefined) {
+        if (!["close", "normal", "across-room"].includes(update.viewingDistance)) {
+          return { ok: false, status: 400, error: "Invalid viewing distance" };
+        }
+        next.viewingDistance = update.viewingDistance;
+      }
+      if (update.displayScale !== undefined) {
+        if (!["automatic", "compact", "standard", "large"].includes(update.displayScale)) {
+          return { ok: false, status: 400, error: "Invalid display scale" };
+        }
+        next.displayScale = update.displayScale;
+      }
 
       const booleanKeys = [
         "showRegistration",

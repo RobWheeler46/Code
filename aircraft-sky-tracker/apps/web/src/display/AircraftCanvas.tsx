@@ -154,10 +154,12 @@ export function AircraftCanvas({
     const rect = canvas.getBoundingClientRect();
     const px = event.clientX - rect.left;
     const py = event.clientY - rect.top;
+    // Touch target scales with the display profile (FRD §12).
+    const clickRadius = CLICK_RADIUS * renderer.getSizeScale();
 
     // Aircraft take priority (primary layer, FRD §69).
     let bestId: string | undefined;
-    let bestDist = CLICK_RADIUS;
+    let bestDist = clickRadius;
     for (const target of renderer.getHitTargets()) {
       const d = Math.hypot(target.x - px, target.y - py);
       if (d <= bestDist) {
@@ -174,7 +176,7 @@ export function AircraftCanvas({
     }
 
     let bestSat: string | undefined;
-    bestDist = CLICK_RADIUS;
+    bestDist = clickRadius;
     for (const target of renderer.getSatelliteHitTargets()) {
       const d = Math.hypot(target.x - px, target.y - py);
       if (d <= bestDist) {

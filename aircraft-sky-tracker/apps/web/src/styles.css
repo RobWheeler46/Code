@@ -97,7 +97,7 @@ body,
   align-items: center;
   justify-content: center;
   color: var(--secondary);
-  font-size: 0.9rem;
+  font-size: calc(0.9rem * var(--ui-scale, 1));
   letter-spacing: 0.1em;
   opacity: 0.5;
   pointer-events: none;
@@ -267,7 +267,7 @@ button.danger {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 0.5rem 1rem;
-  font-size: 0.95rem;
+  font-size: calc(0.95rem * var(--ui-scale, 1));
 }
 
 .rows .k {
@@ -386,7 +386,7 @@ button.danger {
 }
 
 .drawer h2 {
-  font-size: 0.72rem;
+  font-size: calc(0.72rem * var(--ui-scale, 1));
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--secondary);
@@ -403,14 +403,14 @@ button.danger {
 }
 
 .drawer-id {
-  font-size: 1.5rem;
+  font-size: calc(1.5rem * var(--ui-scale, 1));
   font-weight: 600;
   letter-spacing: 0.03em;
 }
 
 .drawer-sub {
   color: var(--secondary);
-  font-size: 0.85rem;
+  font-size: calc(0.85rem * var(--ui-scale, 1));
   margin-top: 0.15rem;
 }
 
@@ -530,7 +530,7 @@ button.danger {
 
 .alert-title {
   color: #ffcf6b;
-  font-size: 0.78rem;
+  font-size: calc(0.78rem * var(--ui-scale, 1));
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -541,7 +541,7 @@ button.danger {
 
 .alert-id {
   color: var(--primary);
-  font-size: 1.1rem;
+  font-size: calc(1.1rem * var(--ui-scale, 1));
   font-weight: 600;
   letter-spacing: 0.03em;
   margin-top: 0.15rem;
@@ -549,7 +549,7 @@ button.danger {
 
 .alert-detail {
   color: var(--secondary);
-  font-size: 0.85rem;
+  font-size: calc(0.85rem * var(--ui-scale, 1));
   margin-top: 0.1rem;
 }
 

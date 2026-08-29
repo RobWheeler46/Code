@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import type { Aircraft, AppConfig, SourceStatus, Satellite } from "@ast/shared";
+import { useEffect, useState, type CSSProperties } from "react";
+import { type Aircraft, type AppConfig, type SourceStatus, type Satellite, resolveDisplayScale } from "@ast/shared";
 import { AircraftCanvas } from "./AircraftCanvas.js";
 import { DisplayStatus } from "./DisplayStatus.js";
 import { AircraftDetailsOverlay } from "./AircraftDetailsOverlay.js";
@@ -31,6 +31,7 @@ export function SkyDisplay({
 }: Props) {
   const [selected, setSelected] = useState<Aircraft | null>(null);
   const [selectedSat, setSelectedSat] = useState<string | null>(null);
+  const uiScale = useUiScale(config);
 
   // Keep the selected overlay's data fresh, and drop it if the aircraft leaves.
   useEffect(() => {
@@ -57,7 +58,7 @@ export function SkyDisplay({
     : null;
 
   return (
-    <div className="sky">
+    <div className="sky" style={{ "--ui-scale": uiScale } as CSSProperties}>
       {config.showHeader && (
         <div className="header">
           {config.postcode} · {config.radiusMiles} mi
@@ -104,4 +105,23 @@ export function SkyDisplay({
       )}
     </div>
   );
+}
+
+/** Resolve the overlay size multiplier, tracking viewport size (FRD §12-13). */
+function useUiScale(config: AppConfig): number {
+  const [size, setSize] = useState(() => ({
+    w: window.innerWidth,
+    h: window.innerHeight,
+  }));
+  useEffect(() => {
+    const onResize = () => setSize({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return resolveDisplayScale({
+    displayScale: config.displayScale,
+    viewingDistance: config.viewingDistance,
+    width: size.w,
+    height: size.h,
+  });
 }

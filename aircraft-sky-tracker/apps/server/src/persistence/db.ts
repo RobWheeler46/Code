@@ -166,6 +166,8 @@ function migrate(db: DatabaseSync): void {
   ensureColumn(db, "settings", "satellite_show_bright", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn(db, "settings", "satellite_show_starlink", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn(db, "settings", "view_mode", "TEXT NOT NULL DEFAULT 'ceiling'");
+  ensureColumn(db, "settings", "viewing_distance", "TEXT NOT NULL DEFAULT 'normal'");
+  ensureColumn(db, "settings", "display_scale", "TEXT NOT NULL DEFAULT 'automatic'");
 }
 
 /** Add a column to an existing table if it is not already present. */
