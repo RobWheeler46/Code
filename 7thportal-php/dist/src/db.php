@@ -1304,6 +1304,14 @@ if ($incidentsSql && !str_contains($incidentsSql, 'event_hub_id')) {
     db()->exec('ALTER TABLE incidents ADD COLUMN event_hub_id INTEGER');
 }
 
+// Migration: users gained ical_token - a per-user secret that authenticates a personal
+// read-only iCal calendar feed (webcal subscription). Null until the user asks for
+// their link; rotating it invalidates the old URL. Add the column if it predates this.
+$usersIcalSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'")['sql'] ?? '';
+if ($usersIcalSql && !str_contains($usersIcalSql, 'ical_token')) {
+    db()->exec('ALTER TABLE users ADD COLUMN ical_token TEXT');
+}
+
 // Migration: activity_forms gained conditional-insurance flags (improved-flow
 // spec). external_provider_used gates the public-liability confirmation + PL
 // document; unity_approval_required gates the Unity Insurance approval document.

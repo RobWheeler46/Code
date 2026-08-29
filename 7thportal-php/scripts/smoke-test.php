@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -32,7 +32,7 @@ function useDb(string $file): void { putenv('SEVENTHPORTAL_DB=' . $file); }
 function boot(): void { require dirname(__DIR__) . '/src/db.php'; }
 function loadLibs(): void
 {
-    foreach (['helpers', 'notifications', 'finance', 'incidents', 'patrolpoints', 'events', 'equipment', 'actions', 'quartermaster', 'prepare', 'features', 'attendance', 'demoseed'] as $lib) {
+    foreach (['helpers', 'notifications', 'finance', 'incidents', 'patrolpoints', 'events', 'equipment', 'actions', 'quartermaster', 'prepare', 'features', 'attendance', 'demoseed', 'calendar'] as $lib) {
         require_once dirname(__DIR__) . '/src/lib/' . $lib . '.php';
     }
 }
@@ -590,6 +590,33 @@ function scenario_logic_demo_scenarios(): void
     $threw = false;
     try { demoApplyScenario($uid, 'nope'); } catch (Throwable $e) { $threw = true; }
     check('demo: an unknown scenario throws', $threw);
+}
+
+// Personal iCal calendar feed (FR-CAL "iCal export"). Token lifecycle, plus the feed
+// renders timed entries as date-times and all-day events as exclusive-end DATE values.
+function scenario_logic_ical_feed(): void
+{
+    useDb(tmpDb('ical')); boot(); loadLibs();
+    $uid = (int) dbRun("INSERT INTO users (auth_type, first_name, last_name, portal_role) VALUES ('local','Cam','Lead','group_leadership')")['lastInsertId'];
+
+    $t1 = calendarFeedToken($uid);
+    check('ical: token is 48 hex chars', preg_match('/^[a-f0-9]{48}$/', $t1) === 1);
+    check('ical: token is stable across reads', calendarFeedToken($uid) === $t1);
+    $t2 = calendarFeedToken($uid, true);
+    check('ical: regenerate rotates the token', $t2 !== $t1 && preg_match('/^[a-f0-9]{48}$/', $t2) === 1);
+
+    dbRun("INSERT INTO settings (key, value) VALUES ('calendar_enabled', 'true')");
+    dbRun("INSERT INTO settings (key, value) VALUES ('event_hub_enabled', 'true')");
+    dbRun("INSERT INTO calendar_entries (title, entry_type, scope, start_at, end_at, all_day, visibility, status, created_by) VALUES ('Pack night','activity','group','2026-09-15 18:00:00','2026-09-15 19:30:00',0,'leaders','published',?)", [$uid]);
+    dbRun("INSERT INTO event_hubs (title, event_type, start_date, end_date, status) VALUES ('Autumn Camp','camp','2026-09-19','2026-09-21','published')");
+
+    $ics = buildICalFeed(dbGet('SELECT * FROM users WHERE id = ?', [$uid]));
+    check('ical: has the VCALENDAR envelope', str_contains($ics, 'BEGIN:VCALENDAR') && str_contains($ics, 'END:VCALENDAR'));
+    check('ical: includes the timed entry summary', str_contains($ics, 'SUMMARY:Pack night'));
+    check('ical: timed event uses a date-time DTSTART', str_contains($ics, 'DTSTART:20260915T180000'));
+    check('ical: camp appears as an all-day DATE', str_contains($ics, 'DTSTART;VALUE=DATE:20260919'));
+    check('ical: all-day end is exclusive (+1 day)', str_contains($ics, 'DTEND;VALUE=DATE:20260922'));
+    check('ical: uses CRLF line endings', str_contains($ics, "\r\n"));
 }
 
 // QM kit completeness check: overall result derives from component statuses.

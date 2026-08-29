@@ -61,6 +61,38 @@ $router->get('/api/calendar', function ($params) {
     ]);
 });
 
+// ── Personal iCal feed (FR-CAL "iCal export") ───────────────────────────────────
+// The signed-in user fetches (or rotates) their private subscription link. The link
+// itself is served unauthenticated below, using the token as the credential.
+$router->get('/api/calendar/feed', function ($params) {
+    $user = requireAuth();
+    requireCalendarEnabled();
+    $token = calendarFeedToken((int) $user['id']);
+    jsonResponse(['token' => $token, 'path' => '/calendar/feed/' . $token . '.ics']);
+});
+
+$router->post('/api/calendar/feed/regenerate', function ($params) {
+    $user = requireAuth();
+    requireCalendarEnabled();
+    $token = calendarFeedToken((int) $user['id'], true);
+    logAudit(['userId' => $user['id'], 'action' => 'calendar_feed_regenerate', 'ipAddress' => clientIp()]);
+    jsonResponse(['token' => $token, 'path' => '/calendar/feed/' . $token . '.ics']);
+});
+
+// The .ics feed itself - NO session auth; the token in the URL is the credential, and
+// the feed is scoped to what that user may see. A calendar app polls this on a timer.
+$router->get('/calendar/feed/:token', function ($params) {
+    $token = preg_replace('/\.ics$/', '', (string) $params['token']);
+    if (!preg_match('/^[a-f0-9]{48}$/', $token)) { http_response_code(404); exit; }
+    $user = dbGet('SELECT * FROM users WHERE ical_token = ?', [$token]);
+    if (!$user || !calendarEnabled()) { http_response_code(404); exit; }
+    header('Content-Type: text/calendar; charset=utf-8');
+    header('Content-Disposition: inline; filename="7thportal.ics"');
+    header('Cache-Control: private, max-age=300');
+    echo buildICalFeed($user);
+    exit;
+});
+
 // ── Single local entry ──────────────────────────────────────────────────────────
 $router->get('/api/calendar/entries/:id', function ($params) {
     $user = requireAuth();

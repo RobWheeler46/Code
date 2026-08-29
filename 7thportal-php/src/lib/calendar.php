@@ -178,6 +178,81 @@ function calendarCollect(array $user, string $from, string $to): array
     return $items;
 }
 
+// ── iCal feed (FR-CAL "iCal export") ────────────────────────────────────────────
+// A personal, read-only calendar subscription. The feed URL carries a per-user secret
+// token (calendar apps can't send a session cookie), and the feed is scoped to exactly
+// what that user is allowed to see - so a parent's feed is parent-safe, a leader's
+// carries operational detail. Rotating the token kills the old link.
+
+function calendarFeedToken(int $userId, bool $regenerate = false): string
+{
+    $row = dbGet('SELECT ical_token FROM users WHERE id = ?', [$userId]);
+    if (!$regenerate && $row && !empty($row['ical_token'])) return $row['ical_token'];
+    $token = bin2hex(random_bytes(24));
+    dbRun('UPDATE users SET ical_token = ? WHERE id = ?', [$token, $userId]);
+    return $token;
+}
+
+// RFC 5545 text escaping for a property value.
+function icalEscape(string $s): string
+{
+    return str_replace(['\\', "\r\n", "\n", "\r", ',', ';'], ['\\\\', '\\n', '\\n', '\\n', '\\,', '\\;'], $s);
+}
+
+// Fold a content line at 75 octets with CRLF + space, per RFC 5545.
+function icalFold(string $line): string
+{
+    if (strlen($line) <= 75) return $line;
+    $out = '';
+    while (strlen($line) > 75) { $out .= substr($line, 0, 75) . "\r\n "; $line = substr($line, 75); }
+    return $out . $line;
+}
+
+// Format a stored 'YYYY-MM-DD HH:MM:SS' (or date-only) value as an iCal DTSTART/DTEND
+// suffix. All-day values become DATE (with an exclusive, +1-day end); timed values
+// become a floating local date-time (no timezone), which is robust for a subscription.
+function icalDate(string $dt, bool $allDay, bool $isEnd): string
+{
+    $day = substr($dt, 0, 10);
+    if ($allDay) {
+        $date = $isEnd ? gmdate('Ymd', strtotime($day . ' +1 day')) : str_replace('-', '', $day);
+        return ';VALUE=DATE:' . $date;
+    }
+    $time = strlen($dt) >= 19 ? substr($dt, 11, 8) : '00:00:00';
+    return ':' . str_replace('-', '', $day) . 'T' . str_replace(':', '', $time);
+}
+
+// Build the VCALENDAR feed for a user from the shared calendar aggregator, over a
+// rolling window (recent past through the next year).
+function buildICalFeed(array $user): string
+{
+    $from = gmdate('Y-m-d', strtotime('-30 days')) . ' 00:00:00';
+    $to = gmdate('Y-m-d', strtotime('+365 days')) . ' 23:59:59';
+    $items = function_exists('calendarCollect') ? calendarCollect($user, $from, $to) : [];
+    $stamp = gmdate('Ymd\THis\Z');
+    $lines = [
+        'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//7thPortal//Calendar//EN',
+        'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:7thPortal', 'X-WR-TIMEZONE:Europe/London',
+    ];
+    foreach ($items as $it) {
+        if (empty($it['start'])) continue;
+        $allDay = !empty($it['allDay']);
+        $summary = $it['title'] . (!empty($it['typeLabel']) ? ' [' . $it['typeLabel'] . ']' : '');
+        $descBits = array_filter([(string) ($it['description'] ?? ''), !empty($it['sectionName']) ? 'Section: ' . $it['sectionName'] : '']);
+        $lines[] = 'BEGIN:VEVENT';
+        $lines[] = 'UID:' . ($it['source'] ?? 'x') . '-' . ($it['id'] ?? '0') . '@7thportal';
+        $lines[] = 'DTSTAMP:' . $stamp;
+        $lines[] = 'DTSTART' . icalDate((string) $it['start'], $allDay, false);
+        $lines[] = 'DTEND' . icalDate((string) ($it['end'] ?: $it['start']), $allDay, true);
+        $lines[] = icalFold('SUMMARY:' . icalEscape($summary));
+        if (!empty($it['location'])) $lines[] = icalFold('LOCATION:' . icalEscape($it['location']));
+        if ($descBits) $lines[] = icalFold('DESCRIPTION:' . icalEscape(implode("\n", $descBits)));
+        $lines[] = 'END:VEVENT';
+    }
+    $lines[] = 'END:VCALENDAR';
+    return implode("\r\n", $lines) . "\r\n";
+}
+
 // Action Centre: upcoming leader-only placeholders that still need firming up or
 // publishing (FR-CAL-013). Managers only; keeps the parent view clean.
 function calendarActionItems(array $user): array

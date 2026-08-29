@@ -42,8 +42,9 @@ async function render() {
 
   // Head actions
   const head = document.getElementById('cal-head-actions');
-  head.innerHTML = CAN_MANAGE ? `<button class="btn" id="cal-new">New entry</button>` : '';
+  head.innerHTML = `<button class="btn btn-secondary" id="cal-subscribe">Subscribe</button>${CAN_MANAGE ? '<button class="btn" id="cal-new">New entry</button>' : ''}`;
   if (CAN_MANAGE) document.getElementById('cal-new').addEventListener('click', () => openEntryForm(null, dkey(new Date(view.y, view.m, 1))));
+  document.getElementById('cal-subscribe').addEventListener('click', openSubscribe);
 
   const toolbar = `
     <div class="cal-toolbar">
@@ -358,6 +359,39 @@ function convertEntry(id) {
     try { const r = await Api.post(`/api/calendar/entries/${id}/convert`, { template: document.getElementById('cv-template').value }); location.href = 'event-hub.html?id=' + r.eventHubId; }
     catch (e) { modalError(e.message); }
   });
+}
+
+// Personal iCal subscription link. Shows the private feed URL with copy buttons and a
+// way to rotate the token (which invalidates any calendar already subscribed).
+async function openSubscribe() {
+  const m = openModal('Subscribe to your calendar', `
+    <p class="muted" style="margin-top:0">Add your 7thPortal calendar to your phone or computer. It updates automatically and shows only what you can see. Keep this link private &mdash; anyone with it can view your calendar.</p>
+    <div id="cal-sub-body"><p class="muted">Loading your link&hellip;</p></div>
+    <div class="modal-actions" style="display:flex;gap:.5rem;margin-top:1rem"><button class="btn btn-secondary" id="cal-sub-close">Close</button></div>`);
+  m.querySelector('#cal-sub-close').addEventListener('click', closeModal);
+  const paint = (path) => {
+    const httpUrl = location.origin + path;
+    const webcal = httpUrl.replace(/^https?:/, 'webcal:');
+    document.getElementById('cal-sub-body').innerHTML = `
+      <div class="field"><label>Subscription link</label>
+        <input id="cal-sub-url" readonly value="${escapeHtml(httpUrl)}" onclick="this.select()" style="font-family:monospace;font-size:.82rem"></div>
+      <div class="cap-actions" style="gap:.5rem;flex-wrap:wrap">
+        <button class="btn btn-sm" id="cal-sub-copy">Copy link</button>
+        <a class="btn btn-secondary btn-sm" href="${escapeHtml(webcal)}">Add to calendar app</a>
+        <button class="btn btn-secondary btn-sm" id="cal-sub-regen" style="margin-left:auto">Reset link</button>
+      </div>
+      <p class="muted" style="font-size:.82rem;margin-top:.6rem">In Google Calendar: <em>Other calendars → From URL</em>. In Apple Calendar: <em>File → New Calendar Subscription</em>. Resetting the link stops any device already subscribed to the old one.</p>`;
+    document.getElementById('cal-sub-copy').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(httpUrl); document.getElementById('cal-sub-copy').textContent = 'Copied'; }
+      catch { document.getElementById('cal-sub-url').select(); }
+    });
+    document.getElementById('cal-sub-regen').addEventListener('click', async () => {
+      try { const r = await Api.post('/api/calendar/feed/regenerate', {}); paint(r.path); }
+      catch (e) { modalError(e.message); }
+    });
+  };
+  try { const r = await Api.get('/api/calendar/feed'); paint(r.path); }
+  catch (e) { document.getElementById('cal-sub-body').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
 }
 
 // ── Shared modal helpers (mirrors quartermaster.js) ─────────────────────────────
