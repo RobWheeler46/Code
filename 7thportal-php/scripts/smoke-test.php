@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -32,7 +32,7 @@ function useDb(string $file): void { putenv('SEVENTHPORTAL_DB=' . $file); }
 function boot(): void { require dirname(__DIR__) . '/src/db.php'; }
 function loadLibs(): void
 {
-    foreach (['helpers', 'notifications', 'finance', 'incidents', 'patrolpoints', 'events', 'equipment', 'actions', 'quartermaster', 'prepare', 'features', 'attendance'] as $lib) {
+    foreach (['helpers', 'notifications', 'finance', 'incidents', 'patrolpoints', 'events', 'equipment', 'actions', 'quartermaster', 'prepare', 'features', 'attendance', 'demoseed'] as $lib) {
         require_once dirname(__DIR__) . '/src/lib/' . $lib . '.php';
     }
 }
@@ -547,6 +547,49 @@ function scenario_logic_camp_attendance_safety(): void
     $hub2 = dbRun("INSERT INTO event_hubs (title, event_type, status) VALUES ('Trip','trip','draft')")['lastInsertId'];
     $keys2 = array_column(eventCommandCentre(dbGet('SELECT * FROM event_hubs WHERE id = ?', [$hub2])), 'key');
     check('cc: no attendance/safety cards when nothing is linked', !in_array('attendance', $keys2, true) && !in_array('safety', $keys2, true));
+}
+
+// Demo scenario launcher (Test Environment pack). Each scenario wipes and re-seeds a
+// coherent world; camp_weekend populates the whole event Command Centre; re-applying
+// never accumulates; unknown keys are rejected.
+function scenario_logic_demo_scenarios(): void
+{
+    useDb(tmpDb('demo')); boot(); loadLibs();
+    $uid = (int) dbRun("INSERT INTO users (auth_type, first_name, last_name, portal_role) VALUES ('local','Ada','Admin','admin')")['lastInsertId'];
+
+    $list = demoScenarioList();
+    check('demo: catalogue lists the scenarios', count($list) >= 3 && in_array('camp_weekend', array_column($list, 'key'), true));
+
+    demoApplyScenario($uid, 'camp_weekend');
+    check('demo: camp_weekend seeds one published hub', (int) dbGet("SELECT COUNT(*) n FROM event_hubs WHERE status = 'published'")['n'] === 1);
+    $hub = (int) dbGet('SELECT id FROM event_hubs LIMIT 1')['id'];
+    check('demo: an expense claim is linked to the camp', (int) dbGet('SELECT COUNT(*) n FROM expense_claims WHERE event_hub_id = ?', [$hub])['n'] === 1);
+    check('demo: an event attendance register is linked', (int) dbGet("SELECT COUNT(*) n FROM attendance_registers WHERE source_type = 'event' AND source_ref_id = ?", [$hub])['n'] === 1);
+    check('demo: a safety record is linked', (int) dbGet('SELECT COUNT(*) n FROM incidents WHERE event_hub_id = ?', [$hub])['n'] === 1);
+
+    // With the modules on, the whole Command Centre lights up.
+    foreach (['finance_enabled', 'attendance_enabled', 'incident_logging_enabled'] as $k) dbRun("INSERT INTO settings (key, value) VALUES (?, 'true')", [$k]);
+    $keys = array_column(eventCommandCentre(dbGet('SELECT * FROM event_hubs WHERE id = ?', [$hub])), 'key');
+    check('demo: camp_weekend lights up finance/attendance/safety', in_array('finance', $keys, true) && in_array('attendance', $keys, true) && in_array('safety', $keys, true));
+
+    // Re-applying wipes first, so it never duplicates.
+    demoApplyScenario($uid, 'camp_weekend');
+    check('demo: re-applying does not duplicate hubs', (int) dbGet('SELECT COUNT(*) n FROM event_hubs')['n'] === 1);
+
+    // Finance backlog seeds several claims, no event hub.
+    demoApplyScenario($uid, 'finance_backlog');
+    check('demo: finance_backlog seeds several claims', (int) dbGet('SELECT COUNT(*) n FROM expense_claims')['n'] === 4);
+    check('demo: finance_backlog leaves no event hub', (int) dbGet('SELECT COUNT(*) n FROM event_hubs')['n'] === 0);
+
+    // Starter clears everything back to the minimal baseline.
+    demoApplyScenario($uid, 'starter');
+    check('demo: starter clears claims and hubs', (int) dbGet('SELECT COUNT(*) n FROM expense_claims')['n'] === 0 && (int) dbGet('SELECT COUNT(*) n FROM event_hubs')['n'] === 0);
+    check('demo: starter seeds the Patrol Points league', (int) dbGet('SELECT COUNT(*) n FROM pp_competitions')['n'] === 1);
+
+    // Unknown scenario is rejected.
+    $threw = false;
+    try { demoApplyScenario($uid, 'nope'); } catch (Throwable $e) { $threw = true; }
+    check('demo: an unknown scenario throws', $threw);
 }
 
 // QM kit completeness check: overall result derives from component statuses.

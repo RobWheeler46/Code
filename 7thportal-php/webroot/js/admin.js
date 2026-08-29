@@ -872,9 +872,10 @@ async function renderSettings() {
       <div class="cap-actions" style="margin-top:.6rem"><a class="btn btn-secondary" href="/api/admin/feedback/export.csv">Export feedback (CSV)</a></div>
     </div>
     <div class="card" id="demo-reset-card" hidden>
-      <h2>Demo data</h2>
-      <p class="muted">Reset the demo/test environment to a known baseline — clears module data (competitions, forms, events, expenses, gallery, bookings, notices, etc.) and re-seeds a starter set. User accounts, settings, audit log and feedback are kept.</p>
-      <div class="cap-actions"><button class="btn btn-secondary" id="demo-reset-btn">Reset demo data to baseline</button><span id="demo-reset-msg"></span></div>
+      <h2>Demo scenario launcher</h2>
+      <p class="muted">Load a ready-made starting point for a demo. Each scenario clears module data (competitions, forms, events, expenses, gallery, bookings, notices, etc.) and re-seeds its own set. User accounts, settings, audit log and feedback are kept.</p>
+      <div id="demo-scenario-list"><p class="muted">Loading&hellip;</p></div>
+      <div id="demo-reset-msg" style="margin-top:.5rem"></div>
     </div>
   `;
   loadDemoFeedback();
@@ -948,12 +949,28 @@ async function renderSettings() {
     if (!cfg || !cfg.demoModeAllowed) return; // demo/test environments only
     const card = document.getElementById('demo-reset-card');
     if (card) card.hidden = false;
-    document.getElementById('demo-reset-btn')?.addEventListener('click', async () => {
-      if (!confirm('Reset ALL demo data to the baseline? This clears competitions, forms, events, expenses, gallery, bookings and notices, then re-seeds a starter set. Accounts and feedback are kept.')) return;
+    const list = document.getElementById('demo-scenario-list');
+    let scenarios = [];
+    try { scenarios = (await Api.get('/api/admin/demo/scenarios')).scenarios || []; }
+    catch (e) { if (list) list.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; return; }
+    if (list) list.innerHTML = scenarios.map(s => `
+      <div class="card" style="margin:0 0 .6rem;background:var(--bg)">
+        <div style="display:flex;justify-content:space-between;gap:.6rem;align-items:flex-start;flex-wrap:wrap">
+          <div style="flex:1;min-width:200px"><strong>${escapeHtml(s.name)}</strong><div class="muted" style="font-size:.85rem;margin-top:.2rem">${escapeHtml(s.description)}</div></div>
+          <button class="btn btn-secondary demo-scenario-btn" data-key="${escapeHtml(s.key)}" data-name="${escapeHtml(s.name)}">Load scenario</button>
+        </div>
+      </div>`).join('');
+    list?.querySelectorAll('.demo-scenario-btn').forEach(btn => btn.addEventListener('click', async () => {
+      if (!confirm(`Load "${btn.dataset.name}"? This clears the current demo module data (events, expenses, forms, bookings, notices, etc.) and re-seeds this scenario. Accounts, settings and feedback are kept.`)) return;
       const msg = document.getElementById('demo-reset-msg');
-      try { const r = await Api.post('/api/admin/demo/reset', {}); msg.innerHTML = `<span class="muted" style="margin-left:.5rem">Reset done (${r.clearedTables} tables cleared). Reload to see the baseline.</span>`; }
-      catch (e) { msg.innerHTML = `<span class="alert alert-error">${escapeHtml(e.message)}</span>`; }
-    });
+      list.querySelectorAll('.demo-scenario-btn').forEach(b => b.disabled = true);
+      msg.innerHTML = '<span class="muted">Loading scenario&hellip;</span>';
+      try {
+        const r = await Api.post('/api/admin/demo/scenario', { scenario: btn.dataset.key });
+        msg.innerHTML = `<div class="alert alert-success">Loaded <strong>${escapeHtml(r.scenarioName)}</strong> (${r.clearedTables} tables reset). Reload the app to explore it.</div>`;
+      } catch (e) { msg.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+      finally { list.querySelectorAll('.demo-scenario-btn').forEach(b => b.disabled = false); }
+    }));
   }
   async function loadDemoFeedback() {
     const host = document.getElementById('demo-fb-list');

@@ -20,8 +20,27 @@ const DEMO_WIPE_TABLES = [
     'notices', 'notifications', 'dismissed_actions',
 ];
 
-function demoResetToBaseline(int $actorUserId): array
+// Demo scenario launcher (Test Environment pack): named starting points an admin can
+// load with one click, each a coherent world for a particular demo. Every scenario
+// clears the transactional tables first, then seeds its own data on the shared
+// baseline, so switching scenarios is repeatable and never accumulates.
+const DEMO_SCENARIOS = [
+    ['key' => 'starter', 'name' => 'Starter baseline', 'description' => 'A clean, minimal set: welcome notices and a Patrol Points league with sample scores. The quickest way back to a tidy demo.'],
+    ['key' => 'camp_weekend', 'name' => 'Camp weekend in full swing', 'description' => 'A published Autumn Adventure Camp with a parent pack, emergency contacts, an adult rota, transport, a programme, plus a linked expense claim, attendance register and a near-miss - so the whole event Command Centre lights up.'],
+    ['key' => 'finance_backlog', 'name' => 'Finance backlog for the Treasurer', 'description' => 'Several expense claims spread across draft, submitted, approved-unpaid and paid - good for demoing the approver and Treasurer flows.'],
+];
+
+function demoScenarioList(): array
 {
+    return DEMO_SCENARIOS;
+}
+
+// Apply a named scenario: wipe the transactional tables, then seed. Throws on an
+// unknown key so the route can turn it into a 400.
+function demoApplyScenario(int $actorUserId, string $key): array
+{
+    $seeders = ['starter' => 'demoSeedBaseline', 'camp_weekend' => 'demoSeedCampWeekend', 'finance_backlog' => 'demoSeedFinanceBacklog'];
+    if (!isset($seeders[$key])) throw new InvalidArgumentException('Unknown demo scenario: ' . $key);
     $cleared = 0;
     foreach (DEMO_WIPE_TABLES as $t) {
         if (dbGet("SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?", [$t])) {
@@ -29,8 +48,25 @@ function demoResetToBaseline(int $actorUserId): array
             $cleared++;
         }
     }
-    demoSeedBaseline($actorUserId);
-    return ['clearedTables' => $cleared];
+    $seeders[$key]($actorUserId);
+    $name = array_column(DEMO_SCENARIOS, 'name', 'key')[$key] ?? $key;
+    return ['scenario' => $key, 'scenarioName' => $name, 'clearedTables' => $cleared];
+}
+
+// Backwards-compatible reset: the original "reset to baseline" button maps to the
+// starter scenario.
+function demoResetToBaseline(int $actorUserId): array
+{
+    return demoApplyScenario($actorUserId, 'starter');
+}
+
+// get-or-create an expense account by name (accounts survive demo wipes, so a claim
+// seeder must not assume one exists on a fresh environment).
+function demoAccount(string $name, string $code): int
+{
+    $row = dbGet('SELECT id FROM expense_accounts WHERE name = ?', [$name]);
+    if ($row) return (int) $row['id'];
+    return (int) dbRun('INSERT INTO expense_accounts (name, code) VALUES (?, ?)', [$name, $code])['lastInsertId'];
 }
 
 // A compact but coherent starter set. Extend here to seed more modules.
@@ -57,4 +93,79 @@ function demoSeedBaseline(int $actorUserId): void
         $s = dbRun("INSERT INTO pp_submissions (competition_id, category_id, submitted_by, comment, status) VALUES (?, ?, ?, 'Baseline demo score', 'approved')", [$cid, $catId, $actorUserId]);
         dbRun('INSERT INTO pp_score_lines (submission_id, team_id, points) VALUES (?, ?, ?)', [(int) $s['lastInsertId'], $teams[$team], $pts]);
     }
+}
+
+// "Camp weekend in full swing": a published camp hub with every operational area
+// populated, so the event Command Centre shows finance, attendance, transport,
+// programme, rota, locations and safety all at once. Built on the starter baseline.
+function demoSeedCampWeekend(int $actorUserId): void
+{
+    demoSeedBaseline($actorUserId);
+    $start = gmdate('Y-m-d', strtotime('+14 days'));
+    $end = gmdate('Y-m-d', strtotime('+16 days'));
+    $hub = (int) dbRun(
+        "INSERT INTO event_hubs (title, event_type, osm_section_id, section_name, start_date, end_date, status) VALUES ('Autumn Adventure Camp', 'camp', 'demo-cubs', 'Cubs', ?, ?, 'published')",
+        [$start, $end]
+    )['lastInsertId'];
+
+    // Parent pack + a leader-only risk assessment.
+    dbRun("INSERT INTO event_hub_items (hub_id, label, item_status, visibility, owner_name) VALUES (?, 'Kit list & what to bring', 'published', 'parents', 'Akela')", [$hub]);
+    dbRun("INSERT INTO event_hub_items (hub_id, label, item_status, visibility, owner_name) VALUES (?, 'Risk assessment', 'published', 'leaders', 'Akela')", [$hub]);
+
+    // Locations, including an emergency contact so that area reads ready.
+    dbRun("INSERT INTO event_locations (hub_id, location_type, name, visibility) VALUES (?, 'campsite', 'Ferny Crofts Scout Activity Centre', 'parents')", [$hub]);
+    dbRun("INSERT INTO event_locations (hub_id, location_type, name, visibility) VALUES (?, 'hospital', 'Southampton General Hospital', 'emergency')", [$hub]);
+
+    // Adult rota (two adults, a couple of duty entries).
+    $a1 = (int) dbRun("INSERT INTO camp_rota_adults (hub_id, name, is_driver, is_first_aider) VALUES (?, 'Akela', 1, 1)", [$hub])['lastInsertId'];
+    $a2 = (int) dbRun("INSERT INTO camp_rota_adults (hub_id, name, is_driver, is_first_aider) VALUES (?, 'Bagheera', 1, 0)", [$hub])['lastInsertId'];
+    dbRun("INSERT INTO camp_rota_entries (hub_id, day_label, session, role, adult_id) VALUES (?, 'Saturday', 'am', 'first_aid', ?)", [$hub, $a1]);
+    dbRun("INSERT INTO camp_rota_entries (hub_id, day_label, session, role, adult_id) VALUES (?, 'Saturday', 'pm', 'driver', ?)", [$hub, $a2]);
+
+    // Transport with a passenger manifest.
+    $v = (int) dbRun("INSERT INTO camp_transport_vehicles (hub_id, name, vehicle_type, driver_name, capacity) VALUES (?, 'Minibus 1', 'minibus', 'Bagheera', 12)", [$hub])['lastInsertId'];
+    foreach (['Alex', 'Sam', 'Jo', 'Charlie'] as $p) {
+        dbRun("INSERT INTO camp_transport_passengers (vehicle_id, hub_id, passenger_name) VALUES (?, ?, ?)", [$v, $hub, $p]);
+    }
+
+    // Programme.
+    dbRun("INSERT INTO camp_programme_slots (hub_id, day_label, session, activity, group_label, location) VALUES (?, 'Saturday', 'am', 'Climbing tower', 'Reds', 'Tower')", [$hub]);
+    dbRun("INSERT INTO camp_programme_slots (hub_id, day_label, session, activity, group_label, location) VALUES (?, 'Saturday', 'pm', 'Canoeing', 'Blues', 'Lake')", [$hub]);
+
+    // Finance: an event-linked expense claim awaiting approval.
+    $acct = demoAccount('Camp Account', 'CAMP');
+    $claim = (int) dbRun(
+        "INSERT INTO expense_claims (claim_number, claimant_user_id, title, status, event_hub_id) VALUES (?, ?, 'Camp catering shop', 'submitted', ?)",
+        [generateClaimNumber(), $actorUserId, $hub]
+    )['lastInsertId'];
+    dbRun("INSERT INTO expense_claim_items (claim_id, item_number, item_type, title, account_id, status, claimed_amount, submitted_at) VALUES (?, 1, 'receipt', 'Bulk catering', ?, 'submitted', 86.40, datetime('now'))", [$claim, $acct]);
+
+    // Attendance: an open register taken for the camp.
+    dbRun(
+        "INSERT INTO attendance_registers (osm_section_id, section_name, title, session_date, source_type, source_ref_id, source_label, status) VALUES ('demo-cubs', 'Cubs', 'Camp register', ?, 'event', ?, 'Autumn Adventure Camp', 'open')",
+        [$start, $hub]
+    );
+
+    // Safety: an open near-miss tied to the camp.
+    dbRun("INSERT INTO incidents (record_type, sensitivity, summary, event_hub_id, section_name, status, occurred_at) VALUES ('near_miss', 'standard', 'Wet decking by the washrooms', ?, 'Cubs', 'open', datetime('now'))", [$hub]);
+}
+
+// "Finance backlog": a spread of expense claims across the workflow, for demoing the
+// approver and Treasurer views. Built on the starter baseline.
+function demoSeedFinanceBacklog(int $actorUserId): void
+{
+    demoSeedBaseline($actorUserId);
+    $acct = demoAccount('Main Account', 'MAIN');
+    $mk = function (string $title, string $claimStatus, string $itemStatus, float $amt) use ($actorUserId, $acct) {
+        $c = (int) dbRun("INSERT INTO expense_claims (claim_number, claimant_user_id, title, status) VALUES (?, ?, ?, ?)", [generateClaimNumber(), $actorUserId, $title, $claimStatus])['lastInsertId'];
+        $approved = in_array($itemStatus, ['approved', 'ready_for_payment', 'paid'], true) ? $amt : null;
+        dbRun(
+            "INSERT INTO expense_claim_items (claim_id, item_number, item_type, title, account_id, status, claimed_amount, approved_amount, submitted_at) VALUES (?, 1, 'receipt', ?, ?, ?, ?, ?, datetime('now'))",
+            [$c, $title, $acct, $itemStatus, $amt, $approved]
+        );
+    };
+    $mk('Badges & awards order', 'submitted', 'submitted', 24.50);
+    $mk('Hall hire - autumn term', 'approved', 'approved', 120.00);
+    $mk('Craft supplies', 'paid', 'paid', 31.75);
+    $mk('Minibus fuel', 'draft', 'draft', 18.00);
 }

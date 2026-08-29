@@ -46,6 +46,25 @@ $router->post('/api/admin/demo/reset', function ($params) {
     jsonResponse(['ok' => true, 'clearedTables' => $r['clearedTables']]);
 });
 
+// Admin: the demo scenario launcher (demo mode only). List the scenarios, and load one.
+$router->get('/api/admin/demo/scenarios', function ($params) {
+    $user = requireAuth();
+    requireAdmin($user);
+    if (!osmDemoModeAllowed()) jsonResponse(['error' => 'The scenario launcher is only available in the demo/test environment.'], 403);
+    jsonResponse(['scenarios' => demoScenarioList()]);
+});
+
+$router->post('/api/admin/demo/scenario', function ($params) {
+    $user = requireAuth();
+    requireAdmin($user);
+    if (!osmDemoModeAllowed()) jsonResponse(['error' => 'The scenario launcher is only available in the demo/test environment.'], 403);
+    $key = (string) (requestBody()['scenario'] ?? '');
+    if (!in_array($key, array_column(demoScenarioList(), 'key'), true)) jsonResponse(['error' => 'Choose a valid scenario.'], 400);
+    $r = demoApplyScenario((int) $user['id'], $key);
+    logAudit(['userId' => $user['id'], 'action' => 'demo_scenario_load', 'ipAddress' => clientIp(), 'details' => $r]);
+    jsonResponse(array_merge(['ok' => true], $r));
+});
+
 // Admin: export feedback to CSV.
 $router->get('/api/admin/feedback/export.csv', function ($params) {
     $user = requireAuth();
