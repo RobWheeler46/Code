@@ -557,6 +557,20 @@ button.danger {
   margin-top: 0.1rem;
 }
 
+/* Satellite pass alerts (FRD v3.2 §61-62): own corner + cyan accent. */
+.sat-alert-stack {
+  top: 1rem;
+  left: 1rem;
+  transform: none;
+}
+.sat-alert-card {
+  border-color: #274a58;
+  border-left-color: #8fe3ff;
+}
+.sat-alert-card .alert-title {
+  color: #8fe3ff;
+}
+
 /* --- History --- */
 .date-tabs {
   display: flex;

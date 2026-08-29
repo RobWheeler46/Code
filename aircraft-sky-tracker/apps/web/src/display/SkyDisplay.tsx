@@ -5,7 +5,8 @@ import { DisplayStatus } from "./DisplayStatus.js";
 import { AircraftDetailsOverlay } from "./AircraftDetailsOverlay.js";
 import { SatelliteDetailsOverlay } from "./SatelliteDetailsOverlay.js";
 import { InterestingAlert } from "./InterestingAlert.js";
-import type { InterestingEntry } from "../hooks/useWebSocket.js";
+import { SatelliteAlert } from "./SatelliteAlert.js";
+import type { InterestingEntry, SatelliteAlertEntry } from "../hooks/useWebSocket.js";
 
 interface Props {
   aircraft: Aircraft[];
@@ -16,6 +17,7 @@ interface Props {
   interestingEntry?: InterestingEntry;
   satellites?: Satellite[];
   satelliteTimestamp?: number;
+  satelliteAlert?: SatelliteAlertEntry;
 }
 
 /** The main display: canvas + optional header + status (FRD §47, §56-59). */
@@ -28,6 +30,7 @@ export function SkyDisplay({
   interestingEntry,
   satellites = [],
   satelliteTimestamp = 0,
+  satelliteAlert,
 }: Props) {
   const [selected, setSelected] = useState<Aircraft | null>(null);
   const [selectedSat, setSelectedSat] = useState<string | null>(null);
@@ -93,6 +96,8 @@ export function SkyDisplay({
       <DisplayStatus sourceStatus={sourceStatus} connected={connected} />
 
       <InterestingAlert entry={interestingEntry} config={config} />
+
+      <SatelliteAlert entry={satelliteAlert} config={config} />
 
       {selected && (
         <AircraftDetailsOverlay aircraft={selected} onClose={() => setSelected(null)} />

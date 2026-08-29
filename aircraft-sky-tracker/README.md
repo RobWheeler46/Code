@@ -185,7 +185,7 @@ The browser talks only to the backend (FRD §39):
 | `GET` | `/api/orbital-status` | Orbital-element source status + satellite counts |
 | `GET` | `/api/health` | Source/route health |
 | `GET` | `/api/diagnostics` | Counts, timings, provider status |
-| `WS` | `/ws` | Live `aircraft.snapshot` / `satellite.snapshot` / `source.status` / `config.updated` |
+| `WS` | `/ws` | Live `aircraft.snapshot` / `satellite.snapshot` / `satellite.alert` / `source.status` / `config.updated` |
 
 ## Aircraft history
 
@@ -347,8 +347,15 @@ pass (one whose maximum elevation clears the configured minimum): rise / maximum
 set times, peak elevation, rise→set compass direction, duration and whether it is
 potentially naked-eye visible (sunlit satellite over a dark sky). Served at
 `/api/satellite-passes` and shown on an **Upcoming passes** screen (keyboard `P`).
-Satellite **history / alerts** (§61-64) and adaptive display (§7-13) remain future
-follow-ups.
+
+**Satellite pass alerts (done, FRD v3.2 §61-62)** — an opt-in advance-warning
+alert ("**ISS visible in 10 minutes**"). A service watches the upcoming-pass
+predictions and fires once per pass when it comes within the configured lead time
+(default 10 min), for the satellite groups you're showing and — by default — only
+naked-eye-visible passes. Each alert shows an on-screen banner (and, when enabled,
+a browser/OS notification), plus a phone push when a ntfy topic is configured on
+the server. Off by default; Settings has the toggle, lead time and visible-only
+option. Satellite **history** (§63-64) remains a future follow-up.
 
 **View modes (done, FRD v3.2)** — a **View mode** setting (Settings → Display)
 offers three layouts, defaulting to *Ceiling* so existing displays are untouched:

@@ -6,11 +6,19 @@ import {
   type ServerMessage,
   type SourceStatus,
   type Satellite,
+  type SatellitePass,
 } from "@ast/shared";
 
 export interface InterestingEntry {
   aircraft: Aircraft;
   /** Monotonic id so consumers can react to each distinct entry event. */
+  id: number;
+}
+
+export interface SatelliteAlertEntry {
+  pass: SatellitePass;
+  minutesUntil: number;
+  /** Monotonic id so consumers can react to each distinct alert. */
   id: number;
 }
 
@@ -25,6 +33,8 @@ export interface LiveState {
   interestingEntry: InterestingEntry | undefined;
   satellites: Satellite[];
   satelliteTimestamp: number;
+  /** Latest upcoming-satellite-pass alert (FRD §61-62), or undefined. */
+  satelliteAlert: SatelliteAlertEntry | undefined;
 }
 
 const MAX_BACKOFF_MS = 15_000;
@@ -45,10 +55,12 @@ export function useWebSocket(): LiveState {
   );
   const [satellites, setSatellites] = useState<Satellite[]>([]);
   const [satelliteTimestamp, setSatelliteTimestamp] = useState<number>(0);
+  const [satelliteAlert, setSatelliteAlert] = useState<SatelliteAlertEntry | undefined>(undefined);
 
   const backoffRef = useRef(1000);
   const closedRef = useRef(false);
   const entryIdRef = useRef(0);
+  const satAlertIdRef = useRef(0);
 
   useEffect(() => {
     closedRef.current = false;
@@ -95,6 +107,14 @@ export function useWebSocket(): LiveState {
             entryIdRef.current += 1;
             setInterestingEntry({ aircraft: message.aircraft, id: entryIdRef.current });
             break;
+          case "satellite.alert":
+            satAlertIdRef.current += 1;
+            setSatelliteAlert({
+              pass: message.pass,
+              minutesUntil: message.minutesUntil,
+              id: satAlertIdRef.current,
+            });
+            break;
           case "error.status":
             // Non-fatal; surfaced via source status in the UI.
             break;
@@ -133,5 +153,6 @@ export function useWebSocket(): LiveState {
     interestingEntry,
     satellites,
     satelliteTimestamp,
+    satelliteAlert,
   };
 }

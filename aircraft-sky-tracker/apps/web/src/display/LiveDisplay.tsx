@@ -27,6 +27,7 @@ export function LiveDisplay() {
       interestingEntry={live.interestingEntry}
       satellites={live.satellites}
       satelliteTimestamp={live.satelliteTimestamp}
+      satelliteAlert={live.satelliteAlert}
     />
   );
 }

@@ -39,6 +39,7 @@ import { AlertService } from "./alerts/alertService.js";
 import { HistoryService } from "./history/historyService.js";
 import { SatelliteService, type SatelliteConfigView } from "./satellite/satelliteService.js";
 import { PassPredictionService } from "./satellite/passPredictionService.js";
+import { SatelliteAlertService } from "./satellite/satelliteAlertService.js";
 import { CelesTrakProvider } from "./satellite/orbitalProvider.js";
 import { DiagnosticsService } from "./diagnostics/diagnosticsService.js";
 import { createAircraftProvider } from "./providers/index.js";
@@ -131,6 +132,23 @@ async function main(): Promise<void> {
     () => satellites.getElements(),
     satelliteConfigView,
     env.aircraftProvider === "simulation",
+  );
+  const satelliteAlerts = new SatelliteAlertService(
+    () => {
+      const c = settings.get();
+      return {
+        enabled: c.satelliteAlertsEnabled,
+        leadMinutes: c.satelliteAlertLeadMinutes,
+        visibleOnly: c.satelliteAlertVisibleOnly,
+        showStations: c.satelliteShowStations,
+        showBright: c.satelliteShowBright,
+        showStarlink: c.satelliteShowStarlink,
+      };
+    },
+    () => satellitePasses.getPasses().passes,
+    { topic: env.notifyNtfyTopic, server: env.notifyNtfyServer },
+    (pass, minutesUntil) =>
+      ws.broadcast({ type: "satellite.alert", pass, minutesUntil, timestamp: Date.now() }),
   );
 
   const polling = new AircraftPollingService(provider, env.aircraftPollIntervalMs, {
@@ -303,6 +321,8 @@ async function main(): Promise<void> {
         "satelliteShowStations",
         "satelliteShowBright",
         "satelliteShowStarlink",
+        "satelliteAlertsEnabled",
+        "satelliteAlertVisibleOnly",
       ] as const;
       for (const key of booleanKeys) {
         if (update[key] !== undefined) next[key] = Boolean(update[key]);
@@ -337,6 +357,14 @@ async function main(): Promise<void> {
           return { ok: false, status: 400, error: "Satellite minimum elevation must be 0-89°" };
         }
         next.satelliteMinElevationDeg = Math.round(deg);
+      }
+
+      if (update.satelliteAlertLeadMinutes !== undefined) {
+        const min = Number(update.satelliteAlertLeadMinutes);
+        if (!Number.isFinite(min) || min < 1 || min > 120) {
+          return { ok: false, status: 400, error: "Alert lead time must be 1-120 minutes" };
+        }
+        next.satelliteAlertLeadMinutes = Math.round(min);
       }
 
       const saved = settings.save(next);
@@ -450,6 +478,7 @@ async function main(): Promise<void> {
       polling.start();
       void satellites.start(); // FRD §36 - independent of aircraft; never blocks
       satellitePasses.start();
+      satelliteAlerts.start();
     } else {
       log.warn("aircraft polling not started - settings screen available for diagnosis (FRD §85)");
     }
@@ -468,6 +497,7 @@ async function main(): Promise<void> {
     history.flush();
     satellites.stop();
     satellitePasses.stop();
+    satelliteAlerts.stop();
     polling.stop();
     ws.close();
     server.close();

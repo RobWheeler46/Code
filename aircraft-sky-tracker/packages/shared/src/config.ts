@@ -63,6 +63,12 @@ export interface AppConfig {
   satelliteShowBright: boolean;
   /** Include bright Starlink passes (FRD §51). */
   satelliteShowStarlink: boolean;
+  /** Alert ahead of an upcoming satellite pass (FRD §61-62). */
+  satelliteAlertsEnabled: boolean;
+  /** Advance-warning lead time in minutes for a satellite pass alert (FRD §62). */
+  satelliteAlertLeadMinutes: number;
+  /** Only alert for potentially naked-eye-visible passes (tames noise). */
+  satelliteAlertVisibleOnly: boolean;
 }
 
 export const DEFAULT_POSTCODE = "SN25 4TP";
@@ -105,6 +111,9 @@ export const DEFAULT_CONFIG: AppConfig = {
   satelliteShowStations: true,
   satelliteShowBright: true,
   satelliteShowStarlink: false,
+  satelliteAlertsEnabled: false,
+  satelliteAlertLeadMinutes: 10,
+  satelliteAlertVisibleOnly: true,
 };
 
 /** Configuration fields a client is permitted to update (FRD §39). */
@@ -141,5 +150,8 @@ export type ConfigUpdate = Partial<
     | "satelliteShowStations"
     | "satelliteShowBright"
     | "satelliteShowStarlink"
+    | "satelliteAlertsEnabled"
+    | "satelliteAlertLeadMinutes"
+    | "satelliteAlertVisibleOnly"
   >
 >;

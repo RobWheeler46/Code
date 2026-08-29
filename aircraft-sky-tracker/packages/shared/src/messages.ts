@@ -2,7 +2,7 @@
 
 import type { Aircraft } from "./aircraft.js";
 import type { AppConfig } from "./config.js";
-import type { Satellite } from "./satellite.js";
+import type { Satellite, SatellitePass } from "./satellite.js";
 
 export type SourceStatus =
   | "connected"
@@ -47,12 +47,22 @@ export interface SatelliteSnapshotMessage {
   satellites: Satellite[];
 }
 
+/** An upcoming satellite pass is within the advance-warning window (FRD §61-62). */
+export interface SatelliteAlertMessage {
+  type: "satellite.alert";
+  pass: SatellitePass;
+  /** Whole minutes until the pass rises (0 = rising now / in progress). */
+  minutesUntil: number;
+  timestamp: number;
+}
+
 export type ServerMessage =
   | AircraftSnapshotMessage
   | ConfigUpdatedMessage
   | SourceStatusMessage
   | ErrorStatusMessage
   | AircraftInterestingEnterMessage
-  | SatelliteSnapshotMessage;
+  | SatelliteSnapshotMessage
+  | SatelliteAlertMessage;
 
 export const WS_PATH = "/ws";

@@ -36,6 +36,9 @@ interface SettingsRow {
   view_mode: string;
   viewing_distance: string;
   display_scale: string;
+  satellite_alerts_enabled: number;
+  satellite_alert_lead_minutes: number;
+  satellite_alert_visible_only: number;
   interpolation: number;
 }
 
@@ -54,6 +57,9 @@ function rowToConfig(row: SettingsRow): AppConfig {
     viewMode: (row.view_mode as AppConfig["viewMode"]) ?? "ceiling",
     viewingDistance: (row.viewing_distance as AppConfig["viewingDistance"]) ?? "normal",
     displayScale: (row.display_scale as AppConfig["displayScale"]) ?? "automatic",
+    satelliteAlertsEnabled: bool(row.satellite_alerts_enabled),
+    satelliteAlertLeadMinutes: row.satellite_alert_lead_minutes ?? 10,
+    satelliteAlertVisibleOnly: bool(row.satellite_alert_visible_only),
     showRegistration: bool(row.show_registration),
     showDestination: bool(row.show_destination),
     showFlightNumber: bool(row.show_flight_number),
@@ -103,9 +109,11 @@ export class SettingsRepo {
           history_enabled, history_retention_days, in_app_alerts,
           browser_notifications, show_satellites, satellite_min_elevation,
           satellite_show_stations, satellite_show_bright, satellite_show_starlink,
-          view_mode, viewing_distance, display_scale, interpolation, created_at, updated_at
+          view_mode, viewing_distance, display_scale,
+          satellite_alerts_enabled, satellite_alert_lead_minutes, satellite_alert_visible_only,
+          interpolation, created_at, updated_at
         ) VALUES (
-          1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )`,
       )
       .run(
@@ -140,6 +148,9 @@ export class SettingsRepo {
         defaults.viewMode,
         defaults.viewingDistance,
         defaults.displayScale,
+        Number(defaults.satelliteAlertsEnabled),
+        defaults.satelliteAlertLeadMinutes,
+        Number(defaults.satelliteAlertVisibleOnly),
         Number(defaults.interpolationEnabled),
         now,
         now,
@@ -178,6 +189,8 @@ export class SettingsRepo {
           satellite_min_elevation = ?, satellite_show_stations = ?,
           satellite_show_bright = ?, satellite_show_starlink = ?,
           view_mode = ?, viewing_distance = ?, display_scale = ?,
+          satellite_alerts_enabled = ?, satellite_alert_lead_minutes = ?,
+          satellite_alert_visible_only = ?,
           interpolation = ?, updated_at = ?
         WHERE id = 1`,
       )
@@ -213,6 +226,9 @@ export class SettingsRepo {
         config.viewMode,
         config.viewingDistance,
         config.displayScale,
+        Number(config.satelliteAlertsEnabled),
+        config.satelliteAlertLeadMinutes,
+        Number(config.satelliteAlertVisibleOnly),
         Number(config.interpolationEnabled),
         now,
       );

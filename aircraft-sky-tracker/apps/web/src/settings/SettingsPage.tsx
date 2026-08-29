@@ -113,6 +113,9 @@ export function SettingsPage({ onBack }: Props) {
         satelliteShowStations: draft.satelliteShowStations,
         satelliteShowBright: draft.satelliteShowBright,
         satelliteShowStarlink: draft.satelliteShowStarlink,
+        satelliteAlertsEnabled: draft.satelliteAlertsEnabled,
+        satelliteAlertLeadMinutes: draft.satelliteAlertLeadMinutes,
+        satelliteAlertVisibleOnly: draft.satelliteAlertVisibleOnly,
       };
       // Only change the active location once a new postcode is entered (FRD §63).
       const normalised = postcodeInput.trim().toUpperCase().replace(/\s+/g, " ");
@@ -411,6 +414,44 @@ export function SettingsPage({ onBack }: Props) {
       <div className="hint">
         Satellite positions come from CelesTrak orbital data propagated with SGP4;
         the centre of the display is directly overhead (zenith).
+      </div>
+
+      <h2>Satellite pass alerts</h2>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={draft.satelliteAlertsEnabled}
+          onChange={(e) => setToggle("satelliteAlertsEnabled", e.target.checked)}
+        />
+        Alert before an upcoming pass
+      </label>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={draft.satelliteAlertVisibleOnly}
+          onChange={(e) => setToggle("satelliteAlertVisibleOnly", e.target.checked)}
+          disabled={!draft.satelliteAlertsEnabled}
+        />
+        Only potentially-visible (naked-eye) passes
+      </label>
+      <div className="field">
+        <label htmlFor="alertlead">Advance warning (minutes)</label>
+        <input
+          id="alertlead"
+          type="number"
+          min={1}
+          max={120}
+          value={draft.satelliteAlertLeadMinutes}
+          disabled={!draft.satelliteAlertsEnabled}
+          onChange={(e) =>
+            setDraft({ ...draft, satelliteAlertLeadMinutes: Number(e.target.value) })
+          }
+        />
+      </div>
+      <div className="hint">
+        Alerts fire for the satellite groups you're showing above (e.g. ISS, bright
+        satellites), and appear on screen — plus a phone push when a ntfy topic is set on
+        the server. In-app / browser notifications reuse the aircraft-alert setting.
       </div>
 
       {saveError && <div className="status-line err">{saveError}</div>}
