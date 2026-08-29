@@ -359,14 +359,15 @@ offers three layouts, defaulting to *Ceiling* so existing displays are untouched
   and a labelled centre (home) marker. Orientation chrome only — **no map
   tiles**, so it stays self-contained — with aircraft/satellites drawn over it
   unchanged (both already share the north-up bearing/azimuth convention).
-- **Map** — aircraft plotted on a **real slippy map** (Leaflet + CARTO dark
-  raster tiles) at true lat/lon, auto-fitted to the postcode + radius. The
-  aircraft canvas becomes a transparent overlay whose lat/lon projection is
-  driven by the map, so icons, trails and labels stay aligned. Satellites can't
-  sit at a ground position, so they move to a small **observer-sky inset**
-  (top-right), keeping the two projection models separate (§65, §68). This is
-  the one mode that fetches from the internet: map tiles load in the browser
-  from CARTO/OpenStreetMap (attribution shown).
+- **Map** — aircraft plotted on a **real slippy map** (Leaflet + OpenStreetMap
+  raster tiles, darkened with a CSS filter to suit the theme) at true lat/lon,
+  auto-fitted to the postcode + radius. The aircraft canvas becomes a transparent
+  overlay whose lat/lon projection is driven by the map, so icons, trails and
+  labels stay aligned. Satellites can't sit at a ground position, so they move to
+  a small **observer-sky inset** (top-right), keeping the two projection models
+  separate (§65, §68). This is the one mode that fetches from the internet: map
+  tiles load in the browser from OpenStreetMap (attribution shown), which is
+  key-free — no API key or account is required.
 
 **Adaptive display sizing (done, FRD v3.2 §12-13, §71-72)** — the canvas already
 follows any resolution + device-pixel-ratio and re-lays out on resize; on top of

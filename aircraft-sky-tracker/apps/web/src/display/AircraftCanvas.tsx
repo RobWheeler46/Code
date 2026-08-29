@@ -116,11 +116,14 @@ export function AircraftCanvas({
         touchZoom: false,
         fadeAnimation: false,
       });
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-        subdomains: "abcd",
+      // OpenStreetMap standard tiles: genuinely key-free (CARTO's keyless dark
+      // tier is rate-limited and serves "API key required" notice tiles). The
+      // light tiles are darkened for the theme via a CSS filter (see styles.css).
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        subdomains: "abc",
         maxZoom: 19,
         attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       }).addTo(map);
       leafletRef.current = map;
       renderer?.setProjectionOverride((lat, lon) => {

@@ -54,6 +54,10 @@ body,
   background: #0a0f18;
   font-family: inherit;
 }
+/* Darken the light OSM tiles to suit the dark theme (keeps water/roads legible). */
+.sky-map .leaflet-tile {
+  filter: invert(0.92) hue-rotate(180deg) brightness(0.92) contrast(0.9) saturate(0.85);
+}
 .leaflet-control-attribution {
   font-size: 10px;
   background: rgba(0, 0, 0, 0.55) !important;
