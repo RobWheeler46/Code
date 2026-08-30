@@ -9,6 +9,8 @@ import {
   compassDirection,
   statuteMilesToNauticalMiles,
   providerQueryRadiusNm,
+  observerLookAngles,
+  FEET_TO_METRES,
 } from "./geo.ts";
 
 test("haversine: identical points are zero distance", () => {
@@ -105,4 +107,33 @@ test("radius conversion: 10 statute miles ~= 8.69 nautical miles", () => {
 test("provider query radius adds ~5% margin (~9.13 nm)", () => {
   const nm = providerQueryRadiusNm(10);
   assert.ok(Math.abs(nm - 9.13) < 0.05, `got ${nm}`);
+});
+
+// --- True Sky look angles (FRD v4.0 §9-11) ---
+const OBS = { lat: 51.6, lon: -1.78 };
+
+test("observerLookAngles: target directly overhead reads ~zenith (90 deg)", () => {
+  // 35,000 ft straight up at the observer's lat/lon.
+  const a = observerLookAngles(OBS.lat, OBS.lon, 0, OBS.lat, OBS.lon, 35000 * FEET_TO_METRES);
+  assert.ok(a.elevationDegrees > 89.9, `elevation ${a.elevationDegrees}`);
+  assert.ok(Math.abs(a.slantRangeMiles - (35000 * FEET_TO_METRES) / 1609.344) < 0.01);
+});
+
+test("observerLookAngles: due-north target reads azimuth ~0/360", () => {
+  const a = observerLookAngles(OBS.lat, OBS.lon, 0, OBS.lat + 0.1, OBS.lon, 5000 * FEET_TO_METRES);
+  assert.ok(a.azimuthDegrees < 1 || a.azimuthDegrees > 359, `azimuth ${a.azimuthDegrees}`);
+});
+
+test("observerLookAngles: due-east target reads azimuth ~90", () => {
+  const a = observerLookAngles(OBS.lat, OBS.lon, 0, OBS.lat, OBS.lon + 0.1, 5000 * FEET_TO_METRES);
+  assert.ok(Math.abs(a.azimuthDegrees - 90) < 1.5, `azimuth ${a.azimuthDegrees}`);
+});
+
+test("observerLookAngles: altitude lifts elevation above the horizon", () => {
+  // Same ground point ~3 miles east: higher aircraft -> higher elevation angle.
+  const lonOffset = 0.07; // ~3 mi east at this latitude
+  const low = observerLookAngles(OBS.lat, OBS.lon, 0, OBS.lat, OBS.lon + lonOffset, 2000 * FEET_TO_METRES);
+  const high = observerLookAngles(OBS.lat, OBS.lon, 0, OBS.lat, OBS.lon + lonOffset, 40000 * FEET_TO_METRES);
+  assert.ok(high.elevationDegrees > low.elevationDegrees, `${high.elevationDegrees} > ${low.elevationDegrees}`);
+  assert.ok(low.elevationDegrees >= 0 && high.elevationDegrees < 90);
 });

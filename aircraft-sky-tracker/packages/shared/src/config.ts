@@ -3,13 +3,14 @@
 export type AircraftSource = "internet" | "local" | "hybrid";
 export type DisplayMode = "minimal" | "informative";
 /**
- * Overall display layout (FRD v3.2). "ceiling" is the pure look-up sky view for
- * a projector; "screen" adds a schematic geographic backdrop (range rings +
+ * Overall display layout. "true-sky" (FRD v4.0 §8-11) places aircraft AND
+ * satellites by their real azimuth/elevation - where you physically look, zenith
+ * at centre; "ceiling" is the earlier simplified ground projection for a
+ * projector; "screen" adds a schematic geographic backdrop (range rings +
  * compass rose + cardinal labels) for a desk monitor; "map" plots aircraft on a
- * real slippy map (tiles fetched from the internet) with satellites shown in a
- * small observer-sky inset.
+ * real slippy map with satellites in a small observer-sky inset.
  */
-export type ViewMode = "ceiling" | "screen" | "map";
+export type ViewMode = "true-sky" | "ceiling" | "screen" | "map";
 /** How far the viewer sits from the display (FRD v3.2 §12); scales sizes. */
 export type ViewingDistance = "close" | "normal" | "across-room";
 /** Overall element-size profile (FRD v3.2 §13). "automatic" adapts to the screen. */

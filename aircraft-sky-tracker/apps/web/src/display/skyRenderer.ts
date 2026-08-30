@@ -23,6 +23,8 @@ import {
   compassDirection,
   resolveDisplayScale,
   isCompactDisplay,
+  observerLookAngles,
+  FEET_TO_METRES,
 } from "@ast/shared";
 
 const FADE_IN_MS = 500; // FRD §53
@@ -118,6 +120,20 @@ export class SkyRenderer {
   /** True only when map mode is active AND the map projection is ready. */
   private get mapMode(): boolean {
     return this.config?.viewMode === "map" && this.projectionOverride !== undefined;
+  }
+
+  /** True Sky mode: aircraft + satellites placed by real azimuth/elevation. */
+  private get trueSky(): boolean {
+    return this.config?.viewMode === "true-sky";
+  }
+
+  /**
+   * Outer-edge elevation for the observer-sky projection. In True Sky the horizon
+   * (0°) is the edge so aircraft and satellites share one 90°→0° scale; otherwise
+   * satellites use their configured minimum elevation.
+   */
+  private skyEdgeMinElevation(config: AppConfig): number {
+    return this.trueSky ? 0 : config.satelliteMinElevationDeg;
   }
 
   /** Current adaptive size multiplier (used for canvas hit-test/touch targets). */
@@ -246,7 +262,9 @@ export class SkyRenderer {
     this.scale = projectionScale(w, h, config.radiusMiles);
 
     if (!mapMode) {
-      if (config.viewMode === "screen") {
+      if (this.trueSky) {
+        this.drawTrueSkyReference(config, w / 2, h / 2);
+      } else if (config.viewMode === "screen") {
         this.drawScreenBackdrop(config, w / 2, h / 2);
       } else {
         this.drawReference(config, w / 2, h / 2);
@@ -256,7 +274,7 @@ export class SkyRenderer {
     const occupied: Rect[] = [];
 
     // Satellites are a secondary layer, drawn under aircraft (FRD §69). On a map
-    // they cannot sit at a ground position, so they move to a sky inset (§65).
+    // they move to a sky inset (§65); in True Sky they share the full sky.
     if (config.showSatellites) this.drawSatellites(config, now, occupied, mapMode);
 
     // Map mode needs the map projection to be ready before aircraft can align.
@@ -292,6 +310,29 @@ export class SkyRenderer {
     const r = maxR * clamp((90 - elevationDeg) / span, 0, 1);
     const az = (azimuthDeg * Math.PI) / 180;
     return { x: cx + r * Math.sin(az), y: cy - r * Math.cos(az) };
+  }
+
+  /**
+   * True Sky placement (FRD v4.0 §9-11): compute an aircraft's real azimuth and
+   * elevation from its position + altitude versus the observer, then place it on
+   * the same observer-sky projection as satellites. Aircraft with no altitude are
+   * treated as at the surface (they sit near the horizon edge).
+   */
+  private projectTrueSky(
+    config: AppConfig,
+    latitude: number,
+    longitude: number,
+    altitudeFeet: number | undefined,
+  ): { x: number; y: number } {
+    const look = observerLookAngles(
+      config.latitude,
+      config.longitude,
+      0,
+      latitude,
+      longitude,
+      (altitudeFeet ?? 0) * FEET_TO_METRES,
+    );
+    return this.projectSky(look.azimuthDegrees, look.elevationDegrees, 0);
   }
 
   /** Merge a satellite snapshot into the interpolation state. */
@@ -338,7 +379,7 @@ export class SkyRenderer {
           : 1;
       const az = angleLerp(st.prev.az, st.cur.az, frac);
       const el = lerp(st.prev.el, st.cur.el, frac);
-      const p = this.projectSky(az, el, config.satelliteMinElevationDeg, cx, cy, maxR);
+      const p = this.projectSky(az, el, this.skyEdgeMinElevation(config), cx, cy, maxR);
       const fadeIn = clamp((now - st.firstSeenMs) / 400, 0, 1);
       this.drawSatelliteMarker(st.data, p.x, p.y, fadeIn);
       if (mapMode) {
@@ -524,6 +565,53 @@ export class SkyRenderer {
     ctx.restore();
   }
 
+  /**
+   * True Sky reference (FRD v4.0 §10): concentric elevation rings (zenith at
+   * centre, horizon at the edge) with subtle compass labels for orientation.
+   */
+  private drawTrueSkyReference(config: AppConfig, cx: number, cy: number): void {
+    const ctx = this.ctx;
+    const maxR = (Math.min(this.cssWidth, this.cssHeight) / 2) * 0.92;
+    ctx.save();
+
+    ctx.strokeStyle = "rgba(120,130,150,0.26)";
+    ctx.lineWidth = 1;
+    ctx.textAlign = "center";
+    for (const el of [0, 30, 60]) {
+      const r = (maxR * (90 - el)) / 90;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+      if (el > 0) {
+        ctx.fillStyle = "rgba(130,145,170,0.5)";
+        ctx.font = font(Math.max(9, Math.min(12, this.cssHeight / 80)), false);
+        ctx.textBaseline = "bottom";
+        ctx.fillText(`${el}°`, cx, cy - r - 2);
+      }
+    }
+
+    // Zenith marker.
+    ctx.fillStyle = "rgba(160,175,200,0.8)";
+    ctx.beginPath();
+    ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Compass at the horizon edge (N up, E right, S down, W left).
+    ctx.fillStyle = "rgba(150,165,190,0.7)";
+    ctx.font = font(Math.max(11, Math.min(15, this.cssHeight / 55)), true);
+    const pad = 3;
+    ctx.textBaseline = "top";
+    ctx.fillText("N", cx, cy - maxR + pad);
+    ctx.textBaseline = "bottom";
+    ctx.fillText("S", cx, cy + maxR - pad);
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "right";
+    ctx.fillText("E", cx + maxR - pad, cy);
+    ctx.textAlign = "left";
+    ctx.fillText("W", cx - maxR + pad, cy);
+    ctx.restore();
+  }
+
   private drawReference(config: AppConfig, cx: number, cy: number): void {
     const ctx = this.ctx;
     if (config.showRangeRing) {
@@ -566,7 +654,9 @@ export class SkyRenderer {
       frac,
     );
 
-    const screen = this.projectLatLon(latitude, longitude);
+    const screen = this.trueSky
+      ? this.projectTrueSky(config, latitude, longitude, state.data.altitudeFeet)
+      : this.projectLatLon(latitude, longitude);
 
     return {
       id: state.id,
@@ -584,8 +674,12 @@ export class SkyRenderer {
     const ctx = this.ctx;
     const highlight = config.highlightInteresting && p.data.interest !== undefined;
 
-    if (config.showTrails) this.drawTrail(p);
-    if (config.showDestinationArcs) this.drawDestinationArc(p);
+    // Trails and arcs use the ground projection and lack altitude history, so
+    // they are omitted in True Sky (where position is by azimuth/elevation).
+    if (!this.trueSky) {
+      if (config.showTrails) this.drawTrail(p);
+      if (config.showDestinationArcs) this.drawDestinationArc(p);
+    }
 
     // Highlight ring for interesting aircraft (FRD Phase 3).
     if (highlight) {

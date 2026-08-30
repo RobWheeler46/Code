@@ -81,6 +81,87 @@ export function bearingDegrees(
   return (bearing + 360) % 360;
 }
 
+/** 1 foot in metres. */
+export const FEET_TO_METRES = 0.3048;
+
+// WGS-84 ellipsoid.
+const WGS84_A = 6_378_137.0; // semi-major axis (m)
+const WGS84_F = 1 / 298.257223563;
+const WGS84_E2 = WGS84_F * (2 - WGS84_F);
+
+interface Ecef {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/** Geodetic (lat/lon/height) to Earth-Centred Earth-Fixed metres (WGS-84). */
+function geodeticToEcef(latDeg: number, lonDeg: number, heightM: number): Ecef {
+  const lat = toRadians(latDeg);
+  const lon = toRadians(lonDeg);
+  const sinLat = Math.sin(lat);
+  const n = WGS84_A / Math.sqrt(1 - WGS84_E2 * sinLat * sinLat);
+  return {
+    x: (n + heightM) * Math.cos(lat) * Math.cos(lon),
+    y: (n + heightM) * Math.cos(lat) * Math.sin(lon),
+    z: (n * (1 - WGS84_E2) + heightM) * sinLat,
+  };
+}
+
+/** Observer look angles to a target: where in the sky to look (FRD v4.0 §9-11). */
+export interface LookAngles {
+  /** Compass azimuth in degrees (0 = North, 90 = East). */
+  azimuthDegrees: number;
+  /** Elevation above the horizon in degrees (90 = zenith, 0 = horizon, <0 below). */
+  elevationDegrees: number;
+  /** Straight-line (slant) distance in statute miles. */
+  slantRangeMiles: number;
+}
+
+/**
+ * True-sky look angles from an observer to a target, from their geodetic
+ * positions and altitudes (FRD v4.0 §9-11). Converts both to ECEF, rotates the
+ * observer→target vector into the local East/North/Up frame, and reads off
+ * azimuth, elevation and slant range. This places an aircraft (or the ISS) where
+ * you would physically look, accounting for altitude - unlike the flat ground
+ * projection, a high aircraft directly overhead sits near the zenith.
+ */
+export function observerLookAngles(
+  observerLatDeg: number,
+  observerLonDeg: number,
+  observerHeightM: number,
+  targetLatDeg: number,
+  targetLonDeg: number,
+  targetHeightM: number,
+): LookAngles {
+  const obs = geodeticToEcef(observerLatDeg, observerLonDeg, observerHeightM);
+  const tgt = geodeticToEcef(targetLatDeg, targetLonDeg, targetHeightM);
+  const dx = tgt.x - obs.x;
+  const dy = tgt.y - obs.y;
+  const dz = tgt.z - obs.z;
+
+  const lat = toRadians(observerLatDeg);
+  const lon = toRadians(observerLonDeg);
+  const sinLat = Math.sin(lat);
+  const cosLat = Math.cos(lat);
+  const sinLon = Math.sin(lon);
+  const cosLon = Math.cos(lon);
+
+  const east = -sinLon * dx + cosLon * dy;
+  const north = -sinLat * cosLon * dx - sinLat * sinLon * dy + cosLat * dz;
+  const up = cosLat * cosLon * dx + cosLat * sinLon * dy + sinLat * dz;
+
+  const horizontal = Math.hypot(east, north);
+  const azimuth = (toDegrees(Math.atan2(east, north)) + 360) % 360;
+  const elevation = toDegrees(Math.atan2(up, horizontal));
+  const slantRangeMetres = Math.hypot(horizontal, up);
+  return {
+    azimuthDegrees: azimuth,
+    elevationDegrees: elevation,
+    slantRangeMiles: slantRangeMetres / 1609.344,
+  };
+}
+
 export interface EastNorth {
   /** Miles east of centre (positive = east). */
   east: number;

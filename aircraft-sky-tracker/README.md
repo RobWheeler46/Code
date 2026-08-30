@@ -382,10 +382,20 @@ old the orbital elements are) derived from the TLE, and the satellite's **next
 pass** (rise time, max elevation, direction, visibility). Served by
 `/api/satellites/{catalogNumber}/detail` and fetched when the drawer opens.
 
-**View modes (done, FRD v3.2)** — a **View mode** setting (Settings → Display)
-offers three layouts, defaulting to *Ceiling* so existing displays are untouched:
+**True Sky (done, FRD v4.0 §9-11)** — a display mode that places **aircraft *and*
+satellites by their real azimuth and elevation** — where you would physically
+look. Each aircraft's position is derived from its lat/lon **and altitude** versus
+the observer via ECEF→ENU look angles (`observerLookAngles` in `@ast/shared`), so
+a high aircraft directly overhead sits near the **zenith (centre)** and a distant
+low one near the **horizon (edge)**, on the same 90°→0° scale as satellites.
+Concentric elevation rings (60°/30°/horizon) and N/E/S/W compass labels orient
+the view. This supersedes the earlier flat ground projection (kept as *Ceiling*).
 
-- **Ceiling** — the pure look-up sky view for a projector.
+**View modes** — a **View mode** setting (Settings → Display) offers four layouts,
+defaulting to *Ceiling* so existing displays are untouched:
+
+- **True Sky** — real azimuth/elevation look-up view (above).
+- **Ceiling** — the earlier simplified ground projection for a projector.
 - **Screen** — a schematic geographic backdrop for a desk monitor: concentric
   range rings labelled in miles, an 8-point compass rose with N/E/S/W cardinals,
   and a labelled centre (home) marker. Orientation chrome only — **no map
