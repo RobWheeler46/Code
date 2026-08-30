@@ -66,13 +66,17 @@ ADS-B receiver or another API is an implementation detail behind the
 > and clicking one opens a detail drawer. Runs against live CelesTrak data, or a
 > synthetic set (ISS/HST/…) under `AIRCRAFT_PROVIDER=simulation`.
 >
-> **Resilience:** CelesTrak is a single free source, so every successful download
-> is saved to the data volume (`orbital-elements.json`) and reloaded at startup —
-> the sky stays populated from the last-good elements even if CelesTrak is
-> unreachable across a restart (TLEs remain usable for SGP4 for several days).
-> While a live fetch hasn't yet succeeded, the backend retries on a short backoff
-> (30 s → 10 min) instead of waiting for the 8-hour cycle, so the layer self-heals
-> within minutes of CelesTrak recovering.
+> **Resilience (FRD §77):** CelesTrak is a single free source, so the app is
+> hardened three ways against it going down. (1) An optional **Space-Track.org
+> backup** behind a failover — the authoritative origin of the data — is used
+> automatically if CelesTrak fails (set `SPACETRACK_USER` / `SPACETRACK_PASSWORD`;
+> it covers a curated bright-object set, CelesTrak stays primary for the full
+> groups). (2) Every successful download is **saved to the data volume**
+> (`orbital-elements.json`) and reloaded at startup, so the sky stays populated
+> from the last-good elements across a restart (TLEs stay usable for SGP4 for
+> several days). (3) Until a live fetch succeeds, the backend **retries on a short
+> backoff** (30 s → 10 min) instead of waiting for the 8-hour cycle, so the layer
+> self-heals within minutes of a source recovering.
 
 ## Tech stack
 
@@ -161,6 +165,7 @@ screen. Startup defaults come from the environment (see `.env.example`):
 | `AIRFRAMES_API_KEY` | *(unset)* | Optional 2nd route source; enables "Confirmed" routes + conflict detection (FRD §24-26) |
 | `NOTIFY_NTFY_TOPIC` | *(unset)* | ntfy topic for interesting-aircraft push alerts; push is off until set |
 | `NOTIFY_NTFY_SERVER` | `https://ntfy.sh` | ntfy server for push alerts |
+| `SPACETRACK_USER` / `SPACETRACK_PASSWORD` | *(unset)* | Optional Space-Track.org backup for satellite orbital data; used only if CelesTrak fails. Both must be set |
 | `PORT` | *(from host)* | Honoured for PaaS (Railway); falls back to `HTTP_PORT` |
 | `DEFAULT_POSTCODE` | `SN25 4TP` | |
 | `DEFAULT_RADIUS_MILES` | `10` | statute miles |

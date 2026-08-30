@@ -76,6 +76,9 @@ export interface Env {
   /** Optional Airframes flight-intelligence provider (FRD §24-26). */
   airframesApiKey: string | undefined;
   airframesUrl: string;
+  /** Optional Space-Track.org credentials for the orbital-data backup (§77). */
+  spaceTrackUser: string | undefined;
+  spaceTrackPassword: string | undefined;
 }
 
 const nodeEnv = str("NODE_ENV", "production");
@@ -103,4 +106,6 @@ export const env: Env = {
   notifyNtfyServer: str("NOTIFY_NTFY_SERVER", "https://ntfy.sh"),
   airframesApiKey: process.env["AIRFRAMES_API_KEY"] || undefined,
   airframesUrl: str("AIRFRAMES_URL", "https://api.airframes.io"),
+  spaceTrackUser: process.env["SPACETRACK_USER"] || undefined,
+  spaceTrackPassword: process.env["SPACETRACK_PASSWORD"] || undefined,
 };

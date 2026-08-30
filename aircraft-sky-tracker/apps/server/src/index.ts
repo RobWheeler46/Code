@@ -41,6 +41,8 @@ import { SatelliteService, type SatelliteConfigView } from "./satellite/satellit
 import { PassPredictionService } from "./satellite/passPredictionService.js";
 import { SatelliteAlertService } from "./satellite/satelliteAlertService.js";
 import { CelesTrakProvider } from "./satellite/orbitalProvider.js";
+import { SpaceTrackProvider } from "./satellite/spaceTrackProvider.js";
+import { FailoverOrbitalProvider } from "./satellite/failoverOrbitalProvider.js";
 import { OrbitalElementCache } from "./satellite/orbitalCache.js";
 import { orbitFrom } from "./satellite/sgp4Service.js";
 import { DiagnosticsService } from "./diagnostics/diagnosticsService.js";
@@ -129,8 +131,16 @@ async function main(): Promise<void> {
   const orbitalCache = new OrbitalElementCache(
     resolve(dirname(env.databasePath), "orbital-elements.json"),
   );
-  const satellites = new SatelliteService(
+  // CelesTrak is primary; Space-Track (if credentials are configured) is an
+  // independent backup so a single-source outage can't empty the sky (FRD §77).
+  const spaceTrack = new SpaceTrackProvider(env.spaceTrackUser, env.spaceTrackPassword);
+  const orbitalProvider = new FailoverOrbitalProvider(
     new CelesTrakProvider(),
+    spaceTrack.configured ? spaceTrack : undefined,
+  );
+  if (spaceTrack.configured) log.info("Space-Track orbital backup enabled");
+  const satellites = new SatelliteService(
+    orbitalProvider,
     satelliteConfigView,
     (sats) => ws.broadcast({ type: "satellite.snapshot", timestamp: Date.now(), satellites: sats }),
     env.aircraftProvider === "simulation",
