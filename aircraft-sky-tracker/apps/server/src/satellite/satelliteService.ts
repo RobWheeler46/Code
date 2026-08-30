@@ -20,6 +20,10 @@ const log = createLogger("satellite");
 const TICK_MS = 2000; // position recompute cadence (FRD §54)
 const REFRESH_MS = 8 * 60 * 60 * 1000; // orbital element refresh (FRD §55)
 const DARK_SUN_ELEVATION_DEG = -4; // sky dark enough for a naked-eye pass (§46)
+// While no elements have loaded yet (e.g. CelesTrak unreachable at startup),
+// retry on a short backoff instead of waiting for the 8-hour cycle (FRD §77).
+const RETRY_MIN_MS = 30 * 1000;
+const RETRY_MAX_MS = 10 * 60 * 1000;
 
 export interface SatelliteConfigView {
   showSatellites: boolean;
@@ -55,6 +59,8 @@ export class SatelliteService {
   };
   private tickTimer: NodeJS.Timeout | undefined;
   private refreshTimer: NodeJS.Timeout | undefined;
+  private retryTimer: NodeJS.Timeout | undefined;
+  private retryDelayMs = RETRY_MIN_MS;
 
   constructor(
     private readonly provider: OrbitalDataProvider,
@@ -79,6 +85,7 @@ export class SatelliteService {
   stop(): void {
     if (this.tickTimer) clearInterval(this.tickTimer);
     if (this.refreshTimer) clearInterval(this.refreshTimer);
+    if (this.retryTimer) clearTimeout(this.retryTimer);
   }
 
   getSnapshot(): Satellite[] {
@@ -121,6 +128,7 @@ export class SatelliteService {
         this.elements = els;
         this.elementsFetchedAt = Date.now();
         this.status = "connected";
+        this.clearRetry();
         log.info("orbital elements refreshed", { loaded: els.length });
       }
     } catch (err) {
@@ -128,6 +136,27 @@ export class SatelliteService {
       this.status = this.elements.length > 0 ? "degraded" : "disconnected";
       log.warn("orbital refresh failed", { error: String(err) });
     }
+    // Never loaded any elements yet? Keep trying on a short backoff rather than
+    // leaving the sky empty until the 8-hour cycle (FRD §77).
+    if (!this.simulation && this.elements.length === 0) this.scheduleRetry();
+  }
+
+  private scheduleRetry(): void {
+    if (this.retryTimer) return; // one retry pending at a time
+    const delay = this.retryDelayMs;
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = undefined;
+      this.retryDelayMs = Math.min(this.retryDelayMs * 2, RETRY_MAX_MS);
+      void this.refreshElements();
+    }, delay);
+    this.retryTimer.unref();
+    log.info("orbital elements not loaded; scheduling retry", { delayMs: delay });
+  }
+
+  private clearRetry(): void {
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    this.retryTimer = undefined;
+    this.retryDelayMs = RETRY_MIN_MS;
   }
 
   private groupEnabled(category: Satellite["category"], cfg: SatelliteConfigView): boolean {
