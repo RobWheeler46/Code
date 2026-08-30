@@ -24,6 +24,9 @@ export interface OrbitalElement {
   satrec: satellite.SatRec;
   /** International designator from TLE line 1, e.g. "1998-067A". */
   intlDesignator?: string;
+  /** The two raw TLE element lines, retained so elements can be persisted. */
+  line1: string;
+  line2: string;
 }
 
 export interface OrbitalDataProvider {
@@ -82,6 +85,30 @@ function formatIntlDesignator(raw: string): string | undefined {
   return `${year}-${m[2]}${m[3]}`;
 }
 
+/** Build one orbital element from a TLE name + two element lines. */
+export function elementFromLines(
+  name: string,
+  l1: string,
+  l2: string,
+  category: SatelliteCategory,
+): OrbitalElement | undefined {
+  if (!l1.startsWith("1 ") || !l2.startsWith("2 ")) return undefined;
+  try {
+    const satrec = satellite.twoline2satrec(l1, l2);
+    return {
+      catalogNumber: l1.slice(2, 7).trim(),
+      name: name.trim(),
+      category,
+      satrec,
+      intlDesignator: formatIntlDesignator(l1.slice(9, 17).trim()),
+      line1: l1,
+      line2: l2,
+    };
+  } catch {
+    return undefined; // malformed element set
+  }
+}
+
 /** Parse 3-line TLE text (name + two element lines) into records. */
 export function parseTle(text: string, category: SatelliteCategory): OrbitalElement[] {
   const lines = text
@@ -90,23 +117,8 @@ export function parseTle(text: string, category: SatelliteCategory): OrbitalElem
     .filter((l) => l.length > 0);
   const out: OrbitalElement[] = [];
   for (let i = 0; i + 2 < lines.length + 1; i += 3) {
-    const name = lines[i];
-    const l1 = lines[i + 1];
-    const l2 = lines[i + 2];
-    if (!name || !l1 || !l2 || !l1.startsWith("1 ") || !l2.startsWith("2 ")) continue;
-    try {
-      const satrec = satellite.twoline2satrec(l1, l2);
-      const catalogNumber = l1.slice(2, 7).trim();
-      out.push({
-        catalogNumber,
-        name: name.trim(),
-        category,
-        satrec,
-        intlDesignator: formatIntlDesignator(l1.slice(9, 17).trim()),
-      });
-    } catch {
-      /* skip malformed element set */
-    }
+    const el = elementFromLines(lines[i] ?? "", lines[i + 1] ?? "", lines[i + 2] ?? "", category);
+    if (el) out.push(el);
   }
   return out;
 }

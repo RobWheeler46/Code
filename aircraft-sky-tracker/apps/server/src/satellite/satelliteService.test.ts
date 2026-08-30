@@ -1,8 +1,12 @@
 import { test, mock } from "node:test";
 import assert from "node:assert/strict";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { rmSync } from "node:fs";
 import { SatelliteService, type SatelliteConfigView } from "./satelliteService.js";
 import type { OrbitalDataProvider, OrbitalElement } from "./orbitalProvider.js";
 import { parseTle } from "./orbitalProvider.js";
+import { OrbitalElementCache } from "./orbitalCache.js";
 
 const ISS_TLE = `ISS (ZARYA)
 1 25544U 98067A   24240.50000000  .00016717  00000-0  30074-3 0  9993
@@ -48,6 +52,32 @@ test("retries loading orbital elements after an initial fetch failure", async ()
     svc.stop();
   } finally {
     mock.timers.reset();
+  }
+});
+
+test("serves last-good cached elements when CelesTrak is unreachable", async () => {
+  const path = join(tmpdir(), `ast-svc-cache-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
+  try {
+    // Pre-seed the cache as if a previous run had fetched successfully.
+    const cache = new OrbitalElementCache(path);
+    cache.save(parseTle(ISS_TLE, "station"), Date.now() - 3_600_000);
+
+    const provider: OrbitalDataProvider = {
+      name: "fake",
+      async fetchElements(): Promise<OrbitalElement[]> {
+        throw new Error("CelesTrak unreachable");
+      },
+    };
+    const svc = new SatelliteService(provider, () => CFG, () => {}, false, cache);
+    await svc.start();
+
+    // Even though the live fetch failed, the sky is populated from the cache,
+    // and the source is reported as degraded (data present, source unconfirmed).
+    assert.equal(svc.getElements().length, 1);
+    assert.equal(svc.diagnostics().status, "degraded");
+    svc.stop();
+  } finally {
+    rmSync(path, { force: true });
   }
 });
 

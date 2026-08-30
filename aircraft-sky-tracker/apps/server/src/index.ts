@@ -41,6 +41,7 @@ import { SatelliteService, type SatelliteConfigView } from "./satellite/satellit
 import { PassPredictionService } from "./satellite/passPredictionService.js";
 import { SatelliteAlertService } from "./satellite/satelliteAlertService.js";
 import { CelesTrakProvider } from "./satellite/orbitalProvider.js";
+import { OrbitalElementCache } from "./satellite/orbitalCache.js";
 import { orbitFrom } from "./satellite/sgp4Service.js";
 import { DiagnosticsService } from "./diagnostics/diagnosticsService.js";
 import { createAircraftProvider } from "./providers/index.js";
@@ -123,11 +124,17 @@ async function main(): Promise<void> {
       longitude: c.longitude,
     };
   };
+  // Persist last-good orbital elements next to the database so the satellite
+  // layer survives a CelesTrak outage across restarts (FRD §77).
+  const orbitalCache = new OrbitalElementCache(
+    resolve(dirname(env.databasePath), "orbital-elements.json"),
+  );
   const satellites = new SatelliteService(
     new CelesTrakProvider(),
     satelliteConfigView,
     (sats) => ws.broadcast({ type: "satellite.snapshot", timestamp: Date.now(), satellites: sats }),
     env.aircraftProvider === "simulation",
+    orbitalCache,
   );
   const satellitePasses = new PassPredictionService(
     () => satellites.getElements(),

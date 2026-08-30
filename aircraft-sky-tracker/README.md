@@ -65,6 +65,14 @@ ADS-B receiver or another API is an implementation detail behind the
 > ◇ stations, ◆ bright/interesting, · Starlink — cyan when potentially visible —
 > and clicking one opens a detail drawer. Runs against live CelesTrak data, or a
 > synthetic set (ISS/HST/…) under `AIRCRAFT_PROVIDER=simulation`.
+>
+> **Resilience:** CelesTrak is a single free source, so every successful download
+> is saved to the data volume (`orbital-elements.json`) and reloaded at startup —
+> the sky stays populated from the last-good elements even if CelesTrak is
+> unreachable across a restart (TLEs remain usable for SGP4 for several days).
+> While a live fetch hasn't yet succeeded, the backend retries on a short backoff
+> (30 s → 10 min) instead of waiting for the 8-hour cycle, so the layer self-heals
+> within minutes of CelesTrak recovering.
 
 ## Tech stack
 

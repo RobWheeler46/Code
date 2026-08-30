@@ -10,6 +10,7 @@
 
 import { type Satellite, compassDirection } from "@ast/shared";
 import type { OrbitalDataProvider, OrbitalElement } from "./orbitalProvider.js";
+import type { OrbitalElementCache } from "./orbitalCache.js";
 import { observe, observerFrom, sunElevationDeg, type ObserverGd } from "./sgp4Service.js";
 import { isSunlit, sunEci } from "./astro.js";
 import { simulationSatellites, skyBearing } from "./simulationSatellites.js";
@@ -67,10 +68,12 @@ export class SatelliteService {
     private readonly getConfig: () => SatelliteConfigView,
     private readonly onSnapshot: (satellites: Satellite[]) => void,
     private readonly simulation: boolean,
+    private readonly cache?: OrbitalElementCache,
   ) {}
 
   async start(): Promise<void> {
     if (!this.simulation) {
+      this.loadFromCache();
       await this.refreshElements();
       this.refreshTimer = setInterval(() => void this.refreshElements(), REFRESH_MS);
       this.refreshTimer.unref();
@@ -80,6 +83,21 @@ export class SatelliteService {
     this.tickTimer = setInterval(() => this.tick(), TICK_MS);
     this.tick();
     log.info("satellite service started", { simulation: this.simulation });
+  }
+
+  /** Seed elements from the last-good cache so the sky is populated at boot. */
+  private loadFromCache(): void {
+    if (!this.cache || this.elements.length > 0) return;
+    const cached = this.cache.load();
+    if (!cached) return;
+    this.elements = cached.elements;
+    this.elementsFetchedAt = cached.fetchedAt;
+    // We have data but have not yet confirmed the live source (FRD §77).
+    this.status = "degraded";
+    log.info("orbital elements loaded from cache", {
+      loaded: cached.elements.length,
+      ageHours: ((Date.now() - cached.fetchedAt) / 3_600_000).toFixed(1),
+    });
   }
 
   stop(): void {
@@ -129,6 +147,7 @@ export class SatelliteService {
         this.elementsFetchedAt = Date.now();
         this.status = "connected";
         this.clearRetry();
+        this.cache?.save(els, this.elementsFetchedAt);
         log.info("orbital elements refreshed", { loaded: els.length });
       }
     } catch (err) {
@@ -136,9 +155,9 @@ export class SatelliteService {
       this.status = this.elements.length > 0 ? "degraded" : "disconnected";
       log.warn("orbital refresh failed", { error: String(err) });
     }
-    // Never loaded any elements yet? Keep trying on a short backoff rather than
-    // leaving the sky empty until the 8-hour cycle (FRD §77).
-    if (!this.simulation && this.elements.length === 0) this.scheduleRetry();
+    // Until a live fetch has succeeded (even while serving stale cache), keep
+    // retrying on a short backoff rather than waiting for the 8-hour cycle.
+    if (!this.simulation && this.status !== "connected") this.scheduleRetry();
   }
 
   private scheduleRetry(): void {
