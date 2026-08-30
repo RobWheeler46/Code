@@ -119,11 +119,13 @@ export class ViewService {
     const watchTokens = parseWatchlist(watchlist);
     const raw = await this.provider.fetchAircraft(lat, lon, radius);
     const source = this.provider.name;
+    const hideGround = this.settings.get().hideGroundAircraft;
     const out: Aircraft[] = [];
 
     for (const item of raw) {
       const n = normaliseAircraft(item, source);
       if (!n) continue;
+      if (hideGround && n.onGround) continue;
       const distance = haversineDistanceMiles(lat, lon, n.latitude, n.longitude);
       if (distance > radius) continue;
       const bearing = bearingDegrees(lat, lon, n.latitude, n.longitude);
@@ -172,6 +174,7 @@ export class ViewService {
         altitudeFeet: n.altitudeFeet,
         groundSpeedKnots: n.groundSpeedKnots,
         trackDegrees: n.trackDegrees,
+        onGround: n.onGround,
         distanceMiles: round(distance, 2),
         bearingFromCentre: round(bearing, 1),
         aircraftTypeCode: type,

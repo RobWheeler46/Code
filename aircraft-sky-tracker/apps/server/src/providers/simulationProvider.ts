@@ -22,6 +22,7 @@ interface Template {
   aircraftTypeCode?: string;
   altitudeFeet: number;
   groundSpeedKnots: number;
+  onGround?: boolean;
 }
 
 /**
@@ -48,6 +49,8 @@ const ROSTER: Template[] = [
   { icaoHex: "SIM014", registration: "G-BIZJ", callsign: "EJA123", aircraftTypeCode: "E55P", altitudeFeet: 28000, groundSpeedKnots: 400 },
   { icaoHex: "SIM015", registration: "G-POLA", callsign: "NPAS01", aircraftTypeCode: "EC35", altitudeFeet: 1200, groundSpeedKnots: 120 },
   { icaoHex: "SIM016", registration: "G-SPIT", aircraftTypeCode: "SPIT", altitudeFeet: 1500, groundSpeedKnots: 180 },
+  // On the ground (taxiing) - hidden when "hide ground aircraft" is enabled.
+  { icaoHex: "SIM017", registration: "G-TAXI", callsign: "GND17", aircraftTypeCode: "A320", altitudeFeet: 0, groundSpeedKnots: 12, onGround: true },
 ];
 
 interface SimFlight extends Template {
@@ -87,6 +90,7 @@ export class SimulationProvider implements AircraftProvider {
       altitudeFeet: f.altitudeFeet,
       groundSpeedKnots: f.groundSpeedKnots,
       trackDegrees: Math.round(f.trackDegrees),
+      onGround: f.onGround,
       positionAgeSeconds: 1,
     }));
   }

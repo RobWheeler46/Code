@@ -72,6 +72,8 @@ export interface Aircraft {
   altitudeFeet?: number;
   groundSpeedKnots?: number;
   trackDegrees?: number;
+  /** On the ground (ADS-B ground bit / alt_baro "ground"), not airborne. */
+  onGround?: boolean;
   distanceMiles: number;
   bearingFromCentre: number;
   aircraftTypeCode?: string;
@@ -106,6 +108,8 @@ export interface ProviderAircraft {
   altitudeFeet?: number;
   groundSpeedKnots?: number;
   trackDegrees?: number;
+  /** Provider indicates the aircraft is on the ground. */
+  onGround?: boolean;
   positionAgeSeconds?: number;
   providerFlags?: unknown;
   /** Extended ADS-B fields, where the provider supplies them (FRD §10, §43, §46). */

@@ -162,6 +162,7 @@ async function main(): Promise<void> {
         Date.now(),
         cfg.watchlist,
         cfg.lowAltitudeThresholdFeet,
+        cfg.hideGroundAircraft,
       );
       ws.broadcast({
         type: "aircraft.snapshot",
@@ -315,6 +316,7 @@ async function main(): Promise<void> {
         "showDestinationArcs",
         "interpolationEnabled",
         "highlightInteresting",
+        "hideGroundAircraft",
         "historyEnabled",
         "inAppAlerts",
         "browserNotifications",

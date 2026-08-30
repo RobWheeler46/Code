@@ -38,6 +38,21 @@ test("aircraft inside the radius is displayed", () => {
   assert.ok((out[0]?.distanceMiles ?? 99) < 10);
 });
 
+test("ground aircraft are shown by default and hidden when the option is on", () => {
+  const airborne = aircraftNorth("AIR", 4);
+  const grounded: ProviderAircraft = { ...aircraftNorth("GND", 3), onGround: true };
+
+  // Default: both appear, and the ground flag is carried through.
+  const shown = makeState().update([airborne, grounded], 10, "test");
+  assert.equal(shown.length, 2);
+  assert.equal(shown.find((a) => a.icaoHex === "GND")?.onGround, true);
+
+  // hideGround = true: the grounded aircraft is excluded, the airborne one stays.
+  const filtered = makeState().update([airborne, grounded], 10, "test", Date.now(), "", undefined, true);
+  assert.equal(filtered.length, 1);
+  assert.equal(filtered[0]?.icaoHex, "AIR");
+});
+
 test("aircraft beyond the radius does not appear", () => {
   const state = makeState();
   const out = state.update([aircraftNorth("BBB", 12)], 10, "test");

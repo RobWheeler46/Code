@@ -24,6 +24,7 @@ interface SettingsRow {
   highlight_interesting: number;
   watchlist: string;
   low_altitude_threshold: number;
+  hide_ground_aircraft: number;
   history_enabled: number;
   history_retention_days: number;
   in_app_alerts: number;
@@ -74,6 +75,7 @@ function rowToConfig(row: SettingsRow): AppConfig {
     highlightInteresting: bool(row.highlight_interesting),
     watchlist: row.watchlist ?? "",
     lowAltitudeThresholdFeet: row.low_altitude_threshold,
+    hideGroundAircraft: bool(row.hide_ground_aircraft),
     historyEnabled: bool(row.history_enabled),
     historyRetentionDays: row.history_retention_days,
     inAppAlerts: bool(row.in_app_alerts),
@@ -105,7 +107,7 @@ export class SettingsRepo {
           display_mode, show_registration, show_destination, show_flight_number,
           show_altitude, show_distance, show_centre_marker, show_range_ring,
           show_header, show_trails, show_destination_arcs,
-          highlight_interesting, watchlist, low_altitude_threshold,
+          highlight_interesting, watchlist, low_altitude_threshold, hide_ground_aircraft,
           history_enabled, history_retention_days, in_app_alerts,
           browser_notifications, show_satellites, satellite_min_elevation,
           satellite_show_stations, satellite_show_bright, satellite_show_starlink,
@@ -113,7 +115,7 @@ export class SettingsRepo {
           satellite_alerts_enabled, satellite_alert_lead_minutes, satellite_alert_visible_only,
           interpolation, created_at, updated_at
         ) VALUES (
-          1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )`,
       )
       .run(
@@ -136,6 +138,7 @@ export class SettingsRepo {
         Number(defaults.highlightInteresting),
         defaults.watchlist,
         defaults.lowAltitudeThresholdFeet,
+        Number(defaults.hideGroundAircraft),
         Number(defaults.historyEnabled),
         defaults.historyRetentionDays,
         Number(defaults.inAppAlerts),
@@ -183,7 +186,7 @@ export class SettingsRepo {
           show_distance = ?, show_centre_marker = ?, show_range_ring = ?,
           show_header = ?, show_trails = ?, show_destination_arcs = ?,
           highlight_interesting = ?, watchlist = ?,
-          low_altitude_threshold = ?, history_enabled = ?,
+          low_altitude_threshold = ?, hide_ground_aircraft = ?, history_enabled = ?,
           history_retention_days = ?, in_app_alerts = ?,
           browser_notifications = ?, show_satellites = ?,
           satellite_min_elevation = ?, satellite_show_stations = ?,
@@ -214,6 +217,7 @@ export class SettingsRepo {
         Number(config.highlightInteresting),
         config.watchlist,
         config.lowAltitudeThresholdFeet,
+        Number(config.hideGroundAircraft),
         Number(config.historyEnabled),
         config.historyRetentionDays,
         Number(config.inAppAlerts),

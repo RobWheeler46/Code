@@ -21,6 +21,7 @@ export interface NormalisedAircraft {
   altitudeFeet?: number;
   groundSpeedKnots?: number;
   trackDegrees?: number;
+  onGround?: boolean;
   aircraftTypeCode?: string;
   /** Provider dbFlags (military / interesting bits), when numeric. */
   providerFlags?: number;
@@ -63,6 +64,7 @@ export function normaliseAircraft(
     altitudeFeet: raw.altitudeFeet,
     groundSpeedKnots: raw.groundSpeedKnots,
     trackDegrees: raw.trackDegrees,
+    onGround: raw.onGround === true ? true : undefined,
     aircraftTypeCode: raw.aircraftTypeCode?.trim() || undefined,
     providerFlags: typeof raw.providerFlags === "number" ? raw.providerFlags : undefined,
     verticalRateFpm: raw.verticalRateFpm,

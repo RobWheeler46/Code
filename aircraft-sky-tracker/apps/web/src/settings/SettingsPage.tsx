@@ -104,6 +104,7 @@ export function SettingsPage({ onBack }: Props) {
         highlightInteresting: draft.highlightInteresting,
         watchlist: draft.watchlist,
         lowAltitudeThresholdFeet: draft.lowAltitudeThresholdFeet,
+        hideGroundAircraft: draft.hideGroundAircraft,
         inAppAlerts: draft.inAppAlerts,
         browserNotifications: draft.browserNotifications,
         historyEnabled: draft.historyEnabled,
@@ -265,6 +266,18 @@ export function SettingsPage({ onBack }: Props) {
           {toggle.label}
         </label>
       ))}
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={draft.hideGroundAircraft}
+          onChange={(e) => setToggle("hideGroundAircraft", e.target.checked)}
+        />
+        Hide aircraft on the ground
+      </label>
+      <div className="hint">
+        When on, aircraft reporting as on the ground (taxiing or parked) are excluded, so
+        only airborne traffic is shown.
+      </div>
 
       <h2>Interesting aircraft</h2>
       <label className="check">

@@ -46,6 +46,7 @@ export function mapOpenSkyState(
 
   const callsignRaw = typeof state[1] === "string" ? state[1].trim() : "";
   const baroAlt = typeof state[7] === "number" ? state[7] : undefined;
+  const onGround = state[8] === true; // OpenSky state vector index 8 = on_ground
   const velocity = typeof state[9] === "number" ? state[9] : undefined;
   const track = typeof state[10] === "number" ? state[10] : undefined;
   const timePos = typeof state[3] === "number" ? state[3] : undefined;
@@ -60,6 +61,7 @@ export function mapOpenSkyState(
     latitude,
     longitude,
     altitudeFeet: baroAlt !== undefined ? Math.round(baroAlt * METERS_TO_FEET) : undefined,
+    onGround: onGround ? true : undefined,
     groundSpeedKnots: velocity !== undefined ? velocity * MPS_TO_KNOTS : undefined,
     trackDegrees: track,
     positionAgeSeconds: age,

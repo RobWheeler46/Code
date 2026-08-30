@@ -335,6 +335,10 @@ highlight on the display, and opt-in ntfy push notifications.
 **Aircraft history (done, FRD v3.0)** — per-aircraft pass records, `/history`
 view with date filter + clear, configurable retention.
 
+**Hide ground aircraft (done)** — an optional Settings toggle (off by default)
+excludes aircraft reporting as on the ground (ADS-B ground bit / `alt_baro`
+"ground"; OpenSky `on_ground`), so the display shows only airborne traffic.
+
 **Satellite layer (done, FRD v3.2 §41-58)** — overhead satellites from CelesTrak
 orbital elements, SGP4-propagated to observer az/el/range with naked-eye
 visibility (sunlit satellite + observer in darkness). Rendered on the

@@ -58,6 +58,7 @@ export class AircraftStateService {
     now: number = Date.now(),
     watchlist = "",
     lowAltitudeFeet?: number,
+    hideGround = false,
   ): Aircraft[] {
     let insideRadius = 0;
     const seen = new Set<string>();
@@ -66,6 +67,12 @@ export class AircraftStateService {
     for (const item of raw) {
       const normalised = normaliseAircraft(item, source);
       if (!normalised) continue;
+
+      // Optionally exclude aircraft on the ground (taxiing / parked) (FRD §14).
+      if (hideGround && normalised.onGround) {
+        this.tracked.delete(normalised.id);
+        continue;
+      }
 
       const distanceMiles = this.geo.distanceMiles(
         normalised.latitude,
@@ -131,6 +138,7 @@ export class AircraftStateService {
         altitudeFeet: normalised.altitudeFeet,
         groundSpeedKnots: normalised.groundSpeedKnots,
         trackDegrees: normalised.trackDegrees,
+        onGround: normalised.onGround,
         distanceMiles: round(distanceMiles, 2),
         bearingFromCentre: round(bearingFromCentre, 1),
         aircraftTypeCode,

@@ -153,6 +153,7 @@ function migrate(db: DatabaseSync): void {
   ensureColumn(db, "settings", "highlight_interesting", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn(db, "settings", "watchlist", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, "settings", "low_altitude_threshold", "INTEGER NOT NULL DEFAULT 3000");
+  ensureColumn(db, "settings", "hide_ground_aircraft", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn(db, "settings", "history_enabled", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn(db, "settings", "history_retention_days", "INTEGER NOT NULL DEFAULT 31");
   ensureColumn(db, "settings", "in_app_alerts", "INTEGER NOT NULL DEFAULT 1");

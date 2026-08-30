@@ -146,6 +146,7 @@ export class ReApiProvider implements AircraftProvider {
       latitude: num(a.lat),
       longitude: num(a.lon),
       altitudeFeet: altitude(a.alt_baro),
+      onGround: a.alt_baro === "ground" ? true : undefined,
       groundSpeedKnots: num(a.gs),
       trackDegrees: num(a.track),
       positionAgeSeconds: num(a.seen_pos),

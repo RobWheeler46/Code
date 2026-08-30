@@ -45,6 +45,8 @@ export interface AppConfig {
   watchlist: string;
   /** Altitude (ft) below which an aircraft is "low" (FRD v3.0 §50). */
   lowAltitudeThresholdFeet: number;
+  /** Hide aircraft that are on the ground (taxiing / parked), showing only airborne. */
+  hideGroundAircraft: boolean;
   /** Record aircraft pass history (FRD v3.0 §56). */
   historyEnabled: boolean;
   /** Days to retain history passes (FRD v3.0 §62). */
@@ -102,6 +104,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   highlightInteresting: true,
   watchlist: "",
   lowAltitudeThresholdFeet: 3000,
+  hideGroundAircraft: false,
   historyEnabled: true,
   historyRetentionDays: 31,
   inAppAlerts: true,
@@ -141,6 +144,7 @@ export type ConfigUpdate = Partial<
     | "highlightInteresting"
     | "watchlist"
     | "lowAltitudeThresholdFeet"
+    | "hideGroundAircraft"
     | "historyEnabled"
     | "historyRetentionDays"
     | "inAppAlerts"
