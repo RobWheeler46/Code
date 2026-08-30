@@ -1,0 +1,11 @@
+# Binary assets must never get line-ending or text normalisation applied - that would
+# corrupt the file. Self-hosted web fonts and images live under webroot/.
+*.woff2 binary
+*.woff  binary
+*.ttf   binary
+*.otf   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
