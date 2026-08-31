@@ -44,6 +44,12 @@ import { CelesTrakProvider } from "./satellite/orbitalProvider.js";
 import { SpaceTrackProvider } from "./satellite/spaceTrackProvider.js";
 import { FailoverOrbitalProvider } from "./satellite/failoverOrbitalProvider.js";
 import { OrbitalElementCache } from "./satellite/orbitalCache.js";
+import {
+  IpWhoIsProvider,
+  clientIp,
+  cloudflareLocation,
+} from "./location/ipLocationProvider.js";
+import { classifyConfidence, type DetectedLocation, type LocationSource } from "@ast/shared";
 import { orbitFrom } from "./satellite/sgp4Service.js";
 import { DiagnosticsService } from "./diagnostics/diagnosticsService.js";
 import { createAircraftProvider } from "./providers/index.js";
@@ -70,6 +76,7 @@ async function main(): Promise<void> {
   let config = settings.ensureSeeded(seedDefaults);
 
   const location = new LocationService();
+  const ipLocation = new IpWhoIsProvider();
 
   // Resolve coordinates if we do not have them yet (FRD §84-85).
   if (config.latitude === 0 && config.longitude === 0) {
@@ -276,6 +283,11 @@ async function main(): Promise<void> {
           next.postcode = resolved.postcode;
           next.latitude = resolved.latitude;
           next.longitude = resolved.longitude;
+          // An explicit postcode is a "good" fix (FRD v3.6 §8).
+          next.locationSource = "postcode";
+          next.locationConfidence = "good";
+          next.locationName = resolved.postcode;
+          next.locationAccuracyRadiusKm = undefined;
           centreChanged = true;
         }
       }
@@ -423,6 +435,59 @@ async function main(): Promise<void> {
         latitude: resolved.latitude,
         longitude: resolved.longitude,
       };
+    },
+
+    detectLocation: async (headers): Promise<DetectedLocation> => {
+      // Prefer Cloudflare edge headers if present; else server-side IP lookup.
+      const edge = cloudflareLocation(headers);
+      if (edge) return edge;
+      const detected = await ipLocation.lookup(clientIp(headers));
+      return (
+        detected ?? {
+          latitude: 0,
+          longitude: 0,
+          source: "ip",
+          confidence: "unknown",
+          detectedAt: new Date().toISOString(),
+        }
+      );
+    },
+
+    applyLocation: async (input): Promise<UpdateOutcome> => {
+      const lat = Number(input.latitude);
+      const lon = Number(input.longitude);
+      if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
+        return { ok: false, status: 400, error: "Invalid latitude" };
+      }
+      if (!Number.isFinite(lon) || lon < -180 || lon > 180) {
+        return { ok: false, status: 400, error: "Invalid longitude" };
+      }
+      const source: LocationSource =
+        input.source === "device" ? "device" : input.source === "manual" ? "manual" : "ip";
+      const accuracyKm =
+        Number.isFinite(Number(input.accuracyRadiusKm)) && Number(input.accuracyRadiusKm) > 0
+          ? Number(input.accuracyRadiusKm)
+          : undefined;
+      const name =
+        typeof input.displayName === "string" && input.displayName.trim().length > 0
+          ? input.displayName.trim().slice(0, 120)
+          : undefined;
+      const current = settings.get();
+      const next: AppConfig = {
+        ...current,
+        latitude: lat,
+        longitude: lon,
+        // Device/IP fixes have no postcode; keep the area name for display.
+        postcode: name ?? "",
+        locationSource: source,
+        locationConfidence: classifyConfidence(source, accuracyKm),
+        locationAccuracyRadiusKm: accuracyKm,
+        locationName: name,
+      };
+      const saved = settings.save(next);
+      applyRuntimeConfig(saved, true);
+      log.info("location applied", { source, confidence: saved.locationConfidence });
+      return { ok: true, status: 200, config: saved };
     },
 
     snapshot: (): { generatedAt: string; aircraft: Aircraft[] } => ({

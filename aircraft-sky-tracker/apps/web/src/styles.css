@@ -93,6 +93,27 @@ body,
   color: var(--secondary);
   letter-spacing: 0.05em;
 }
+.header-approx {
+  color: #d8a24a;
+  opacity: 0.85;
+}
+
+/* True Sky approximate-location notice (FRD v3.6 §10). */
+.true-sky-notice {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 22;
+  max-width: min(420px, 92vw);
+  text-align: center;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+  color: #f0d9a8;
+  background: rgba(60, 45, 18, 0.7);
+  border: 1px solid #6a5320;
+  border-radius: 8px;
+}
 
 .no-aircraft {
   position: fixed;

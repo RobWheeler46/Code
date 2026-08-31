@@ -1,5 +1,7 @@
 /** Application configuration model (FRD §32-33). */
 
+import type { LocationSource, LocationConfidence } from "./location.js";
+
 export type AircraftSource = "internet" | "local" | "hybrid";
 export type DisplayMode = "minimal" | "informative";
 /**
@@ -21,6 +23,14 @@ export interface AppConfig {
   latitude: number;
   longitude: number;
   radiusMiles: number;
+  /** How the current location was obtained (FRD v3.6 §8, §17). */
+  locationSource: LocationSource;
+  /** Trustworthiness of the observer centre (FRD v3.6 §8). */
+  locationConfidence: LocationConfidence;
+  /** Provider accuracy radius (km) for IP locations, where known (§5). */
+  locationAccuracyRadiusKm?: number;
+  /** Human area label, e.g. "Swindon, Wiltshire" (§3, §25). */
+  locationName?: string;
   aircraftSource: AircraftSource;
   displayMode: DisplayMode;
   /** Ceiling (pure sky) vs screen (schematic backdrop) vs map (real tiles). */
@@ -86,6 +96,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   latitude: 0,
   longitude: 0,
   radiusMiles: DEFAULT_RADIUS_MILES,
+  locationSource: "default",
+  locationConfidence: "good",
   aircraftSource: "internet",
   displayMode: "minimal",
   viewMode: "ceiling",

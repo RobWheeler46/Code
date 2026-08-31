@@ -1,5 +1,12 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { type Aircraft, type AppConfig, type SourceStatus, type Satellite, resolveDisplayScale } from "@ast/shared";
+import {
+  type Aircraft,
+  type AppConfig,
+  type SourceStatus,
+  type Satellite,
+  resolveDisplayScale,
+  locationTooApproximateForTrueSky,
+} from "@ast/shared";
 import { AircraftCanvas } from "./AircraftCanvas.js";
 import { DisplayStatus } from "./DisplayStatus.js";
 import { AircraftDetailsOverlay } from "./AircraftDetailsOverlay.js";
@@ -64,9 +71,21 @@ export function SkyDisplay({
     <div className="sky" style={{ "--ui-scale": uiScale } as CSSProperties}>
       {config.showHeader && (
         <div className="header">
-          {config.postcode} · {config.radiusMiles} mi
+          📍 {config.locationName ?? config.postcode} · {config.radiusMiles} mi
+          {(config.locationConfidence === "approximate" ||
+            config.locationConfidence === "coarse") && (
+            <span className="header-approx"> · approximate</span>
+          )}
         </div>
       )}
+
+      {/* True Sky needs an accurate observer; warn on a coarse fix (FRD v3.6 §10). */}
+      {config.viewMode === "true-sky" &&
+        locationTooApproximateForTrueSky(config.locationConfidence) && (
+          <div className="true-sky-notice">
+            Location is only approximate — improve it in Settings for an accurate Sky View.
+          </div>
+        )}
 
       <AircraftCanvas
         aircraft={aircraft}

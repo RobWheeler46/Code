@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import type { AppConfig, ConfigUpdate } from "@ast/shared";
+import {
+  type AppConfig,
+  type ConfigUpdate,
+  type DetectedLocation,
+  sourceLabel,
+  confidenceLabel,
+} from "@ast/shared";
 import { useConfig } from "../hooks/useConfig.js";
 
 interface Props {
@@ -29,7 +35,10 @@ const DISPLAY_TOGGLES: { key: keyof AppConfig; label: string }[] = [
 
 /** Settings screen (FRD §62-65). */
 export function SettingsPage({ onBack }: Props) {
-  const { config, update, reset, validatePostcode } = useConfig();
+  const { config, update, reset, validatePostcode, detectLocation, applyLocation } = useConfig();
+  const [suggestion, setSuggestion] = useState<DetectedLocation | undefined>();
+  const [locStatus, setLocStatus] = useState<string | undefined>();
+  const [locBusy, setLocBusy] = useState(false);
   const [draft, setDraft] = useState<AppConfig | undefined>(config);
   const [postcodeInput, setPostcodeInput] = useState("");
   const [validation, setValidation] = useState<Validation>({ state: "idle" });
@@ -79,6 +88,68 @@ export function SettingsPage({ onBack }: Props) {
         message: "Could not check postcode - the lookup service may be unavailable.",
       });
     }
+  };
+
+  // --- Automatic location discovery (FRD v3.6) ---
+  const runDetect = async () => {
+    setLocBusy(true);
+    setSuggestion(undefined);
+    setLocStatus("Finding your approximate location…");
+    try {
+      const detected = await detectLocation();
+      if (detected.confidence === "unknown") {
+        setLocStatus("Could not determine your location from the network.");
+      } else {
+        setSuggestion(detected);
+        setLocStatus(undefined);
+      }
+    } catch {
+      setLocStatus("Location detection failed.");
+    } finally {
+      setLocBusy(false);
+    }
+  };
+
+  const applyDetected = async (input: {
+    latitude: number;
+    longitude: number;
+    source: "ip" | "device";
+    displayName?: string;
+    accuracyRadiusKm?: number;
+  }) => {
+    setLocBusy(true);
+    try {
+      const saved = await applyLocation(input);
+      setPostcodeInput(saved.postcode);
+      setSuggestion(undefined);
+      setLocStatus(`Location set: ${saved.locationName ?? "approximate area"}.`);
+    } catch (err) {
+      setLocStatus(err instanceof Error ? err.message : "Could not apply location.");
+    } finally {
+      setLocBusy(false);
+    }
+  };
+
+  const useDeviceLocation = () => {
+    if (!("geolocation" in navigator)) {
+      setLocStatus("Device location is not available in this browser.");
+      return;
+    }
+    setLocBusy(true);
+    setLocStatus("Requesting device location…");
+    navigator.geolocation.getCurrentPosition(
+      (pos) =>
+        void applyDetected({
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          source: "device",
+        }),
+      (err) => {
+        setLocStatus(`Device location unavailable: ${err.message}`);
+        setLocBusy(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
   };
 
   const save = async () => {
@@ -166,6 +237,64 @@ export function SettingsPage({ onBack }: Props) {
         <div className={`status-line ${validationClass(validation)}`}>
           {validationMessage(validation)}
         </div>
+      </div>
+
+      <div className="field">
+        <label>Automatic location</label>
+        <div className="rows">
+          <span className="k">Current</span>
+          <span className="v">{draft.locationName ?? draft.postcode ?? "—"}</span>
+          <span className="k">Source</span>
+          <span className="v">{sourceLabel(draft.locationSource)}</span>
+          <span className="k">Accuracy</span>
+          <span className="v">
+            {confidenceLabel(draft.locationConfidence)}
+            {draft.locationAccuracyRadiusKm ? ` (~${draft.locationAccuracyRadiusKm} km)` : ""}
+          </span>
+        </div>
+        <div className="actions" style={{ marginTop: "0.5rem" }}>
+          <button onClick={() => void runDetect()} disabled={locBusy}>
+            Detect from network
+          </button>
+          <button onClick={() => useDeviceLocation()} disabled={locBusy}>
+            Use my device location
+          </button>
+        </div>
+        {suggestion && (
+          <div className="panel" style={{ marginTop: "0.6rem" }}>
+            <div>
+              We think you're near: <strong>{suggestion.displayName ?? "your area"}</strong>
+            </div>
+            <p className="hint">
+              {confidenceLabel(suggestion.confidence)} location
+              {suggestion.accuracyRadiusKm ? ` (~${suggestion.accuracyRadiusKm} km radius)` : ""}.
+              Enter a postcode above, or use device location, for better accuracy.
+            </p>
+            <div className="actions">
+              <button
+                className="primary"
+                disabled={locBusy}
+                onClick={() =>
+                  void applyDetected({
+                    latitude: suggestion.latitude,
+                    longitude: suggestion.longitude,
+                    source: "ip",
+                    displayName: suggestion.displayName,
+                    accuracyRadiusKm: suggestion.accuracyRadiusKm,
+                  })
+                }
+              >
+                Use this location
+              </button>
+              <button onClick={() => setSuggestion(undefined)}>Dismiss</button>
+            </div>
+          </div>
+        )}
+        {locStatus && <div className="status-line">{locStatus}</div>}
+        <p className="hint">
+          Network (IP) location is approximate and may be wrong on a VPN or mobile network;
+          your device location or a postcode is more precise.
+        </p>
       </div>
 
       <div className="field">

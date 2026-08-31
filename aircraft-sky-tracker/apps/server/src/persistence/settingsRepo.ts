@@ -9,6 +9,10 @@ interface SettingsRow {
   latitude: number;
   longitude: number;
   radius_miles: number;
+  location_source: string;
+  location_confidence: string;
+  location_accuracy_radius_km: number | null;
+  location_name: string | null;
   aircraft_source: string;
   display_mode: string;
   show_registration: number;
@@ -53,6 +57,10 @@ function rowToConfig(row: SettingsRow): AppConfig {
     latitude: row.latitude,
     longitude: row.longitude,
     radiusMiles: row.radius_miles,
+    locationSource: (row.location_source as AppConfig["locationSource"]) ?? "default",
+    locationConfidence: (row.location_confidence as AppConfig["locationConfidence"]) ?? "good",
+    locationAccuracyRadiusKm: row.location_accuracy_radius_km ?? undefined,
+    locationName: row.location_name ?? undefined,
     aircraftSource: row.aircraft_source as AppConfig["aircraftSource"],
     displayMode: row.display_mode as AppConfig["displayMode"],
     viewMode: (row.view_mode as AppConfig["viewMode"]) ?? "ceiling",
@@ -103,7 +111,9 @@ export class SettingsRepo {
     this.db
       .prepare(
         `INSERT INTO settings (
-          id, postcode, latitude, longitude, radius_miles, aircraft_source,
+          id, postcode, latitude, longitude, radius_miles,
+          location_source, location_confidence, location_accuracy_radius_km, location_name,
+          aircraft_source,
           display_mode, show_registration, show_destination, show_flight_number,
           show_altitude, show_distance, show_centre_marker, show_range_ring,
           show_header, show_trails, show_destination_arcs,
@@ -115,7 +125,7 @@ export class SettingsRepo {
           satellite_alerts_enabled, satellite_alert_lead_minutes, satellite_alert_visible_only,
           interpolation, created_at, updated_at
         ) VALUES (
-          1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )`,
       )
       .run(
@@ -123,6 +133,10 @@ export class SettingsRepo {
         defaults.latitude,
         defaults.longitude,
         defaults.radiusMiles,
+        defaults.locationSource,
+        defaults.locationConfidence,
+        defaults.locationAccuracyRadiusKm ?? null,
+        defaults.locationName ?? null,
         defaults.aircraftSource,
         defaults.displayMode,
         Number(defaults.showRegistration),
@@ -181,6 +195,8 @@ export class SettingsRepo {
       .prepare(
         `UPDATE settings SET
           postcode = ?, latitude = ?, longitude = ?, radius_miles = ?,
+          location_source = ?, location_confidence = ?,
+          location_accuracy_radius_km = ?, location_name = ?,
           aircraft_source = ?, display_mode = ?, show_registration = ?,
           show_destination = ?, show_flight_number = ?, show_altitude = ?,
           show_distance = ?, show_centre_marker = ?, show_range_ring = ?,
@@ -202,6 +218,10 @@ export class SettingsRepo {
         config.latitude,
         config.longitude,
         config.radiusMiles,
+        config.locationSource,
+        config.locationConfidence,
+        config.locationAccuracyRadiusKm ?? null,
+        config.locationName ?? null,
         config.aircraftSource,
         config.displayMode,
         Number(config.showRegistration),

@@ -185,6 +185,8 @@ The browser talks only to the backend (FRD §39):
 | `PUT` | `/api/config` | Update configuration |
 | `POST` | `/api/config/reset` | Restore defaults (SN25 4TP, 10 mi, minimal) |
 | `POST` | `/api/location/validate` | Validate a UK postcode + resolve coordinates |
+| `GET` | `/api/location/detect` | Approximate location from the caller's IP (never stored) |
+| `POST` | `/api/location/apply` | Set the observer location from a detected/device fix |
 | `GET` | `/api/aircraft` | Current aircraft snapshot (diagnostics/dev) |
 | `GET` | `/api/aircraft/photo?reg=&hex=` | Aircraft photo (proxies planespotters.net) |
 | `GET` | `/api/aircraft/{icaoHex}` | Aircraft detail + registry metadata (adsbdb) |
@@ -390,6 +392,16 @@ a high aircraft directly overhead sits near the **zenith (centre)** and a distan
 low one near the **horizon (edge)**, on the same 90°→0° scale as satellites.
 Concentric elevation rings (60°/30°/horizon) and N/E/S/W compass labels orient
 the view. This supersedes the earlier flat ground projection (kept as *Ceiling*).
+
+**Automatic location discovery (done, FRD v3.6)** — the location no longer has to
+be typed. Settings → Location can **detect an approximate area from the network
+(IP)** — server-side via a key-free geolocation lookup using the client IP from
+`X-Forwarded-For` (or Cloudflare edge headers where present), with the raw IP used
+only for the lookup and never stored — or **use the device's GPS** (browser
+geolocation, precise). Every location carries a **source** (default / ip / device
+/ postcode) and a **confidence** (precise / good / approximate / coarse), shown by
+a 📍 indicator; a coarse fix triggers an "improve your location" notice in True
+Sky (which needs an accurate observer). A postcode remains the manual path.
 
 **View modes** — a **View mode** setting (Settings → Display) offers four layouts,
 defaulting to *Ceiling* so existing displays are untouched:

@@ -15,6 +15,7 @@ import type {
   Satellite,
   SatellitePass,
   SatelliteDetail,
+  DetectedLocation,
 } from "@ast/shared";
 import { basicAuthMiddleware, isAuthEnabled } from "./auth.js";
 
@@ -34,12 +35,23 @@ export interface UpdateOutcome {
   error?: string;
 }
 
+/** Body for POST /api/location/apply (FRD v3.6). */
+export interface LocationApplyInput {
+  latitude?: unknown;
+  longitude?: unknown;
+  source?: unknown;
+  displayName?: unknown;
+  accuracyRadiusKm?: unknown;
+}
+
 /** Everything the HTTP layer needs from the application core. */
 export interface ApiContext {
   getConfig(): AppConfig;
   updateConfig(update: ConfigUpdate): Promise<UpdateOutcome>;
   resetConfig(): Promise<AppConfig>;
   validateLocation(postcode: string): Promise<ValidateResult>;
+  detectLocation(headers: import("node:http").IncomingHttpHeaders): Promise<DetectedLocation>;
+  applyLocation(input: LocationApplyInput): Promise<UpdateOutcome>;
   snapshot(): { generatedAt: string; aircraft: Aircraft[] };
   health(): HealthReport;
   diagnostics(): DiagnosticsReport;
@@ -129,6 +141,23 @@ export function createApiRouter(ctx: ApiContext): Router {
     } catch (err) {
       res.status(502).json({ error: `Postcode service unavailable: ${String(err)}` });
     }
+  });
+
+  // GET /api/location/detect - approximate location from the caller's IP.
+  // Public and read-only: it only suggests, and never stores the raw IP (§20).
+  router.get("/location/detect", async (req: Request, res: Response) => {
+    res.json(await ctx.detectLocation(req.headers));
+  });
+
+  // POST /api/location/apply - set the observer location from a detected/device
+  // fix (explicit coordinates + source). Config change -> requires auth (§79).
+  router.post("/location/apply", basicAuthMiddleware, async (req: Request, res: Response) => {
+    const outcome = await ctx.applyLocation((req.body ?? {}) as LocationApplyInput);
+    if (!outcome.ok) {
+      res.status(outcome.status).json({ error: outcome.error });
+      return;
+    }
+    res.json(outcome.config);
   });
 
   // GET /api/aircraft - current snapshot (diagnostics/development, FRD §41).

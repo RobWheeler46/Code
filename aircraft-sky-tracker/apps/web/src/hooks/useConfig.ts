@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
-import type { AppConfig, ConfigUpdate } from "@ast/shared";
+import type { AppConfig, ConfigUpdate, DetectedLocation, LocationSource } from "@ast/shared";
 import { authHeaders } from "../auth.js";
+
+export interface LocationApply {
+  latitude: number;
+  longitude: number;
+  source: LocationSource;
+  displayName?: string;
+  accuracyRadiusKm?: number;
+}
 
 export interface ValidateResult {
   valid: boolean;
@@ -17,6 +25,8 @@ export interface UseConfig {
   update: (update: ConfigUpdate) => Promise<AppConfig>;
   reset: () => Promise<AppConfig>;
   validatePostcode: (postcode: string) => Promise<ValidateResult>;
+  detectLocation: () => Promise<DetectedLocation>;
+  applyLocation: (input: LocationApply) => Promise<AppConfig>;
 }
 
 /** REST access to the backend configuration API (FRD §39-40). */
@@ -85,5 +95,34 @@ export function useConfig(): UseConfig {
     [],
   );
 
-  return { config, loading, error, refresh, update, reset, validatePostcode };
+  const detectLocation = useCallback(async (): Promise<DetectedLocation> => {
+    const res = await fetch("/api/location/detect");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return (await res.json()) as DetectedLocation;
+  }, []);
+
+  const applyLocation = useCallback(async (input: LocationApply): Promise<AppConfig> => {
+    const res = await fetch("/api/location/apply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify(input),
+    });
+    const body = (await res.json()) as AppConfig | { error: string };
+    if (!res.ok) throw new Error((body as { error: string }).error ?? `HTTP ${res.status}`);
+    const next = body as AppConfig;
+    setConfig(next);
+    return next;
+  }, []);
+
+  return {
+    config,
+    loading,
+    error,
+    refresh,
+    update,
+    reset,
+    validatePostcode,
+    detectLocation,
+    applyLocation,
+  };
 }
