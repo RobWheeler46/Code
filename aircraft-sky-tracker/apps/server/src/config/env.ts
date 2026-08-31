@@ -79,6 +79,11 @@ export interface Env {
   /** Optional Space-Track.org credentials for the orbital-data backup (§77). */
   spaceTrackUser: string | undefined;
   spaceTrackPassword: string | undefined;
+  /** Optional Google Sign-In for personal saved locations (FRD v3.6 §12, §26). */
+  googleClientId: string | undefined;
+  googleClientSecret: string | undefined;
+  /** Secret used to sign session cookies; defaults to sitePassword if unset. */
+  sessionSecret: string | undefined;
 }
 
 const nodeEnv = str("NODE_ENV", "production");
@@ -108,4 +113,7 @@ export const env: Env = {
   airframesUrl: str("AIRFRAMES_URL", "https://api.airframes.io"),
   spaceTrackUser: process.env["SPACETRACK_USER"] || undefined,
   spaceTrackPassword: process.env["SPACETRACK_PASSWORD"] || undefined,
+  googleClientId: process.env["GOOGLE_CLIENT_ID"] || undefined,
+  googleClientSecret: process.env["GOOGLE_CLIENT_SECRET"] || undefined,
+  sessionSecret: process.env["SESSION_SECRET"] || undefined,
 };

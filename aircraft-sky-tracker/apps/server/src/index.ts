@@ -50,6 +50,9 @@ import {
   cloudflareLocation,
 } from "./location/ipLocationProvider.js";
 import { classifyConfidence, type DetectedLocation, type LocationSource } from "@ast/shared";
+import { AccountRepo } from "./persistence/accountRepo.js";
+import { GoogleAuth } from "./auth/googleAuth.js";
+import { createAuthRouter } from "./auth/authRouter.js";
 import { orbitFrom } from "./satellite/sgp4Service.js";
 import { DiagnosticsService } from "./diagnostics/diagnosticsService.js";
 import { createAircraftProvider } from "./providers/index.js";
@@ -77,6 +80,8 @@ async function main(): Promise<void> {
 
   const location = new LocationService();
   const ipLocation = new IpWhoIsProvider();
+  const accounts = new AccountRepo();
+  const googleAuth = new GoogleAuth();
 
   // Resolve coordinates if we do not have them yet (FRD §84-85).
   if (config.latitude === 0 && config.longitude === 0) {
@@ -258,6 +263,34 @@ async function main(): Promise<void> {
     if (centreChanged) state.clear();
     ws.broadcast({ type: "config.updated", config: next });
     if (next.latitude !== 0 || next.longitude !== 0) polling.start();
+  }
+
+  /** Set the observer to explicit coordinates from a detected/device/saved fix. */
+  function applyObserverLocation(input: {
+    latitude: number;
+    longitude: number;
+    source: LocationSource;
+    displayName?: string;
+    accuracyRadiusKm?: number;
+  }): AppConfig {
+    const accuracyKm =
+      Number.isFinite(input.accuracyRadiusKm) && (input.accuracyRadiusKm as number) > 0
+        ? input.accuracyRadiusKm
+        : undefined;
+    const name = input.displayName?.trim().slice(0, 120) || undefined;
+    const saved = settings.save({
+      ...settings.get(),
+      latitude: input.latitude,
+      longitude: input.longitude,
+      postcode: name ?? "",
+      locationSource: input.source,
+      locationConfidence: classifyConfidence(input.source, accuracyKm),
+      locationAccuracyRadiusKm: accuracyKm,
+      locationName: name,
+    });
+    applyRuntimeConfig(saved, true);
+    log.info("location applied", { source: input.source, confidence: saved.locationConfidence });
+    return saved;
   }
 
   const apiContext: ApiContext = {
@@ -468,25 +501,14 @@ async function main(): Promise<void> {
         Number.isFinite(Number(input.accuracyRadiusKm)) && Number(input.accuracyRadiusKm) > 0
           ? Number(input.accuracyRadiusKm)
           : undefined;
-      const name =
-        typeof input.displayName === "string" && input.displayName.trim().length > 0
-          ? input.displayName.trim().slice(0, 120)
-          : undefined;
-      const current = settings.get();
-      const next: AppConfig = {
-        ...current,
+      const name = typeof input.displayName === "string" ? input.displayName : undefined;
+      const saved = applyObserverLocation({
         latitude: lat,
         longitude: lon,
-        // Device/IP fixes have no postcode; keep the area name for display.
-        postcode: name ?? "",
-        locationSource: source,
-        locationConfidence: classifyConfidence(source, accuracyKm),
-        locationAccuracyRadiusKm: accuracyKm,
-        locationName: name,
-      };
-      const saved = settings.save(next);
-      applyRuntimeConfig(saved, true);
-      log.info("location applied", { source, confidence: saved.locationConfidence });
+        source,
+        displayName: name,
+        accuracyRadiusKm: accuracyKm,
+      });
       return { ok: true, status: 200, config: saved };
     },
 
@@ -544,6 +566,17 @@ async function main(): Promise<void> {
   if (isAuthEnabled()) {
     log.info("config/diagnostics password protection enabled (viewing is open)");
   }
+  // Google Sign-In + account saved-locations (optional; FRD v3.6 §12, §26).
+  app.use(
+    "/api",
+    createAuthRouter({
+      google: googleAuth,
+      accounts,
+      applyLocation: async (input) =>
+        applyObserverLocation({ ...input, source: "manual" }),
+    }),
+  );
+  if (googleAuth.configured) log.info("Google Sign-In enabled");
   app.use("/api", createApiRouter(apiContext));
   app.use("/api", (_req: Request, res: Response) => {
     res.status(404).json({ error: "Not found" });

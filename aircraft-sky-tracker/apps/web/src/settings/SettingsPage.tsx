@@ -7,6 +7,7 @@ import {
   confidenceLabel,
 } from "@ast/shared";
 import { useConfig } from "../hooks/useConfig.js";
+import { useAuth } from "../hooks/useAuth.js";
 
 interface Props {
   onBack: () => void;
@@ -36,9 +37,11 @@ const DISPLAY_TOGGLES: { key: keyof AppConfig; label: string }[] = [
 /** Settings screen (FRD §62-65). */
 export function SettingsPage({ onBack }: Props) {
   const { config, update, reset, validatePostcode, detectLocation, applyLocation } = useConfig();
+  const auth = useAuth();
   const [suggestion, setSuggestion] = useState<DetectedLocation | undefined>();
   const [locStatus, setLocStatus] = useState<string | undefined>();
   const [locBusy, setLocBusy] = useState(false);
+  const [newLocLabel, setNewLocLabel] = useState("");
   const [draft, setDraft] = useState<AppConfig | undefined>(config);
   const [postcodeInput, setPostcodeInput] = useState("");
   const [validation, setValidation] = useState<Validation>({ state: "idle" });
@@ -150,6 +153,37 @@ export function SettingsPage({ onBack }: Props) {
       },
       { enableHighAccuracy: true, timeout: 10000 },
     );
+  };
+
+  // --- Account saved locations (FRD v3.6 §12, §26) ---
+  const useSavedLocation = async (id: string) => {
+    setLocBusy(true);
+    try {
+      const cfg = await auth.useLocation(id);
+      setDraft(cfg);
+      setPostcodeInput(cfg.postcode);
+      setLocStatus(`Location set: ${cfg.locationName ?? "saved location"}.`);
+    } catch (err) {
+      setLocStatus(err instanceof Error ? err.message : "Could not apply location.");
+    } finally {
+      setLocBusy(false);
+    }
+  };
+
+  const saveCurrentLocation = async () => {
+    if (!newLocLabel.trim()) return;
+    try {
+      await auth.addLocation({
+        label: newLocLabel.trim(),
+        latitude: draft.latitude,
+        longitude: draft.longitude,
+        accuracyRadiusKm: draft.locationAccuracyRadiusKm,
+      });
+      setNewLocLabel("");
+      setLocStatus("Saved to your account.");
+    } catch (err) {
+      setLocStatus(err instanceof Error ? err.message : "Could not save location.");
+    }
   };
 
   const save = async () => {
@@ -296,6 +330,76 @@ export function SettingsPage({ onBack }: Props) {
           your device location or a postcode is more precise.
         </p>
       </div>
+
+      {auth.googleEnabled && (
+        <div className="field">
+          <label>Account</label>
+          {!auth.user ? (
+            <>
+              <div className="actions">
+                <button onClick={auth.signIn}>Sign in with Google</button>
+              </div>
+              <p className="hint">
+                Sign in to save your Home and other locations to your Google account and switch
+                between them quickly.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="rows">
+                <span className="k">Signed in</span>
+                <span className="v">{auth.user.name ?? auth.user.email ?? "Google account"}</span>
+              </div>
+              {auth.locations.length > 0 && (
+                <div className="saved-locations">
+                  {auth.locations.map((loc) => (
+                    <div key={loc.id} className="saved-loc">
+                      <span className="saved-loc-label">
+                        {loc.isHome ? "🏠 " : ""}
+                        {loc.label}
+                      </span>
+                      <span className="saved-loc-actions">
+                        <button disabled={locBusy} onClick={() => void useSavedLocation(loc.id)}>
+                          Use
+                        </button>
+                        {!loc.isHome && (
+                          <button onClick={() => void auth.setHome(loc.id)}>Set Home</button>
+                        )}
+                        <button
+                          className="danger"
+                          aria-label={`Delete ${loc.label}`}
+                          onClick={() => void auth.deleteLocation(loc.id)}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="save-current">
+                <input
+                  type="text"
+                  placeholder="Label (e.g. Home)"
+                  value={newLocLabel}
+                  maxLength={60}
+                  onChange={(e) => setNewLocLabel(e.target.value)}
+                />
+                <button disabled={!newLocLabel.trim()} onClick={() => void saveCurrentLocation()}>
+                  Save current location
+                </button>
+              </div>
+              <div className="actions" style={{ marginTop: "0.4rem" }}>
+                <button onClick={() => void auth.signOut()}>Sign out</button>
+              </div>
+              <p className="hint">
+                Saved locations are stored to your Google account. "Use" applies one to the
+                display (needs the settings password).
+              </p>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="field">
         <label htmlFor="radius">Tracking radius</label>

@@ -166,6 +166,8 @@ screen. Startup defaults come from the environment (see `.env.example`):
 | `NOTIFY_NTFY_TOPIC` | *(unset)* | ntfy topic for interesting-aircraft push alerts; push is off until set |
 | `NOTIFY_NTFY_SERVER` | `https://ntfy.sh` | ntfy server for push alerts |
 | `SPACETRACK_USER` / `SPACETRACK_PASSWORD` | *(unset)* | Optional Space-Track.org backup for satellite orbital data; used only if CelesTrak fails. Both must be set |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | *(unset)* | Optional Google Sign-In for per-account saved locations; both must be set |
+| `SESSION_SECRET` | *(SITE_PASSWORD)* | Secret used to sign session cookies; stable value keeps users signed in across restarts |
 | `PORT` | *(from host)* | Honoured for PaaS (Railway); falls back to `HTTP_PORT` |
 | `DEFAULT_POSTCODE` | `SN25 4TP` | |
 | `DEFAULT_RADIUS_MILES` | `10` | statute miles |
@@ -187,6 +189,9 @@ The browser talks only to the backend (FRD §39):
 | `POST` | `/api/location/validate` | Validate a UK postcode + resolve coordinates |
 | `GET` | `/api/location/detect` | Approximate location from the caller's IP (never stored) |
 | `POST` | `/api/location/apply` | Set the observer location from a detected/device fix |
+| `GET` | `/api/auth/config` · `/api/auth/me` | Whether Google Sign-In is enabled; the signed-in user |
+| `GET` | `/api/auth/google` · `/callback` | Google OAuth sign-in flow (when configured) |
+| `GET/POST/DELETE` | `/api/account/locations…` | Per-user saved locations (list/add/delete/home/use) |
 | `GET` | `/api/aircraft` | Current aircraft snapshot (diagnostics/dev) |
 | `GET` | `/api/aircraft/photo?reg=&hex=` | Aircraft photo (proxies planespotters.net) |
 | `GET` | `/api/aircraft/{icaoHex}` | Aircraft detail + registry metadata (adsbdb) |
@@ -402,6 +407,17 @@ geolocation, precise). Every location carries a **source** (default / ip / devic
 / postcode) and a **confidence** (precise / good / approximate / coarse), shown by
 a 📍 indicator; a coarse fix triggers an "improve your location" notice in True
 Sky (which needs an accurate observer). A postcode remains the manual path.
+
+**Google account & saved locations (done, FRD v3.6 §12, §26)** — an optional
+**Google Sign-In** (env-gated: `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`) lets the
+owner save named locations (Home, Work…) to their Google account and switch the
+display between them in one click. OAuth 2.0 authorization-code flow (profile read
+from the userinfo endpoint — no JWT dependency); a **stateless HMAC-signed session
+cookie** (no session store, pure `node:crypto`); saved locations stored per user
+in SQLite. Saved-location management needs only the session; *applying* one to the
+shared display also needs the settings password (it changes what everyone sees).
+Disabled unless configured, so the kiosk is unchanged. (The full anonymous
+onboarding wizard and household/travel model remain future work.)
 
 **View modes** — a **View mode** setting (Settings → Display) offers four layouts,
 defaulting to *Ceiling* so existing displays are untouched:

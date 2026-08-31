@@ -146,6 +146,29 @@ function migrate(db: DatabaseSync): void {
     );
     CREATE INDEX IF NOT EXISTS idx_history_created_date
       ON history_passes(created_date);
+
+    CREATE TABLE IF NOT EXISTS account_users (
+      id          TEXT PRIMARY KEY,
+      email       TEXT,
+      name        TEXT,
+      picture     TEXT,
+      created_at  TEXT NOT NULL,
+      last_seen   TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS saved_locations (
+      id                 TEXT PRIMARY KEY,
+      user_id            TEXT NOT NULL,
+      label              TEXT NOT NULL,
+      latitude           REAL NOT NULL,
+      longitude          REAL NOT NULL,
+      is_home            INTEGER NOT NULL DEFAULT 0,
+      accuracy_radius_km REAL,
+      created_at         TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES account_users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_saved_locations_user
+      ON saved_locations(user_id);
   `);
 
   // Additive migrations for databases created by earlier versions.
