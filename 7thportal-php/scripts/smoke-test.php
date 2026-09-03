@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -679,6 +679,33 @@ function scenario_logic_equipment_disposal(): void
     dbRun("UPDATE equipment_assets SET status = 'retired' WHERE id = ?", [$asset]);
     check('disp: approval retires the asset', dbGet('SELECT status FROM equipment_assets WHERE id = ?', [$asset])['status'] === 'retired');
     check('disp: no approval action remains once decided', count(equipmentDisposalActionItems($glv)) === 0);
+}
+
+// Weekly digest polish (FR-NOT): a managing leader's digest carries the open critical
+// readiness exceptions; a parent's does not.
+function scenario_logic_digest_exceptions(): void
+{
+    useDb(tmpDb('digest')); boot(); loadLibs();
+    dbRun("INSERT INTO settings (key, value) VALUES ('event_hub_enabled', 'true')");
+    $uid = (int) dbRun("INSERT INTO users (auth_type, first_name, last_name, portal_role, email) VALUES ('local','Cam','Lead','group_leadership','c@x.com')")['lastInsertId'];
+    $hub = (int) dbRun("INSERT INTO event_hubs (title, event_type, status) VALUES ('Summer Camp','camp','draft')")['lastInsertId'];
+    dbRun("INSERT INTO event_exception_state (hub_id, area_key, label, summary, status) VALUES (?, 'equipment', 'Equipment', '1 overdue to return', 'open')", [$hub]);
+
+    $digest = buildWeeklyDigest(dbGet('SELECT * FROM users WHERE id = ?', [$uid]));
+    check('digest: manager digest lists the critical exception', $digest !== null
+        && str_contains($digest, 'Critical readiness exceptions')
+        && str_contains($digest, 'Summer Camp')
+        && str_contains($digest, '1 overdue to return'));
+
+    // A parent (not a manager) never gets the exceptions block.
+    $pid = (int) dbRun("INSERT INTO users (auth_type, first_name, last_name, portal_role, email) VALUES ('local','Pat','Parent','parent','p@x.com')")['lastInsertId'];
+    $pdigest = buildWeeklyDigest(dbGet('SELECT * FROM users WHERE id = ?', [$pid]));
+    check('digest: a parent digest has no exceptions block', $pdigest === null || !str_contains((string) $pdigest, 'Critical readiness exceptions'));
+
+    // Once the exception clears, it drops out of the digest.
+    dbRun("UPDATE event_exception_state SET status = 'resolved' WHERE hub_id = ?", [$hub]);
+    $after = buildWeeklyDigest(dbGet('SELECT * FROM users WHERE id = ?', [$uid]));
+    check('digest: a resolved exception no longer appears', $after === null || !str_contains((string) $after, 'Critical readiness exceptions'));
 }
 
 // QM kit completeness check: overall result derives from component statuses.

@@ -83,9 +83,24 @@ function buildWeeklyDigest(array $user): ?string
 {
     $actions = function_exists('buildActionCentre') ? buildActionCentre($user) : [];
     $unread = unreadNotificationCount((int) $user['id']);
-    if (count($actions) === 0 && $unread === 0) return null;
+    // Managing leaders also get the open critical readiness exceptions (blocked
+    // Command Centre areas on live events) - the same rollup that fires in-portal, so
+    // a serious blocker isn't missed by someone who only reads the weekly email.
+    $exceptions = [];
+    if (function_exists('eventOpenExceptions') && function_exists('eventHubCanManage') && eventHubCanManage($user)) {
+        $exceptions = eventOpenExceptions();
+    }
+    if (count($actions) === 0 && $unread === 0 && count($exceptions) === 0) return null;
     $lines = ['Hello ' . $user['first_name'] . ',', '', 'Your 7thPortal weekly summary:', ''];
     $lines[] = $unread . ' unread notification' . ($unread === 1 ? '' : 's') . '.';
+    if (count($exceptions) > 0) {
+        $lines[] = '';
+        $lines[] = 'Critical readiness exceptions (' . count($exceptions) . ') - sort these first:';
+        foreach (array_slice($exceptions, 0, 10) as $e) {
+            $lines[] = '  - ' . $e['hubTitle'] . ' - ' . $e['area'] . ': ' . $e['summary'];
+        }
+    }
+    $lines[] = '';
     $lines[] = count($actions) . ' action' . (count($actions) === 1 ? '' : 's') . ' needing attention:';
     foreach (array_slice($actions, 0, 10) as $a) $lines[] = '  - [' . $a['priority'] . '] ' . $a['type'] . ': ' . $a['action'];
     $lines[] = '';
@@ -97,6 +112,11 @@ function buildWeeklyDigest(array $user): ?string
 // Intended to be called from a weekly cron (or the admin "send now" action).
 function sendWeeklyDigests(): int
 {
+    // Refresh the critical-exception state once up front so the emailed rollup is
+    // current (best-effort; a scan failure must never block the digest run).
+    if (function_exists('scanEventCriticalExceptions')) {
+        try { scanEventCriticalExceptions(); } catch (Throwable $e) { /* ignore */ }
+    }
     $sent = 0;
     foreach (dbAll("SELECT u.* FROM users u LEFT JOIN notification_prefs p ON p.user_id = u.id WHERE u.account_status = 'active' AND u.email IS NOT NULL AND (p.weekly_digest IS NULL OR p.weekly_digest = 1)") as $u) {
         $body = buildWeeklyDigest($u);
