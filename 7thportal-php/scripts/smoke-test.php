@@ -32,7 +32,7 @@ function useDb(string $file): void { putenv('SEVENTHPORTAL_DB=' . $file); }
 function boot(): void { require dirname(__DIR__) . '/src/db.php'; }
 function loadLibs(): void
 {
-    foreach (['helpers', 'notifications', 'finance', 'incidents', 'patrolpoints', 'events', 'equipment', 'actions', 'quartermaster', 'prepare', 'features', 'attendance', 'demoseed', 'calendar', 'pdf', 'dlv'] as $lib) {
+    foreach (['helpers', 'notifications', 'finance', 'incidents', 'patrolpoints', 'events', 'equipment', 'actions', 'quartermaster', 'prepare', 'features', 'attendance', 'demoseed', 'calendar', 'activity', 'pdf', 'dlv'] as $lib) {
         require_once dirname(__DIR__) . '/src/lib/' . $lib . '.php';
     }
 }
@@ -789,6 +789,21 @@ function scenario_logic_dlv_approval(): void
     dbRun("UPDATE activity_dlv_packs SET status = 'awaiting' WHERE id = ?", [$pack2['id']]);
     dlvApplyVote(dlvTokenLookup($tk2['reject'])['token'], dbGet('SELECT * FROM activity_dlv_packs WHERE id = ?', [$pack2['id']]), 'Needs a risk assessment');
     check('dlv: reject returns the form to more_info', dbGet('SELECT status FROM activity_forms WHERE id = ?', [$fid])['status'] === 'more_info' && dbGet('SELECT dlv_stage FROM activity_forms WHERE id = ?', [$fid])['dlv_stage'] === 'rejected');
+
+    // Email delivery: with no mail server configured (as in the test env) the request
+    // stays awaiting with a note - not a hard failure.
+    dlvSaveSettings(['maxAttachMb' => 20]);
+    $pack3 = dlvCreatePack($f, $glv, 'send test');
+    dlvRenderPackPdf($pack3);
+    $tk3 = dlvIssueTokens((int) $pack3['id'], 14);
+    $send = dlvSendPack(dbGet('SELECT * FROM activity_dlv_packs WHERE id = ?', [$pack3['id']]), $tk3);
+    check('dlv: no mailer -> awaits with a note (not a failure)', $send['status'] === 'awaiting' && $send['sent'] === false
+        && str_contains((string) dbGet('SELECT send_error FROM activity_dlv_packs WHERE id = ?', [$pack3['id']])['send_error'], 'not delivered'));
+    // A supporting file whose disk copy is missing must FAIL the send - evidence is
+    // never silently omitted (FR-AA-020).
+    dbRun("INSERT INTO activity_form_files (form_id, doc_type, storage_key, ext, original_filename) VALUES (?, 'supporting', 'ghost-missing', 'pdf', 'Risk_Assessment.pdf')", [$fid]);
+    $send2 = dlvSendPack(dbGet('SELECT * FROM activity_dlv_packs WHERE id = ?', [$pack3['id']]), $tk3);
+    check('dlv: a missing evidence file fails the send', $send2['status'] === 'failed' && str_contains($send2['error'], 'Risk_Assessment.pdf'));
 }
 
 // QM kit completeness check: overall result derives from component statuses.

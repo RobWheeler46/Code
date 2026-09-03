@@ -215,9 +215,9 @@ $router->post('/api/activity/forms/:id/refer-dlv', function ($params) {
 
     $pack = dlvCreatePack($f, $user, $reason);
     dlvRenderPackPdf($pack);
-    dlvIssueTokens((int) $pack['id'], $settings['voteDays']);
-    dbRun("UPDATE activity_dlv_packs SET status = 'awaiting' WHERE id = ?", [$pack['id']]);
-    dbRun("UPDATE activity_forms SET status = 'awaiting_dlv', dlv_stage = 'awaiting', glv_decided_by = ?, glv_decided_at = datetime('now'), updated_at = datetime('now') WHERE id = ?", [$user['id'], $f['id']]);
+    $tokens = dlvIssueTokens((int) $pack['id'], $settings['voteDays']);
+    $send = dlvSendPack(dbGet('SELECT * FROM activity_dlv_packs WHERE id = ?', [$pack['id']]), $tokens);
+    dbRun("UPDATE activity_forms SET status = 'awaiting_dlv', dlv_stage = ?, glv_decided_by = ?, glv_decided_at = datetime('now'), updated_at = datetime('now') WHERE id = ?", [$send['status'] === 'failed' ? 'failed' : 'awaiting', $user['id'], $f['id']]);
     activityLogEvent((int) $f['id'], $user['id'], 'glv_refer_dlv', 'glv', $reason);
     logAudit(['userId' => $user['id'], 'action' => 'activity_form_refer_dlv', 'entityType' => 'activity_form', 'entityId' => (string) $f['id'], 'ipAddress' => clientIp(), 'details' => ['packVersion' => (int) $pack['version']]]);
     $ref = $f['reference'] ?: ('AAF-' . $f['id']);

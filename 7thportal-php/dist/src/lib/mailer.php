@@ -40,6 +40,67 @@ function sendInviteEmail(string $toEmail, string $firstName, string $setupUrl): 
     return sendEmail($toEmail, $subject, $body);
 }
 
+// MIME multipart send with file attachments (used by the DLV approval email). Same
+// transport and graceful "false when unconfigured" behaviour as sendEmail; throws only
+// on a live send error. $attachments: [['filename','content','mime']]. $opts: replyTo,
+// cc[] (extra recipients). The evidence is never truncated here - size limits are
+// enforced by the caller before it decides to send.
+function sendEmailWithAttachments(string $toEmail, string $subject, string $body, array $attachments = [], array $opts = []): bool
+{
+    $host = env('SMTP_HOST');
+    $user = env('SMTP_USER');
+    if (!$host || !$user) return false;
+
+    $port = (int) (env('SMTP_PORT') ?: 587);
+    $pass = env('SMTP_PASS') ?: '';
+    $from = env('INVITE_EMAIL_FROM') ?: $user;
+    $replyTo = trim((string) ($opts['replyTo'] ?? ''));
+    $cc = array_values(array_filter(array_map('trim', $opts['cc'] ?? [])));
+
+    $transportPrefix = $port === 465 ? 'ssl://' : 'tcp://';
+    $fp = @stream_socket_client("$transportPrefix$host:$port", $errno, $errstr, 15);
+    if (!$fp) throw new Exception("Could not connect to SMTP server: $errstr");
+    try {
+        smtpExpect($fp, '220');
+        smtpCommand($fp, 'EHLO 7thportal.local', '250');
+        if ($port !== 465) {
+            smtpCommand($fp, 'STARTTLS', '220');
+            if (!stream_socket_enable_crypto($fp, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) throw new Exception('STARTTLS negotiation failed.');
+            smtpCommand($fp, 'EHLO 7thportal.local', '250');
+        }
+        smtpCommand($fp, 'AUTH LOGIN', '334');
+        smtpCommand($fp, base64_encode($user), '334');
+        smtpCommand($fp, base64_encode($pass), '235');
+        smtpCommand($fp, "MAIL FROM:<$from>", '250');
+        smtpCommand($fp, "RCPT TO:<$toEmail>", '250');
+        foreach ($cc as $c) smtpCommand($fp, "RCPT TO:<$c>", '250');
+        smtpCommand($fp, 'DATA', '354');
+
+        $boundary = 'b_' . bin2hex(random_bytes(12));
+        $msg = "From: $from\r\nTo: $toEmail\r\n";
+        if ($cc) $msg .= 'Cc: ' . implode(', ', $cc) . "\r\n";
+        if ($replyTo) $msg .= "Reply-To: $replyTo\r\n";
+        $msg .= "Subject: $subject\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"$boundary\"\r\n\r\n";
+        $msg .= "--$boundary\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n" . $body . "\r\n";
+        foreach ($attachments as $a) {
+            $name = str_replace('"', '', (string) $a['filename']);
+            $mime = $a['mime'] ?? 'application/octet-stream';
+            $msg .= "--$boundary\r\nContent-Type: $mime; name=\"$name\"\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: attachment; filename=\"$name\"\r\n\r\n" . chunk_split(base64_encode((string) $a['content'])) . "\r\n";
+        }
+        $msg .= "--$boundary--\r\n";
+        // SMTP dot-stuffing: any line that begins with a dot must be doubled.
+        $msg = preg_replace('/^\./m', '..', $msg);
+        fwrite($fp, $msg . "\r\n.\r\n");
+        smtpExpect($fp, '250');
+        fwrite($fp, "QUIT\r\n");
+        fclose($fp);
+        return true;
+    } catch (Throwable $e) {
+        fclose($fp);
+        throw $e;
+    }
+}
+
 // Generic plain-text SMTP send. Returns false (without throwing) when SMTP is not
 // configured, so callers can degrade gracefully; throws only on a live send error.
 function sendEmail(string $toEmail, string $subject, string $body): bool

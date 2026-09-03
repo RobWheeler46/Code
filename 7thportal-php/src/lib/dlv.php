@@ -268,3 +268,88 @@ function dlvPackFilename(array $pack, array $snap): string
 {
     return ($snap['reference'] ?? ('AAF-' . $pack['form_id'])) . '-DLV-Approval-Pack-v' . (int) $pack['version'] . '.pdf';
 }
+
+// ── Email delivery of the pack (FR-AA-020/021) ──────────────────────────────────
+// The public base URL the DLV's vote links resolve against: an explicit APP_BASE_URL
+// wins, otherwise it's derived from the current request (honouring a proxy's scheme).
+function dlvBaseUrl(): string
+{
+    $env = function_exists('env') ? trim((string) env('APP_BASE_URL')) : '';
+    if ($env !== '') return rtrim($env, '/');
+    $scheme = (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https' || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')) ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    return $scheme . '://' . $host;
+}
+
+const DLV_EXT_MIME = ['pdf' => 'application/pdf', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'gif' => 'image/gif', 'doc' => 'application/msword', 'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'txt' => 'text/plain'];
+
+// Email the pack + all supporting evidence to the DLV with the two voting links.
+// FR-AA-020: never silently omit evidence - if a file can't be read or the total
+// exceeds the configured limit, the request is marked failed (not sent) with a clear
+// reason for the GLV to resolve. Returns ['status' => 'awaiting'|'failed', ...].
+function dlvSendPack(array $pack, array $tokens): array
+{
+    $s = dlvSettings();
+    $snap = json_decode($pack['snapshot_json'] ?: '{}', true) ?: [];
+
+    // Attachments: the immutable PDF pack first, then every supporting file.
+    $atts = [['filename' => dlvPackFilename($pack, $snap), 'mime' => 'application/pdf',
+        'content' => ($pack['pdf_path'] && is_file($pack['pdf_path'])) ? file_get_contents($pack['pdf_path']) : pdfBuild(dlvPackBlocks($snap))]];
+    $missing = [];
+    foreach (dbAll('SELECT * FROM activity_form_files WHERE form_id = ?', [$pack['form_id']]) as $file) {
+        $path = function_exists('activityFilePathFor') ? activityFilePathFor($file['storage_key'], $file['ext']) : null;
+        if ($path && is_file($path)) {
+            $atts[] = ['filename' => $file['original_filename'] ?: ('evidence.' . $file['ext']), 'mime' => DLV_EXT_MIME[strtolower($file['ext'])] ?? 'application/octet-stream', 'content' => file_get_contents($path)];
+        } else {
+            $missing[] = $file['original_filename'] ?: $file['storage_key'];
+        }
+    }
+    $fail = function (string $why) use ($pack) {
+        dbRun("UPDATE activity_dlv_packs SET status = 'failed', send_error = ? WHERE id = ?", [$why, $pack['id']]);
+        return ['status' => 'failed', 'error' => $why];
+    };
+    if ($missing) return $fail('Some supporting files could not be attached: ' . implode(', ', $missing) . '. Re-upload them, then resend.');
+    $total = array_sum(array_map(fn($a) => strlen((string) $a['content']), $atts));
+    if ($total > $s['maxAttachMb'] * 1024 * 1024) {
+        return $fail('The evidence pack is ' . round($total / 1048576, 1) . ' MB, over the ' . $s['maxAttachMb'] . ' MB email limit. Reduce file sizes, then resend.');
+    }
+
+    $base = dlvBaseUrl();
+    $approveUrl = $base . '/activity/vote/' . $tokens['approve'];
+    $rejectUrl = $base . '/activity/vote/' . $tokens['reject'];
+    $subject = strtr($s['subjectTemplate'], ['{activity}' => $snap['activityDescription'] ?? 'Activity', '{reference}' => $snap['reference'] ?? '']);
+    $body = "Hello " . ($s['displayName'] ?: 'District Lead Volunteer') . ",\n\n"
+        . "7th Swindon Scouts has referred the following activity for your approval.\n\n"
+        . "Activity: " . ($snap['activityDescription'] ?? '') . "\n"
+        . "Date: " . ($snap['activityDate'] ?? '') . "\n"
+        . "Location: " . ($snap['activityLocation'] ?? '') . "\n"
+        . "Sections: " . ($snap['sectionNames'] ?? '') . "\n"
+        . "Leader in Charge: " . ($snap['leaderName'] ?? '') . "\n"
+        . "Reference: " . ($snap['reference'] ?? '') . "\n\n"
+        . "GLV endorsement\nThe Group Lead Volunteer has reviewed and endorsed the activity for District approval.\nReason: " . ($snap['referralReason'] ?? '') . "\n\n"
+        . "Attached\n" . implode("\n", array_map(fn($a) => '- ' . $a['filename'], $atts)) . "\n\n"
+        . "Please review the attached approval pack and supporting evidence, then vote:\n\n"
+        . "APPROVE: " . $approveUrl . "\nREJECT:  " . $rejectUrl . "\n\n"
+        . "Each link opens a confirmation page - no 7thPortal account is required.\n"
+        . ($pack['expires_at'] ? "This voting request expires on " . date('j F Y', strtotime($pack['expires_at'])) . ".\n" : '')
+        . ($s['replyTo'] ? "Questions can be sent by replying to this email.\n" : '');
+
+    $opts = ['replyTo' => $s['replyTo'] ?: null, 'cc' => []];
+    if ($s['copyGlv'] && !empty($pack['glv_user_id'])) {
+        $g = dbGet('SELECT email FROM users WHERE id = ?', [$pack['glv_user_id']]);
+        if ($g && !empty($g['email'])) $opts['cc'][] = $g['email'];
+    }
+    try {
+        $sent = function_exists('sendEmailWithAttachments') ? sendEmailWithAttachments($s['email'], $subject, $body, $atts, $opts) : false;
+    } catch (Throwable $e) {
+        return $fail('The email could not be sent: ' . substr($e->getMessage(), 0, 200));
+    }
+    if ($sent) {
+        dbRun("UPDATE activity_dlv_packs SET status = 'awaiting', sent_at = datetime('now'), send_error = NULL WHERE id = ?", [$pack['id']]);
+        return ['status' => 'awaiting', 'sent' => true];
+    }
+    // Mailer not configured (e.g. the demo/test environment): the request is live but
+    // no email left the building. Not a hard failure - the GLV can resend once SMTP is on.
+    dbRun("UPDATE activity_dlv_packs SET status = 'awaiting', send_error = 'Email was not delivered (no mail server is configured on this environment).' WHERE id = ?", [$pack['id']]);
+    return ['status' => 'awaiting', 'sent' => false];
+}

@@ -30,10 +30,12 @@ $router->post('/api/activity/dlv-packs/:pid/resend', function ($params) {
     requireActivityFormsEnabled();
     $pack = dbGet('SELECT * FROM activity_dlv_packs WHERE id = ?', [$params['pid']]);
     if (!$pack) jsonResponse(['error' => 'Approval pack not found.'], 404);
-    if ($pack['status'] !== 'awaiting') jsonResponse(['error' => 'Only an awaiting request can be resent.'], 409);
+    if (!in_array($pack['status'], ['awaiting', 'failed'], true)) jsonResponse(['error' => 'Only an awaiting or failed request can be resent.'], 409);
     $f = dbGet('SELECT * FROM activity_forms WHERE id = ?', [$pack['form_id']]);
     if (!$f || !activityCanView($user, $f)) jsonResponse(['error' => 'Not permitted.'], 403);
-    dlvIssueTokens((int) $pack['id'], dlvSettings()['voteDays']);
+    $tokens = dlvIssueTokens((int) $pack['id'], dlvSettings()['voteDays']);
+    $send = dlvSendPack(dbGet('SELECT * FROM activity_dlv_packs WHERE id = ?', [$pack['id']]), $tokens);
+    dbRun("UPDATE activity_forms SET dlv_stage = ?, updated_at = datetime('now') WHERE id = ?", [$send['status'] === 'failed' ? 'failed' : 'awaiting', $f['id']]);
     activityLogEvent((int) $f['id'], $user['id'], 'dlv_resend', 'glv', null);
     logAudit(['userId' => $user['id'], 'action' => 'activity_form_dlv_resend', 'entityType' => 'activity_form', 'entityId' => (string) $f['id'], 'ipAddress' => clientIp()]);
     jsonResponse(serializeDlvPack(dbGet('SELECT * FROM activity_dlv_packs WHERE id = ?', [$pack['id']])));

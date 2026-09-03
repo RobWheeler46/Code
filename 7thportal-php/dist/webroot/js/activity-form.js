@@ -256,6 +256,8 @@ function dlvPanel() {
   return `<div class="card"><div class="cap-head"><h2 style="margin:0">District (DLV) approval</h2><span class="badge" data-status="${badge[0]}">${badge[1]}</span></div>
     <p class="muted" style="margin:.2rem 0 .5rem">Sent to <strong>${esc(p.recipientName || 'DLV')}</strong>${p.recipientEmail ? ' &lt;' + esc(p.recipientEmail) + '&gt;' : ''} · pack v${p.version}${p.expiresAt ? ' · vote link expires ' + esc(formatDate(p.expiresAt)) : ''}</p>
     ${p.referralReason ? `<p style="margin:.2rem 0"><span class="muted">Referral reason:</span> ${esc(p.referralReason)}</p>` : ''}
+    <p class="muted" style="margin:.2rem 0;font-size:.85rem">${p.sentAt ? 'Email sent ' + esc(formatDateTime(p.sentAt)) : 'Email not sent yet'}</p>
+    ${p.sendError ? `<div class="alert alert-warning" style="margin:.4rem 0">${esc(p.sendError)}</div>` : ''}
     ${p.decision ? `<p style="margin:.2rem 0"><span class="badge" data-status="${p.decision === 'approve' ? 'active' : 'deleted'}">${p.decision === 'approve' ? 'Approved' : 'Rejected'}</span> ${p.decidedAt ? '<span class="muted">' + esc(formatDateTime(p.decidedAt)) + '</span>' : ''}${p.decisionComment ? '<br><span class="muted">' + esc(p.decisionComment) + '</span>' : ''}</p>` : ''}
     <div class="cap-actions" style="margin-top:.5rem"><a class="btn btn-secondary btn-sm" href="/api/activity/dlv-packs/${p.id}/pack.pdf" target="_blank" rel="noopener">View pack (PDF)</a>${canResend ? '<button class="btn btn-secondary btn-sm" id="dlv-resend">Resend request</button>' : ''}</div>
     <div id="dlv-msg"></div></div>`;
