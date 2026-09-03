@@ -196,3 +196,75 @@ function dlvActivePack(int $formId): ?array
 {
     return dbGet('SELECT * FROM activity_dlv_packs WHERE form_id = ? ORDER BY version DESC LIMIT 1', [$formId]);
 }
+
+// ── Immutable PDF evidence pack (FR-AA-019) ─────────────────────────────────────
+// The pack layout, as pdfBuild() blocks, straight from the frozen snapshot. Follows
+// the DLV Approval Pack field spec: counts (never youth names), leader contact,
+// characteristics, evidence confirmations, GLV endorsement and the attachment manifest.
+function dlvPackBlocks(array $s): array
+{
+    $yn = fn($b) => !empty($b) ? 'Yes' : 'No';
+    $dates = trim(($s['activityDate'] ?? '') . (!empty($s['activityEndDate']) && $s['activityEndDate'] !== ($s['activityDate'] ?? '') ? ' - ' . $s['activityEndDate'] : ''));
+    $b = [
+        ['h1', '7thPortal - DLV Activity Approval Pack'],
+        ['text', 'Group endorsed - awaiting DLV decision. This pack contains the minimum information required to approve the activity: participant counts, not young-person names.'],
+        ['rule'],
+        ['h2', 'Approval request'],
+        ['kv', 'Reference', $s['reference'] ?? ''],
+        ['kv', 'District policy', $s['policyRef'] ?? DLV_POLICY_REF],
+        ['kv', 'Pack generated', gmdate('d M Y H:i') . ' UTC'],
+        ['kv', 'Submitted', $s['submittedAt'] ?? ''],
+        ['h2', 'Activity'],
+        ['kv', 'Description', $s['activityDescription'] ?? ''],
+        ['kv', 'Date', $dates],
+        ['kv', 'Location', $s['activityLocation'] ?? ''],
+        ['kv', 'Section(s)', $s['sectionNames'] ?? ''],
+        ['kv', 'Estimated young people', $s['ypCount'] !== null ? (string) $s['ypCount'] : ''],
+        ['kv', 'Estimated adults', $s['adultCount'] !== null ? (string) $s['adultCount'] : ''],
+        ['h2', 'Leader in charge'],
+        ['kv', 'Name', $s['leaderName'] ?? ''],
+        ['kv', 'Phone', $s['leaderPhone'] ?? ''],
+        ['kv', 'Email', $s['leaderEmail'] ?? ''],
+        ['h2', 'Characteristics & evidence'],
+        ['kv', 'Activity type', $s['activityType'] ?? ''],
+        ['kv', 'External provider', $yn($s['externalProvider'] ?? false)],
+        ['kv', 'Unity insurance', !empty($s['unityRequired']) ? 'Required / evidence attached' : 'Not required'],
+        ['kv', 'Qualifications', $s['qualifications'] ?? ''],
+        ['kv', 'In Touch process', $s['inTouch'] ?? ''],
+        ['kv', 'Risk assessment confirmed', $yn($s['riskAssessmentConfirmed'] ?? false)],
+        ['kv', 'Public liability confirmed', $yn($s['publicLiabilityConfirmed'] ?? false)],
+        ['kv', 'Activity Rules confirmed', $yn($s['activityRulesConfirmed'] ?? false)],
+        ['h2', 'GLV endorsement / DLV referral'],
+        ['kv', 'Endorsed by (GLV)', $s['glvName'] ?? ''],
+        ['kv', 'Referral reason', $s['referralReason'] ?? ''],
+    ];
+    if (!empty($s['notes'])) $b[] = ['kv', 'Notes', $s['notes']];
+    $b[] = ['h2', 'Attachment manifest'];
+    if (!empty($s['files'])) {
+        foreach ($s['files'] as $f) $b[] = ['kv', ucfirst((string) ($f['category'] ?? 'document')), $f['name'] ?? 'file'];
+    } else {
+        $b[] = ['text', 'No supporting files were attached to this submission.'];
+    }
+    return $b;
+}
+
+// Render the pack PDF to disk (data/dlv-packs/) and record its path. Idempotent per
+// pack version - the file is the immutable artefact emailed to the DLV.
+function dlvRenderPackPdf(array $pack): string
+{
+    if (!function_exists('pdfBuild')) return '';
+    $snap = json_decode($pack['snapshot_json'] ?: '{}', true) ?: [];
+    $bytes = pdfBuild(dlvPackBlocks($snap));
+    $dir = dirname(__DIR__, 2) . '/data/dlv-packs';
+    if (!is_dir($dir)) @mkdir($dir, 0770, true);
+    $file = $dir . '/pack-' . (int) $pack['id'] . '-v' . (int) $pack['version'] . '.pdf';
+    file_put_contents($file, $bytes);
+    dbRun('UPDATE activity_dlv_packs SET pdf_path = ? WHERE id = ?', [$file, $pack['id']]);
+    return $file;
+}
+
+// The DLV-facing filename for the pack PDF.
+function dlvPackFilename(array $pack, array $snap): string
+{
+    return ($snap['reference'] ?? ('AAF-' . $pack['form_id'])) . '-DLV-Approval-Pack-v' . (int) $pack['version'] . '.pdf';
+}

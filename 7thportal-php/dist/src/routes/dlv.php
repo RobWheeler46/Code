@@ -39,6 +39,23 @@ $router->post('/api/activity/dlv-packs/:pid/resend', function ($params) {
     jsonResponse(serializeDlvPack(dbGet('SELECT * FROM activity_dlv_packs WHERE id = ?', [$pack['id']])));
 });
 
+// GLV/leader views the immutable pack PDF for a form they can see.
+$router->get('/api/activity/dlv-packs/:pid/pack.pdf', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireActivityFormsEnabled();
+    $pack = dbGet('SELECT * FROM activity_dlv_packs WHERE id = ?', [$params['pid']]);
+    if (!$pack) jsonResponse(['error' => 'Pack not found.'], 404);
+    $f = dbGet('SELECT * FROM activity_forms WHERE id = ?', [$pack['form_id']]);
+    if (!$f || !activityCanView($user, $f)) jsonResponse(['error' => 'Not permitted.'], 403);
+    // Render on the fly if the file is missing (e.g. moved deploy), from the snapshot.
+    $bytes = ($pack['pdf_path'] && is_file($pack['pdf_path'])) ? file_get_contents($pack['pdf_path']) : pdfBuild(dlvPackBlocks(json_decode($pack['snapshot_json'] ?: '{}', true) ?: []));
+    header('Content-Type: application/pdf');
+    header('Content-Disposition: inline; filename="' . dlvPackFilename($pack, json_decode($pack['snapshot_json'] ?: '{}', true) ?: []) . '"');
+    echo $bytes;
+    exit;
+});
+
 // ── Public no-login voting pages (FR-AA-022..024) ───────────────────────────────
 // A minimal, self-contained page: no portal chrome, no navigation, no session. The GET
 // only shows a confirmation UI; the vote commits on the POST, so an email scanner that

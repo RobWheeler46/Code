@@ -86,6 +86,7 @@ try {
     require_once __DIR__ . '/../src/lib/calendar.php';
     require_once __DIR__ . '/../src/lib/attendance.php';
     require_once __DIR__ . '/../src/lib/activity.php';
+    require_once __DIR__ . '/../src/lib/pdf.php';
     require_once __DIR__ . '/../src/lib/dlv.php';
     require_once __DIR__ . '/../src/lib/patrolpoints.php';
     require_once __DIR__ . '/../src/lib/demoseed.php';

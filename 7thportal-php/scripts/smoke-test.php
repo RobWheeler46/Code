@@ -32,7 +32,7 @@ function useDb(string $file): void { putenv('SEVENTHPORTAL_DB=' . $file); }
 function boot(): void { require dirname(__DIR__) . '/src/db.php'; }
 function loadLibs(): void
 {
-    foreach (['helpers', 'notifications', 'finance', 'incidents', 'patrolpoints', 'events', 'equipment', 'actions', 'quartermaster', 'prepare', 'features', 'attendance', 'demoseed', 'calendar', 'dlv'] as $lib) {
+    foreach (['helpers', 'notifications', 'finance', 'incidents', 'patrolpoints', 'events', 'equipment', 'actions', 'quartermaster', 'prepare', 'features', 'attendance', 'demoseed', 'calendar', 'pdf', 'dlv'] as $lib) {
         require_once dirname(__DIR__) . '/src/lib/' . $lib . '.php';
     }
 }
@@ -761,6 +761,9 @@ function scenario_logic_dlv_approval(): void
 
     $pack = dlvCreatePack($f, $glv, 'External provider - District approval');
     check('dlv: pack v1 preparing carries a frozen snapshot', (int) $pack['version'] === 1 && $pack['status'] === 'preparing' && str_contains($pack['snapshot_json'], 'Climbing day'));
+    // The immutable pack renders to a structurally valid PDF straight from the snapshot.
+    $pdf = pdfBuild(dlvPackBlocks(json_decode($pack['snapshot_json'], true)));
+    check('dlv: pack renders a valid PDF', str_starts_with($pdf, '%PDF-1.') && str_contains($pdf, 'Climbing day') && str_contains($pdf, '%%EOF'));
     $tokens = dlvIssueTokens((int) $pack['id'], 14);
     check('dlv: two 64-hex voting tokens issued', preg_match('/^[a-f0-9]{64}$/', $tokens['approve']) === 1 && preg_match('/^[a-f0-9]{64}$/', $tokens['reject']) === 1);
     dbRun("UPDATE activity_dlv_packs SET status = 'awaiting' WHERE id = ?", [$pack['id']]);

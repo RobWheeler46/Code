@@ -214,6 +214,7 @@ $router->post('/api/activity/forms/:id/refer-dlv', function ($params) {
     if (!$settings['configured']) jsonResponse(['error' => 'No DLV approval email is configured yet. Ask a Portal Administrator to set it in Admin settings.'], 409);
 
     $pack = dlvCreatePack($f, $user, $reason);
+    dlvRenderPackPdf($pack);
     dlvIssueTokens((int) $pack['id'], $settings['voteDays']);
     dbRun("UPDATE activity_dlv_packs SET status = 'awaiting' WHERE id = ?", [$pack['id']]);
     dbRun("UPDATE activity_forms SET status = 'awaiting_dlv', dlv_stage = 'awaiting', glv_decided_by = ?, glv_decided_at = datetime('now'), updated_at = datetime('now') WHERE id = ?", [$user['id'], $f['id']]);
