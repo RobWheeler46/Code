@@ -977,6 +977,21 @@ CREATE TABLE IF NOT EXISTS qm_booking_items (
 CREATE INDEX IF NOT EXISTS idx_qm_booking_items_booking ON qm_booking_items(booking_id);
 CREATE INDEX IF NOT EXISTS idx_qm_booking_items_asset ON qm_booking_items(equipment_asset_id);
 
+-- Per-instance allocation (FR-QM): for a serialised asset, a QM allocates the specific
+-- physical instances (e.g. "Tent-03", "Tent-07") to a booking line, so it's clear which
+-- items went where. Allocating reserves the instance; the booking lifecycle then moves
+-- it issued -> available on collect/return. One instance can only be on one line.
+CREATE TABLE IF NOT EXISTS qm_booking_item_instances (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  booking_item_id INTEGER NOT NULL REFERENCES qm_booking_items(id) ON DELETE CASCADE,
+  instance_id INTEGER NOT NULL REFERENCES equipment_asset_instances(id) ON DELETE CASCADE,
+  allocated_by INTEGER REFERENCES users(id),
+  allocated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(booking_item_id, instance_id)
+);
+CREATE INDEX IF NOT EXISTS idx_qm_booking_item_instances_item ON qm_booking_item_instances(booking_item_id);
+CREATE INDEX IF NOT EXISTS idx_qm_booking_item_instances_instance ON qm_booking_item_instances(instance_id);
+
 -- QM equipment bundles (FR-QM-ADV-014): a reusable named kit list a Quartermaster
 -- curates (e.g. "Camping weekend kit") that can generate a draft booking request in
 -- one action.

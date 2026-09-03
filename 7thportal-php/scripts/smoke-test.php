@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -706,6 +706,43 @@ function scenario_logic_digest_exceptions(): void
     dbRun("UPDATE event_exception_state SET status = 'resolved' WHERE hub_id = ?", [$hub]);
     $after = buildWeeklyDigest(dbGet('SELECT * FROM users WHERE id = ?', [$uid]));
     check('digest: a resolved exception no longer appears', $after === null || !str_contains((string) $after, 'Critical readiness exceptions'));
+}
+
+// QM per-instance allocation (FR-QM). Serialised lines carry specific instances;
+// allocating reserves an instance and the booking lifecycle flips issued/available.
+function scenario_logic_qm_instance_alloc(): void
+{
+    useDb(tmpDb('qmi')); boot(); loadLibs();
+    $u = (int) dbRun("INSERT INTO users (auth_type, first_name, last_name, portal_role) VALUES ('local','Q','M','quartermaster')")['lastInsertId'];
+    $asset = (int) dbRun("INSERT INTO equipment_assets (name, tracking_mode) VALUES ('Patrol Tent','serialised')")['lastInsertId'];
+    $i1 = (int) dbRun("INSERT INTO equipment_asset_instances (asset_id, instance_ref, status) VALUES (?, 'Tent-01', 'available')", [$asset])['lastInsertId'];
+    dbRun("INSERT INTO equipment_asset_instances (asset_id, instance_ref, status) VALUES (?, 'Tent-02', 'available')", [$asset]);
+    $bk = (int) dbRun("INSERT INTO qm_bookings (requester_user_id, status) VALUES (?, 'approved')", [$u])['lastInsertId'];
+    $line = (int) dbRun("INSERT INTO qm_booking_items (booking_id, equipment_asset_id, item_name, requested_qty, approved_qty, line_status) VALUES (?, ?, 'Patrol Tent', 2, 2, 'approved')", [$bk, $asset])['lastInsertId'];
+
+    $itemRow = fn($id) => dbGet('SELECT * FROM qm_booking_items WHERE id = ?', [$id]);
+    $ser = serializeQmBookingItem($itemRow($line));
+    check('qmi: line is flagged serialised with nothing allocated', $ser['serialised'] === true && $ser['allocatedCount'] === 0);
+
+    // Allocate Tent-01 (mirrors the route: link + reserve).
+    dbRun("INSERT INTO qm_booking_item_instances (booking_item_id, instance_id, allocated_by) VALUES (?, ?, ?)", [$line, $i1, $u]);
+    dbRun("UPDATE equipment_asset_instances SET status = 'reserved' WHERE id = ?", [$i1]);
+    $ser2 = serializeQmBookingItem($itemRow($line));
+    check('qmi: allocated instance shows on the line and is reserved',
+        $ser2['allocatedCount'] === 1 && $ser2['allocatedInstances'][0]['ref'] === 'Tent-01'
+        && dbGet('SELECT status FROM equipment_asset_instances WHERE id = ?', [$i1])['status'] === 'reserved');
+
+    // Lifecycle: collect -> issued, return -> available.
+    qmSetBookingInstancesStatus($bk, 'issued');
+    check('qmi: collect issues the allocated instance', dbGet('SELECT status FROM equipment_asset_instances WHERE id = ?', [$i1])['status'] === 'issued');
+    qmSetBookingInstancesStatus($bk, 'available');
+    check('qmi: return frees the allocated instance', dbGet('SELECT status FROM equipment_asset_instances WHERE id = ?', [$i1])['status'] === 'available');
+
+    // A bulk line never reports as serialised.
+    $bulk = (int) dbRun("INSERT INTO equipment_assets (name, tracking_mode) VALUES ('Rope','bulk_reusable')")['lastInsertId'];
+    $line2 = (int) dbRun("INSERT INTO qm_booking_items (booking_id, equipment_asset_id, item_name, requested_qty, line_status) VALUES (?, ?, 'Rope', 5, 'approved')", [$bk, $bulk])['lastInsertId'];
+    $serBulk = serializeQmBookingItem($itemRow($line2));
+    check('qmi: a bulk line is not serialised', $serBulk['itemName'] === 'Rope' && $serBulk['serialised'] === false);
 }
 
 // QM kit completeness check: overall result derives from component statuses.

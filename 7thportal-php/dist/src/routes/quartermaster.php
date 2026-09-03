@@ -26,7 +26,13 @@ function qmBookingOr404($id): array
 
 function qmBookingItems(int $bookingId): array
 {
-    return dbAll('SELECT * FROM qm_booking_items WHERE booking_id = ? ORDER BY sort_order, id', [$bookingId]);
+    // Carry the effective (substitute-aware) asset's tracking mode so the serializer
+    // can flag serialised lines without a per-item lookup.
+    return dbAll(
+        "SELECT bi.*, (SELECT tracking_mode FROM equipment_assets WHERE id = COALESCE(bi.substitute_asset_id, bi.equipment_asset_id)) AS effective_tracking_mode
+         FROM qm_booking_items bi WHERE bi.booking_id = ? ORDER BY bi.sort_order, bi.id",
+        [$bookingId]
+    );
 }
 
 function qmTouch(int $bookingId): void
@@ -443,6 +449,73 @@ $router->post('/api/qm/bookings/:id/items/:itemId/decide', function ($params) {
     jsonResponse(serializeQmBookingItem(dbGet('SELECT * FROM qm_booking_items WHERE id = ?', [$item['id']])));
 });
 
+// ── Per-instance allocation for serialised lines (FR-QM) ────────────────────────
+// Load a booking line whose effective asset is serialised, or fail with a clear error.
+function qmSerialisedLineOr($bookingId, $itemId): array
+{
+    $item = dbGet('SELECT * FROM qm_booking_items WHERE id = ? AND booking_id = ?', [$itemId, $bookingId]);
+    if (!$item) jsonResponse(['error' => 'Booking line not found.'], 404);
+    $assetId = qmLineEffectiveAssetId($item);
+    $asset = $assetId ? dbGet('SELECT * FROM equipment_assets WHERE id = ?', [$assetId]) : null;
+    if (!$asset || $asset['tracking_mode'] !== 'serialised') jsonResponse(['error' => 'This line is not a serialised asset, so there are no instances to allocate.'], 400);
+    return [$item, (int) $assetId];
+}
+
+$router->get('/api/qm/bookings/:id/items/:itemId/allocatable', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireQmBookingEnabled();
+    $b = qmBookingOr404($params['id']);
+    if (!qmCanViewBooking($user, $b)) jsonResponse(['error' => 'You cannot view this booking.'], 403);
+    [$item, $assetId] = qmSerialisedLineOr($b['id'], $params['itemId']);
+    $available = array_map(fn($r) => ['instanceId' => (int) $r['id'], 'ref' => $r['instance_ref'], 'condition' => $r['condition']],
+        dbAll("SELECT id, instance_ref, condition FROM equipment_asset_instances WHERE asset_id = ? AND status = 'available' ORDER BY instance_ref", [$assetId]));
+    jsonResponse([
+        'allocated' => qmLineAllocatedInstances((int) $item['id']),
+        'available' => $available,
+        'cap' => (int) ($item['approved_qty'] ?? $item['requested_qty']),
+        'canManage' => qmCanApprove($user),
+    ]);
+});
+
+$router->post('/api/qm/bookings/:id/items/:itemId/instances', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireQmBookingEnabled();
+    if (!qmCanApprove($user)) jsonResponse(['error' => 'Quartermaster access required to allocate instances.'], 403);
+    $b = qmBookingOr404($params['id']);
+    if (in_array($b['status'], ['returned', 'closed', 'cancelled'], true)) jsonResponse(['error' => 'This booking is finalised.'], 409);
+    [$item, $assetId] = qmSerialisedLineOr($b['id'], $params['itemId']);
+    $instanceId = (int) (requestBody()['instanceId'] ?? 0);
+    $inst = dbGet('SELECT * FROM equipment_asset_instances WHERE id = ? AND asset_id = ?', [$instanceId, $assetId]);
+    if (!$inst) jsonResponse(['error' => 'That instance is not part of this asset.'], 404);
+    if ($inst['status'] !== 'available') jsonResponse(['error' => 'Instance ' . $inst['instance_ref'] . ' is not available (' . $inst['status'] . ').'], 409);
+    $cap = (int) ($item['approved_qty'] ?? $item['requested_qty']);
+    if (count(qmLineAllocatedInstances((int) $item['id'])) >= $cap) jsonResponse(['error' => 'You have already allocated the approved quantity (' . $cap . ').'], 409);
+    dbRun('INSERT OR IGNORE INTO qm_booking_item_instances (booking_item_id, instance_id, allocated_by) VALUES (?, ?, ?)', [$item['id'], $instanceId, $user['id']]);
+    dbRun("UPDATE equipment_asset_instances SET status = 'reserved' WHERE id = ?", [$instanceId]);
+    logAudit(['userId' => $user['id'], 'action' => 'qm_instance_allocate', 'entityType' => 'qm_booking', 'entityId' => (string) $b['id'], 'ipAddress' => clientIp(), 'details' => ['instanceRef' => $inst['instance_ref']]]);
+    qmTouch((int) $b['id']);
+    jsonResponse(serializeQmBookingItem(dbGet('SELECT * FROM qm_booking_items WHERE id = ?', [$item['id']])));
+});
+
+$router->delete('/api/qm/bookings/:id/items/:itemId/instances/:instanceId', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireQmBookingEnabled();
+    if (!qmCanApprove($user)) jsonResponse(['error' => 'Quartermaster access required.'], 403);
+    $b = qmBookingOr404($params['id']);
+    [$item] = qmSerialisedLineOr($b['id'], $params['itemId']);
+    $link = dbGet('SELECT * FROM qm_booking_item_instances WHERE booking_item_id = ? AND instance_id = ?', [$item['id'], $params['instanceId']]);
+    if (!$link) jsonResponse(['error' => 'That instance is not allocated to this line.'], 404);
+    dbRun('DELETE FROM qm_booking_item_instances WHERE id = ?', [$link['id']]);
+    // Only free an instance we were reserving - never clobber an issued/maintenance state.
+    dbRun("UPDATE equipment_asset_instances SET status = 'available' WHERE id = ? AND status = 'reserved'", [$params['instanceId']]);
+    logAudit(['userId' => $user['id'], 'action' => 'qm_instance_deallocate', 'entityType' => 'qm_booking', 'entityId' => (string) $b['id'], 'ipAddress' => clientIp()]);
+    qmTouch((int) $b['id']);
+    jsonResponse(serializeQmBookingItem(dbGet('SELECT * FROM qm_booking_items WHERE id = ?', [$item['id']])));
+});
+
 // ── Finalise the review (compute booking status + reserve, clash-checked) ──────
 $router->post('/api/qm/bookings/:id/finalise', function ($params) {
     $user = requireAuth();
@@ -518,6 +591,8 @@ $router->post('/api/qm/bookings/:id/collect', function ($params) {
     $body = requestBody();
     $issueCondition = trim((string) ($body['issueCondition'] ?? '')) ?: null;
     dbRun("UPDATE qm_bookings SET status = 'collected', collected_at = datetime('now'), collected_by_name = ?, updated_at = datetime('now') WHERE id = ?", [trim((string) ($body['collectedByName'] ?? '')) ?: null, $b['id']]);
+    // Allocated serialised instances are now physically out with the borrower.
+    qmSetBookingInstancesStatus((int) $b['id'], 'issued');
     if ($issueCondition !== null) {
         // Stamp the same handover condition on every reserving line as a baseline.
         dbRun("UPDATE qm_booking_items SET issue_condition = ? WHERE booking_id = ? AND line_status IN ('approved','substituted')", [$issueCondition, $b['id']]);
@@ -539,6 +614,8 @@ $router->post('/api/qm/bookings/:id/return', function ($params) {
     $body = requestBody();
     $note = trim((string) ($body['returnConditionNote'] ?? '')) ?: null;
     dbRun("UPDATE qm_bookings SET status = 'returned', returned_at = datetime('now'), return_condition_note = ?, updated_at = datetime('now') WHERE id = ?", [$note, $b['id']]);
+    // Allocated serialised instances are back on the shelf.
+    qmSetBookingInstancesStatus((int) $b['id'], 'available');
 
     // Per-line condition + damage, and (FR-QM-017) push flagged assets to the register.
     $lines = is_array($body['lines'] ?? null) ? $body['lines'] : [];
@@ -593,6 +670,10 @@ $router->post('/api/qm/bookings/:id/cancel', function ($params) {
     $body = requestBody();
     $reason = trim((string) ($body['reason'] ?? '')) ?: null;
     dbRun("UPDATE qm_bookings SET status = 'cancelled', cancel_reason = ?, updated_at = datetime('now') WHERE id = ?", [$reason, $b['id']]);
+    // Release any instances we were holding for this booking (reserved -> available).
+    dbRun("UPDATE equipment_asset_instances SET status = 'available' WHERE status = 'reserved' AND id IN (
+        SELECT bii.instance_id FROM qm_booking_item_instances bii JOIN qm_booking_items bi ON bi.id = bii.booking_item_id WHERE bi.booking_id = ?
+    )", [$b['id']]);
     logAudit(['userId' => $user['id'], 'action' => 'qm_booking_cancel', 'entityType' => 'qm_booking', 'entityId' => (string) $b['id'], 'ipAddress' => clientIp(), 'details' => ['reason' => $reason]]);
     $ref = $b['reference'] ?: ('QM-' . str_pad((string) $b['id'], 4, '0', STR_PAD_LEFT));
     // Tell the other party.

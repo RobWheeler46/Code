@@ -163,9 +163,44 @@ function serializeQmBooking(array $b, bool $full = false): array
     ]);
 }
 
+// Per-instance allocation (FR-QM). Instances allocated to a booking line, with their
+// current register status/condition, for the serialised-asset workflow.
+function qmLineAllocatedInstances(int $bookingItemId): array
+{
+    return array_map(fn($r) => [
+        'instanceId' => (int) $r['instance_id'],
+        'ref' => $r['instance_ref'],
+        'status' => $r['status'],
+        'condition' => $r['condition'],
+    ], dbAll(
+        'SELECT bii.instance_id, i.instance_ref, i.status, i.condition
+         FROM qm_booking_item_instances bii JOIN equipment_asset_instances i ON i.id = bii.instance_id
+         WHERE bii.booking_item_id = ? ORDER BY i.instance_ref',
+        [$bookingItemId]
+    ));
+}
+
+// Move every instance allocated to a booking to a new register status (used by the
+// booking lifecycle: collect -> issued, return/cancel -> available).
+function qmSetBookingInstancesStatus(int $bookingId, string $status): void
+{
+    dbRun(
+        "UPDATE equipment_asset_instances SET status = ? WHERE id IN (
+            SELECT bii.instance_id FROM qm_booking_item_instances bii
+            JOIN qm_booking_items bi ON bi.id = bii.booking_item_id WHERE bi.booking_id = ?
+        )",
+        [$status, $bookingId]
+    );
+}
+
 function serializeQmBookingItem(array $i): array
 {
     [$restricted, $restrictedCategory] = qmLineRestriction($i);
+    // Serialised lines carry per-instance allocation; others don't.
+    $effectiveAssetId = qmLineEffectiveAssetId($i);
+    $trackingMode = $i['effective_tracking_mode'] ?? ($effectiveAssetId ? (dbGet('SELECT tracking_mode FROM equipment_assets WHERE id = ?', [$effectiveAssetId])['tracking_mode'] ?? null) : null);
+    $serialised = $trackingMode === 'serialised';
+    $allocated = $serialised ? qmLineAllocatedInstances((int) $i['id']) : [];
     return [
         'id' => (int) $i['id'],
         'bookingId' => (int) $i['booking_id'],
@@ -173,6 +208,10 @@ function serializeQmBookingItem(array $i): array
         'itemName' => $i['item_name'],
         'requestedQty' => (int) $i['requested_qty'],
         'approvedQty' => $i['approved_qty'] !== null ? (int) $i['approved_qty'] : null,
+        // Per-instance allocation (serialised assets only).
+        'serialised' => $serialised,
+        'allocatedInstances' => $allocated,
+        'allocatedCount' => count($allocated),
         'substituteAssetId' => $i['substitute_asset_id'] !== null ? (int) $i['substitute_asset_id'] : null,
         'substituteName' => $i['substitute_name'],
         'lineStatus' => $i['line_status'],

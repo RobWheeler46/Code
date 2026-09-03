@@ -238,6 +238,9 @@ async function renderDetail(id) {
   if (reviewing) {
     document.querySelectorAll('.qm-decide').forEach(el => el.addEventListener('click', () => decideItem(b, items.find(i => i.id == el.dataset.id), el.dataset.decision)));
   }
+  // Per-instance allocation controls (serialised lines; QM only).
+  document.querySelectorAll('.qm-allocate').forEach(el => el.addEventListener('click', () => openAllocateModal(b, el.dataset.item, el.dataset.name)));
+  document.querySelectorAll('.qm-dealloc').forEach(el => el.addEventListener('click', () => deallocInstance(b, el.dataset.item, el.dataset.inst)));
   renderActions(b, items, isOwner);
 }
 
@@ -249,7 +252,7 @@ function renderItemsTable(b, items, opts) {
       const decided = i.lineStatus !== 'requested';
       const lineKey = { approved: 'active', rejected: 'deleted', substituted: 'pending_approval', more_info: 'suspended', requested: 'archived' }[i.lineStatus] || 'archived';
       return `<tr>
-        <td><strong>${escapeHtml(i.itemName)}</strong>${i.substituteName ? ` <span class="muted">&rarr; ${escapeHtml(i.substituteName)}</span>` : ''}${i.restricted ? ` <span class="badge" data-status="suspended">Restricted</span>` : ''}${i.qmNotes ? `<br><span class="muted">${escapeHtml(i.qmNotes)}</span>` : ''}${i.damageNotes ? `<br><span class="badge" data-status="deleted">Damage: ${escapeHtml(i.damageNotes)}</span>` : ''}${i.restricted ? `<br><span class="muted" style="font-size:.82rem">Permit: ${i.permitConfirmed ? '<span class="badge" data-status="active">confirmed</span>' : '<span class="badge" data-status="deleted">not confirmed</span>'}${i.responsibleAdult ? ' · Responsible: ' + escapeHtml(i.responsibleAdult) : ' · <span class="badge" data-status="deleted">no responsible adult</span>'}</span>` : ''}</td>
+        <td><strong>${escapeHtml(i.itemName)}</strong>${i.substituteName ? ` <span class="muted">&rarr; ${escapeHtml(i.substituteName)}</span>` : ''}${i.restricted ? ` <span class="badge" data-status="suspended">Restricted</span>` : ''}${i.qmNotes ? `<br><span class="muted">${escapeHtml(i.qmNotes)}</span>` : ''}${i.damageNotes ? `<br><span class="badge" data-status="deleted">Damage: ${escapeHtml(i.damageNotes)}</span>` : ''}${i.restricted ? `<br><span class="muted" style="font-size:.82rem">Permit: ${i.permitConfirmed ? '<span class="badge" data-status="active">confirmed</span>' : '<span class="badge" data-status="deleted">not confirmed</span>'}${i.responsibleAdult ? ' · Responsible: ' + escapeHtml(i.responsibleAdult) : ' · <span class="badge" data-status="deleted">no responsible adult</span>'}</span>` : ''}${allocationRow(b, i)}</td>
         <td>${i.requestedQty}</td>
         <td>${decided ? `<span class="badge" data-status="${lineKey}">${escapeHtml(i.lineStatusLabel)}</span>` : '<span class="muted">Pending</span>'}
           ${opts.reviewing ? `<div class="cap-actions" style="margin-top:.4rem;gap:.3rem;flex-wrap:wrap">
@@ -263,6 +266,61 @@ function renderItemsTable(b, items, opts) {
         ${opts.editable ? `<td class="cap-actions"><button class="btn btn-secondary btn-sm qm-item-edit" data-id="${i.id}">Edit</button> <button class="btn btn-secondary btn-sm qm-item-del" data-id="${i.id}">Remove</button></td>` : ''}
       </tr>`;
     }).join('')}</tbody></table>`;
+}
+
+// Per-instance allocation row for a serialised line (FR-QM). Shows the allocated
+// instance refs (with a remove × for the QM) and an Allocate button, once the line is
+// approved and the booking is past draft. Non-serialised lines render nothing.
+function allocationRow(b, i) {
+  if (!i.serialised || !['approved', 'substituted'].includes(i.lineStatus) || b.status === 'draft') return '';
+  const cap = i.approvedQty != null ? i.approvedQty : i.requestedQty;
+  const live = !['returned', 'closed', 'cancelled'].includes(b.status);
+  const chips = (i.allocatedInstances || []).map(x =>
+    `<span class="chip">${escapeHtml(x.ref)}${CAN_APPROVE && live ? ` <button class="chip-x qm-dealloc" data-item="${i.id}" data-inst="${x.instanceId}" title="Remove ${escapeHtml(x.ref)}">&times;</button>` : ''}</span>`
+  ).join(' ');
+  const canAdd = CAN_APPROVE && live && i.allocatedCount < cap;
+  return `<div style="margin-top:.4rem;font-size:.85rem">
+    <span class="muted">Instances ${i.allocatedCount}/${cap}:</span> ${chips || '<span class="muted">none allocated</span>'}
+    ${canAdd ? ` <button class="btn btn-secondary btn-sm qm-allocate" data-item="${i.id}" data-name="${escapeHtml(i.itemName)}">Allocate</button>` : ''}
+  </div>`;
+}
+
+async function deallocInstance(b, itemId, instanceId) {
+  try { await Api.delete(`/api/qm/bookings/${b.id}/items/${itemId}/instances/${instanceId}`); renderDetail(b.id); }
+  catch (e) { alert(e.message); }
+}
+
+// Pick from the asset's available instances to allocate to this line.
+async function openAllocateModal(b, itemId, itemName) {
+  let d;
+  try { d = await Api.get(`/api/qm/bookings/${b.id}/items/${itemId}/allocatable`); }
+  catch (e) { alert(e.message); return; }
+  const render = (data) => {
+    const remaining = data.cap - data.allocated.length;
+    const allocated = data.allocated.length
+      ? data.allocated.map(x => `<span class="chip">${escapeHtml(x.ref)} <button class="chip-x am-remove" data-inst="${x.instanceId}">&times;</button></span>`).join(' ')
+      : '<span class="muted">None yet.</span>';
+    const available = data.available.length
+      ? data.available.map(x => `<button class="btn btn-secondary btn-sm am-add" data-inst="${x.instanceId}"${remaining <= 0 ? ' disabled' : ''}>${escapeHtml(x.ref)}${x.condition && x.condition !== 'good' ? ` (${escapeHtml(x.condition)})` : ''}</button>`).join(' ')
+      : '<span class="muted">No other instances are free right now.</span>';
+    document.getElementById('am-body').innerHTML = `
+      <p class="muted" style="margin:.2rem 0 .5rem">Allocated <strong>${data.allocated.length}</strong> of <strong>${data.cap}</strong>.</p>
+      <div class="field"><label>Allocated</label><div>${allocated}</div></div>
+      <div class="field"><label>Available to allocate</label><div style="display:flex;flex-wrap:wrap;gap:.4rem">${available}</div></div>`;
+    document.querySelectorAll('.am-add').forEach(el => el.addEventListener('click', async () => {
+      try { await Api.post(`/api/qm/bookings/${b.id}/items/${itemId}/instances`, { instanceId: Number(el.dataset.inst) }); reload(); }
+      catch (e) { document.getElementById('am-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+    }));
+    document.querySelectorAll('.am-remove').forEach(el => el.addEventListener('click', async () => {
+      try { await Api.delete(`/api/qm/bookings/${b.id}/items/${itemId}/instances/${el.dataset.inst}`); reload(); }
+      catch (e) { document.getElementById('am-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+    }));
+  };
+  const reload = async () => { try { render(await Api.get(`/api/qm/bookings/${b.id}/items/${itemId}/allocatable`)); } catch (e) { /* keep modal */ } };
+  const m = openModal(`Allocate instances · ${itemName}`, `<div id="am-msg"></div><div id="am-body"></div>
+    <div class="cap-actions" style="margin-top:1rem"><button class="btn" id="am-done">Done</button></div>`);
+  document.getElementById('am-done').addEventListener('click', () => { closeModal(); renderDetail(b.id); });
+  render(d);
 }
 
 // ── Action panel (state machine buttons) ────────────────────────────────────────
