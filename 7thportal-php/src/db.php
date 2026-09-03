@@ -1111,8 +1111,12 @@ CREATE TABLE IF NOT EXISTS activity_forms (
   activity_rules_confirmed INTEGER NOT NULL DEFAULT 0,
   add_to_calendar INTEGER NOT NULL DEFAULT 1,
   notes TEXT,
-  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','awaiting_section','awaiting_glv','approved','rejected','more_info')),
+  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','awaiting_section','awaiting_glv','awaiting_dlv','approved','rejected','more_info')),
   more_info_stage TEXT,
+  -- External DLV email approval (FR-AA-017..030): once the GLV endorses & refers to the
+  -- District Lead Volunteer, dlv_stage tracks the external request (preparing/awaiting/
+  -- approved/rejected/failed). Detail lives in activity_dlv_packs; this is the summary.
+  dlv_stage TEXT,
   submitted_at TEXT,
   section_decided_by INTEGER REFERENCES users(id), section_decided_at TEXT,
   glv_decided_by INTEGER REFERENCES users(id), glv_decided_at TEXT,
@@ -1145,6 +1149,48 @@ CREATE TABLE IF NOT EXISTS activity_form_events (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_activity_form_events_form ON activity_form_events(form_id);
+
+-- External DLV email approval (FR-AA-017..030). When the GLV endorses an Activity
+-- Approval for the District Lead Volunteer, the portal freezes an immutable, versioned
+-- evidence pack (snapshot_json is the frozen form data used for the PDF), emails the
+-- configured DLV, and records the DLV's external Approve/Reject vote against THIS exact
+-- pack. A revised submission creates a new pack version; old packs stay as history.
+CREATE TABLE IF NOT EXISTS activity_dlv_packs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  form_id INTEGER NOT NULL REFERENCES activity_forms(id) ON DELETE CASCADE,
+  version INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'preparing' CHECK(status IN ('preparing','awaiting','approved','rejected','failed','superseded')),
+  referral_reason TEXT,
+  snapshot_json TEXT NOT NULL DEFAULT '{}',
+  recipient_email TEXT,
+  recipient_name TEXT,
+  glv_user_id INTEGER REFERENCES users(id),
+  glv_user_name TEXT,
+  generated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  sent_at TEXT,
+  send_error TEXT,
+  expires_at TEXT,
+  decided_at TEXT,
+  decision TEXT CHECK(decision IN ('approve','reject')),
+  decision_comment TEXT,
+  pdf_path TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_activity_dlv_packs_form ON activity_dlv_packs(form_id, status);
+
+-- The two voting links per sent pack (approve, reject). Each token is a high-entropy
+-- secret; following the link only opens a confirmation page - the vote commits on an
+-- explicit confirm. Resend voids prior tokens and issues new ones for the same pack.
+CREATE TABLE IF NOT EXISTS activity_dlv_tokens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  pack_id INTEGER NOT NULL REFERENCES activity_dlv_packs(id) ON DELETE CASCADE,
+  action TEXT NOT NULL CHECK(action IN ('approve','reject')),
+  token TEXT NOT NULL UNIQUE,
+  expires_at TEXT,
+  used_at TEXT,
+  void_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_activity_dlv_tokens_pack ON activity_dlv_tokens(pack_id);
 
 -- Patrol Points (FRD v2.1 s13). Competitions with named teams, scoring categories,
 -- comment-required score submissions (multi-team, approvable, no self-approval) and
@@ -1384,6 +1430,54 @@ if ($activityFormsSql && !str_contains($activityFormsSql, 'external_provider_use
 // selected activity type drives whether "Relevant qualifications" is required.
 if ($activityFormsSql && !str_contains($activityFormsSql, 'activity_type')) {
     db()->exec('ALTER TABLE activity_forms ADD COLUMN activity_type TEXT');
+}
+// Migration: activity_forms gained dlv_stage (external DLV email approval, FR-AA-017..).
+if ($activityFormsSql && !str_contains($activityFormsSql, 'dlv_stage')) {
+    db()->exec('ALTER TABLE activity_forms ADD COLUMN dlv_stage TEXT');
+}
+// Migration: the status CHECK gained 'awaiting_dlv'. SQLite can't ALTER a CHECK, so an
+// older table is rebuilt with the new constraint (foreign_keys OFF so the FK children
+// - activity_form_files/events - aren't cascade-deleted; they re-bind to the new table
+// by name). Only runs when the live CHECK doesn't already allow the new value.
+$activityFormsSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='activity_forms'")['sql'] ?? '';
+if ($activityFormsSql && !str_contains($activityFormsSql, "'awaiting_dlv'")) {
+    db()->exec('PRAGMA foreign_keys = OFF');
+    db()->exec('BEGIN TRANSACTION');
+    db()->exec(<<<'SQL'
+    CREATE TABLE activity_forms_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      reference TEXT,
+      created_by INTEGER NOT NULL REFERENCES users(id),
+      leader_name TEXT, leader_phone TEXT, leader_email TEXT,
+      activity_description TEXT, activity_location TEXT, activity_date TEXT, activity_end_date TEXT,
+      osm_section_id TEXT, section_names TEXT, yp_count INTEGER, adult_count INTEGER,
+      activity_type TEXT, qualifications TEXT, in_touch TEXT,
+      external_provider_used INTEGER NOT NULL DEFAULT 0,
+      unity_approval_required INTEGER NOT NULL DEFAULT 0,
+      risk_assessment_confirmed INTEGER NOT NULL DEFAULT 0,
+      public_liability_confirmed INTEGER NOT NULL DEFAULT 0,
+      activity_rules_confirmed INTEGER NOT NULL DEFAULT 0,
+      add_to_calendar INTEGER NOT NULL DEFAULT 1,
+      notes TEXT,
+      status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','awaiting_section','awaiting_glv','awaiting_dlv','approved','rejected','more_info')),
+      more_info_stage TEXT,
+      dlv_stage TEXT,
+      submitted_at TEXT,
+      section_decided_by INTEGER REFERENCES users(id), section_decided_at TEXT,
+      glv_decided_by INTEGER REFERENCES users(id), glv_decided_at TEXT,
+      calendar_entry_id INTEGER REFERENCES calendar_entries(id) ON DELETE SET NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    SQL);
+    $targetCols = ['id', 'reference', 'created_by', 'leader_name', 'leader_phone', 'leader_email', 'activity_description', 'activity_location', 'activity_date', 'activity_end_date', 'osm_section_id', 'section_names', 'yp_count', 'adult_count', 'activity_type', 'qualifications', 'in_touch', 'external_provider_used', 'unity_approval_required', 'risk_assessment_confirmed', 'public_liability_confirmed', 'activity_rules_confirmed', 'add_to_calendar', 'notes', 'status', 'more_info_stage', 'dlv_stage', 'submitted_at', 'section_decided_by', 'section_decided_at', 'glv_decided_by', 'glv_decided_at', 'calendar_entry_id', 'created_at', 'updated_at'];
+    $liveCols = array_column(dbAll('PRAGMA table_info(activity_forms)'), 'name');
+    $shared = implode(', ', array_values(array_intersect($targetCols, $liveCols)));
+    db()->exec("INSERT INTO activity_forms_new ($shared) SELECT $shared FROM activity_forms");
+    db()->exec('DROP TABLE activity_forms');
+    db()->exec('ALTER TABLE activity_forms_new RENAME TO activity_forms');
+    db()->exec('COMMIT');
+    db()->exec('PRAGMA foreign_keys = ON');
 }
 // Migration: pp_submissions gained withdraw + revision columns (FRD v2.1 s13
 // PP-PTS-008/009). withdrawn cancels a pending/returned submission; revises_id

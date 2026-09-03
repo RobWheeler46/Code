@@ -12,6 +12,7 @@ const ACTIVITY_STATUSES = [
     'draft' => 'Draft',
     'awaiting_section' => 'Awaiting Section Lead',
     'awaiting_glv' => 'Awaiting GLV',
+    'awaiting_dlv' => 'Awaiting DLV decision',
     'approved' => 'Approved',
     'rejected' => 'Rejected',
     'more_info' => 'More information needed',
@@ -163,7 +164,7 @@ function serializeActivityForm(array $f, bool $full = false): array
         'publicLiabilityConfirmed' => (bool) $f['public_liability_confirmed'],
         'activityRulesConfirmed' => (bool) $f['activity_rules_confirmed'],
         'addToCalendar' => (bool) $f['add_to_calendar'], 'notes' => $f['notes'],
-        'moreInfoStage' => $f['more_info_stage'], 'calendarEntryId' => $f['calendar_entry_id'] !== null ? (int) $f['calendar_entry_id'] : null,
+        'moreInfoStage' => $f['more_info_stage'], 'dlvStage' => $f['dlv_stage'] ?? null, 'calendarEntryId' => $f['calendar_entry_id'] !== null ? (int) $f['calendar_entry_id'] : null,
     ]);
 }
 function serializeActivityFile(array $x): array

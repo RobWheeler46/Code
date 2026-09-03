@@ -108,6 +108,9 @@ $router->get('/api/activity/forms/:id', function ($params) {
         'events' => array_map('serializeActivityEvent', dbAll('SELECT * FROM activity_form_events WHERE form_id = ? ORDER BY id', [$f['id']])),
         'myActions' => activityMyActions($user, $f),
         'missing' => activityValidate($f),
+        // External DLV approval pack + status (once referred).
+        'dlvPack' => (function () use ($f) { $p = dlvActivePack((int) $f['id']); return $p ? serializeDlvPack($p) : null; })(),
+        'dlvSettings' => (function () { $s = dlvSettings(); return ['configured' => $s['configured'], 'displayName' => $s['displayName'], 'email' => $s['email']]; })(),
         'meta' => ['statuses' => ACTIVITY_STATUSES, 'docTypes' => ACTIVITY_DOC_TYPES, 'sections' => ACTIVITY_SECTIONS, 'activityTypes' => activityTypeOptions()],
     ]);
 });
@@ -193,6 +196,31 @@ $router->post('/api/activity/forms/:id/approve', function ($params) {
     if ($calId) activityLogEvent((int) $f['id'], $user['id'], 'calendar_created', 'glv', null);
     notify((int) $f['created_by'], 'activity_form', 'Activity form approved', $ref . ' has been approved.' . ($calId ? ' A draft calendar entry was created.' : ''), 'activity-form.html?id=' . $f['id']);
     logAudit(['userId' => $user['id'], 'action' => 'activity_form_approve', 'entityType' => 'activity_form', 'entityId' => (string) $f['id'], 'ipAddress' => clientIp(), 'details' => ['stage' => $f['status']]]);
+    jsonResponse(serializeActivityForm(activityFormOr404($f['id']), true));
+});
+
+// GLV endorses & refers to the external District Lead Volunteer (FR-AA-017..021). This
+// freezes an immutable evidence pack, issues the Approve/Reject voting tokens and moves
+// the form to awaiting_dlv. Email delivery of the pack is a separate layer.
+$router->post('/api/activity/forms/:id/refer-dlv', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireActivityFormsEnabled();
+    $f = activityFormOr404($params['id']);
+    if (!activityCanActNow($user, $f)) jsonResponse(['error' => 'You cannot refer this form at its current stage.'], 403);
+    $reason = trim((string) (requestBody()['reason'] ?? ''));
+    if ($reason === '') jsonResponse(['error' => 'A referral reason is required to send this to the DLV.'], 422);
+    $settings = dlvSettings();
+    if (!$settings['configured']) jsonResponse(['error' => 'No DLV approval email is configured yet. Ask a Portal Administrator to set it in Admin settings.'], 409);
+
+    $pack = dlvCreatePack($f, $user, $reason);
+    dlvIssueTokens((int) $pack['id'], $settings['voteDays']);
+    dbRun("UPDATE activity_dlv_packs SET status = 'awaiting' WHERE id = ?", [$pack['id']]);
+    dbRun("UPDATE activity_forms SET status = 'awaiting_dlv', dlv_stage = 'awaiting', glv_decided_by = ?, glv_decided_at = datetime('now'), updated_at = datetime('now') WHERE id = ?", [$user['id'], $f['id']]);
+    activityLogEvent((int) $f['id'], $user['id'], 'glv_refer_dlv', 'glv', $reason);
+    logAudit(['userId' => $user['id'], 'action' => 'activity_form_refer_dlv', 'entityType' => 'activity_form', 'entityId' => (string) $f['id'], 'ipAddress' => clientIp(), 'details' => ['packVersion' => (int) $pack['version']]]);
+    $ref = $f['reference'] ?: ('AAF-' . $f['id']);
+    notify((int) $f['created_by'], 'activity_form', 'Referred to the DLV', $ref . ' was endorsed and referred to the District Lead Volunteer for approval.', 'activity-form.html?id=' . $f['id']);
     jsonResponse(serializeActivityForm(activityFormOr404($f['id']), true));
 });
 

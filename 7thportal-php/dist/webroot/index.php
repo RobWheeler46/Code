@@ -86,6 +86,7 @@ try {
     require_once __DIR__ . '/../src/lib/calendar.php';
     require_once __DIR__ . '/../src/lib/attendance.php';
     require_once __DIR__ . '/../src/lib/activity.php';
+    require_once __DIR__ . '/../src/lib/dlv.php';
     require_once __DIR__ . '/../src/lib/patrolpoints.php';
     require_once __DIR__ . '/../src/lib/demoseed.php';
     require_once __DIR__ . '/../src/lib/actions.php';
@@ -180,6 +181,7 @@ require_once __DIR__ . '/../src/routes/events.php';
 require_once __DIR__ . '/../src/routes/calendar.php';
 require_once __DIR__ . '/../src/routes/attendance.php';
 require_once __DIR__ . '/../src/routes/activity.php';
+require_once __DIR__ . '/../src/routes/dlv.php';
 require_once __DIR__ . '/../src/routes/patrolpoints.php';
 require_once __DIR__ . '/../src/routes/feedback.php';
 require_once __DIR__ . '/../src/routes/search.php';

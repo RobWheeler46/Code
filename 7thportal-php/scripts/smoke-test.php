@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -32,7 +32,7 @@ function useDb(string $file): void { putenv('SEVENTHPORTAL_DB=' . $file); }
 function boot(): void { require dirname(__DIR__) . '/src/db.php'; }
 function loadLibs(): void
 {
-    foreach (['helpers', 'notifications', 'finance', 'incidents', 'patrolpoints', 'events', 'equipment', 'actions', 'quartermaster', 'prepare', 'features', 'attendance', 'demoseed', 'calendar'] as $lib) {
+    foreach (['helpers', 'notifications', 'finance', 'incidents', 'patrolpoints', 'events', 'equipment', 'actions', 'quartermaster', 'prepare', 'features', 'attendance', 'demoseed', 'calendar', 'dlv'] as $lib) {
         require_once dirname(__DIR__) . '/src/lib/' . $lib . '.php';
     }
 }
@@ -743,6 +743,49 @@ function scenario_logic_qm_instance_alloc(): void
     $line2 = (int) dbRun("INSERT INTO qm_booking_items (booking_id, equipment_asset_id, item_name, requested_qty, line_status) VALUES (?, ?, 'Rope', 5, 'approved')", [$bk, $bulk])['lastInsertId'];
     $serBulk = serializeQmBookingItem($itemRow($line2));
     check('qmi: a bulk line is not serialised', $serBulk['itemName'] === 'Rope' && $serBulk['serialised'] === false);
+}
+
+// External DLV email approval (FR-AA-017..030): settings, pack versioning, token
+// issue/void, block reasons, and the approve/reject vote driving the form state.
+function scenario_logic_dlv_approval(): void
+{
+    useDb(tmpDb('dlv')); boot(); loadLibs();
+    dlvSaveSettings(['email' => 'dlv@example.com', 'displayName' => 'DLV', 'voteDays' => 14]);
+    $s = dlvSettings();
+    check('dlv: settings save + configured', $s['configured'] === true && $s['email'] === 'dlv@example.com' && $s['voteDays'] === 14);
+
+    $glv = dbGet('SELECT * FROM users WHERE id = ?', [dbRun("INSERT INTO users (auth_type, first_name, last_name, portal_role) VALUES ('local','Glen','Vee','group_leadership')")['lastInsertId']]);
+    $creator = (int) dbRun("INSERT INTO users (auth_type, first_name, last_name, portal_role) VALUES ('local','Lee','Der','section_leader')")['lastInsertId'];
+    $fid = (int) dbRun("INSERT INTO activity_forms (reference, created_by, activity_description, status, submitted_at) VALUES ('AAF-1', ?, 'Climbing day', 'awaiting_glv', datetime('now'))", [$creator])['lastInsertId'];
+    $f = dbGet('SELECT * FROM activity_forms WHERE id = ?', [$fid]);
+
+    $pack = dlvCreatePack($f, $glv, 'External provider - District approval');
+    check('dlv: pack v1 preparing carries a frozen snapshot', (int) $pack['version'] === 1 && $pack['status'] === 'preparing' && str_contains($pack['snapshot_json'], 'Climbing day'));
+    $tokens = dlvIssueTokens((int) $pack['id'], 14);
+    check('dlv: two 64-hex voting tokens issued', preg_match('/^[a-f0-9]{64}$/', $tokens['approve']) === 1 && preg_match('/^[a-f0-9]{64}$/', $tokens['reject']) === 1);
+    dbRun("UPDATE activity_dlv_packs SET status = 'awaiting' WHERE id = ?", [$pack['id']]);
+
+    $look = dlvTokenLookup($tokens['approve']);
+    check('dlv: approve token resolves and is votable', $look && dlvTokenBlockReason($look['token'], $look['pack']) === '');
+
+    // A resend voids the earlier token.
+    $tokens2 = dlvIssueTokens((int) $pack['id'], 14);
+    $oldTok = dbGet('SELECT * FROM activity_dlv_tokens WHERE token = ?', [$tokens['approve']]);
+    check('dlv: resend voids the earlier token', dlvTokenBlockReason($oldTok, dbGet('SELECT * FROM activity_dlv_packs WHERE id = ?', [$pack['id']])) === 'void');
+
+    // Confirmed Approve -> form approved, pack approved, sibling reject token voided.
+    dlvApplyVote(dlvTokenLookup($tokens2['approve'])['token'], dbGet('SELECT * FROM activity_dlv_packs WHERE id = ?', [$pack['id']]), 'Looks good');
+    check('dlv: approve marks form + pack approved', dbGet('SELECT status FROM activity_forms WHERE id = ?', [$fid])['status'] === 'approved' && dbGet('SELECT decision FROM activity_dlv_packs WHERE id = ?', [$pack['id']])['decision'] === 'approve');
+    $usedTok = dbGet('SELECT * FROM activity_dlv_tokens WHERE token = ?', [$tokens2['approve']]);
+    check('dlv: the used token cannot vote again', dlvTokenBlockReason($usedTok, dbGet('SELECT * FROM activity_dlv_packs WHERE id = ?', [$pack['id']])) === 'used');
+
+    // A fresh pack + confirmed Reject returns the form to the GLV/leader.
+    $pack2 = dlvCreatePack($f, $glv, 'redo');
+    check('dlv: revised submission gets pack v2', (int) $pack2['version'] === 2);
+    $tk2 = dlvIssueTokens((int) $pack2['id'], 14);
+    dbRun("UPDATE activity_dlv_packs SET status = 'awaiting' WHERE id = ?", [$pack2['id']]);
+    dlvApplyVote(dlvTokenLookup($tk2['reject'])['token'], dbGet('SELECT * FROM activity_dlv_packs WHERE id = ?', [$pack2['id']]), 'Needs a risk assessment');
+    check('dlv: reject returns the form to more_info', dbGet('SELECT status FROM activity_forms WHERE id = ?', [$fid])['status'] === 'more_info' && dbGet('SELECT dlv_stage FROM activity_forms WHERE id = ?', [$fid])['dlv_stage'] === 'rejected');
 }
 
 // QM kit completeness check: overall result derives from component statuses.
