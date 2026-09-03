@@ -59,6 +59,27 @@
   --radius-card: 14px;
 }
 
+/* ── Test / demo environment theme ───────────────────────────────────────────
+   The test site recolours the whole app teal (the live site stays purple) so you
+   can never mistake one for the other. Applied via data-env="test" on <html>,
+   set in api.js (by hostname) and reaffirmed in nav.js (by the demo-mode flag).
+   Redefining the brand tokens cascades to the nav, links, hero, sidebar, badges,
+   avatars and calendar; the few hardcoded lavender spots are re-tinted below. */
+:root[data-env="test"] {
+  --purple: #0f766e;        /* teal, in place of the live purple */
+  --purple-dark: #0b5b54;
+  --bg: #eef3f2;            /* a cooler ground so even the background reads different */
+  --border: #d6e4e1;
+}
+:root[data-env="test"] .app-sidebar nav a:hover,
+:root[data-env="test"] .app-sidebar nav button:hover,
+:root[data-env="test"] .app-sidebar nav a.active,
+:root[data-env="test"] .app-sidebar nav button.active,
+:root[data-env="test"] .nav-drawer nav a.active,
+:root[data-env="test"] .nav-drawer nav a:active { background: #d8ede9; color: var(--purple); }
+:root[data-env="test"] tr:hover td { background: #f1f6f5; }
+:root[data-env="test"] .card.clickable:hover { box-shadow: 0 4px 10px rgba(27,21,51,.06), 0 14px 30px rgba(15,118,110,0.16); }
+
 * { box-sizing: border-box; }
 
 body {

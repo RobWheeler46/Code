@@ -17,7 +17,11 @@ function renderPublicNav() {
 }
 
 function renderDemoBanner(cfg, me) {
-  if (!cfg || document.querySelector('.demo-banner')) return;
+  if (!cfg) return;
+  // Demo mode is the definitive "this is the test environment" signal - reaffirm the
+  // distinct theme even if the hostname check in api.js didn't catch this host.
+  if (cfg.demoModeAllowed) document.documentElement.setAttribute('data-env', 'test');
+  if (document.querySelector('.demo-banner')) return;
   const el = document.createElement('div');
   if (cfg.demoModeAllowed) {
     // Prominent, unmistakable banner for the demo/test environment, naming the

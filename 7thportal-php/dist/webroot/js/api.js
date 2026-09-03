@@ -1,3 +1,16 @@
+// Environment theme: give the test/demo site a visibly different colour scheme so it
+// can never be mistaken for the live site. Keyed off the hostname first (instant, no
+// flash, covers public + app pages); nav.js also reaffirms it from the demo-mode flag.
+// The live domains (www./digital.7thswindon.org.uk) never match, so they stay purple.
+(function () {
+  try {
+    const h = (location.hostname || '').toLowerCase();
+    const isTest = h === 'localhost' || h.startsWith('127.') || h.startsWith('192.168.')
+      || h.startsWith('test.') || h.startsWith('staging.') || h.includes('.test.');
+    if (isTest) document.documentElement.setAttribute('data-env', 'test');
+  } catch (e) { /* non-fatal */ }
+})();
+
 const Api = {
   async request(method, url, body) {
     const opts = { method, headers: {} };
