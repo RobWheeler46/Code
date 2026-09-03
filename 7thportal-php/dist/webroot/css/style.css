@@ -28,8 +28,12 @@
 }
 
 :root {
-  --purple: #6d28d9;
-  --purple-dark: #4c1d95;
+  /* Brand primary. Production (live) is teal; the test/demo site overrides these to
+     the legacy purple below (see :root[data-env="test"]), so the two are never
+     confused. The token is still named --purple for historical reasons - it means
+     "brand primary", whatever hue that currently is. */
+  --purple: #0f766e;
+  --purple-dark: #0b5b54;
   --navy: #1b1533;
   --green: #0f9d78;
   --yellow: #f5b800;
@@ -37,11 +41,15 @@
   --red: #b3261e;
   --amber: #b5730a;
   --blue: #2a5fb0;
-  --bg: #f6f4f0;
+  --bg: #eef3f2;
   --card: #ffffff;
-  --border: #e3ddf0;
+  --border: #d6e4e1;
   --text: #221c2e;
   --muted: #6b6478;
+  /* Brand-tinted UI accents (swap with the brand hue between environments). */
+  --nav-tint: #d8ede9;      /* sidebar / drawer hover + active background */
+  --row-hover: #f1f6f5;     /* table row hover */
+  --card-glow: 15,118,110;  /* rgb triplet for the clickable-card hover glow */
   --radius: 10px;
   --radius-pill: 999px;
   /* Semantic status tints (v1.1 restyle) — one tinted pill per state, icon+word,
@@ -60,25 +68,20 @@
 }
 
 /* ── Test / demo environment theme ───────────────────────────────────────────
-   The test site recolours the whole app teal (the live site stays purple) so you
-   can never mistake one for the other. Applied via data-env="test" on <html>,
-   set in api.js (by hostname) and reaffirmed in nav.js (by the demo-mode flag).
-   Redefining the brand tokens cascades to the nav, links, hero, sidebar, badges,
-   avatars and calendar; the few hardcoded lavender spots are re-tinted below. */
+   Production (live) is teal; the test/demo site recolours the whole app to the
+   legacy purple, so you can never mistake one for the other. Applied via
+   data-env="test" on <html>, set in api.js (by hostname) and reaffirmed in nav.js
+   (by the demo-mode flag). Every environment-specific value is a token, so this is
+   a straight swap of the token set - no per-selector overrides needed. */
 :root[data-env="test"] {
-  --purple: #0f766e;        /* teal, in place of the live purple */
-  --purple-dark: #0b5b54;
-  --bg: #eef3f2;            /* a cooler ground so even the background reads different */
-  --border: #d6e4e1;
+  --purple: #6d28d9;        /* legacy purple, in place of the live teal */
+  --purple-dark: #4c1d95;
+  --bg: #f6f4f0;            /* the warmer original ground */
+  --border: #e3ddf0;
+  --nav-tint: #efe9fb;      /* lavender sidebar/drawer accents */
+  --row-hover: #faf9fc;
+  --card-glow: 109,40,217;
 }
-:root[data-env="test"] .app-sidebar nav a:hover,
-:root[data-env="test"] .app-sidebar nav button:hover,
-:root[data-env="test"] .app-sidebar nav a.active,
-:root[data-env="test"] .app-sidebar nav button.active,
-:root[data-env="test"] .nav-drawer nav a.active,
-:root[data-env="test"] .nav-drawer nav a:active { background: #d8ede9; color: var(--purple); }
-:root[data-env="test"] tr:hover td { background: #f1f6f5; }
-:root[data-env="test"] .card.clickable:hover { box-shadow: 0 4px 10px rgba(27,21,51,.06), 0 14px 30px rgba(15,118,110,0.16); }
 
 * { box-sizing: border-box; }
 
@@ -152,8 +155,8 @@ a { color: var(--purple); }
   padding: 0.55rem 0.75rem; border-radius: var(--radius); background: none; border: none; cursor: pointer;
   font-family: inherit; width: 100%;
 }
-.app-sidebar nav a:hover, .app-sidebar nav button:hover { background: #efe9fb; }
-.app-sidebar nav a.active, .app-sidebar nav button.active { background: #efe9fb; color: var(--purple); font-weight: 700; }
+.app-sidebar nav a:hover, .app-sidebar nav button:hover { background: var(--nav-tint); }
+.app-sidebar nav a.active, .app-sidebar nav button.active { background: var(--nav-tint); color: var(--purple); font-weight: 700; }
 .app-main { flex: 1; min-width: 0; }
 @media (min-width: 900px) {
   .app-sidebar { display: block; }
@@ -166,7 +169,7 @@ a { color: var(--purple); }
 /* ── Cards ───────────────────────────────────────────────────────────── */
 .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 1.25rem; margin-bottom: 1.25rem; box-shadow: var(--shadow); }
 .card.clickable { cursor: pointer; transition: box-shadow 0.15s, transform 0.15s; display: block; text-decoration: none; color: inherit; }
-.card.clickable:hover { box-shadow: 0 4px 10px rgba(27,21,51,.06), 0 14px 30px rgba(109,40,217,0.14); transform: translateY(-1px); }
+.card.clickable:hover { box-shadow: 0 4px 10px rgba(27,21,51,.06), 0 14px 30px rgba(var(--card-glow),0.14); transform: translateY(-1px); }
 .card.clickable:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
 
 .card-accent { border-left: 4px solid var(--purple); }
@@ -187,7 +190,7 @@ h3 { font-size: 1rem; margin: 1.25rem 0 0.5rem; }
 table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); }
 th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.02em; }
-tr:hover td { background: #faf9fc; }
+tr:hover td { background: var(--row-hover); }
 
 /* Status pills (v1.1 restyle): tinted background + same-hue ink, so status reads
    softly and never depends on colour alone (the label text carries the meaning).
@@ -284,7 +287,7 @@ textarea { min-height: 5rem; resize: vertical; }
 .gallery-terms { background: #fdf2e2; border: 1px solid #f6ddb0; color: var(--amber); border-radius: var(--radius); padding: 0.75rem 1rem; font-size: 0.85rem; margin-bottom: 1.25rem; }
 .album-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; }
 .album-tile { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; text-decoration: none; color: inherit; display: block; }
-.album-tile:hover { box-shadow: 0 4px 14px rgba(109,40,217,0.14); }
+.album-tile:hover { box-shadow: 0 4px 14px rgba(var(--card-glow),0.14); }
 .album-tile .thumb { width: 100%; aspect-ratio: 4/3; object-fit: cover; background: #ece7f2; display: block; }
 .album-tile .info { padding: 0.75rem; }
 .album-tile .info strong { display: block; }
@@ -438,8 +441,8 @@ textarea { min-height: 5rem; resize: vertical; }
 .nav-drawer-switch { margin: 0.2rem 0 0.5rem; }
 .nav-drawer nav { display: flex; flex-direction: column; gap: 0.1rem; }
 .nav-drawer nav a { display: block; padding: 0.7rem 0.75rem; border-radius: var(--radius); color: var(--text); text-decoration: none; font-size: 1rem; }
-.nav-drawer nav a.active { background: #efe9fb; color: var(--purple); font-weight: 700; }
-.nav-drawer nav a:active { background: #efe9fb; }
+.nav-drawer nav a.active { background: var(--nav-tint); color: var(--purple); font-weight: 700; }
+.nav-drawer nav a:active { background: var(--nav-tint); }
 .nav-drawer-logout { margin-top: auto; padding: 0.75rem; color: var(--purple); text-decoration: none; font-weight: 600; }
 
 /* Admin feature-availability toggle: checkbox + status pill on one line. */
@@ -479,7 +482,7 @@ textarea { min-height: 5rem; resize: vertical; }
   .bottom-nav-item .bn-icon { font-size: 1.15rem; line-height: 1; }
   .bottom-nav-item .bn-label { line-height: 1; }
   .bottom-nav-item.active { color: var(--purple); }
-  .bottom-nav-item:active { background: #efe9fb; }
+  .bottom-nav-item:active { background: var(--nav-tint); }
   /* Keep page content and the floating feedback button clear of the bar. */
   body.has-bottom-nav .app-main { padding-bottom: 4.6rem; }
   body.has-bottom-nav .demo-fb-btn { bottom: 4.9rem; }
