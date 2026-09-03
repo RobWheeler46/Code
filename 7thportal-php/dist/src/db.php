@@ -594,6 +594,27 @@ CREATE TABLE IF NOT EXISTS camp_programme_slots (
 );
 CREATE INDEX IF NOT EXISTS idx_camp_programme_slots_hub ON camp_programme_slots(hub_id);
 
+-- Catering / meal plan (FRD-CAMP / Command Centre catering). A day/meal plan for a
+-- camp: each meal has a dish, an optional cook, a headcount and a prep status, plus a
+-- free-text dietary/catering note (a planning aid - "3 vegetarian, 1 gluten-free" -
+-- NOT a per-child medical register). Leader-only operational data.
+CREATE TABLE IF NOT EXISTS camp_catering_meals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  hub_id INTEGER NOT NULL REFERENCES event_hubs(id) ON DELETE CASCADE,
+  day_label TEXT NOT NULL,
+  meal TEXT NOT NULL DEFAULT 'breakfast' CHECK(meal IN ('breakfast','lunch','dinner','snack','other')),
+  dish TEXT,
+  cook_name TEXT,
+  headcount INTEGER,
+  status TEXT NOT NULL DEFAULT 'planned' CHECK(status IN ('planned','shopping_done','prepped')),
+  dietary_notes TEXT,
+  notes TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_camp_catering_meals_hub ON camp_catering_meals(hub_id);
+
 -- Camp plan version history & acknowledgements (FRD-CAMP-010). A leader captures the
 -- current state of the camp plan as a numbered, timestamped snapshot with a change
 -- summary; the snapshot_json freezes the counts/content at that moment so the record

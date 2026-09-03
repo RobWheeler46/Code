@@ -119,6 +119,8 @@ $router->get('/api/events/:id', function ($params) {
         'transport' => $isLeaderView ? eventCampTransport((int) $hub['id']) : null,
         // Programme matrix & activity allocation - leader-only.
         'programme' => $isLeaderView ? eventCampProgramme((int) $hub['id']) : null,
+        // Catering / meal plan - leader-only.
+        'catering' => $isLeaderView ? eventCampCatering((int) $hub['id']) : null,
         // Command Centre: per-area readiness rollup so the event acts as the
         // operational spine - leader-only.
         'commandCentre' => $isLeaderView ? eventCommandCentre($hub) : null,
@@ -496,6 +498,56 @@ $router->post('/api/events/:id/programme/import', function ($params) {
     }
     logAudit(['userId' => $user['id'], 'action' => 'camp_programme_import', 'entityType' => 'event_hub', 'entityId' => (string) $hub['id'], 'ipAddress' => clientIp(), 'details' => ['added' => count($ready), 'skipped' => count($errors)]]);
     jsonResponse(['ok' => true, 'added' => count($ready), 'skipped' => count($errors), 'errors' => $errors]);
+});
+
+// ── Catering / meal plan (Command Centre catering) ──────────────────────────────
+function eventCateringMealFields(array $b, array $existing = []): array
+{
+    $val = fn($bk, $ek) => array_key_exists($bk, $b) ? (trim((string) $b[$bk]) ?: null) : ($existing[$ek] ?? null);
+    return [
+        'day_label' => trim((string) ($b['dayLabel'] ?? $existing['day_label'] ?? '')),
+        'meal' => array_key_exists($b['meal'] ?? null, CAMP_MEAL_TYPES) ? $b['meal'] : ($existing['meal'] ?? 'breakfast'),
+        'dish' => $val('dish', 'dish'),
+        'cook_name' => $val('cook', 'cook_name'),
+        'headcount' => array_key_exists('headcount', $b) ? (($b['headcount'] === '' || $b['headcount'] === null) ? null : max(0, (int) $b['headcount'])) : ($existing['headcount'] ?? null),
+        'status' => array_key_exists($b['status'] ?? null, CAMP_MEAL_STATUSES) ? $b['status'] : ($existing['status'] ?? 'planned'),
+        'dietary_notes' => $val('dietaryNotes', 'dietary_notes'),
+        'notes' => $val('notes', 'notes'),
+    ];
+}
+$router->post('/api/events/:id/catering', function ($params) {
+    $user = requireAuth();
+    requireEventHubEnabled();
+    if (!eventHubCanManage($user)) jsonResponse(['error' => 'Not permitted.'], 403);
+    $hub = eventHubForManage($params['id']);
+    $f = eventCateringMealFields(requestBody());
+    if ($f['day_label'] === '') jsonResponse(['error' => 'A day is required.'], 400);
+    $cols = array_keys($f);
+    $result = dbRun('INSERT INTO camp_catering_meals (hub_id, ' . implode(',', $cols) . ') VALUES (?, ' . implode(',', array_fill(0, count($cols), '?')) . ')', [$hub['id'], ...array_values($f)]);
+    logAudit(['userId' => $user['id'], 'action' => 'camp_catering_add', 'entityType' => 'event_hub', 'entityId' => (string) $hub['id'], 'ipAddress' => clientIp()]);
+    jsonResponse(serializeCateringMeal(dbGet('SELECT * FROM camp_catering_meals WHERE id = ?', [$result['lastInsertId']])), 201);
+});
+$router->patch('/api/events/:id/catering/:mid', function ($params) {
+    $user = requireAuth();
+    requireEventHubEnabled();
+    if (!eventHubCanManage($user)) jsonResponse(['error' => 'Not permitted.'], 403);
+    $m = dbGet('SELECT * FROM camp_catering_meals WHERE id = ? AND hub_id = ?', [$params['mid'], $params['id']]);
+    if (!$m) jsonResponse(['error' => 'Meal not found.'], 404);
+    $f = eventCateringMealFields(requestBody(), $m);
+    if ($f['day_label'] === '') jsonResponse(['error' => 'A day is required.'], 400);
+    $set = implode(', ', array_map(fn($c) => "$c = ?", array_keys($f)));
+    dbRun("UPDATE camp_catering_meals SET $set, updated_at = datetime('now') WHERE id = ?", [...array_values($f), $m['id']]);
+    jsonResponse(serializeCateringMeal(dbGet('SELECT * FROM camp_catering_meals WHERE id = ?', [$m['id']])));
+});
+$router->delete('/api/events/:id/catering/:mid', function ($params) {
+    $user = requireAuth();
+    requireEventHubEnabled();
+    if (!eventHubCanManage($user)) jsonResponse(['error' => 'Not permitted.'], 403);
+    $m = dbGet('SELECT * FROM camp_catering_meals WHERE id = ? AND hub_id = ?', [$params['mid'], $params['id']]);
+    if (!$m) jsonResponse(['error' => 'Meal not found.'], 404);
+    dbRun('DELETE FROM camp_catering_meals WHERE id = ?', [$m['id']]);
+    logAudit(['userId' => $user['id'], 'action' => 'camp_catering_delete', 'entityType' => 'event_hub', 'entityId' => (string) $params['id'], 'ipAddress' => clientIp()]);
+    jsonResponse(['ok' => true]);
 });
 
 // ── Plan version history & acknowledgements (FRD-CAMP-010) ───────────────────

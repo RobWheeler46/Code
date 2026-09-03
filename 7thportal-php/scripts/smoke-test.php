@@ -294,11 +294,17 @@ function scenario_logic_command_centre(): void
     $byKey = fn() => array_column(eventCommandCentre($hub), null, 'key');
 
     $cc = $byKey();
-    check('cc: seven readiness areas', count($cc) === 7);
+    check('cc: eight readiness areas', count($cc) === 8);
     check('cc: fresh equipment = none', $cc['equipment']['status'] === 'none');
     check('cc: fresh parent pack = none', $cc['parentpack']['status'] === 'none');
     check('cc: fresh transport = none', $cc['transport']['status'] === 'none');
     check('cc: fresh programme = none', $cc['programme']['status'] === 'none');
+    check('cc: fresh catering = none', $cc['catering']['status'] === 'none');
+    // Catering: a meal with no dish -> attention; give it a dish -> ready.
+    $mealId = dbRun("INSERT INTO camp_catering_meals (hub_id, day_label, meal) VALUES (?, 'Sat', 'breakfast')", [$hubId])['lastInsertId'];
+    check('cc: unplanned meal -> catering attention', $byKey()['catering']['status'] === 'attention');
+    dbRun("UPDATE camp_catering_meals SET dish = 'Porridge' WHERE id = ?", [$mealId]);
+    check('cc: meal with a dish -> catering ready', $byKey()['catering']['status'] === 'ready');
     // a vehicle with no driver -> transport needs attention.
     dbRun("INSERT INTO camp_transport_vehicles (hub_id, name, vehicle_type, capacity) VALUES (?, 'Minibus A', 'minibus', 12)", [$hubId]);
     check('cc: vehicle without driver -> transport attention', $byKey()['transport']['status'] === 'attention');

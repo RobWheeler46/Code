@@ -92,6 +92,7 @@ function renderLeader(box) {
     ${locationsLeader()}
     ${rotaLeader()}
     ${programmeLeader()}
+    ${cateringLeader()}
     ${transportLeader()}
     ${versionsLeader()}`;
 
@@ -118,6 +119,8 @@ function renderLeader(box) {
   const progAdd = document.getElementById('prog-add'); if (progAdd) progAdd.addEventListener('click', () => openProgrammeSlotForm(null));
   const progImport = document.getElementById('prog-import'); if (progImport) progImport.addEventListener('click', openProgrammeImport);
   box.querySelectorAll('.prog-edit').forEach(b => b.addEventListener('click', () => openProgrammeSlotForm((HUB.programme.slots || []).find(s => s.id == b.dataset.id))));
+  const cateringAdd = document.getElementById('catering-add'); if (cateringAdd) cateringAdd.addEventListener('click', () => openCateringMealForm(null));
+  box.querySelectorAll('.catering-edit').forEach(b => b.addEventListener('click', () => openCateringMealForm((HUB.catering.meals || []).find(m => m.id == b.dataset.id))));
   const verCapture = document.getElementById('ver-capture'); if (verCapture) verCapture.addEventListener('click', openVersionCapture);
   box.querySelectorAll('.ver-ack').forEach(b => b.addEventListener('click', () => ackVersion(b.dataset.id)));
   box.querySelectorAll('.ver-delete').forEach(b => b.addEventListener('click', () => deleteVersion(b.dataset.id, b.dataset.no)));
@@ -489,6 +492,62 @@ async function ackVersion(id) {
 async function deleteVersion(id, no) {
   if (!confirm(`Delete version ${no}? This removes the snapshot and its acknowledgements.`)) return;
   try { await Api.delete(`/api/events/${window.HUB_ID}/versions/${id}`); loadHub(); } catch (e) { alert(e.message); }
+}
+
+// ── Catering / meal plan (Command Centre catering) ──────────────────────────────
+function cateringLeader() {
+  const c = HUB.catering; if (!c) return '';
+  const meals = c.meals || [];
+  const pill = c.total === 0 ? '' : (c.unplanned > 0
+    ? `<span class="badge" data-status="suspended">${c.unplanned} to plan</span>`
+    : '<span class="badge" data-status="active">All planned</span>');
+  const mealOrder = { breakfast: 0, lunch: 1, dinner: 2, snack: 3, other: 4 };
+  const byDay = {};
+  for (const m of meals) (byDay[m.dayLabel] ||= []).push(m);
+  const daysHtml = Object.keys(byDay).length ? Object.entries(byDay).map(([day, ms]) => `
+    <h3 style="margin:.8rem 0 .3rem">${escapeHtml(day)}</h3>
+    <table class="data-table rcards"><thead><tr><th>Meal</th><th>Dish</th><th>Cook / heads</th><th>Status</th><th></th></tr></thead>
+    <tbody>${ms.slice().sort((a, b) => (mealOrder[a.meal] ?? 9) - (mealOrder[b.meal] ?? 9)).map(m => `<tr>
+        <td data-label="Meal">${escapeHtml(m.mealLabel)}</td>
+        <td data-label="Dish" class="rcard-title">${m.dish ? `<strong>${escapeHtml(m.dish)}</strong>` : '<span class="badge" data-status="suspended">To plan</span>'}${m.dietaryNotes ? `<div class="muted" style="font-size:.82rem">Dietary: ${escapeHtml(m.dietaryNotes)}</div>` : ''}</td>
+        <td data-label="Cook / heads" class="muted">${escapeHtml([m.cook, m.headcount != null ? m.headcount + ' heads' : ''].filter(Boolean).join(' · ')) || '&mdash;'}</td>
+        <td data-label="Status"><span class="badge" data-status="${m.status === 'prepped' ? 'active' : (m.status === 'shopping_done' ? 'published' : 'draft')}">${escapeHtml(m.statusLabel)}</span></td>
+        <td class="rcard-actions"><button class="btn btn-secondary btn-sm catering-edit" data-id="${m.id}">Edit</button></td>
+      </tr>`).join('')}</tbody></table>`).join('') : '<p class="muted">No meals planned yet. Add each meal per day, with a dish and who’s cooking.</p>';
+  return `<div class="card">
+    <div class="cap-head"><h2 style="margin:0">Catering</h2><span class="cap-actions">${pill}<button class="btn btn-sm" id="catering-add">Add meal</button></span></div>
+    <p class="muted">Plan meals by day, with a dish, a cook, a headcount and a prep status. Dietary notes here are a catering aid, not a medical record. Leader-only.</p>
+    ${daysHtml}
+  </div>`;
+}
+
+function openCateringMealForm(m) {
+  const isEdit = !!m; const x = m || { meal: 'breakfast', status: 'planned' };
+  const meta = HUB.catering.meta || {};
+  const opt = (map, v) => Object.entries(map || {}).map(([k, l]) => `<option value="${k}"${k === v ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('');
+  const mo = modal(`<h2>${isEdit ? 'Edit meal' : 'Add meal'}</h2><div id="cm-msg"></div>
+    <div class="cap-actions">${field('Day', `<input id="cm-day" value="${escapeHtml(x.dayLabel || '')}" placeholder="e.g. Saturday">`)}${field('Meal', `<select id="cm-meal">${opt(meta.meals, x.meal || 'breakfast')}</select>`)}</div>
+    ${field('Dish', `<input id="cm-dish" value="${escapeHtml(x.dish || '')}" placeholder="e.g. Sausage & mash">`)}
+    <div class="cap-actions">${field('Cook (optional)', `<input id="cm-cook" value="${escapeHtml(x.cook || '')}">`)}${field('Headcount (optional)', `<input id="cm-heads" type="number" min="0" value="${x.headcount != null ? x.headcount : ''}" style="width:110px">`)}${field('Status', `<select id="cm-status">${opt(meta.statuses, x.status || 'planned')}</select>`)}</div>
+    ${field('Dietary notes (optional)', `<input id="cm-dietary" value="${escapeHtml(x.dietaryNotes || '')}" placeholder="e.g. 3 vegetarian, 1 gluten-free">`)}
+    <div class="modal-actions" style="display:flex;gap:.5rem;margin-top:1rem"><button class="btn" id="cm-save">${isEdit ? 'Save' : 'Add'}</button><button class="btn btn-secondary" id="cm-cancel">Cancel</button>${isEdit ? '<button class="btn btn-secondary" id="cm-delete" style="margin-left:auto">Delete</button>' : ''}</div>`);
+  mo.querySelector('#cm-cancel').addEventListener('click', () => mo.remove());
+  mo.querySelector('#cm-save').addEventListener('click', async () => {
+    const payload = {
+      dayLabel: document.getElementById('cm-day').value.trim(), meal: document.getElementById('cm-meal').value,
+      dish: document.getElementById('cm-dish').value.trim(), cook: document.getElementById('cm-cook').value.trim(),
+      headcount: document.getElementById('cm-heads').value, status: document.getElementById('cm-status').value,
+      dietaryNotes: document.getElementById('cm-dietary').value.trim(),
+    };
+    if (!payload.dayLabel) { document.getElementById('cm-msg').innerHTML = '<div class="alert alert-error">A day is required.</div>'; return; }
+    try { if (isEdit) await Api.patch(`/api/events/${window.HUB_ID}/catering/${m.id}`, payload); else await Api.post(`/api/events/${window.HUB_ID}/catering`, payload); mo.remove(); loadHub(); }
+    catch (e) { document.getElementById('cm-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
+  const del = document.getElementById('cm-delete');
+  if (del) del.addEventListener('click', async () => {
+    try { await Api.delete(`/api/events/${window.HUB_ID}/catering/${m.id}`); mo.remove(); loadHub(); }
+    catch (e) { document.getElementById('cm-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
 }
 
 // ── Transport & manifests (FR-CAMP-OP-023..028) ─────────────────────────────────

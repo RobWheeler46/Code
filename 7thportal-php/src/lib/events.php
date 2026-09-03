@@ -231,6 +231,37 @@ function eventCampProgramme(int $hubId): array
     ];
 }
 
+// Catering / meal plan (Command Centre catering). A day/meal schedule for a camp -
+// each meal has a dish, an optional cook and headcount, and a prep status. Leader-only.
+const CAMP_MEAL_TYPES = ['breakfast' => 'Breakfast', 'lunch' => 'Lunch', 'dinner' => 'Dinner', 'snack' => 'Snack', 'other' => 'Other'];
+const CAMP_MEAL_STATUSES = ['planned' => 'Planned', 'shopping_done' => 'Shopping done', 'prepped' => 'Prepped'];
+
+function serializeCateringMeal(array $m): array
+{
+    return [
+        'id' => (int) $m['id'], 'dayLabel' => $m['day_label'],
+        'meal' => $m['meal'], 'mealLabel' => CAMP_MEAL_TYPES[$m['meal']] ?? $m['meal'],
+        'dish' => $m['dish'], 'cook' => $m['cook_name'],
+        'headcount' => $m['headcount'] !== null ? (int) $m['headcount'] : null,
+        'status' => $m['status'], 'statusLabel' => CAMP_MEAL_STATUSES[$m['status']] ?? $m['status'],
+        'dietaryNotes' => $m['dietary_notes'], 'notes' => $m['notes'],
+        // A meal with no dish named is still "to plan".
+        'planned' => trim((string) $m['dish']) !== '',
+    ];
+}
+
+function eventCampCatering(int $hubId): array
+{
+    $meals = array_map('serializeCateringMeal', dbAll('SELECT * FROM camp_catering_meals WHERE hub_id = ? ORDER BY sort_order, id', [$hubId]));
+    $unplanned = count(array_filter($meals, fn($m) => !$m['planned']));
+    return [
+        'meals' => $meals,
+        'total' => count($meals),
+        'unplanned' => $unplanned,
+        'meta' => ['meals' => CAMP_MEAL_TYPES, 'statuses' => CAMP_MEAL_STATUSES],
+    ];
+}
+
 // Camp plan version history & acknowledgements (FRD-CAMP-010). Capturing a version
 // freezes a snapshot of the plan's current shape - the counts that matter plus the
 // readiness verdict - so each numbered version is an honest record of what the plan
@@ -427,6 +458,15 @@ function eventCommandCentre(array $hub): array
         'key' => 'programme', 'label' => 'Programme',
         'status' => $prog['total'] === 0 ? 'none' : ($prog['clashes'] > 0 ? 'attention' : 'ready'),
         'summary' => $prog['total'] === 0 ? 'No activities planned yet' : ($prog['clashes'] > 0 ? $prog['clashes'] . ' clash' . ($prog['clashes'] === 1 ? '' : 'es') . ' to resolve' : $prog['total'] . ' activit' . ($prog['total'] === 1 ? 'y' : 'ies') . ' scheduled'),
+        'link' => null,
+    ];
+
+    // Catering — the camp meal plan (event-native, like programme/transport).
+    $cat = eventCampCatering($id);
+    $areas[] = [
+        'key' => 'catering', 'label' => 'Catering',
+        'status' => $cat['total'] === 0 ? 'none' : ($cat['unplanned'] > 0 ? 'attention' : 'ready'),
+        'summary' => $cat['total'] === 0 ? 'No meals planned yet' : ($cat['unplanned'] > 0 ? $cat['unplanned'] . ' meal' . ($cat['unplanned'] === 1 ? '' : 's') . ' still to plan' : $cat['total'] . ' meal' . ($cat['total'] === 1 ? '' : 's') . ' planned'),
         'link' => null,
     ];
 
