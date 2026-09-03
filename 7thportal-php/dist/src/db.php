@@ -752,6 +752,30 @@ CREATE TABLE IF NOT EXISTS equipment_repairs (
 CREATE INDEX IF NOT EXISTS idx_equipment_repairs_asset ON equipment_repairs(asset_id, status);
 CREATE INDEX IF NOT EXISTS idx_equipment_status ON equipment_assets(status, category);
 
+-- Disposal / retirement approval (FR-QM: writing off a group asset). Retiring kit has
+-- value and insurance implications, so it isn't a QM's unilateral edit: a leader
+-- REQUESTS disposal with a reason and method, and a GLV/admin (never the requester)
+-- approves before the asset is actually retired. The request captures the write-off
+-- value at request time so the decision has the number in front of it.
+CREATE TABLE IF NOT EXISTS equipment_disposals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  asset_id INTEGER NOT NULL REFERENCES equipment_assets(id) ON DELETE CASCADE,
+  quantity INTEGER NOT NULL DEFAULT 1,
+  method TEXT NOT NULL DEFAULT 'other' CHECK(method IN ('broken_beyond_repair','worn_out','lost','stolen','sold','donated','recycled','other')),
+  reason TEXT NOT NULL,
+  proposed_value REAL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected','withdrawn')),
+  requested_by INTEGER REFERENCES users(id),
+  requested_by_name TEXT,
+  requested_at TEXT NOT NULL DEFAULT (datetime('now')),
+  decided_by INTEGER REFERENCES users(id),
+  decided_by_name TEXT,
+  decided_at TEXT,
+  decision_note TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_equipment_disposals_asset ON equipment_disposals(asset_id, status);
+CREATE INDEX IF NOT EXISTS idx_equipment_disposals_status ON equipment_disposals(status);
+
 -- QM Advanced Controls kits (FRD FR-QM-ADV-002/003, INV-010). A kit (an asset with
 -- item_type='kit') has an expected-contents checklist; a completeness check records
 -- the state of each expected component pre-loan or post-return.

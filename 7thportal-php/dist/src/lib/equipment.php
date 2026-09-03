@@ -374,3 +374,54 @@ function equipmentActionItems(): array
     }
     return $items;
 }
+
+// ── Disposal / retirement approval (FR-QM) ──────────────────────────────────────
+const EQUIPMENT_DISPOSAL_METHODS = [
+    'broken_beyond_repair' => 'Broken beyond repair',
+    'worn_out' => 'Worn out / end of life',
+    'lost' => 'Lost',
+    'stolen' => 'Stolen',
+    'sold' => 'Sold',
+    'donated' => 'Donated',
+    'recycled' => 'Recycled',
+    'other' => 'Other',
+];
+// Writing off a group asset is a governance decision, so approval sits with GLV /
+// Chair / Admin - never the requesting Quartermaster.
+const EQUIPMENT_DISPOSAL_APPROVER_ROLES = ['group_leadership', 'chair', 'admin'];
+
+function equipmentCanApproveDisposal(array $user): bool
+{
+    return in_array($user['portal_role'], EQUIPMENT_DISPOSAL_APPROVER_ROLES, true);
+}
+
+function serializeDisposal(array $r): array
+{
+    return [
+        'id' => (int) $r['id'],
+        'assetId' => (int) $r['asset_id'],
+        'assetName' => $r['asset_name'] ?? null,
+        'quantity' => (int) $r['quantity'],
+        'method' => $r['method'],
+        'methodLabel' => EQUIPMENT_DISPOSAL_METHODS[$r['method']] ?? $r['method'],
+        'reason' => $r['reason'],
+        'proposedValue' => $r['proposed_value'] !== null ? (float) $r['proposed_value'] : null,
+        'status' => $r['status'],
+        'requestedById' => $r['requested_by'] !== null ? (int) $r['requested_by'] : null,
+        'requestedBy' => $r['requested_by_name'] ?: 'A leader',
+        'requestedAt' => $r['requested_at'],
+        'decidedBy' => $r['decided_by_name'],
+        'decidedAt' => $r['decided_at'],
+        'decisionNote' => $r['decision_note'],
+    ];
+}
+
+// Pending disposals awaiting a decision surface in the approver's Action Centre (one
+// aggregate task, so a batch of write-offs doesn't flood it).
+function equipmentDisposalActionItems(array $user): array
+{
+    if (!equipmentRegisterEnabled() || !equipmentCanApproveDisposal($user)) return [];
+    $n = (int) dbGet("SELECT COUNT(*) AS n FROM equipment_disposals WHERE status = 'pending'")['n'];
+    if ($n === 0) return [];
+    return [actionItem('eqp-disposal', 'Medium', 'Equipment', $n . ' equipment disposal' . ($n === 1 ? '' : 's') . ' awaiting your approval', 'GLV', 'Review', 'equipment.html')];
+}

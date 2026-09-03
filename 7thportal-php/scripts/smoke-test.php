@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -644,6 +644,35 @@ function scenario_logic_parent_search(): void
     dbRun("INSERT INTO parent_child_links (parent_user_id, osm_member_id, osm_section_id, osm_section_name, child_display_name) VALUES (?, 'm2', 'sectA', 'Beavers', 'Kit Other')", [$other]);
     $mine = dbAll("SELECT child_display_name FROM parent_child_links WHERE parent_user_id = ? AND child_display_name LIKE '%Kit%'", [$parent]);
     check('psearch: a parent finds only their own child', count($mine) === 1 && $mine[0]['child_display_name'] === 'Kit Parent');
+}
+
+// Equipment disposal approval (FR-QM). A QM requests, a GLV/Chair/Admin approves, and
+// approval retires the asset. Approver role gating and the approver action item hold.
+function scenario_logic_equipment_disposal(): void
+{
+    useDb(tmpDb('disp')); boot(); loadLibs();
+    dbRun("INSERT INTO settings (key, value) VALUES ('equipment_register_enabled', 'true')");
+    $qm = (int) dbRun("INSERT INTO users (auth_type, first_name, last_name, portal_role) VALUES ('local','Quinn','Master','quartermaster')")['lastInsertId'];
+    $glv = dbGet('SELECT * FROM users WHERE id = ?', [dbRun("INSERT INTO users (auth_type, first_name, last_name, portal_role) VALUES ('local','Glen','Vee','group_leadership')")['lastInsertId']]);
+    $qmUser = dbGet('SELECT * FROM users WHERE id = ?', [$qm]);
+    $asset = (int) dbRun("INSERT INTO equipment_assets (name, value) VALUES ('Old tent', 120.00)")['lastInsertId'];
+
+    check('disp: a QM cannot approve disposals', equipmentCanApproveDisposal($qmUser) === false);
+    check('disp: a GLV can approve disposals', equipmentCanApproveDisposal($glv) === true);
+
+    $did = (int) dbRun("INSERT INTO equipment_disposals (asset_id, quantity, method, reason, proposed_value, requested_by, requested_by_name) VALUES (?, 1, 'worn_out', 'End of life', 120.00, ?, 'Quinn Master')", [$asset, $qm])['lastInsertId'];
+    $ser = serializeDisposal(dbGet("SELECT d.*, a.name AS asset_name FROM equipment_disposals d JOIN equipment_assets a ON a.id = d.asset_id WHERE d.id = ?", [$did]));
+    check('disp: serialises with asset name + method label + value', $ser['assetName'] === 'Old tent' && $ser['methodLabel'] === 'Worn out / end of life' && $ser['status'] === 'pending' && $ser['proposedValue'] === 120.0);
+    check('disp: requester id is captured (for withdraw gating)', $ser['requestedById'] === $qm);
+
+    check('disp: a pending disposal shows in the approver Action Centre', count(equipmentDisposalActionItems($glv)) === 1);
+    check('disp: the requester gets no approval action', count(equipmentDisposalActionItems($qmUser)) === 0);
+
+    // Approval retires the asset (mirrors the route's two writes).
+    dbRun("UPDATE equipment_disposals SET status = 'approved', decided_by = ?, decided_at = datetime('now') WHERE id = ?", [$glv['id'], $did]);
+    dbRun("UPDATE equipment_assets SET status = 'retired' WHERE id = ?", [$asset]);
+    check('disp: approval retires the asset', dbGet('SELECT status FROM equipment_assets WHERE id = ?', [$asset])['status'] === 'retired');
+    check('disp: no approval action remains once decided', count(equipmentDisposalActionItems($glv)) === 0);
 }
 
 // QM kit completeness check: overall result derives from component statuses.

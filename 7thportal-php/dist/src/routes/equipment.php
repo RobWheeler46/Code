@@ -105,7 +105,8 @@ $router->get('/api/equipment', function ($params) {
         ],
         'meta' => ['categories' => EQUIPMENT_CATEGORIES, 'conditions' => EQUIPMENT_CONDITIONS, 'statuses' => EQUIPMENT_STATUSES,
             'itemTypes' => EQUIPMENT_ITEM_TYPES, 'restrictedCategories' => EQUIPMENT_RESTRICTED_CATEGORIES, 'locationConfidence' => EQUIPMENT_LOCATION_CONFIDENCE,
-            'trackingModes' => EQUIPMENT_TRACKING_MODES],
+            'trackingModes' => EQUIPMENT_TRACKING_MODES, 'disposalMethods' => EQUIPMENT_DISPOSAL_METHODS],
+        'disposalsPending' => equipmentCanApproveDisposal($user) ? (int) dbGet("SELECT COUNT(*) AS n FROM equipment_disposals WHERE status = 'pending'")['n'] : 0,
     ]);
 });
 
@@ -470,6 +471,116 @@ $router->get('/api/equipment/storage-map', function ($params) {
     $areas = [];
     foreach ($map as $area => $items) $areas[] = ['area' => $area, 'items' => $items, 'count' => count($items)];
     jsonResponse(['areas' => $areas]);
+});
+
+// ── Disposal / retirement approval (FR-QM) ──────────────────────────────────────
+// Registered before /api/equipment/:id so "disposals" isn't captured as an id.
+// A leader REQUESTS disposal; a GLV/Chair/Admin (never the requester) approves, which
+// retires the asset. All steps are audited.
+$router->get('/api/equipment/disposals', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireEquipmentEnabled();
+    $status = queryParam('status');
+    $where = in_array($status, ['pending', 'approved', 'rejected', 'withdrawn'], true) ? 'WHERE d.status = ?' : '';
+    $args = $where ? [$status] : [];
+    $rows = dbAll(
+        "SELECT d.*, a.name AS asset_name FROM equipment_disposals d JOIN equipment_assets a ON a.id = d.asset_id $where ORDER BY (d.status = 'pending') DESC, d.id DESC LIMIT 100",
+        $args
+    );
+    jsonResponse([
+        'disposals' => array_map('serializeDisposal', $rows),
+        'canApprove' => equipmentCanApproveDisposal($user),
+        'pendingCount' => (int) dbGet("SELECT COUNT(*) AS n FROM equipment_disposals WHERE status = 'pending'")['n'],
+        'meta' => ['methods' => EQUIPMENT_DISPOSAL_METHODS],
+    ]);
+});
+
+$router->post('/api/equipment/:id/disposal', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireEquipmentEnabled();
+    $asset = dbGet('SELECT * FROM equipment_assets WHERE id = ?', [$params['id']]);
+    if (!$asset) jsonResponse(['error' => 'Asset not found.'], 404);
+    if ($asset['status'] === 'retired') jsonResponse(['error' => 'This asset is already retired.'], 400);
+    if (dbGet("SELECT 1 FROM equipment_disposals WHERE asset_id = ? AND status = 'pending'", [$asset['id']])) {
+        jsonResponse(['error' => 'A disposal request for this asset is already awaiting approval.'], 409);
+    }
+    $b = requestBody();
+    $reason = trim((string) ($b['reason'] ?? ''));
+    if ($reason === '') jsonResponse(['error' => 'A reason for disposal is required.'], 422);
+    $method = array_key_exists($b['method'] ?? '', EQUIPMENT_DISPOSAL_METHODS) ? $b['method'] : 'other';
+    $qty = max(1, (int) ($b['quantity'] ?? 1));
+    // Default the write-off value to the asset's recorded value (or replacement value).
+    $value = array_key_exists('proposedValue', $b) && $b['proposedValue'] !== '' && $b['proposedValue'] !== null
+        ? (float) $b['proposedValue']
+        : ($asset['value'] ?? $asset['replacement_value'] ?? null);
+    $byName = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')) ?: null;
+    $result = dbRun(
+        'INSERT INTO equipment_disposals (asset_id, quantity, method, reason, proposed_value, requested_by, requested_by_name) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [$asset['id'], $qty, $method, $reason, $value, $user['id'], $byName]
+    );
+    logAudit(['userId' => $user['id'], 'action' => 'equipment_disposal_request', 'entityType' => 'equipment', 'entityId' => (string) $asset['id'], 'ipAddress' => clientIp(), 'details' => ['method' => $method, 'quantity' => $qty]]);
+    // Tell the approvers there's a write-off to review.
+    if (function_exists('notifyRoles')) {
+        notifyRoles(EQUIPMENT_DISPOSAL_APPROVER_ROLES, 'equipment', 'Equipment disposal to approve', $asset['name'] . ' — ' . (EQUIPMENT_DISPOSAL_METHODS[$method] ?? $method), 'equipment.html');
+    }
+    jsonResponse(serializeDisposal(dbGet("SELECT d.*, a.name AS asset_name FROM equipment_disposals d JOIN equipment_assets a ON a.id = d.asset_id WHERE d.id = ?", [$result['lastInsertId']])), 201);
+});
+
+// Load a pending disposal or fail; shared by approve/reject.
+function equipmentPendingDisposalOr404($did): array
+{
+    $d = dbGet('SELECT * FROM equipment_disposals WHERE id = ?', [$did]);
+    if (!$d) jsonResponse(['error' => 'Disposal request not found.'], 404);
+    if ($d['status'] !== 'pending') jsonResponse(['error' => 'This request has already been decided.'], 409);
+    return $d;
+}
+
+$router->post('/api/equipment/disposals/:did/approve', function ($params) {
+    $user = requireAuth();
+    requireEquipmentEnabled();
+    if (!equipmentCanApproveDisposal($user)) jsonResponse(['error' => 'Only a GLV, Chair or Admin can approve a disposal.'], 403);
+    $d = equipmentPendingDisposalOr404($params['did']);
+    // A requester can never approve their own write-off (segregation of duties).
+    if ((int) $d['requested_by'] === (int) $user['id']) jsonResponse(['error' => 'You cannot approve a disposal you requested.'], 403);
+    $note = trim((string) (requestBody()['note'] ?? '')) ?: null;
+    $byName = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')) ?: null;
+    dbRun("UPDATE equipment_disposals SET status = 'approved', decided_by = ?, decided_by_name = ?, decided_at = datetime('now'), decision_note = ? WHERE id = ?", [$user['id'], $byName, $note, $d['id']]);
+    // The approval is what actually retires the asset.
+    dbRun("UPDATE equipment_assets SET status = 'retired', updated_at = datetime('now') WHERE id = ?", [$d['asset_id']]);
+    logAudit(['userId' => $user['id'], 'action' => 'equipment_disposal_approve', 'entityType' => 'equipment', 'entityId' => (string) $d['asset_id'], 'ipAddress' => clientIp(), 'details' => ['disposalId' => (int) $d['id']]]);
+    if (function_exists('notify') && $d['requested_by']) {
+        notify((int) $d['requested_by'], 'equipment', 'Disposal approved', 'Your disposal request was approved and the asset is now retired.', 'equipment.html');
+    }
+    jsonResponse(serializeDisposal(dbGet("SELECT d.*, a.name AS asset_name FROM equipment_disposals d JOIN equipment_assets a ON a.id = d.asset_id WHERE d.id = ?", [$d['id']])));
+});
+
+$router->post('/api/equipment/disposals/:did/reject', function ($params) {
+    $user = requireAuth();
+    requireEquipmentEnabled();
+    if (!equipmentCanApproveDisposal($user)) jsonResponse(['error' => 'Only a GLV, Chair or Admin can decide a disposal.'], 403);
+    $d = equipmentPendingDisposalOr404($params['did']);
+    $note = trim((string) (requestBody()['note'] ?? '')) ?: null;
+    $byName = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')) ?: null;
+    dbRun("UPDATE equipment_disposals SET status = 'rejected', decided_by = ?, decided_by_name = ?, decided_at = datetime('now'), decision_note = ? WHERE id = ?", [$user['id'], $byName, $note, $d['id']]);
+    logAudit(['userId' => $user['id'], 'action' => 'equipment_disposal_reject', 'entityType' => 'equipment', 'entityId' => (string) $d['asset_id'], 'ipAddress' => clientIp(), 'details' => ['disposalId' => (int) $d['id']]]);
+    if (function_exists('notify') && $d['requested_by']) {
+        notify((int) $d['requested_by'], 'equipment', 'Disposal not approved', 'Your disposal request was not approved. The asset stays in service.', 'equipment.html');
+    }
+    jsonResponse(serializeDisposal(dbGet("SELECT d.*, a.name AS asset_name FROM equipment_disposals d JOIN equipment_assets a ON a.id = d.asset_id WHERE d.id = ?", [$d['id']])));
+});
+
+// The requester can withdraw their own request while it's still pending.
+$router->post('/api/equipment/disposals/:did/withdraw', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requireEquipmentEnabled();
+    $d = equipmentPendingDisposalOr404($params['did']);
+    if ((int) $d['requested_by'] !== (int) $user['id']) jsonResponse(['error' => 'Only the person who requested this disposal can withdraw it.'], 403);
+    dbRun("UPDATE equipment_disposals SET status = 'withdrawn', decided_at = datetime('now') WHERE id = ?", [$d['id']]);
+    logAudit(['userId' => $user['id'], 'action' => 'equipment_disposal_withdraw', 'entityType' => 'equipment', 'entityId' => (string) $d['asset_id'], 'ipAddress' => clientIp(), 'details' => ['disposalId' => (int) $d['id']]]);
+    jsonResponse(['ok' => true]);
 });
 
 $router->get('/api/equipment/:id', function ($params) {

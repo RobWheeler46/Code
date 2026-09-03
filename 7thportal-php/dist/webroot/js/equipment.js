@@ -1,13 +1,15 @@
 let EQ_META = { categories: {}, conditions: {}, statuses: {} };
+let ME = null;
 const eqFilters = { q: '', category: '', status: '' };
 
 (async () => {
-  const me = await requireUserNav();
-  if (!me) return;
+  ME = await requireUserNav();
+  if (!ME) return;
   document.getElementById('add-asset').addEventListener('click', () => openAssetForm(null));
   document.getElementById('import-assets').addEventListener('click', openImportModal);
   document.getElementById('stocktake-btn').addEventListener('click', openStocktakeModal);
   document.getElementById('storage-map-btn').addEventListener('click', openStorageMap);
+  document.getElementById('disposals-btn').addEventListener('click', openDisposalsQueue);
   loadEquipment();
 })();
 
@@ -148,7 +150,7 @@ async function loadEquipment() {
             <td>${escapeHtml(EQ_META.conditions[a.condition] || a.condition)}</td>
             <td><span class="badge" data-status="${a.status === 'available' ? 'active' : (a.status === 'retired' ? 'archived' : 'pending_approval')}">${escapeHtml(EQ_META.statuses[a.status] || a.status)}</span>${a.maintenanceLocked ? ' <span class="badge" data-status="deleted">Locked</span>' : ''}</td>
             <td>${nextCheckLabel(a)}</td>
-            <td style="white-space:nowrap">${a.itemType === 'kit' ? `<button class="btn btn-secondary btn-sm eq-kit" data-id="${a.id}">Kit</button> ` : ''}<button class="btn btn-secondary btn-sm eq-stock" data-id="${a.id}">Stock</button> <button class="btn btn-secondary btn-sm eq-inspect" data-id="${a.id}">Inspect</button> <button class="btn btn-secondary btn-sm eq-edit" data-id="${a.id}">Edit</button></td>
+            <td style="white-space:nowrap">${a.itemType === 'kit' ? `<button class="btn btn-secondary btn-sm eq-kit" data-id="${a.id}">Kit</button> ` : ''}<button class="btn btn-secondary btn-sm eq-stock" data-id="${a.id}">Stock</button> <button class="btn btn-secondary btn-sm eq-inspect" data-id="${a.id}">Inspect</button> <button class="btn btn-secondary btn-sm eq-edit" data-id="${a.id}">Edit</button>${a.status !== 'retired' ? ` <button class="btn btn-secondary btn-sm eq-dispose" data-id="${a.id}" data-name="${escapeHtml(a.name)}">Dispose</button>` : ''}</td>
           </tr>`).join('')}</tbody>
       </table>` : '<div class="empty-state">No assets match. Add your first asset to get started.</div>'}
     </div>`;
@@ -161,6 +163,95 @@ async function loadEquipment() {
   document.querySelectorAll('.eq-inspect').forEach(b => b.addEventListener('click', () => openInspectForm(b.dataset.id)));
   document.querySelectorAll('.eq-kit').forEach(b => b.addEventListener('click', () => openKitModal(b.dataset.id)));
   document.querySelectorAll('.eq-stock').forEach(b => b.addEventListener('click', () => openStockModal(b.dataset.id)));
+  document.querySelectorAll('.eq-dispose').forEach(b => b.addEventListener('click', () => openDisposalRequest(b.dataset.id, b.dataset.name)));
+  // Flag pending disposals awaiting approval on the toolbar button (approvers only).
+  const dzBtn = document.getElementById('disposals-btn');
+  if (dzBtn) dzBtn.innerHTML = 'Disposals' + (data.disposalsPending ? ` <span class="badge" data-status="pending_approval">${data.disposalsPending}</span>` : '');
+}
+
+// ── Disposal / retirement approval (FR-QM) ──────────────────────────────────────
+function eqModal(id, html) {
+  document.getElementById(id)?.remove();
+  const m = document.createElement('div');
+  m.id = id; m.className = 'modal-backdrop';
+  m.innerHTML = `<div class="modal-box">${html}</div>`;
+  document.body.appendChild(m);
+  m.addEventListener('click', e => { if (e.target === m) m.remove(); });
+  return m;
+}
+
+// A leader requests disposal; it goes to GLV/Chair/Admin for approval before the
+// asset is retired.
+async function openDisposalRequest(assetId, assetName) {
+  const methods = (EQ_META.disposalMethods) || { other: 'Other' };
+  const opts = Object.entries(methods).map(([k, l]) => `<option value="${k}">${escapeHtml(l)}</option>`).join('');
+  const m = eqModal('eq-dispose-modal', `<h2>Request disposal</h2>
+    <p class="muted" style="margin-top:-.3rem">${escapeHtml(assetName)} &mdash; this asks a GLV, Chair or Admin to approve writing the asset off. It stays in service until they approve.</p>
+    <div id="eq-dispose-msg"></div>
+    <div class="cap-actions">${field2('Method', `<select id="dz-method">${opts}</select>`)}${field2('Quantity', `<input id="dz-qty" type="number" min="1" value="1" style="width:90px">`)}${field2('Est. write-off value (£)', `<input id="dz-value" type="number" min="0" step="0.01" placeholder="optional">`)}</div>
+    ${field2('Reason', `<textarea id="dz-reason" rows="3" placeholder="Why is this being disposed of?"></textarea>`)}
+    <div class="cap-actions" style="margin-top:1rem"><button class="btn" id="dz-submit">Send for approval</button><button class="btn btn-secondary" id="dz-cancel">Cancel</button></div>`);
+  m.querySelector('#dz-cancel').addEventListener('click', () => m.remove());
+  m.querySelector('#dz-submit').addEventListener('click', async () => {
+    const reason = document.getElementById('dz-reason').value.trim();
+    if (!reason) { document.getElementById('eq-dispose-msg').innerHTML = '<div class="alert alert-error">A reason is required.</div>'; return; }
+    const val = document.getElementById('dz-value').value;
+    try {
+      await Api.post(`/api/equipment/${assetId}/disposal`, {
+        reason, method: document.getElementById('dz-method').value,
+        quantity: Number(document.getElementById('dz-qty').value) || 1,
+        proposedValue: val === '' ? null : Number(val),
+      });
+      m.remove();
+      openDisposalsQueue();
+    } catch (e) { document.getElementById('eq-dispose-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
+}
+
+// The disposal queue: pending requests first, with approve/reject for approvers and
+// withdraw for the requester.
+async function openDisposalsQueue() {
+  let d;
+  try { d = await Api.get('/api/equipment/disposals'); } catch (e) { alert(e.message); return; }
+  if (EQ_META) EQ_META.disposalMethods = d.meta.methods;
+  const badge = { pending: ['pending_approval', 'Awaiting approval'], approved: ['archived', 'Approved · retired'], rejected: ['deleted', 'Not approved'], withdrawn: ['draft', 'Withdrawn'] };
+  const rows = d.disposals.length ? d.disposals.map(x => {
+    const [st, lbl] = badge[x.status] || ['draft', x.status];
+    const mine = ME && x.requestedById === ME.id;
+    const actions = x.status === 'pending'
+      ? (d.canApprove && !mine
+          ? `<button class="btn btn-sm dz-approve" data-id="${x.id}">Approve</button> <button class="btn btn-secondary btn-sm dz-reject" data-id="${x.id}">Reject</button>`
+          : (mine ? `<button class="btn btn-secondary btn-sm dz-withdraw" data-id="${x.id}">Withdraw</button>` : (d.canApprove ? '<span class="muted" style="font-size:.8rem">You requested this</span>' : '')))
+      : `<span class="muted" style="font-size:.82rem">${escapeHtml(x.decidedBy || '')}${x.decidedBy ? ' · ' : ''}${x.decidedAt ? formatDate(x.decidedAt) : ''}</span>`;
+    return `<tr>
+      <td><strong>${escapeHtml(x.assetName || '')}</strong>${x.quantity > 1 ? ` <span class="muted">&times;${x.quantity}</span>` : ''}<div class="muted" style="font-size:.82rem">${escapeHtml(x.methodLabel)}${x.proposedValue != null ? ` · £${x.proposedValue.toFixed(2)}` : ''} · ${escapeHtml(x.reason)}</div>${x.decisionNote ? `<div class="muted" style="font-size:.82rem">Note: ${escapeHtml(x.decisionNote)}</div>` : ''}</td>
+      <td class="muted">${escapeHtml(x.requestedBy)}<br><span style="font-size:.8rem">${formatDate(x.requestedAt)}</span></td>
+      <td><span class="badge" data-status="${st}">${lbl}</span></td>
+      <td style="white-space:nowrap">${actions}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="4" class="muted">No disposal requests.</td></tr>';
+  const m = eqModal('eq-disposals-modal', `<h2>Equipment disposals</h2>
+    <p class="muted" style="margin-top:-.3rem">Retiring a group asset needs sign-off. ${d.canApprove ? 'As an approver you can approve or reject requests (not your own).' : 'A GLV, Chair or Admin approves each request.'}</p>
+    <div id="eq-disposals-msg"></div>
+    <table class="data-table"><thead><tr><th>Asset</th><th>Requested by</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="cap-actions" style="margin-top:1rem"><button class="btn btn-secondary" id="dzq-close">Close</button></div>`);
+  m.querySelector('#dzq-close').addEventListener('click', () => m.remove());
+  const send = async (id, action, note) => {
+    try { await Api.post(`/api/equipment/disposals/${id}/${action}`, note != null && note !== '' ? { note } : {}); document.getElementById('eq-dz-note-modal')?.remove(); m.remove(); loadEquipment(); openDisposalsQueue(); }
+    catch (e) { const box = document.getElementById('eq-dz-note-msg') || document.getElementById('eq-disposals-msg'); if (box) box.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  };
+  // Approve/reject collect an optional note via a small inline modal (no native prompt).
+  const decideWithNote = (id, action, title, hint) => {
+    const nm = eqModal('eq-dz-note-modal', `<h2>${escapeHtml(title)}</h2>
+      <div id="eq-dz-note-msg"></div>
+      ${field2('Note ' + (action === 'reject' ? '(reason)' : '(optional)'), `<textarea id="dz-note" rows="3" placeholder="${escapeHtml(hint)}"></textarea>`)}
+      <div class="cap-actions" style="margin-top:1rem"><button class="btn" id="dz-note-go">${action === 'approve' ? 'Approve &amp; retire' : 'Reject'}</button><button class="btn btn-secondary" id="dz-note-cancel">Cancel</button></div>`);
+    nm.querySelector('#dz-note-cancel').addEventListener('click', () => nm.remove());
+    nm.querySelector('#dz-note-go').addEventListener('click', () => send(id, action, document.getElementById('dz-note').value.trim()));
+  };
+  m.querySelectorAll('.dz-approve').forEach(b => b.addEventListener('click', () => decideWithNote(b.dataset.id, 'approve', 'Approve disposal', 'Any note for the record')));
+  m.querySelectorAll('.dz-reject').forEach(b => b.addEventListener('click', () => decideWithNote(b.dataset.id, 'reject', 'Reject disposal', 'Why is this not being approved?')));
+  m.querySelectorAll('.dz-withdraw').forEach(b => b.addEventListener('click', () => send(b.dataset.id, 'withdraw', null)));
 }
 
 // Record inspection modal: the six outcomes drive condition/lock/repair/retire,

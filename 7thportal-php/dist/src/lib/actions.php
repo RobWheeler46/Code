@@ -77,6 +77,8 @@ function buildActionCentre(array $user): array
     if ($isLeader) {
         // Equipment checks/returns/replacement (FR-EQP-006).
         if (function_exists('equipmentActionItems')) $items = array_merge($items, equipmentActionItems());
+        // Equipment disposals awaiting this leader's approval (GLV/Chair/Admin only).
+        if (function_exists('equipmentDisposalActionItems')) $items = array_merge($items, equipmentDisposalActionItems($user));
         // Overdue incident follow-up actions (FR-INC "Incident action due").
         if (function_exists('incidentActionItems')) $items = array_merge($items, incidentActionItems($user));
         // Draft event/camp hubs needing setup (FR-EVT-HUB-007).
