@@ -730,7 +730,7 @@ async function renderFeatures() {
 async function renderSettings() {
   const box = document.getElementById('tab-content');
   box.innerHTML = '<p class="muted">Loading&hellip;</p>';
-  const [settings, sectionsResp] = await Promise.all([Api.get('/api/admin/settings'), getSections()]);
+  const [settings, sectionsResp, dlv] = await Promise.all([Api.get('/api/admin/settings'), getSections(), Api.get('/api/admin/dlv-settings').catch(() => null)]);
   const sections = sectionsResp.sections || [];
   const visible = settings.visibleSectionIds;
 
@@ -854,6 +854,24 @@ async function renderSettings() {
         <span id="activity-settings-saved"></span>
       </form>
     </div>
+    ${dlv ? `<div class="card">
+      <h2>DLV approval (Activity forms)</h2>
+      <p class="muted">When a GLV endorses an activity for District approval, the portal emails this District Lead Volunteer an evidence pack with Approve/Reject voting links. The DLV needs no portal account. Changes are audited.</p>
+      <form id="dlv-settings-form">
+        <div class="grid cols-2">
+          <div class="field"><label>DLV approval email</label><input type="email" id="dlv-email" value="${escapeHtml(dlv.email || '')}" placeholder="dlv@district.example"></div>
+          <div class="field"><label>DLV display name</label><input type="text" id="dlv-name" value="${escapeHtml(dlv.displayName || '')}"></div>
+          <div class="field"><label>Reply-to email</label><input type="email" id="dlv-replyto" value="${escapeHtml(dlv.replyTo || '')}" placeholder="approvals@..."></div>
+          <div class="field"><label>Voting link lifetime (days)</label><input type="number" id="dlv-votedays" min="1" value="${dlv.voteDays}"></div>
+          <div class="field"><label>Reminder interval (days, 0 = none)</label><input type="number" id="dlv-reminderdays" min="0" value="${dlv.reminderDays}"></div>
+          <div class="field"><label>Max attachment size (MB)</label><input type="number" id="dlv-maxmb" min="1" value="${dlv.maxAttachMb}"></div>
+        </div>
+        <div class="field"><label>Email subject template</label><input type="text" id="dlv-subject" value="${escapeHtml(dlv.subjectTemplate || '')}"><span class="field help">Use {activity} and {reference}.</span></div>
+        <div class="field"><label style="font-weight:400;"><input type="checkbox" id="dlv-copyglv" ${dlv.copyGlv ? 'checked' : ''}> Send a copy to the referring GLV</label></div>
+        <button class="btn btn-primary" type="submit">Save</button>
+        <span id="dlv-settings-saved"></span>
+      </form>
+    </div>` : ''}
     <div class="card">
       <h2>Patrol Points</h2>
       <p class="muted">Run competitions across programmes, meetings and camps: named teams, reusable scoring categories, comment-required score submissions (approve/reject/return, no self-approval) and a live tie-aware leaderboard. Completed competitions lock. Ships off by default.</p>
@@ -938,6 +956,24 @@ async function renderSettings() {
     e.preventDefault();
     await Api.put('/api/admin/settings', { activityFormsEnabled: document.getElementById('act-forms-enabled').checked });
     document.getElementById('activity-settings-saved').textContent = 'Saved.';
+  });
+  const dlvForm = document.getElementById('dlv-settings-form');
+  if (dlvForm) dlvForm.addEventListener('submit', async e => {
+    e.preventDefault();
+    const saved = document.getElementById('dlv-settings-saved');
+    try {
+      await Api.put('/api/admin/dlv-settings', {
+        email: document.getElementById('dlv-email').value.trim(),
+        displayName: document.getElementById('dlv-name').value.trim(),
+        replyTo: document.getElementById('dlv-replyto').value.trim(),
+        voteDays: Number(document.getElementById('dlv-votedays').value),
+        reminderDays: Number(document.getElementById('dlv-reminderdays').value),
+        maxAttachMb: Number(document.getElementById('dlv-maxmb').value),
+        subjectTemplate: document.getElementById('dlv-subject').value.trim(),
+        copyGlv: document.getElementById('dlv-copyglv').checked,
+      });
+      saved.textContent = 'Saved.';
+    } catch (err) { saved.innerHTML = `<span class="alert alert-error">${escapeHtml(err.message)}</span>`; }
   });
   document.getElementById('patrol-points-settings-form').addEventListener('submit', async e => {
     e.preventDefault();

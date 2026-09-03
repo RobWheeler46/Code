@@ -1,5 +1,5 @@
 // Activity Approval form - fill/submit (creator) and review/approve (approvers).
-let FORM, FILES, EVENTS, ACTIONS, MISSING, META, ID;
+let FORM, FILES, EVENTS, ACTIONS, MISSING, META, ID, DLV_PACK, DLV_SETTINGS;
 const SKEY = { draft: 'suspended', awaiting_section: 'pending_approval', awaiting_glv: 'pending_approval', approved: 'active', rejected: 'deleted', more_info: 'suspended' };
 
 (async () => {
@@ -18,8 +18,9 @@ async function load() {
   try { d = await Api.get(`/api/activity/forms/${ID}`); }
   catch (e) { box.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; return; }
   FORM = d.form; FILES = d.files; EVENTS = d.events; ACTIONS = d.myActions; MISSING = d.missing; META = d.meta;
+  DLV_PACK = d.dlvPack; DLV_SETTINGS = d.dlvSettings;
 
-  box.innerHTML = header() + returnedNote() + routeView() + (ACTIONS.canEdit ? editView() : readView()) + filesView() + approverPanel() + submitBar() + trailView();
+  box.innerHTML = header() + returnedNote() + routeView() + (ACTIONS.canEdit ? editView() : readView()) + filesView() + approverPanel() + dlvPanel() + submitBar() + trailView();
   wire();
 }
 
@@ -237,9 +238,27 @@ function approverPanel() {
     ${F('Comment (required to return or reject)', `<textarea id="ap-comment" rows="2"></textarea>`)}
     <div class="cap-actions">
       <button class="btn" id="ap-approve">Approve</button>
+      <button class="btn btn-secondary" id="ap-refer-dlv">Endorse &amp; send to DLV</button>
       <button class="btn btn-secondary" id="ap-info">Ask for more info</button>
       <button class="btn btn-secondary" id="ap-reject">Reject</button>
-    </div><div id="ap-msg"></div></div>`;
+    </div>
+    <p class="muted" style="font-size:.82rem;margin:.5rem 0 0">${DLV_SETTINGS && DLV_SETTINGS.configured ? 'Endorsing sends an evidence pack to the DLV (' + esc(DLV_SETTINGS.email) + ') for an external Approve/Reject decision.' : 'The DLV email isn’t configured yet — an admin can set it in Admin › Settings.'}</p>
+    <div id="ap-msg"></div></div>`;
+}
+
+// External DLV approval status (once referred). Shows the request state, pack version,
+// the DLV's decision, and a resend for an unanswered request.
+function dlvPanel() {
+  const p = DLV_PACK;
+  if (!p) return '';
+  const badge = { preparing: ['pending_approval', 'Preparing'], awaiting: ['pending_approval', 'Awaiting DLV decision'], approved: ['active', 'DLV approved'], rejected: ['deleted', 'DLV rejected'], failed: ['deleted', 'Send failed'], superseded: ['draft', 'Superseded'] }[p.status] || ['draft', p.status];
+  const canResend = p.status === 'awaiting' && ACTIONS.canApproveGlv;
+  return `<div class="card"><div class="cap-head"><h2 style="margin:0">District (DLV) approval</h2><span class="badge" data-status="${badge[0]}">${badge[1]}</span></div>
+    <p class="muted" style="margin:.2rem 0 .5rem">Sent to <strong>${esc(p.recipientName || 'DLV')}</strong>${p.recipientEmail ? ' &lt;' + esc(p.recipientEmail) + '&gt;' : ''} · pack v${p.version}${p.expiresAt ? ' · vote link expires ' + esc(formatDate(p.expiresAt)) : ''}</p>
+    ${p.referralReason ? `<p style="margin:.2rem 0"><span class="muted">Referral reason:</span> ${esc(p.referralReason)}</p>` : ''}
+    ${p.decision ? `<p style="margin:.2rem 0"><span class="badge" data-status="${p.decision === 'approve' ? 'active' : 'deleted'}">${p.decision === 'approve' ? 'Approved' : 'Rejected'}</span> ${p.decidedAt ? '<span class="muted">' + esc(formatDateTime(p.decidedAt)) + '</span>' : ''}${p.decisionComment ? '<br><span class="muted">' + esc(p.decisionComment) + '</span>' : ''}</p>` : ''}
+    ${canResend ? '<div class="cap-actions" style="margin-top:.5rem"><button class="btn btn-secondary btn-sm" id="dlv-resend">Resend request</button></div>' : ''}
+    <div id="dlv-msg"></div></div>`;
 }
 
 // ── Submit bar (creator) ────────────────────────────────────────────────────────
@@ -306,6 +325,33 @@ function wire() {
   on('ap-approve', () => decide('approve', false));
   on('ap-info', () => decide('request-info', true));
   on('ap-reject', () => decide('reject', true));
+  on('ap-refer-dlv', openReferModal);
+  on('dlv-resend', resendDlv);
+}
+
+function openReferModal() {
+  if (!(DLV_SETTINGS && DLV_SETTINGS.configured)) { document.getElementById('ap-msg').innerHTML = '<div class="alert alert-error">The DLV email isn’t configured. Ask an admin to set it in Admin › Settings.</div>'; return; }
+  const m = document.createElement('div');
+  m.className = 'modal-backdrop'; m.id = 'refer-modal';
+  m.innerHTML = `<div class="modal-box"><h2>Endorse &amp; send to the DLV</h2>
+    <p class="muted" style="margin-top:-.3rem">This freezes an evidence pack and sends it to <strong>${esc(DLV_SETTINGS.email)}</strong> for an external Approve/Reject decision. The activity is not approved until the DLV votes.</p>
+    <div id="refer-msg"></div>
+    ${F('Reason for referral', `<textarea id="refer-reason" rows="3" placeholder="e.g. External activity provider — District approval required"></textarea>`)}
+    <div class="cap-actions" style="margin-top:1rem"><button class="btn" id="refer-go">Generate pack &amp; refer</button><button class="btn btn-secondary" id="refer-cancel">Cancel</button></div></div>`;
+  document.body.appendChild(m);
+  m.addEventListener('click', e => { if (e.target === m) m.remove(); });
+  m.querySelector('#refer-cancel').addEventListener('click', () => m.remove());
+  m.querySelector('#refer-go').addEventListener('click', async () => {
+    const reason = document.getElementById('refer-reason').value.trim();
+    if (!reason) { document.getElementById('refer-msg').innerHTML = '<div class="alert alert-error">A referral reason is required.</div>'; return; }
+    try { await Api.post(`/api/activity/forms/${ID}/refer-dlv`, { reason }); m.remove(); load(); }
+    catch (e) { document.getElementById('refer-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
+}
+
+async function resendDlv() {
+  try { await Api.post(`/api/activity/dlv-packs/${DLV_PACK.id}/resend`, {}); load(); }
+  catch (e) { document.getElementById('dlv-msg').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
 }
 
 // Wired separately so refreshSubmitBar() can re-attach after re-rendering the bar.
