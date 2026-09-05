@@ -157,6 +157,15 @@ a { color: var(--purple); }
 }
 .app-sidebar nav a:hover, .app-sidebar nav button:hover { background: var(--nav-tint); }
 .app-sidebar nav a.active, .app-sidebar nav button.active { background: var(--nav-tint); color: var(--purple); font-weight: 700; }
+/* Secondary ("More") divider + account footer group (v3.1 G51 nav consolidation). */
+.nav-sep { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; padding: 0.9rem 0.75rem 0.25rem; }
+.app-sidebar .nav-account { margin-top: 0.8rem; padding-top: 0.5rem; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 0.15rem; }
+.app-sidebar .nav-account a { color: var(--muted); font-size: 0.85rem; padding: 0.5rem 0.75rem; border-radius: var(--radius); text-decoration: none; }
+.app-sidebar .nav-account a:hover { background: var(--nav-tint); }
+/* Top-bar notifications bell (alert surface). */
+.app-nav .nav-bell { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; text-decoration: none; font-size: 1.15rem; line-height: 1; color: #fff; }
+.app-nav .nav-bell:hover, .app-nav .nav-bell.active { background: rgba(255,255,255,0.16); }
+.app-nav .nav-bell-count { position: absolute; top: 0; right: 0; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--yellow); color: var(--navy); font-size: 0.64rem; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; line-height: 1; box-shadow: 0 0 0 2px var(--purple); }
 .app-main { flex: 1; min-width: 0; }
 @media (min-width: 900px) {
   .app-sidebar { display: block; }

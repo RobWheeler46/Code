@@ -41,6 +41,12 @@ function renderDemoBanner(cfg, me) {
 // Sidebar links only ever point at pages that actually exist in this build -
 // the wireframe pack's Messages/Help/Reports/Approvals nav items are left out
 // deliberately (see project README/memory: layout redesign only this pass).
+// Navigation model (v3.1 gap G51 consolidation). Links carry an optional `section`:
+//  - 'primary'   (default) the operational nav
+//  - 'secondary' contextual/lower-frequency, shown under a "More" divider
+//  - 'account'   personal/legal items, out of the operational nav at the foot
+// Notifications is NOT a nav item: it lives on the top-bar bell alert surface.
+// Equipment is one domain — Bookings sits directly under it (Equipment > Bookings).
 function sidebarLinksForRole(me, cfg) {
   // Dual-role users see the nav for their ACTIVE view, not their stored role.
   const view = me.activeView || (me.role === 'parent' ? 'parent' : 'leader');
@@ -49,12 +55,11 @@ function sidebarLinksForRole(me, cfg) {
     links.push({ href: 'action-centre.html', label: 'Actions' });
     links.push({ href: 'search.html', label: 'Search' });
     if (cfg && cfg.eventHubEnabled) links.push({ href: 'events.html', label: 'Events & camps' });
-    if (cfg && cfg.calendarEnabled) links.push({ href: 'calendar.html', label: 'Calendar' });
     if (cfg && cfg.patrolPointsEnabled) links.push({ href: 'patrol-leaderboard.html', label: 'Patrol Points' });
     if (cfg && cfg.galleryEnabled) links.push({ href: 'gallery.html', label: 'Photo gallery' });
     links.push({ href: 'notices.html', label: 'Notices' });
-    links.push({ href: 'notifications.html', label: 'Notifications' });
-    links.push({ href: 'privacy.html', label: 'Privacy notice' });
+    if (cfg && cfg.calendarEnabled) links.push({ href: 'calendar.html', label: 'Calendar', section: 'secondary' });
+    links.push({ href: 'privacy.html', label: 'Privacy notice', section: 'account' });
     return links;
   }
   // Prepare Tonight is retired from primary navigation (v3.0 §1.2 / gap G50): its
@@ -64,7 +69,6 @@ function sidebarLinksForRole(me, cfg) {
   links.push({ href: 'action-centre.html', label: 'Actions' });
   links.push({ href: 'search.html', label: 'Search' });
   if (cfg && cfg.eventHubEnabled) links.push({ href: 'events.html', label: 'Events & camps' });
-  if (cfg && cfg.calendarEnabled) links.push({ href: 'calendar.html', label: 'Calendar' });
   if (cfg && cfg.attendanceEnabled) links.push({ href: 'attendance.html', label: 'Attendance' });
   if (cfg && cfg.activityFormsEnabled) links.push({ href: 'activity-forms.html', label: 'Activity forms' });
   if (cfg && cfg.patrolPointsEnabled) links.push({ href: 'patrol-points.html', label: 'Patrol Points' });
@@ -73,27 +77,41 @@ function sidebarLinksForRole(me, cfg) {
   if (cfg && cfg.documentLibraryEnabled) links.push({ href: 'documents.html', label: 'Document library' });
   if (cfg && cfg.incidentLoggingEnabled) links.push({ href: 'incidents.html', label: 'Incidents' });
   if (cfg && cfg.equipmentRegisterEnabled) links.push({ href: 'equipment.html', label: 'Equipment' });
-  if (cfg && cfg.qmBookingEnabled) links.push({ href: 'quartermaster.html', label: 'QM bookings' });
+  if (cfg && cfg.qmBookingEnabled) links.push({ href: 'quartermaster.html', label: 'Bookings' });
   if (cfg && cfg.financeEnabled && ['treasurer', 'admin'].includes(me.role)) links.push({ href: 'treasurer.html', label: 'Treasurer' });
   if (['trustee_viewer', 'chair', 'treasurer', 'admin'].includes(me.role)) links.push({ href: 'governance.html', label: 'Trustee dashboard' });
   links.push({ href: 'notices.html', label: 'Notices' });
-  links.push({ href: 'notifications.html', label: 'Notifications' });
   if (me.role === 'admin') links.push({ href: 'admin.html', label: 'Admin' });
-  links.push({ href: 'privacy.html', label: 'Privacy notice' });
+  // Contextual/secondary — reachable but out of the primary operational list.
+  if (cfg && cfg.calendarEnabled) links.push({ href: 'calendar.html', label: 'Calendar', section: 'secondary' });
+  // Account/legal — out of operational navigation.
+  links.push({ href: 'privacy.html', label: 'Privacy notice', section: 'account' });
   return links;
+}
+
+// Split a link list into its nav sections (see sidebarLinksForRole).
+function navSections(links) {
+  return {
+    primary: links.filter(l => (l.section || 'primary') === 'primary'),
+    secondary: links.filter(l => l.section === 'secondary'),
+    account: links.filter(l => l.section === 'account'),
+  };
 }
 
 function renderSidebar(me, cfg) {
   const target = document.getElementById('app-sidebar');
   if (!target) return;
   const currentPage = location.pathname.split('/').pop() || 'index.html';
-  const links = sidebarLinksForRole(me, cfg)
-    .map(l => `<a href="${l.href}"${currentPage === l.href ? ' class="active"' : ''}>${escapeHtml(l.label)}</a>`)
-    .join('');
+  const a = l => `<a href="${l.href}"${currentPage === l.href ? ' class="active"' : ''}>${escapeHtml(l.label)}</a>`;
+  const g = navSections(sidebarLinksForRole(me, cfg));
   const roleLine = me.dualRole
     ? `${me.activeView === 'parent' ? 'Parent view' : 'Leader view'}`
     : me.roleLabel;
-  target.innerHTML = `<div class="sidebar-role">${escapeHtml(roleLine)}</div><nav>${links}</nav>`;
+  let nav = g.primary.map(a).join('');
+  if (g.secondary.length) nav += `<div class="nav-sep">More</div>` + g.secondary.map(a).join('');
+  let html = `<div class="sidebar-role">${escapeHtml(roleLine)}</div><nav>${nav}</nav>`;
+  if (g.account.length) html += `<nav class="nav-account">${g.account.map(a).join('')}</nav>`;
+  target.innerHTML = html;
 }
 
 // Mobile navigation: a slide-in drawer (shown via the header burger below 900px)
@@ -107,7 +125,11 @@ function renderMobileDrawer(me, cfg, pillLabel) {
   // nav plus a link back into Admin so a mobile admin isn't stranded.
   let links = sidebarLinksForRole(me, cfg);
   if (isAdmin && me.role === 'admin' && !links.some(l => l.href === 'admin.html')) links.push({ href: 'admin.html', label: 'Admin' });
-  const linksHtml = links.map(l => `<a href="${l.href}"${currentPage === l.href ? ' class="active"' : ''}>${escapeHtml(l.label)}</a>`).join('');
+  const a = l => `<a href="${l.href}"${currentPage === l.href ? ' class="active"' : ''}>${escapeHtml(l.label)}</a>`;
+  const g = navSections(links);
+  let linksHtml = g.primary.map(a).join('');
+  if (g.secondary.length) linksHtml += `<div class="nav-sep">More</div>` + g.secondary.map(a).join('');
+  if (g.account.length) linksHtml += `<div class="nav-sep">Account</div>` + g.account.map(a).join('');
 
   const drawer = document.createElement('div');
   drawer.id = 'nav-drawer';
@@ -167,6 +189,19 @@ function renderBottomNav(me, cfg) {
   document.body.classList.add('has-bottom-nav');
   // "More" opens the existing drawer, reusing its wiring via the header burger.
   document.getElementById('bottom-nav-more').addEventListener('click', () => document.getElementById('nav-burger')?.click());
+}
+
+// Top-bar notifications alert surface (v3.1 gap G51): Notifications is no longer a
+// primary nav item — the bell shows the unread count and links to the full list.
+// Best-effort: a failed/empty fetch simply leaves the bell with no badge.
+function wireNotificationBell() {
+  const badge = document.getElementById('nav-bell-count');
+  if (!badge || typeof Api === 'undefined') return;
+  Api.get('/api/notifications').then(d => {
+    const n = (d && d.unread) || 0;
+    if (n > 0) { badge.textContent = n > 99 ? '99+' : String(n); badge.hidden = false; }
+    else { badge.hidden = true; }
+  }).catch(() => { /* leave the bell unbadged */ });
 }
 
 // A dual-role user's Parent/Leader toggle. Switching stores the view server-side
@@ -264,6 +299,9 @@ async function requireUserNav(pageView) {
       </div>
       <div class="nav-right">
         ${viewSwitcherHtml(me)}
+        <a href="notifications.html" class="nav-bell${(location.pathname.split('/').pop() === 'notifications.html') ? ' active' : ''}" id="nav-bell" aria-label="Notifications" title="Notifications">
+          <span aria-hidden="true">&#128276;</span><span class="nav-bell-count" id="nav-bell-count" hidden>0</span>
+        </a>
         <span class="user-info">${escapeHtml(me.firstName)} ${escapeHtml(me.lastName)}</span>
         <span class="role-pill">${escapeHtml(pillLabel)}</span>
         <a href="#" id="logout-link" class="logout-link">Log out</a>
@@ -276,6 +314,7 @@ async function requireUserNav(pageView) {
     });
     wireViewSwitcher();
     renderMobileDrawer(me, cfg, pillLabel);
+    wireNotificationBell();
   }
   renderSidebar(me, cfg);
   renderBottomNav(me, cfg);
