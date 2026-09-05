@@ -127,8 +127,11 @@ const PAGE_HEADERS = {
   'documents.html': { title: 'Documents', description: 'The leader document library. Acknowledge published policies and templates here.' },
   'expenses.html': { title: 'Expenses & mileage', description: 'Your claims, receipts and mileage. Submit for approval and track payment status.' },
   'treasurer.html': { title: 'Treasurer', description: 'Approved items awaiting payment, payment recording and finance exports.' },
-  'governance.html': { title: 'Trustee dashboard', description: 'Board-level finance oversight and exceptions.' },
-  'trustee-dashboard.html': { title: 'Trustee dashboard', description: 'Board-level finance oversight and exceptions.' },
+  'governance.html': { title: 'Trustee dashboard', description: 'Read-only board oversight across the operational modules.' },
+  // Finance detail reached from the Trustee dashboard's Finance panel - a second-level
+  // drilldown, not a second root. Distinct canonical name + hierarchy resolves the
+  // label drift with governance.html (both previously read "Trustee dashboard").
+  'trustee-dashboard.html': { title: 'Finance oversight', crumbs: [{ label: 'Trustee dashboard', href: 'governance.html' }, { label: 'Finance' }], description: 'Board-level finance detail - spend by account, approval pipeline and exceptions.' },
   'patrol-leaderboard.html': { title: 'Patrol Points' },
   'equipment-labels.html': { title: 'Equipment labels', crumbs: [{ label: 'Equipment', href: 'equipment.html' }, { label: 'Labels' }] },
   'admin.html': { title: 'Admin', description: 'Organisational configuration and support. Personal account settings live outside Admin.' },

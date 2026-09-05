@@ -16,8 +16,15 @@ function route() {
 function go(id) { history.pushState({}, '', id ? `attendance.html?id=${id}` : 'attendance.html'); route(); }
 
 // ── List ────────────────────────────────────────────────────────────────────────
+function attBaseCrumbs() { return [{ label: 'Attendance', href: 'attendance.html' }]; }
+
 async function renderList() {
   const box = document.getElementById('content');
+  renderPageHeader({
+    title: 'Section attendance',
+    description: 'Take a register for your section, pre-filled from the live OSM roster. Records are kept in the portal; emergency contact details are not shown here.',
+    actions: '<span class="cap-actions" id="att-head-actions"></span>',
+  });
   document.getElementById('att-head-actions').innerHTML = `<button class="btn" id="att-new">New register</button>`;
   document.getElementById('att-new').addEventListener('click', newRegister);
 
@@ -103,6 +110,12 @@ async function newRegister() {
 // ── Register detail (marking grid) ──────────────────────────────────────────────
 async function renderRegister(id) {
   const box = document.getElementById('content');
+  // Canonical header: Attendance > <register>. Title + status fill in on load.
+  renderPageHeader({
+    crumbs: attBaseCrumbs().concat([{ label: 'Register' }]),
+    title: 'Register',
+    actions: '<span class="cap-actions" id="att-head-actions"></span>',
+  });
   document.getElementById('att-head-actions').innerHTML = `<button class="btn btn-secondary" id="att-back">Back to registers</button>`;
   document.getElementById('att-back').addEventListener('click', () => go(null));
 
@@ -113,6 +126,7 @@ async function renderRegister(id) {
   const r = data.register, groups = data.groups;
   const open = r.status === 'open';
   window.__reg = r; window.__groups = groups;
+  setPageHeaderRecord(r.title, { title: r.title, status: { label: open ? 'Open' : 'Submitted', tone: open ? 'attention' : 'ready' } });
 
   const statusOpts = (sel) => Object.entries(META.statuses).map(([k, v]) => `<option value="${k}"${k === sel ? ' selected' : ''}>${escapeHtml(v)}</option>`).join('');
 
@@ -132,9 +146,7 @@ async function renderRegister(id) {
 
   box.innerHTML = `
     <div class="card">
-      <div class="cap-head"><h2 style="margin:0">${escapeHtml(r.title)}</h2>
-        <span class="badge" data-status="${open ? 'suspended' : 'active'}">${open ? 'Open' : 'Submitted'}</span></div>
-      <p class="muted">${escapeHtml(r.sectionName || r.sectionId)} &middot; ${formatDate(r.sessionDate)} &middot; ${escapeHtml(r.sourceLabel || r.sourceTypeLabel)}</p>
+      <p class="muted" style="margin-top:0">${escapeHtml(r.sectionName || r.sectionId)} &middot; ${formatDate(r.sessionDate)} &middot; ${escapeHtml(r.sourceLabel || r.sourceTypeLabel)}</p>
       <p><strong id="att-present">${r.presentCount}</strong> present of <strong>${r.total}</strong></p>
       <div class="cap-actions">
         <button class="btn btn-secondary btn-sm" id="att-print">Print register</button>
