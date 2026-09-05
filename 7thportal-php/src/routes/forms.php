@@ -23,9 +23,24 @@ $router->post('/api/forms/submissions', function ($params) {
     if (!formsCanComplete($user)) jsonResponse(['error' => 'Not permitted.'], 403);
     $b = requestBody();
     $templateId = (int) ($b['templateId'] ?? 0);
-    $id = formStartSubmission($user, $templateId);
+    $tpl = dbGet('SELECT * FROM form_templates WHERE id = ?', [$templateId]);
+
+    // On-behalf (FR-FORM-008): only when the template allows it and the actor is an
+    // administrator. The acting admin stays the submitter; the subject and reason are
+    // recorded, never a silent impersonation.
+    $onBehalf = null;
+    if (!empty($b['onBehalf']) && is_array($b['onBehalf']) && !empty($b['onBehalf']['userId'])) {
+        if (!$tpl || !formCanCompleteOnBehalf($user, $tpl)) jsonResponse(['error' => 'On-behalf completion is not permitted for this form.'], 403);
+        $target = dbGet('SELECT id FROM users WHERE id = ?', [(int) $b['onBehalf']['userId']]);
+        if (!$target) jsonResponse(['error' => 'Choose a valid person to complete this for.'], 422);
+        $reason = trim((string) ($b['onBehalf']['reason'] ?? ''));
+        if ($reason === '') jsonResponse(['error' => 'Give a reason for completing on behalf of someone else.'], 422);
+        $onBehalf = ['userId' => (int) $target['id'], 'reason' => $reason];
+    }
+
+    $id = formStartSubmission($user, $templateId, $onBehalf);
     if (!$id) jsonResponse(['error' => 'That form is not available.'], 404);
-    logAudit(['userId' => $user['id'], 'action' => 'form_submission_start', 'entityType' => 'form_submission', 'entityId' => (string) $id, 'ipAddress' => clientIp()]);
+    logAudit(['userId' => $user['id'], 'action' => 'form_submission_start', 'entityType' => 'form_submission', 'entityId' => (string) $id, 'ipAddress' => clientIp(), 'details' => $onBehalf ? ['onBehalfOf' => $onBehalf['userId'], 'reason' => $onBehalf['reason']] : null]);
     jsonResponse(['id' => $id], 201);
 });
 
@@ -105,6 +120,72 @@ $router->post('/api/forms/submissions/:id/decision', function ($params) {
     notify((int) $sub['submitter_user_id'], 'form_decided', $tpl['title'] . ' ' . ($decision === 'approved' ? 'approved' : 'returned'), $comment ?: null, 'form-fill.html?id=' . $sub['id']);
     logAudit(['userId' => $user['id'], 'action' => 'form_submission_' . $decision, 'entityType' => 'form_submission', 'entityId' => (string) $sub['id'], 'ipAddress' => clientIp()]);
     jsonResponse(serializeFormSubmission(dbGet('SELECT * FROM form_submissions WHERE id = ?', [$sub['id']]), $user));
+});
+
+// ── Evidence files on a submission's 'file' fields. Private: stored outside the web
+// root, served only via this authenticated proxy. ───────────────────────────────
+$router->post('/api/forms/submissions/:id/files', function ($params) {
+    $user = requireAuth();
+    requireFormsEnabled();
+    $sub = dbGet('SELECT * FROM form_submissions WHERE id = ?', [$params['id']]);
+    if (!$sub) jsonResponse(['error' => 'Not found.'], 404);
+    if (!formCanEditSubmission($user, $sub)) jsonResponse(['error' => 'This form can no longer be edited.'], 409);
+    $fieldId = trim((string) ($_POST['fieldId'] ?? ''));
+    $schema = json_decode($sub['schema_snapshot_json'] ?: '{}', true) ?: [];
+    $field = null;
+    foreach (formSchemaFields($schema) as $f) { if (($f['id'] ?? '') === $fieldId && ($f['type'] ?? '') === 'file') { $field = $f; break; } }
+    if (!$field) jsonResponse(['error' => 'Unknown upload field.'], 400);
+    if (empty($_FILES['file'])) jsonResponse(['error' => 'No file received.'], 400);
+    $file = $_FILES['file'];
+    if ($file['error'] !== UPLOAD_ERR_OK || $file['size'] > FORM_MAX_UPLOAD_BYTES || !is_uploaded_file($file['tmp_name'])) jsonResponse(['error' => 'Upload failed - check the file is under 10MB.'], 400);
+    $ext = activityDetectExtension($file['tmp_name'], $file['name']); // shared detector (PDF/JPG/PNG sniffed, office by ext)
+    if (!$ext) jsonResponse(['error' => 'Accepted files: PDF, DOCX, XLSX, PNG, JPG.'], 400);
+    if (!is_dir(FORM_UPLOAD_DIR)) @mkdir(FORM_UPLOAD_DIR, 0775, true);
+    $key = formStorageKey();
+    file_put_contents(formFilePathFor($key, $ext), file_get_contents($file['tmp_name']));
+    dbRun('INSERT INTO form_submission_files (submission_id, field_id, storage_key, ext, original_filename, uploaded_by) VALUES (?, ?, ?, ?, ?, ?)', [$sub['id'], $fieldId, $key, $ext, $file['name'], $user['id']]);
+    logAudit(['userId' => $user['id'], 'action' => 'form_file_upload', 'entityType' => 'form_submission', 'entityId' => (string) $sub['id'], 'ipAddress' => clientIp(), 'details' => ['fieldId' => $fieldId]]);
+    jsonResponse(serializeFormSubmission(dbGet('SELECT * FROM form_submissions WHERE id = ?', [$sub['id']]), $user));
+});
+
+$router->delete('/api/forms/submissions/:id/files/:fileId', function ($params) {
+    $user = requireAuth();
+    requireFormsEnabled();
+    $sub = dbGet('SELECT * FROM form_submissions WHERE id = ?', [$params['id']]);
+    if (!$sub) jsonResponse(['error' => 'Not found.'], 404);
+    if (!formCanEditSubmission($user, $sub)) jsonResponse(['error' => 'This form can no longer be edited.'], 409);
+    $x = dbGet('SELECT * FROM form_submission_files WHERE id = ? AND submission_id = ?', [$params['fileId'], $sub['id']]);
+    if (!$x) jsonResponse(['error' => 'File not found.'], 404);
+    formDeleteFileOnDisk($x['storage_key'], $x['ext']);
+    dbRun('DELETE FROM form_submission_files WHERE id = ?', [$x['id']]);
+    jsonResponse(serializeFormSubmission(dbGet('SELECT * FROM form_submissions WHERE id = ?', [$sub['id']]), $user));
+});
+
+$router->get('/api/forms/submissions/:id/files/:fileId/download', function ($params) {
+    $user = requireAuth();
+    requireFormsEnabled();
+    $sub = dbGet('SELECT * FROM form_submissions WHERE id = ?', [$params['id']]);
+    if (!$sub || !formCanViewSubmission($user, $sub)) { http_response_code(404); exit; }
+    $x = dbGet('SELECT * FROM form_submission_files WHERE id = ? AND submission_id = ?', [$params['fileId'], $sub['id']]);
+    if (!$x) { http_response_code(404); exit; }
+    $path = formFilePathFor($x['storage_key'], $x['ext']);
+    if (!is_file($path)) { http_response_code(404); exit; }
+    $mimes = ['pdf' => 'application/pdf', 'jpg' => 'image/jpeg', 'png' => 'image/png', 'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+    header('Content-Type: ' . ($mimes[$x['ext']] ?? 'application/octet-stream'));
+    header('Content-Disposition: inline; filename="' . preg_replace('/[^\w.\- ]/', '_', (string) ($x['original_filename'] ?: ('file.' . $x['ext']))) . '"');
+    header('Content-Length: ' . filesize($path));
+    readfile($path);
+    exit;
+});
+
+// People an admin may complete a form on behalf of (on-behalf picker). Admin-only.
+$router->get('/api/forms/people', function ($params) {
+    $user = requireAuth();
+    requireFormsEnabled();
+    if (!formsCanAdmin($user)) jsonResponse(['error' => 'Not permitted.'], 403);
+    $people = array_map(fn($u) => ['id' => (int) $u['id'], 'name' => trim($u['first_name'] . ' ' . $u['last_name']), 'role' => $u['portal_role']],
+        dbAll("SELECT id, first_name, last_name, portal_role FROM users WHERE account_status = 'active' ORDER BY first_name, last_name"));
+    jsonResponse(['people' => $people]);
 });
 
 // ── Template administration (FR-FORM-004/005/006). Admin only; permission-separated

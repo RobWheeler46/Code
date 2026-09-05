@@ -1368,6 +1368,19 @@ CREATE INDEX IF NOT EXISTS idx_form_templates_status ON form_templates(status, c
 CREATE INDEX IF NOT EXISTS idx_form_template_versions_template ON form_template_versions(template_id, status);
 CREATE INDEX IF NOT EXISTS idx_form_submissions_submitter ON form_submissions(submitter_user_id, status);
 CREATE INDEX IF NOT EXISTS idx_form_submissions_template ON form_submissions(template_id, status);
+-- Evidence files attached to a submission's 'file' fields. Private: served only via an
+-- authenticated proxy route (never a public path), like receipts / activity uploads.
+CREATE TABLE IF NOT EXISTS form_submission_files (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  submission_id INTEGER NOT NULL REFERENCES form_submissions(id) ON DELETE CASCADE,
+  field_id TEXT NOT NULL,
+  storage_key TEXT NOT NULL,
+  ext TEXT NOT NULL,
+  original_filename TEXT,
+  uploaded_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_form_submission_files_sub ON form_submission_files(submission_id, field_id);
 
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(portal_role, account_status);
 CREATE INDEX IF NOT EXISTS idx_parent_links_parent ON parent_child_links(parent_user_id);

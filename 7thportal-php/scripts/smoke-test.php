@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle', 'logic_forms', 'logic_forms_admin'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle', 'logic_forms', 'logic_forms_admin', 'logic_forms_files'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -914,6 +914,37 @@ function scenario_logic_forms_admin(): void
     // Schema validation catches duplicate ids and missing choice options.
     check('forms-admin: duplicate field ids are caught', count(formValidateSchema(['sections' => [['fields' => [['id' => 'a', 'label' => 'A', 'type' => 'text'], ['id' => 'a', 'label' => 'B', 'type' => 'text']]]]])) > 0);
     check('forms-admin: choice field without options is caught', count(formValidateSchema(['sections' => [['fields' => [['id' => 'a', 'label' => 'A', 'type' => 'select']]]]])) > 0);
+}
+
+// Forms part 3: on-behalf completion (recorded, not impersonated) + required file
+// evidence (FR-FORM-008 + evidence).
+function scenario_logic_forms_files(): void
+{
+    useDb(tmpDb('formsf')); boot(); loadLibs();
+    dbRun("INSERT OR REPLACE INTO settings (key,value) VALUES ('forms_enabled','true')");
+    $adminId = (int) dbRun("INSERT INTO users (auth_type,email,first_name,last_name,portal_role) VALUES ('local','a@x.com','Ada','A','admin')")['lastInsertId'];
+    $leaderId = (int) dbRun("INSERT INTO users (auth_type,email,first_name,last_name,portal_role) VALUES ('local','l@x.com','Lee','L','section_leader')")['lastInsertId'];
+    $admin = dbGet('SELECT * FROM users WHERE id=?', [$adminId]);
+    $leader = dbGet('SELECT * FROM users WHERE id=?', [$leaderId]);
+
+    $tid = formCreateTemplate($admin, ['title' => 'Evidence form', 'allowOnBehalf' => true]);
+    formUpdateTemplate($tid, $admin, ['schema' => ['sections' => [['title' => 'Docs', 'fields' => [['id' => 'ra', 'label' => 'Risk assessment', 'type' => 'file', 'required' => true]]]]]]);
+    formPublishTemplate($tid);
+    $tpl = dbGet('SELECT * FROM form_templates WHERE id=?', [$tid]);
+
+    check('forms-file: admin can complete on behalf when the template allows it', formCanCompleteOnBehalf($admin, $tpl) === true);
+    check('forms-file: a leader cannot complete on behalf', formCanCompleteOnBehalf($leader, $tpl) === false);
+
+    $subId = formStartSubmission($admin, $tid, ['userId' => $leaderId, 'reason' => 'they asked me to']);
+    $sub = dbGet('SELECT * FROM form_submissions WHERE id=?', [$subId]);
+    check('forms-file: on-behalf records subject + reason, keeps the admin as submitter', (int) $sub['submitter_user_id'] === $adminId && (int) $sub['on_behalf_of_user_id'] === $leaderId && $sub['on_behalf_reason'] === 'they asked me to');
+    check('forms-file: the on-behalf subject can view the record', formCanViewSubmission($leader, $sub) === true);
+
+    check('forms-file: a required file field flags as missing before upload', in_array('Risk assessment', formValidateSubmission($sub), true));
+    dbRun("INSERT INTO form_submission_files (submission_id,field_id,storage_key,ext,original_filename,uploaded_by) VALUES (?,?,?,?,?,?)", [$subId, 'ra', 'key123', 'pdf', 'ra.pdf', $adminId]);
+    $sub = dbGet('SELECT * FROM form_submissions WHERE id=?', [$subId]);
+    check('forms-file: uploaded evidence clears the required-file requirement', formValidateSubmission($sub) === []);
+    check('forms-file: evidence serialises grouped by field id', isset(formSubmissionFilesByField($subId)['ra']));
 }
 
 // QM restricted-booking gate: a restricted line isn't cleared for approval until

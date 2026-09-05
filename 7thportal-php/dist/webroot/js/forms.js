@@ -1,6 +1,8 @@
 // Forms landing (FR-FORM-003): the published forms this user can start, plus their own
 // recent submissions. Not a task inbox — returned/approval items live in Actions.
 const FORM_STATUS_TONE = { draft: 'suspended', submitted: 'pending_approval', approved: 'active', returned: 'suspended', withdrawn: 'archived' };
+let CAN_ADMIN = false;
+const TEMPLATES = {};
 
 (async () => {
   const me = await requireUserNav('leader');
@@ -9,6 +11,8 @@ const FORM_STATUS_TONE = { draft: 'suspended', submitted: 'pending_approval', ap
   let data;
   try { data = await Api.get('/api/forms'); }
   catch (e) { box.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; return; }
+  CAN_ADMIN = data.canAdmin;
+  (data.templates || []).forEach(t => { TEMPLATES[t.id] = t; });
 
   // Admins get template + submissions administration entry points in the header
   // (completion vs administration stays permission-separated, FR-FORM-004).
@@ -61,15 +65,53 @@ function mySubmissions(subs) {
     </div>`;
 }
 
-async function startForm(templateId, btn) {
-  btn.disabled = true; btn.textContent = 'Starting…';
+function startForm(templateId, btn) {
+  const tpl = TEMPLATES[templateId];
+  // On-behalf is a controlled admin capability (FR-FORM-008): offer the choice only
+  // when the template allows it and the user is an administrator.
+  if (tpl && tpl.allowOnBehalf && CAN_ADMIN) return openOnBehalfModal(Number(templateId));
+  directStart(Number(templateId), null, btn);
+}
+
+async function directStart(templateId, onBehalf, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Starting…'; }
   try {
-    const { id } = await Api.post('/api/forms/submissions', { templateId: Number(templateId) });
+    const body = { templateId };
+    if (onBehalf) body.onBehalf = onBehalf;
+    const { id } = await Api.post('/api/forms/submissions', body);
     location.href = `form-fill.html?id=${id}`;
   } catch (e) {
-    btn.disabled = false; btn.textContent = 'Start form';
-    alert(e.message);
+    if (btn) { btn.disabled = false; btn.textContent = 'Start form'; }
+    const err = document.getElementById('ob-msg');
+    if (err) err.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; else alert(e.message);
   }
+}
+
+async function openOnBehalfModal(templateId) {
+  let people = [];
+  try { people = (await Api.get('/api/forms/people')).people || []; } catch (e) { /* fall back to self only */ }
+  const wrap = document.createElement('div');
+  wrap.className = 'modal-backdrop';
+  wrap.innerHTML = `<div class="modal-box">
+    <h2 style="margin-top:0">Start “${escapeHtml(TEMPLATES[templateId].title)}”</h2>
+    <div class="field"><label>Who is this for?</label>
+      <select id="ob-who"><option value="">Myself</option>${people.map(p => `<option value="${p.id}">${escapeHtml(p.name)} (${escapeHtml(p.role)})</option>`).join('')}</select></div>
+    <div class="field" id="ob-reason-wrap" hidden><label>Reason for completing on their behalf</label><textarea id="ob-reason" rows="2" placeholder="Recorded on the submission"></textarea></div>
+    <div id="ob-msg"></div>
+    <div class="cap-actions"><button class="btn" id="ob-start">Start</button><button class="btn btn-secondary" id="ob-cancel">Cancel</button></div>
+  </div>`;
+  document.body.appendChild(wrap);
+  const close = () => wrap.remove();
+  wrap.addEventListener('click', e => { if (e.target === wrap) close(); });
+  document.getElementById('ob-cancel').addEventListener('click', close);
+  document.getElementById('ob-who').addEventListener('change', e => { document.getElementById('ob-reason-wrap').hidden = !e.target.value; });
+  document.getElementById('ob-start').addEventListener('click', () => {
+    const who = document.getElementById('ob-who').value;
+    if (!who) return directStart(templateId, null, null);
+    const reason = document.getElementById('ob-reason').value.trim();
+    if (!reason) { document.getElementById('ob-msg').innerHTML = '<div class="alert alert-error">Give a reason for completing on their behalf.</div>'; return; }
+    directStart(templateId, { userId: Number(who), reason }, null);
+  });
 }
 
 // Row click (outside the action button) opens the submission too.

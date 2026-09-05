@@ -10,7 +10,7 @@
 const DEMO_WIPE_TABLES = [
     'pp_score_lines', 'pp_participants', 'pp_guest_links', 'pp_submissions', 'pp_activities', 'pp_categories', 'pp_teams', 'pp_competitions',
     'activity_form_files', 'activity_form_events', 'activity_forms',
-    'form_submissions', 'form_template_versions', 'form_templates',
+    'form_submission_files', 'form_submissions', 'form_template_versions', 'form_templates',
     'camp_rota_entries', 'camp_rota_adults', 'event_locations', 'event_hub_items', 'event_hubs',
     'calendar_entries',
     'gallery_photos', 'gallery_album_parents', 'gallery_albums',

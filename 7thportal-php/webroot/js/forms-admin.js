@@ -6,7 +6,7 @@ let TPL = null, ID = null, SCHEMA = { sections: [] }, fieldSeq = 0;
 const FA_TONE = { draft: 'suspended', published: 'active', retired: 'archived' };
 const FIELD_TYPES = [
   ['text', 'Short text'], ['textarea', 'Paragraph'], ['email', 'Email'], ['number', 'Number'],
-  ['date', 'Date'], ['select', 'Dropdown'], ['radio', 'Choose one'], ['checkbox', 'Tickbox'],
+  ['date', 'Date'], ['select', 'Dropdown'], ['radio', 'Choose one'], ['checkbox', 'Tickbox'], ['file', 'File upload'],
 ];
 const faEsc = s => escapeHtml(s == null ? '' : String(s));
 const roleList = [['section_leader', 'Section leaders'], ['assistant_leader', 'Assistant leaders'], ['group_leadership', 'Group leadership'], ['treasurer', 'Treasurer'], ['chair', 'Chair'], ['admin', 'Admin']];

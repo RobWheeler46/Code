@@ -14,8 +14,28 @@ const FORM_SUB_STATUSES = [
     'withdrawn' => 'Withdrawn',
 ];
 // The field types the builder/renderer understand. Kept deliberately small and shared
-// with the design-system field components.
-const FORM_FIELD_TYPES = ['text', 'textarea', 'email', 'number', 'date', 'select', 'radio', 'checkbox'];
+// with the design-system field components. 'file' collects private evidence.
+const FORM_FIELD_TYPES = ['text', 'textarea', 'email', 'number', 'date', 'select', 'radio', 'checkbox', 'file'];
+const FORM_UPLOAD_DIR = __DIR__ . '/../../data/form-uploads';
+const FORM_MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+function formStorageKey(): string { return bin2hex(random_bytes(20)); }
+function formFilePathFor(string $key, string $ext): string { return FORM_UPLOAD_DIR . "/$key.$ext"; }
+function formDeleteFileOnDisk(string $key, string $ext): void { $p = formFilePathFor($key, $ext); if (is_file($p)) @unlink($p); }
+// Files attached to a submission, grouped by field id, for the completion renderer.
+function formSubmissionFilesByField(int $submissionId): array
+{
+    $out = [];
+    foreach (dbAll('SELECT * FROM form_submission_files WHERE submission_id = ? ORDER BY id', [$submissionId]) as $x) {
+        $out[$x['field_id']][] = ['id' => (int) $x['id'], 'filename' => $x['original_filename'], 'ext' => $x['ext']];
+    }
+    return $out;
+}
+// Whether the given user may complete a form on behalf of someone else (FR-FORM-008):
+// only when the template allows it and the actor is an administrator.
+function formCanCompleteOnBehalf(array $user, array $tpl): bool
+{
+    return !empty($tpl['allow_on_behalf']) && formsCanAdmin($user);
+}
 
 function formsEnabled(): bool
 {
@@ -65,6 +85,7 @@ function formPublishedTemplatesFor(array $user): array
             'description' => $t['description'],
             'category' => $t['category'],
             'workflow' => $t['workflow'],
+            'allowOnBehalf' => (bool) $t['allow_on_behalf'],
         ];
     }
     return $out;
@@ -109,9 +130,14 @@ function formValidateSubmission(array $sub): array
 {
     $schema = json_decode($sub['schema_snapshot_json'] ?: '{}', true) ?: [];
     $data = json_decode($sub['data_json'] ?: '{}', true) ?: [];
+    $files = formSubmissionFilesByField((int) $sub['id']);
     $missing = [];
     foreach (formSchemaFields($schema) as $f) {
         if (empty($f['required'])) continue;
+        if (($f['type'] ?? '') === 'file') {
+            if (empty($files[$f['id']])) $missing[] = $f['label'] ?? $f['id'];
+            continue;
+        }
         $v = $data[$f['id']] ?? null;
         $empty = $v === null || $v === '' || (is_array($v) && !$v) || ($f['type'] === 'checkbox' && !$v);
         if ($empty) $missing[] = $f['label'] ?? $f['id'];
@@ -173,6 +199,7 @@ function serializeFormSubmission(array $sub, array $user): array
         'statusLabel' => FORM_SUB_STATUSES[$sub['status']] ?? $sub['status'],
         'schema' => json_decode($sub['schema_snapshot_json'] ?: '{}', true) ?: [],
         'data' => json_decode($sub['data_json'] ?: '{}', true) ?: [],
+        'files' => formSubmissionFilesByField((int) $sub['id']),
         'submittedAt' => $sub['submitted_at'],
         'submitterName' => $submitter ? trim($submitter['first_name'] . ' ' . $submitter['last_name']) : '',
         'onBehalfOf' => $onBehalf ? trim($onBehalf['first_name'] . ' ' . $onBehalf['last_name']) : null,

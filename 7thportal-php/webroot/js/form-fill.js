@@ -59,6 +59,7 @@ function sectionsView(editable) {
 function field(f, value, editable) {
   const req = f.required ? ' <span class="err" style="color:var(--red)">*</span>' : '';
   const id = `ff-${ffEsc(f.id)}`;
+  if (f.type === 'file') return fileField(f, editable);
   if (!editable) return roField(f, value);
   const label = t => `<div class="field"><label>${ffEsc(f.label)}${req}</label>${t}${f.help ? `<span class="field help">${ffEsc(f.help)}</span>` : ''}</div>`;
   switch (f.type) {
@@ -73,6 +74,21 @@ function field(f, value, editable) {
   }
 }
 
+// File-evidence field: existing uploads as private download links, plus an upload
+// control while editable. Files live under SUB.files[fieldId], not in data.
+function fileField(f, editable) {
+  const req = f.required ? ' <span class="err" style="color:var(--red)">*</span>' : '';
+  const files = (SUB.files && SUB.files[f.id]) || [];
+  const list = files.map(x => `<div class="ff-file" style="display:flex;gap:.5rem;align-items:center;padding:.3rem 0;">
+      <a href="/api/forms/submissions/${SUB.id}/files/${x.id}/download" target="_blank" rel="noopener">${ffEsc(x.filename || ('file.' + x.ext))}</a>
+      ${editable ? `<button class="btn btn-secondary btn-sm ff-file-del" data-file="${x.id}">Remove</button>` : ''}
+    </div>`).join('') || '<p class="muted" style="margin:.2rem 0">No file uploaded.</p>';
+  const upload = editable
+    ? `<div class="ff-upload" data-fid="${ffEsc(f.id)}" style="margin-top:.3rem"><input type="file" class="ff-file-input" data-fid="${ffEsc(f.id)}" accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx"><span class="field help">PDF, DOCX, XLSX, PNG or JPG, up to 10MB.</span></div>`
+    : '';
+  return `<div class="field"><label>${ffEsc(f.label)}${req}</label>${list}${upload}</div>`;
+}
+
 function roField(f, value) {
   let shown;
   if (f.type === 'checkbox') shown = value ? 'Yes' : 'No';
@@ -84,6 +100,7 @@ function roField(f, value) {
 function collectData() {
   const data = {};
   document.querySelectorAll('#content [data-fid]').forEach(el => {
+    if (el.type === 'file' || el.classList.contains('ff-upload')) return; // evidence lives in files, not data
     const fid = el.dataset.fid;
     if (el.type === 'checkbox') data[fid] = el.checked;
     else data[fid] = el.value;
@@ -131,6 +148,8 @@ function wire(A) {
   };
   document.getElementById('ff-save')?.addEventListener('click', () => save(false));
   document.getElementById('ff-submit')?.addEventListener('click', () => save(true));
+  document.querySelectorAll('.ff-file-input').forEach(inp => inp.addEventListener('change', () => uploadFile(inp)));
+  document.querySelectorAll('.ff-file-del').forEach(b => b.addEventListener('click', () => removeFile(b.dataset.file)));
   document.getElementById('ff-withdraw')?.addEventListener('click', async () => {
     if (!confirmInline()) return;
     try { await Api.post(`/api/forms/submissions/${ID}/withdraw`, {}); await load(); }
@@ -146,6 +165,32 @@ function wire(A) {
     document.getElementById('ff-approve').addEventListener('click', () => decide('approve'));
     document.getElementById('ff-return').addEventListener('click', () => decide('return'));
   }
+}
+
+// Persist typed answers before a file op, so the reload doesn't drop them.
+async function preserveAnswers() {
+  if (!SUB.myActions.canEdit) return;
+  try { await Api.put(`/api/forms/submissions/${ID}`, { data: collectData() }); } catch (e) { /* best effort */ }
+}
+async function uploadFile(inp) {
+  const file = inp.files && inp.files[0];
+  if (!file) return;
+  const msg = t => { const m = document.getElementById('ff-msg'); if (m) m.innerHTML = t; };
+  await preserveAnswers();
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('fieldId', inp.dataset.fid);
+  try {
+    const res = await fetch(`/api/forms/submissions/${ID}/files`, { method: 'POST', body: fd });
+    const d = await res.json().catch(() => null);
+    if (!res.ok) { msg(`<div class="alert alert-error">${ffEsc((d && d.error) || 'Upload failed.')}</div>`); return; }
+    await load();
+  } catch (e) { msg(`<div class="alert alert-error">${ffEsc(e.message)}</div>`); }
+}
+async function removeFile(fileId) {
+  await preserveAnswers();
+  try { await Api.delete(`/api/forms/submissions/${ID}/files/${fileId}`); await load(); }
+  catch (e) { const m = document.getElementById('ff-msg'); if (m) m.innerHTML = `<div class="alert alert-error">${ffEsc(e.message)}</div>`; }
 }
 
 // Lightweight inline confirm without a native dialog (native dialogs hang under preview).
