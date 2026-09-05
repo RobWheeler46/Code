@@ -195,6 +195,7 @@ The browser talks only to the backend (FRD §39):
 | `GET` | `/api/aircraft` | Current aircraft snapshot (diagnostics/dev) |
 | `GET` | `/api/aircraft/photo?reg=&hex=` | Aircraft photo (proxies planespotters.net) |
 | `GET` | `/api/aircraft/{icaoHex}` | Aircraft detail + registry metadata (adsbdb) |
+| `GET` | `/api/aircraft/{icaoHex}/flight-intelligence` | Operational flight data: state, OOOI, ETA, route (§102) |
 | `GET` | `/api/view?postcode=` | Per-viewer snapshot for any postcode (read-only) |
 | `GET` | `/api/history?date=` | Aircraft pass history for a date (default today) |
 | `GET` | `/api/history/dates` | Retained dates with pass counts |
@@ -407,6 +408,21 @@ geolocation, precise). Every location carries a **source** (default / ip / devic
 / postcode) and a **confidence** (precise / good / approximate / coarse), shown by
 a 📍 indicator; a coarse fix triggers an "improve your location" notice in True
 Sky (which needs an accurate observer). A postcode remains the manual path.
+
+**Operational flight intelligence (done, FRD v3.8 §21-44, §53)** — beyond the
+route, aircraft can carry *operational* enrichment: **OOOI flight events**
+(out/off/on/in, shown human-readably), a derived **flight state** (at gate →
+departed → airborne → en route → landed → arrived), **ETA**, stronger route
+corroboration, and **possible route-change / diversion** insight — all on top of
+ADS-B positional truth, which is never overridden (§17, §124). Airframes is the
+Tier-1 provider behind a provider abstraction (env-gated: `AIRFRAMES_ENABLED` +
+`AIRFRAMES_API_KEY`, credentials server-side); its live REST mapping awaits
+confirmed API access, so the whole pipeline is exercised by a **simulation
+operational provider** (§106) covering the confirmed / Airframes-only / conflict /
+stale-ACARS / possible-diversion / OOOI scenarios. Served at
+`/api/aircraft/{hex}/flight-intelligence` and shown in the detail drawer's
+**Flight Intelligence** section. If the provider fails, only enrichment degrades —
+tracking, routes and history continue (§108).
 
 **Google account & saved locations (done, FRD v3.6 §12, §26)** — an optional
 **Google Sign-In** (env-gated: `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`) lets the

@@ -4,6 +4,7 @@ export * from "./config.js";
 export * from "./sizing.js";
 export * from "./location.js";
 export * from "./account.js";
+export * from "./operations.js";
 export * from "./history.js";
 export * from "./satellite.js";
 export * from "./messages.js";

@@ -49,7 +49,18 @@ import {
   clientIp,
   cloudflareLocation,
 } from "./location/ipLocationProvider.js";
-import { classifyConfidence, type DetectedLocation, type LocationSource } from "@ast/shared";
+import {
+  classifyConfidence,
+  deriveFlightState,
+  type DetectedLocation,
+  type LocationSource,
+  type FlightIntelligence,
+} from "@ast/shared";
+import {
+  OperationalIntelligenceService,
+  SimulationOperationalProvider,
+  AirframesOperationalProvider,
+} from "./routes/operationalIntelligence.js";
 import { AccountRepo } from "./persistence/accountRepo.js";
 import { GoogleAuth } from "./auth/googleAuth.js";
 import { createAuthRouter } from "./auth/authRouter.js";
@@ -82,6 +93,16 @@ async function main(): Promise<void> {
   const ipLocation = new IpWhoIsProvider();
   const accounts = new AccountRepo();
   const googleAuth = new GoogleAuth();
+  const operational = new OperationalIntelligenceService(
+    env.aircraftProvider === "simulation"
+      ? new SimulationOperationalProvider()
+      : new AirframesOperationalProvider(
+          env.airframesEnabled,
+          env.airframesMode,
+          env.airframesUrl,
+          env.airframesApiKey,
+        ),
+  );
 
   // Resolve coordinates if we do not have them yet (FRD §84-85).
   if (config.latitude === 0 && config.longitude === 0) {
@@ -524,6 +545,37 @@ async function main(): Promise<void> {
       const aircraft = state.snapshot().find((a) => a.icaoHex === icaoHex) ?? null;
       const meta = await routes.getAircraftMeta(icaoHex);
       return { aircraft, meta };
+    },
+    flightIntelligence: async (icaoHex): Promise<FlightIntelligence> => {
+      const aircraft = state.snapshot().find((a) => a.icaoHex === icaoHex);
+      const dest = aircraft?.destination;
+      const airborne = aircraft ? aircraft.onGround !== true : false;
+      const op = aircraft
+        ? await operational.lookup({
+            icaoHex,
+            callsign: aircraft.callsign,
+            registration: aircraft.registration,
+            airborne,
+          })
+        : undefined;
+      // Route + confidence come from the live route decision (ADS-B + adsbdb);
+      // operational evidence adds flight state / OOOI / ETA / diversion (§53, §102).
+      const sources = new Set<string>(op?.sources ?? []);
+      for (const s of dest?.sources ?? []) sources.add(s);
+      if (aircraft) sources.add("ADS-B");
+      return {
+        available: op !== undefined,
+        callsign: aircraft?.callsign,
+        airline: dest?.airline ?? op?.airline,
+        origin: dest?.originName ?? op?.origin,
+        destination: dest?.displayName ?? op?.destination,
+        routeConfidence: dest?.confidence ?? op?.routeConfidenceHint ?? "unknown",
+        flightState: deriveFlightState(op?.oooi ?? {}, airborne),
+        oooi: op?.oooi ?? {},
+        eta: op?.eta,
+        possibleRouteChange: op?.possibleRouteChange,
+        sources: [...sources],
+      };
     },
     view: (postcode) => viewService.getView(postcode),
 

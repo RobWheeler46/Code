@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { type Aircraft, type AircraftMeta } from "@ast/shared";
+import {
+  type Aircraft,
+  type AircraftMeta,
+  type FlightIntelligence,
+  flightStateLabel,
+  oooiRows,
+} from "@ast/shared";
 
 interface Props {
   aircraft: Aircraft;
@@ -63,6 +69,7 @@ export function AircraftDetailsOverlay({ aircraft, onClose }: Props) {
   const [photo, setPhoto] = useState<Photo | undefined>();
   const [photoLoaded, setPhotoLoaded] = useState(false);
   const [meta, setMeta] = useState<AircraftMeta | undefined>();
+  const [flight, setFlight] = useState<FlightIntelligence | undefined>();
   const [showTechnical, setShowTechnical] = useState(false);
   const [showQuality, setShowQuality] = useState(false);
 
@@ -83,6 +90,11 @@ export function AircraftDetailsOverlay({ aircraft, onClose }: Props) {
       .then((r) => (r.ok ? (r.json() as Promise<{ meta: AircraftMeta }>) : { meta: {} }))
       .then((d) => active && setMeta(d.meta ?? {}))
       .catch(() => active && setMeta({}));
+    setFlight(undefined);
+    void fetch(`/api/aircraft/${encodeURIComponent(aircraft.icaoHex)}/flight-intelligence`)
+      .then((r) => (r.ok ? (r.json() as Promise<FlightIntelligence>) : undefined))
+      .then((f) => active && setFlight(f))
+      .catch(() => undefined);
     return () => {
       active = false;
     };
@@ -237,6 +249,8 @@ export function AircraftDetailsOverlay({ aircraft, onClose }: Props) {
           )}
         </div>
 
+        {flight && <FlightIntelligenceSection flight={flight} />}
+
         <Section title="Live" rows={liveRows} />
         <Section title="Aircraft" rows={aircraftRows} />
 
@@ -284,6 +298,62 @@ function Section({ title, rows }: { title: string; rows: Row[] }) {
       <Rows rows={rows} />
     </>
   );
+}
+
+/** Operational flight intelligence: state, OOOI, ETA, sources (FRD v3.8 §53). */
+function FlightIntelligenceSection({ flight }: { flight: FlightIntelligence }) {
+  const oooi = oooiRows(flight.oooi).filter((r) => r.time);
+  const rows: Row[] = [
+    ["Flight", flight.callsign],
+    ["Status", flightStateLabel(flight.flightState)],
+    ["Airline", flight.airline],
+    ["Route confidence", capitalise(flight.routeConfidence)],
+    ["Estimated arrival", flight.eta ? formatTime(flight.eta.time) : undefined],
+  ];
+  // Nothing operational to show and no callsign -> skip entirely.
+  if (rows.every((r) => !r[1]) && oooi.length === 0 && !flight.possibleRouteChange) return null;
+
+  return (
+    <>
+      <h2>Flight intelligence</h2>
+      {flight.possibleRouteChange && (
+        <div className="route-change">
+          <div className="route-change-head">
+            Possible route change ({flight.possibleRouteChange.confidence})
+          </div>
+          <div>
+            {flight.possibleRouteChange.previousDestination} →{" "}
+            <strong>{flight.possibleRouteChange.newDestination}</strong>
+          </div>
+        </div>
+      )}
+      <Rows rows={rows} />
+      {oooi.length > 0 && (
+        <div className="oooi">
+          {oooi.map((r) => (
+            <span key={r.label} style={{ display: "contents" }}>
+              <span className="k">{r.label}</span>
+              <span className="v">{r.time ? formatTime(r.time) : "—"}</span>
+            </span>
+          ))}
+        </div>
+      )}
+      {flight.sources.length > 0 && (
+        <div className="route-conf">Sources: {flight.sources.join(" · ")}</div>
+      )}
+    </>
+  );
+}
+
+function capitalise(s: string): string {
+  return s.length > 0 ? s[0]!.toUpperCase() + s.slice(1) : s;
+}
+
+function formatTime(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
 }
 
 function Collapsible({

@@ -518,6 +518,38 @@ button.danger {
   margin-top: 0.25rem;
 }
 
+/* Flight intelligence: OOOI grid + possible route change (FRD v3.8 §53, §59). */
+.oooi {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.3rem 1rem;
+  font-size: calc(0.9rem * var(--ui-scale, 1));
+  margin-top: 0.4rem;
+}
+.oooi .k {
+  color: var(--secondary);
+}
+.oooi .v {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.route-change {
+  margin: 0.4rem 0;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #6a5320;
+  border-left: 3px solid #ffcf6b;
+  border-radius: 8px;
+  background: rgba(60, 45, 18, 0.35);
+  font-size: 0.9rem;
+}
+.route-change-head {
+  color: #ffcf6b;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.2rem;
+}
+
 .collapsible {
   width: 100%;
   text-align: left;
