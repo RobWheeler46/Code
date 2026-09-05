@@ -238,6 +238,7 @@ const PAGE_FEATURE_MAP = {
   'attendance.html': 'attendanceEnabled',
   'activity-forms.html': 'activityFormsEnabled', 'activity-form.html': 'activityFormsEnabled',
   'forms.html': 'formsEnabled', 'form-fill.html': 'formsEnabled',
+  'forms-admin.html': 'formsEnabled', 'forms-submissions.html': 'formsEnabled',
   'patrol-points.html': 'patrolPointsEnabled', 'patrol-point.html': 'patrolPointsEnabled',
   'patrol-leaderboard.html': 'patrolPointsEnabled', 'patrol-score.html': 'patrolPointsEnabled',
 };

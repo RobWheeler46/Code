@@ -10,6 +10,16 @@ const FORM_STATUS_TONE = { draft: 'suspended', submitted: 'pending_approval', ap
   try { data = await Api.get('/api/forms'); }
   catch (e) { box.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; return; }
 
+  // Admins get template + submissions administration entry points in the header
+  // (completion vs administration stays permission-separated, FR-FORM-004).
+  if (data.canAdmin) {
+    renderPageHeader({
+      title: 'Forms',
+      description: 'Start a published form and track your submissions.',
+      actions: '<a class="btn btn-secondary" href="forms-admin.html">Manage templates</a><a class="btn btn-secondary" href="forms-submissions.html">All submissions</a>',
+    });
+  }
+
   box.innerHTML = availableForms(data.templates) + mySubmissions(data.mySubmissions);
   box.querySelectorAll('[data-start]').forEach(b => b.addEventListener('click', () => startForm(b.dataset.start, b)));
 })();

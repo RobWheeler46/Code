@@ -24,6 +24,7 @@ const Api = {
     if (!res.ok) {
       const err = new Error((data && data.error) || `Request failed (${res.status})`);
       err.status = res.status;
+      err.data = data; // full JSON body (e.g. a validation `errors` array) for callers that show detail
       throw err;
     }
     return data;

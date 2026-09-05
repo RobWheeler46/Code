@@ -106,3 +106,82 @@ $router->post('/api/forms/submissions/:id/decision', function ($params) {
     logAudit(['userId' => $user['id'], 'action' => 'form_submission_' . $decision, 'entityType' => 'form_submission', 'entityId' => (string) $sub['id'], 'ipAddress' => clientIp()]);
     jsonResponse(serializeFormSubmission(dbGet('SELECT * FROM form_submissions WHERE id = ?', [$sub['id']]), $user));
 });
+
+// ── Template administration (FR-FORM-004/005/006). Admin only; permission-separated
+// from completion, so an ordinary completer never reaches these. ─────────────────
+function requireFormsAdmin(): array
+{
+    $user = requireAuth();
+    requireFormsEnabled();
+    if (!formsCanAdmin($user)) jsonResponse(['error' => 'Form administration is restricted to administrators.'], 403);
+    return $user;
+}
+
+$router->get('/api/admin/forms/templates', function ($params) {
+    requireFormsAdmin();
+    jsonResponse(['templates' => formAdminTemplates()]);
+});
+
+$router->post('/api/admin/forms/templates', function ($params) {
+    $user = requireFormsAdmin();
+    $id = formCreateTemplate($user, requestBody());
+    logAudit(['userId' => $user['id'], 'action' => 'form_template_create', 'entityType' => 'form_template', 'entityId' => (string) $id, 'ipAddress' => clientIp()]);
+    jsonResponse(['id' => $id], 201);
+});
+
+$router->get('/api/admin/forms/templates/:id', function ($params) {
+    requireFormsAdmin();
+    $tpl = dbGet('SELECT * FROM form_templates WHERE id = ?', [$params['id']]);
+    if (!$tpl) jsonResponse(['error' => 'Not found.'], 404);
+    jsonResponse(serializeFormTemplateAdmin($tpl));
+});
+
+$router->put('/api/admin/forms/templates/:id', function ($params) {
+    $user = requireFormsAdmin();
+    $tpl = dbGet('SELECT * FROM form_templates WHERE id = ?', [$params['id']]);
+    if (!$tpl) jsonResponse(['error' => 'Not found.'], 404);
+    formUpdateTemplate((int) $tpl['id'], $user, requestBody());
+    logAudit(['userId' => $user['id'], 'action' => 'form_template_update', 'entityType' => 'form_template', 'entityId' => (string) $tpl['id'], 'ipAddress' => clientIp()]);
+    jsonResponse(serializeFormTemplateAdmin(dbGet('SELECT * FROM form_templates WHERE id = ?', [$tpl['id']])));
+});
+
+$router->post('/api/admin/forms/templates/:id/publish', function ($params) {
+    $user = requireFormsAdmin();
+    $tpl = dbGet('SELECT * FROM form_templates WHERE id = ?', [$params['id']]);
+    if (!$tpl) jsonResponse(['error' => 'Not found.'], 404);
+    $r = formPublishTemplate((int) $tpl['id']);
+    if (isset($r['errors'])) jsonResponse(['error' => 'Fix these before publishing.', 'errors' => $r['errors']], 422);
+    if (isset($r['error'])) jsonResponse(['error' => $r['error']], 409);
+    logAudit(['userId' => $user['id'], 'action' => 'form_template_publish', 'entityType' => 'form_template', 'entityId' => (string) $tpl['id'], 'ipAddress' => clientIp()]);
+    jsonResponse(serializeFormTemplateAdmin(dbGet('SELECT * FROM form_templates WHERE id = ?', [$tpl['id']])));
+});
+
+$router->post('/api/admin/forms/templates/:id/retire', function ($params) {
+    $user = requireFormsAdmin();
+    $tpl = dbGet('SELECT * FROM form_templates WHERE id = ?', [$params['id']]);
+    if (!$tpl) jsonResponse(['error' => 'Not found.'], 404);
+    formRetireTemplate((int) $tpl['id']);
+    logAudit(['userId' => $user['id'], 'action' => 'form_template_retire', 'entityType' => 'form_template', 'entityId' => (string) $tpl['id'], 'ipAddress' => clientIp()]);
+    jsonResponse(serializeFormTemplateAdmin(dbGet('SELECT * FROM form_templates WHERE id = ?', [$tpl['id']])));
+});
+
+// Delete only a never-published template with no submissions; otherwise retire.
+$router->delete('/api/admin/forms/templates/:id', function ($params) {
+    $user = requireFormsAdmin();
+    $tpl = dbGet('SELECT * FROM form_templates WHERE id = ?', [$params['id']]);
+    if (!$tpl) jsonResponse(['error' => 'Not found.'], 404);
+    if ($tpl['status'] !== 'draft' || formTemplateSubmissionCount((int) $tpl['id']) > 0) jsonResponse(['error' => 'This form has been published or has submissions. Retire it instead.'], 409);
+    dbRun('DELETE FROM form_templates WHERE id = ?', [$tpl['id']]);
+    logAudit(['userId' => $user['id'], 'action' => 'form_template_delete', 'entityType' => 'form_template', 'entityId' => (string) $tpl['id'], 'ipAddress' => clientIp()]);
+    jsonResponse(['ok' => true]);
+});
+
+// Submissions administration (FR-FORM-007): permission-filtered list. Admin only.
+$router->get('/api/admin/forms/submissions', function ($params) {
+    requireFormsAdmin();
+    jsonResponse([
+        'submissions' => formAdminSubmissions(['templateId' => queryParam('templateId'), 'status' => queryParam('status'), 'q' => queryParam('q')]),
+        'templates' => formAdminTemplates(),
+        'statuses' => FORM_SUB_STATUSES,
+    ]);
+});

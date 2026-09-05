@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle', 'logic_forms'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle', 'logic_forms', 'logic_forms_admin'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -868,6 +868,52 @@ function scenario_logic_forms(): void
     check('forms: submitter can view own submission', formCanViewSubmission($leader, $sub) === true);
     check('forms: unrelated leader cannot view (no leak)', formCanViewSubmission($stranger, $sub) === false);
     check('forms: reference format is FRM-YYYY-000000', preg_match('/^FRM-\d{4}-\d{6}$/', formSubmissionReference()) === 1);
+}
+
+// Forms template administration: create -> build -> pre-publish validation -> publish ->
+// edit-after-publish creates a new version while old submissions keep their snapshot.
+function scenario_logic_forms_admin(): void
+{
+    useDb(tmpDb('formsadm')); boot(); loadLibs();
+    dbRun("INSERT OR REPLACE INTO settings (key,value) VALUES ('forms_enabled','true')");
+    $adminId = (int) dbRun("INSERT INTO users (auth_type,email,first_name,last_name,portal_role) VALUES ('local','a@x.com','Ada','A','admin')")['lastInsertId'];
+    $leaderId = (int) dbRun("INSERT INTO users (auth_type,email,first_name,last_name,portal_role) VALUES ('local','l@x.com','Lee','L','section_leader')")['lastInsertId'];
+    $admin = dbGet('SELECT * FROM users WHERE id=?', [$adminId]);
+    $leader = dbGet('SELECT * FROM users WHERE id=?', [$leaderId]);
+
+    $tid = formCreateTemplate($admin, ['title' => 'Trip interest', 'workflow' => 'record']);
+    check('forms-admin: new template is a draft with an empty version', dbGet('SELECT status FROM form_templates WHERE id=?', [$tid])['status'] === 'draft' && formDraftVersion($tid) !== null);
+    check('forms-admin: a draft-only template is not offered to completers', count(formPublishedTemplatesFor($leader)) === 0);
+
+    // Pre-publish validation blocks an empty form.
+    $pub = formPublishTemplate($tid);
+    check('forms-admin: publishing an empty form is rejected', isset($pub['errors']) && count($pub['errors']) > 0);
+
+    // Build a valid schema, then publish.
+    formUpdateTemplate($tid, $admin, ['schema' => ['sections' => [['title' => 'You', 'fields' => [['id' => 'name', 'label' => 'Name', 'type' => 'text', 'required' => true]]]]]]);
+    check('forms-admin: valid schema publishes', (formPublishTemplate($tid)['ok'] ?? false) === true);
+    $tpl = dbGet('SELECT * FROM form_templates WHERE id=?', [$tid]);
+    check('forms-admin: published template has a current version + is offered', $tpl['status'] === 'published' && $tpl['current_version_id'] && count(formPublishedTemplatesFor($leader)) === 1);
+    $v1 = (int) $tpl['current_version_id'];
+
+    // A submission started now freezes v1.
+    $subId = formStartSubmission($leader, $tid);
+
+    // Edit after publish -> a NEW draft version (v1 stays immutable).
+    formUpdateTemplate($tid, $admin, ['schema' => ['sections' => [['title' => 'You', 'fields' => [['id' => 'name', 'label' => 'Full name', 'type' => 'text', 'required' => true], ['id' => 'phone', 'label' => 'Phone', 'type' => 'text', 'required' => false]]]]]]);
+    $draft = formDraftVersion($tid);
+    check('forms-admin: editing a published form creates a new draft version', $draft && (int) $draft['id'] !== $v1 && (int) $draft['version_no'] === 2);
+    check('forms-admin: the published v1 schema is unchanged', str_contains(dbGet('SELECT schema_json FROM form_template_versions WHERE id=?', [$v1])['schema_json'], '"label":"Name"'));
+
+    // Publish v2 -> current moves, v1 retired, but the in-flight submission keeps its v1 snapshot.
+    formPublishTemplate($tid);
+    $tpl = dbGet('SELECT * FROM form_templates WHERE id=?', [$tid]);
+    check('forms-admin: publishing v2 supersedes v1', (int) $tpl['current_version_id'] === (int) $draft['id'] && dbGet('SELECT status FROM form_template_versions WHERE id=?', [$v1])['status'] === 'retired');
+    check('forms-admin: an in-flight submission keeps its original v1 snapshot', dbGet('SELECT template_version_id FROM form_submissions WHERE id=?', [$subId])['template_version_id'] == $v1);
+
+    // Schema validation catches duplicate ids and missing choice options.
+    check('forms-admin: duplicate field ids are caught', count(formValidateSchema(['sections' => [['fields' => [['id' => 'a', 'label' => 'A', 'type' => 'text'], ['id' => 'a', 'label' => 'B', 'type' => 'text']]]]])) > 0);
+    check('forms-admin: choice field without options is caught', count(formValidateSchema(['sections' => [['fields' => [['id' => 'a', 'label' => 'A', 'type' => 'select']]]]])) > 0);
 }
 
 // QM restricted-booking gate: a restricted line isn't cleared for approval until
