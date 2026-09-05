@@ -14,6 +14,7 @@ const FEATURE_CATALOGUE = [
     ['flag' => 'calendarEnabled', 'setting' => 'calendar_enabled', 'label' => 'Calendar', 'visibleTo' => 'Leaders & QMs; parents see published', 'dependsOn' => '—'],
     ['flag' => 'attendanceEnabled', 'setting' => 'attendance_enabled', 'label' => 'Attendance', 'visibleTo' => 'Leaders', 'dependsOn' => 'Central Section Directory'],
     ['flag' => 'activityFormsEnabled', 'setting' => 'activity_forms_enabled', 'label' => 'Activity forms & approval', 'visibleTo' => 'Leaders; GLV approvers', 'dependsOn' => '—'],
+    ['flag' => 'formsEnabled', 'setting' => 'forms_enabled', 'label' => 'Forms (reusable forms & submissions)', 'visibleTo' => 'Leaders; admin manages templates', 'dependsOn' => '—'],
     ['flag' => 'equipmentRegisterEnabled', 'setting' => 'equipment_register_enabled', 'label' => 'Equipment register', 'visibleTo' => 'Leaders, QMs, Admin', 'dependsOn' => '—'],
     ['flag' => 'qmBookingEnabled', 'setting' => 'qm_booking_enabled', 'label' => 'QM bookings', 'visibleTo' => 'Leaders, QMs, Admin', 'dependsOn' => 'Equipment register', 'dependsOnSetting' => 'equipment_register_enabled', 'dependsOnLabel' => 'Equipment register'],
     ['flag' => 'financeEnabled', 'setting' => 'finance_enabled', 'label' => 'Finance & expenses', 'visibleTo' => 'Leaders, approvers, Treasurer', 'dependsOn' => 'Accounts & approver groups'],

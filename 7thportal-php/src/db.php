@@ -1316,6 +1316,59 @@ CREATE TABLE IF NOT EXISTS demo_feedback (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Generic reusable Forms (FR-FORM-003..009). A form_template is the logical form; its
+-- schema lives in versioned form_template_versions so a published version with live or
+-- historical submissions stays immutable (a future change creates a new draft version).
+-- A form_submission freezes the exact version schema it was completed against, so the
+-- record always renders as it was, regardless of later template edits. Distinct from the
+-- fixed Activity Approval form, which has its own workflow tables above.
+CREATE TABLE IF NOT EXISTS form_templates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  slug TEXT UNIQUE,
+  title TEXT NOT NULL,
+  description TEXT,
+  category TEXT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','published','retired')),
+  current_version_id INTEGER,
+  audience_roles TEXT,            -- JSON array of portal_roles allowed to start it (null/[] = any completer)
+  workflow TEXT NOT NULL DEFAULT 'record' CHECK(workflow IN ('record','approval')),
+  allow_on_behalf INTEGER NOT NULL DEFAULT 0,
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS form_template_versions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  template_id INTEGER NOT NULL REFERENCES form_templates(id) ON DELETE CASCADE,
+  version_no INTEGER NOT NULL DEFAULT 1,
+  schema_json TEXT NOT NULL,      -- { "sections": [ { "title": ..., "fields": [ {id,label,type,required,options?,help?} ] } ] }
+  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','published','retired')),
+  published_at TEXT,
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS form_submissions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  reference TEXT,
+  template_id INTEGER NOT NULL REFERENCES form_templates(id),
+  template_version_id INTEGER NOT NULL REFERENCES form_template_versions(id),
+  schema_snapshot_json TEXT NOT NULL,     -- the version schema frozen at start
+  submitter_user_id INTEGER NOT NULL REFERENCES users(id),
+  on_behalf_of_user_id INTEGER REFERENCES users(id),
+  on_behalf_reason TEXT,
+  section_context TEXT,
+  data_json TEXT,                          -- answers keyed by field id
+  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','submitted','approved','returned','withdrawn')),
+  submitted_at TEXT,
+  decided_by INTEGER REFERENCES users(id), decided_at TEXT, decision_comment TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_form_templates_status ON form_templates(status, category);
+CREATE INDEX IF NOT EXISTS idx_form_template_versions_template ON form_template_versions(template_id, status);
+CREATE INDEX IF NOT EXISTS idx_form_submissions_submitter ON form_submissions(submitter_user_id, status);
+CREATE INDEX IF NOT EXISTS idx_form_submissions_template ON form_submissions(template_id, status);
+
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(portal_role, account_status);
 CREATE INDEX IF NOT EXISTS idx_parent_links_parent ON parent_child_links(parent_user_id);
 CREATE INDEX IF NOT EXISTS idx_notices_status ON notices(status, audience, start_date);

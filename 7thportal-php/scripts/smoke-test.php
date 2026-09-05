@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle', 'logic_forms'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -32,7 +32,7 @@ function useDb(string $file): void { putenv('SEVENTHPORTAL_DB=' . $file); }
 function boot(): void { require dirname(__DIR__) . '/src/db.php'; }
 function loadLibs(): void
 {
-    foreach (['helpers', 'notifications', 'finance', 'incidents', 'patrolpoints', 'events', 'equipment', 'actions', 'quartermaster', 'prepare', 'features', 'attendance', 'demoseed', 'calendar', 'activity', 'pdf', 'dlv'] as $lib) {
+    foreach (['helpers', 'notifications', 'finance', 'incidents', 'patrolpoints', 'events', 'equipment', 'actions', 'quartermaster', 'prepare', 'features', 'attendance', 'demoseed', 'calendar', 'activity', 'pdf', 'dlv', 'forms'] as $lib) {
         require_once dirname(__DIR__) . '/src/lib/' . $lib . '.php';
     }
 }
@@ -824,6 +824,50 @@ function scenario_logic_bundle(): void
     dbRun('INSERT INTO qm_bundle_items (bundle_id, item_name, requested_qty) VALUES (?, ?, ?)', [$bid, 'Stove', 1]);
     $s = serializeQmBundle(dbGet('SELECT * FROM qm_bundles WHERE id = ?', [$bid]));
     check('bundle: serializes with item count', $s['itemCount'] === 2 && $s['items'][0]['itemName'] === 'Tent' && $s['items'][0]['requestedQty'] === 2);
+}
+
+// Generic Forms: published-template audience, frozen snapshot, required-field validation,
+// reference format, and the no-self-approval / no-leak permission rules (FR-FORM-003..008).
+function scenario_logic_forms(): void
+{
+    useDb(tmpDb('forms')); boot(); loadLibs();
+    dbRun("INSERT OR REPLACE INTO settings (key,value) VALUES ('forms_enabled','true')");
+    $leaderId = (int) dbRun("INSERT INTO users (auth_type,email,first_name,last_name,portal_role) VALUES ('local','l@x.com','Lee','L','section_leader')")['lastInsertId'];
+    $glvId = (int) dbRun("INSERT INTO users (auth_type,email,first_name,last_name,portal_role) VALUES ('local','g@x.com','Gwen','G','group_leadership')")['lastInsertId'];
+    $adminId = (int) dbRun("INSERT INTO users (auth_type,email,first_name,last_name,portal_role) VALUES ('local','a@x.com','Ada','A','admin')")['lastInsertId'];
+    $strangerId = (int) dbRun("INSERT INTO users (auth_type,email,first_name,last_name,portal_role) VALUES ('local','s@x.com','Sid','S','section_leader')")['lastInsertId'];
+    demoSeedFormsTemplate($adminId);
+    $leader = dbGet('SELECT * FROM users WHERE id=?', [$leaderId]);
+    $glv = dbGet('SELECT * FROM users WHERE id=?', [$glvId]);
+    $stranger = dbGet('SELECT * FROM users WHERE id=?', [$strangerId]);
+
+    check('forms: module enabled', formsEnabled());
+    $tpls = formPublishedTemplatesFor($leader);
+    check('forms: leader sees the published template', count($tpls) === 1 && $tpls[0]['workflow'] === 'approval');
+
+    $subId = formStartSubmission($leader, (int) $tpls[0]['id']);
+    check('forms: started a draft submission', $subId > 0);
+    $sub = dbGet('SELECT * FROM form_submissions WHERE id=?', [$subId]);
+    check('forms: version schema frozen onto submission', str_contains($sub['schema_snapshot_json'], 'Your name'));
+    check('forms: required fields missing before fill', count(formValidateSubmission($sub)) >= 3);
+
+    dbRun("UPDATE form_submissions SET data_json=? WHERE id=?", [json_encode(['name' => 'Sam', 'email' => 's@x.com', 'section' => 'Cubs', 'availability' => 'Weekly', 'dbs' => true]), $subId]);
+    $sub = dbGet('SELECT * FROM form_submissions WHERE id=?', [$subId]);
+    check('forms: no missing once required fields filled', formValidateSubmission($sub) === []);
+
+    // Editing an in-flight template must NOT change the frozen snapshot (immutability).
+    $verId = (int) dbGet('SELECT current_version_id FROM form_templates LIMIT 1')['current_version_id'];
+    dbRun("UPDATE form_template_versions SET schema_json = ? WHERE id = ?", [json_encode(['sections' => []]), $verId]);
+    $sub = dbGet('SELECT * FROM form_submissions WHERE id=?', [$subId]);
+    check('forms: submission snapshot survives a later template edit', str_contains($sub['schema_snapshot_json'], 'Your name'));
+
+    dbRun("UPDATE form_submissions SET status='submitted', reference='FRM-TEST' WHERE id=?", [$subId]);
+    $sub = dbGet('SELECT * FROM form_submissions WHERE id=?', [$subId]);
+    check('forms: submitter cannot approve own submission', formCanApprove($leader, $sub) === false);
+    check('forms: GLV can approve a submitted approval-workflow form', formCanApprove($glv, $sub) === true);
+    check('forms: submitter can view own submission', formCanViewSubmission($leader, $sub) === true);
+    check('forms: unrelated leader cannot view (no leak)', formCanViewSubmission($stranger, $sub) === false);
+    check('forms: reference format is FRM-YYYY-000000', preg_match('/^FRM-\d{4}-\d{6}$/', formSubmissionReference()) === 1);
 }
 
 // QM restricted-booking gate: a restricted line isn't cleared for approval until

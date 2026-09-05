@@ -93,6 +93,8 @@ function buildActionCentre(array $user): array
         if (function_exists('activityActionItems')) $items = array_merge($items, activityActionItems($user));
         // Patrol Points submissions awaiting a (non-conflicted) approver (FRD v2.1 s13).
         if (function_exists('patrolPointsActionItems')) $items = array_merge($items, patrolPointsActionItems($user));
+        // Generic forms: returned submissions to fix + records awaiting approval (FR-FORM).
+        if (function_exists('formActionItems')) $items = array_merge($items, formActionItems($user));
     }
 
     if ($isAdmin) {

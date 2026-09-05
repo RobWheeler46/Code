@@ -125,6 +125,7 @@ const PAGE_HEADERS = {
   'notices.html': { title: 'Notices', description: 'Published notices for you and your sections.' },
   'search.html': { title: 'Search' },
   'documents.html': { title: 'Documents', description: 'The leader document library. Acknowledge published policies and templates here.' },
+  'forms.html': { title: 'Forms', description: 'Start a published form and track your submissions.' },
   'expenses.html': { title: 'Expenses & mileage', description: 'Your claims, receipts and mileage. Submit for approval and track payment status.' },
   'treasurer.html': { title: 'Treasurer', description: 'Approved items awaiting payment, payment recording and finance exports.' },
   'governance.html': { title: 'Trustee dashboard', description: 'Read-only board oversight across the operational modules.' },

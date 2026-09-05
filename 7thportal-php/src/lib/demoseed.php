@@ -10,6 +10,7 @@
 const DEMO_WIPE_TABLES = [
     'pp_score_lines', 'pp_participants', 'pp_guest_links', 'pp_submissions', 'pp_activities', 'pp_categories', 'pp_teams', 'pp_competitions',
     'activity_form_files', 'activity_form_events', 'activity_forms',
+    'form_submissions', 'form_template_versions', 'form_templates',
     'camp_rota_entries', 'camp_rota_adults', 'event_locations', 'event_hub_items', 'event_hubs',
     'calendar_entries',
     'gallery_photos', 'gallery_album_parents', 'gallery_albums',
@@ -93,6 +94,34 @@ function demoSeedBaseline(int $actorUserId): void
         $s = dbRun("INSERT INTO pp_submissions (competition_id, category_id, submitted_by, comment, status) VALUES (?, ?, ?, 'Baseline demo score', 'approved')", [$cid, $catId, $actorUserId]);
         dbRun('INSERT INTO pp_score_lines (submission_id, team_id, points) VALUES (?, ?, ?)', [(int) $s['lastInsertId'], $teams[$team], $pts]);
     }
+
+    demoSeedFormsTemplate($actorUserId);
+}
+
+// A published Forms template so the generic Forms module is clickable in the demo: an
+// adult-volunteer enquiry with a single GLV approval step. Wiped/reseeded each reset.
+function demoSeedFormsTemplate(int $actorUserId): void
+{
+    $schema = json_encode(['sections' => [
+        ['title' => 'About you', 'fields' => [
+            ['id' => 'name', 'label' => 'Your name', 'type' => 'text', 'required' => true],
+            ['id' => 'email', 'label' => 'Email address', 'type' => 'email', 'required' => true],
+            ['id' => 'phone', 'label' => 'Phone (optional)', 'type' => 'text', 'required' => false],
+        ]],
+        ['title' => 'How you would like to help', 'fields' => [
+            ['id' => 'section', 'label' => 'Which section interests you?', 'type' => 'select', 'required' => true, 'options' => ['Beavers', 'Cubs', 'Scouts', 'Any / not sure']],
+            ['id' => 'availability', 'label' => 'Availability', 'type' => 'radio', 'required' => true, 'options' => ['Weekly', 'Occasional', 'One-off events']],
+            ['id' => 'dbs', 'label' => 'I understand a DBS check will be needed', 'type' => 'checkbox', 'required' => true],
+            ['id' => 'about', 'label' => 'Anything else you would like us to know', 'type' => 'textarea', 'required' => false],
+        ]],
+    ]]);
+    $t = dbRun(
+        "INSERT INTO form_templates (slug, title, description, category, status, workflow, created_by) VALUES ('volunteer-enquiry', ?, ?, 'Volunteering', 'published', 'approval', ?)",
+        ['Adult volunteer enquiry', 'Register your interest in helping at 7th Swindon and tell us how to reach you.', $actorUserId]
+    );
+    $tid = (int) $t['lastInsertId'];
+    $v = dbRun("INSERT INTO form_template_versions (template_id, version_no, schema_json, status, published_at, created_by) VALUES (?, 1, ?, 'published', datetime('now'), ?)", [$tid, $schema, $actorUserId]);
+    dbRun('UPDATE form_templates SET current_version_id = ? WHERE id = ?', [(int) $v['lastInsertId'], $tid]);
 }
 
 // "Camp weekend in full swing": a published camp hub with every operational area

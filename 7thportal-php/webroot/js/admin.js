@@ -854,6 +854,15 @@ async function renderSettings() {
         <span id="activity-settings-saved"></span>
       </form>
     </div>
+    <div class="card">
+      <h2>Forms</h2>
+      <p class="muted">Reusable forms with a plain-language builder, versioned templates (draft/published/retired) and permission-filtered submissions. Completers fill published forms; only admins manage templates. Optional single-approval workflow per template. Ships off by default.</p>
+      <form id="forms-settings-form">
+        <div class="field"><label style="font-weight:400;"><input type="checkbox" id="forms-enabled" ${settings.formsEnabled ? 'checked' : ''}> Enable Forms</label></div>
+        <button class="btn btn-primary" type="submit">Save</button>
+        <span id="forms-settings-saved"></span>
+      </form>
+    </div>
     ${dlv ? `<div class="card">
       <h2>DLV approval (Activity forms)</h2>
       <p class="muted">When a GLV endorses an activity for District approval, the portal emails this District Lead Volunteer an evidence pack with Approve/Reject voting links. The DLV needs no portal account. Changes are audited.</p>
@@ -956,6 +965,11 @@ async function renderSettings() {
     e.preventDefault();
     await Api.put('/api/admin/settings', { activityFormsEnabled: document.getElementById('act-forms-enabled').checked });
     document.getElementById('activity-settings-saved').textContent = 'Saved.';
+  });
+  document.getElementById('forms-settings-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    await Api.put('/api/admin/settings', { formsEnabled: document.getElementById('forms-enabled').checked });
+    document.getElementById('forms-settings-saved').textContent = 'Saved.';
   });
   const dlvForm = document.getElementById('dlv-settings-form');
   if (dlvForm) dlvForm.addEventListener('submit', async e => {

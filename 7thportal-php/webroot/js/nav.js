@@ -71,6 +71,7 @@ function sidebarLinksForRole(me, cfg) {
   if (cfg && cfg.eventHubEnabled) links.push({ href: 'events.html', label: 'Events & camps' });
   if (cfg && cfg.attendanceEnabled) links.push({ href: 'attendance.html', label: 'Attendance' });
   if (cfg && cfg.activityFormsEnabled) links.push({ href: 'activity-forms.html', label: 'Activity forms' });
+  if (cfg && cfg.formsEnabled) links.push({ href: 'forms.html', label: 'Forms' });
   if (cfg && cfg.patrolPointsEnabled) links.push({ href: 'patrol-points.html', label: 'Patrol Points' });
   if (cfg && cfg.galleryEnabled) links.push({ href: 'leader-gallery.html', label: 'Photo gallery' });
   if (cfg && cfg.financeEnabled) links.push({ href: 'expenses.html', label: 'Expenses & mileage' });
@@ -236,6 +237,7 @@ const PAGE_FEATURE_MAP = {
   'calendar.html': 'calendarEnabled',
   'attendance.html': 'attendanceEnabled',
   'activity-forms.html': 'activityFormsEnabled', 'activity-form.html': 'activityFormsEnabled',
+  'forms.html': 'formsEnabled', 'form-fill.html': 'formsEnabled',
   'patrol-points.html': 'patrolPointsEnabled', 'patrol-point.html': 'patrolPointsEnabled',
   'patrol-leaderboard.html': 'patrolPointsEnabled', 'patrol-score.html': 'patrolPointsEnabled',
 };
