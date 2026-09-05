@@ -3,10 +3,14 @@
   if (!me) return;
   const sectionId = new URLSearchParams(location.search).get('id');
   const content = document.getElementById('content');
+  // Canonical hierarchy: Sections > <Section>. There is no separate Sections list
+  // route (sections live on Today), so the trail returns to Today.
+  renderPageHeader({ crumbs: [{ label: 'Today', href: 'leader-dashboard.html' }, { label: 'Section' }], title: 'Section members' });
   if (!sectionId) { content.innerHTML = '<div class="alert alert-error">No section specified.</div>'; return; }
 
   try {
     const data = await Api.get(`/api/sections/${encodeURIComponent(sectionId)}/members`);
+    if (data.sectionName) setPageHeaderRecord(data.sectionName, { title: data.sectionName });
     const osmUrl = data.osmUrl || 'https://www.onlinescoutmanager.co.uk/';
     content.innerHTML = `
       <div class="card">

@@ -49,8 +49,18 @@ function modalError(msg) { const m = document.getElementById('qm-modal-msg'); if
 function closeModal() { const m = document.getElementById('qm-modal'); if (m) m.remove(); }
 
 // ── List view ──────────────────────────────────────────────────────────────────
+// Canonical breadcrumb roots for this page. Bookings sit under the Equipment domain
+// (v3.0 canonical hierarchy: Equipment > Bookings > <reference>).
+function qmBaseCrumbs() { return [{ label: 'Equipment', href: 'equipment.html' }, { label: 'Bookings', href: 'quartermaster.html' }]; }
+
 async function renderList() {
   const box = document.getElementById('content');
+  renderPageHeader({
+    crumbs: [{ label: 'Equipment', href: 'equipment.html' }, { label: 'Bookings' }],
+    title: 'Bookings',
+    description: 'Request equipment from the Group stores. A Quartermaster reviews every request &mdash; nothing is reserved until it is approved.',
+    actions: '<span class="cap-actions" id="qm-head-actions"></span>',
+  });
   const head = document.getElementById('qm-head-actions');
   head.innerHTML = '';
   const params = new URLSearchParams();
@@ -191,9 +201,22 @@ async function openBundlesModal() {
 }
 
 // ── Detail view ─────────────────────────────────────────────────────────────────
+// Detail status as a PageHeader tone (mirrors statusChip's data-status mapping).
+function qmStatusTone(b) {
+  const map = { submitted: 'pending', approved: 'ready', partially_approved: 'pending', ready_for_collection: 'ready', collected: 'ready', returned: 'pending', closed: 'neutral', cancelled: 'blocked', draft: 'attention' };
+  let label = b.statusLabel, tone = map[b.status] || 'pending';
+  if (b.derivedState === 'overdue') { label = 'Overdue'; tone = 'blocked'; }
+  else if (b.derivedState === 'due_back') { label = 'On loan'; tone = 'ready'; }
+  return { label, tone };
+}
+
 async function renderDetail(id) {
   const box = document.getElementById('content');
-  document.getElementById('qm-head-actions').innerHTML = `<button class="btn btn-secondary" id="qm-back">Back to list</button>`;
+  renderPageHeader({
+    crumbs: qmBaseCrumbs().concat([{ label: 'Booking' }]),
+    title: 'Booking',
+    actions: '<button class="btn btn-secondary" id="qm-back">Back to list</button>',
+  });
   document.getElementById('qm-back').addEventListener('click', () => go(null));
 
   let data;
@@ -203,10 +226,10 @@ async function renderDetail(id) {
   CAN_APPROVE = data.canApprove; META = data.meta;
   const isOwner = data.isOwner;
   const reviewing = CAN_APPROVE && ['submitted', 'approved', 'partially_approved'].includes(b.status);
+  setPageHeaderRecord(b.reference, { title: b.reference, status: qmStatusTone(b) });
 
   box.innerHTML = `
     <div class="card">
-      <div class="cap-head"><h2 style="margin:0">${escapeHtml(b.reference)}</h2>${statusChip(b)}</div>
       <div id="qm-detail-msg"></div>
       <table class="kv-table" style="margin-top:.6rem">
         <tr><td class="muted">Purpose</td><td>${escapeHtml(b.purpose || '—')}</td></tr>

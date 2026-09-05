@@ -36,7 +36,12 @@ function infoCards() {
   </div>`;
 }
 
+// Event lifecycle status as a PageHeader tone.
+function evtStatus() { return { label: HUB.statusLabel || HUB.status, tone: HUB.status === 'published' ? 'ready' : (HUB.status === 'cancelled' ? 'blocked' : 'attention') }; }
+function evtCrumbs() { return [{ label: 'Events & Camps', href: 'events.html' }, { label: HUB.title }]; }
+
 function renderParent(box) {
+  renderPageHeader({ crumbs: evtCrumbs(), title: HUB.title, status: evtStatus(), actions: osmBtn() });
   const rows = (HUB.items || []).map(i => `<tr>
     <td>${escapeHtml(i.label)}</td>
     <td><span class="badge" data-status="${i.itemStatus === 'published' ? 'published' : 'draft'}">${escapeHtml(i.itemStatusLabel)}</span></td>
@@ -46,8 +51,7 @@ function renderParent(box) {
   box.innerHTML = `
     ${PARENT_PREVIEW ? '<div class="alert alert-warning">Parent preview - this is exactly what parents can see. <a href="#" id="exit-preview">Back to leader view</a></div>' : ''}
     <div class="card">
-      <div class="cap-head"><h1 style="margin:0">${escapeHtml(HUB.title)}</h1><span class="cap-actions">${osmBtn()}</span></div>
-      <p class="muted" style="margin:.3rem 0 0">${escapeHtml(HUB.eventTypeLabel)} &middot; ${escapeHtml(hubDates())}${HUB.location ? ' &middot; ' + escapeHtml(HUB.location) : ''}</p>
+      <p class="muted" style="margin:0">${escapeHtml(HUB.eventTypeLabel)} &middot; ${escapeHtml(hubDates())}${HUB.location ? ' &middot; ' + escapeHtml(HUB.location) : ''}</p>
       <p class="muted" style="margin:.5rem 0 0">OSM stays the source of truth for sign-up, payment and attendance.</p>
     </div>
     ${infoCards()}
@@ -61,6 +65,12 @@ function renderParent(box) {
 }
 
 function renderLeader(box) {
+  renderPageHeader({
+    crumbs: evtCrumbs(),
+    title: HUB.title,
+    status: evtStatus(),
+    actions: `<button class="btn" id="ev-camp-pack">Camp pack (print)</button><button class="btn btn-secondary" id="ev-edit">Edit details</button>${HUB.canManage ? '<button class="btn btn-secondary ev-delete" id="ev-delete">Delete</button>' : ''}`,
+  });
   const r = HUB.readiness || { complete: 0, total: 6, rag: 'red', tasks: {} };
   const linked = ['osmEventUrl'].every(k => HUB[k]);
   const itemRows = (HUB.items || []).map(i => `<tr>
@@ -79,8 +89,7 @@ function renderLeader(box) {
       ${overviewCard()}
     </div>
     <div class="card">
-      <div class="cap-head"><h1 style="margin:0">${escapeHtml(HUB.title)}</h1><span class="cap-actions"><button class="btn" id="ev-camp-pack">Camp pack (print)</button><button class="btn btn-secondary" id="ev-edit">Edit details</button>${HUB.canManage ? '<button class="btn btn-secondary ev-delete" id="ev-delete">Delete</button>' : ''}</span></div>
-      <p class="muted" style="margin:.3rem 0 0">${escapeHtml(HUB.eventTypeLabel)} &middot; ${escapeHtml(hubDates())}${HUB.location ? ' &middot; ' + escapeHtml(HUB.location) : ''}${HUB.sectionName ? ' &middot; ' + escapeHtml(HUB.sectionName) : ''}</p>
+      <p class="muted" style="margin:0">${escapeHtml(HUB.eventTypeLabel)} &middot; ${escapeHtml(hubDates())}${HUB.location ? ' &middot; ' + escapeHtml(HUB.location) : ''}${HUB.sectionName ? ' &middot; ' + escapeHtml(HUB.sectionName) : ''}</p>
     </div>
     ${commandCentreCard()}
     ${infoCards()}

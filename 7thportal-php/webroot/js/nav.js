@@ -45,8 +45,8 @@ function sidebarLinksForRole(me, cfg) {
   // Dual-role users see the nav for their ACTIVE view, not their stored role.
   const view = me.activeView || (me.role === 'parent' ? 'parent' : 'leader');
   if (view === 'parent') {
-    const links = [{ href: 'parent-dashboard.html', label: 'Dashboard' }];
-    links.push({ href: 'action-centre.html', label: 'Action Centre' });
+    const links = [{ href: 'parent-dashboard.html', label: 'Today' }];
+    links.push({ href: 'action-centre.html', label: 'Actions' });
     links.push({ href: 'search.html', label: 'Search' });
     if (cfg && cfg.eventHubEnabled) links.push({ href: 'events.html', label: 'Events & camps' });
     if (cfg && cfg.calendarEnabled) links.push({ href: 'calendar.html', label: 'Calendar' });
@@ -57,9 +57,11 @@ function sidebarLinksForRole(me, cfg) {
     links.push({ href: 'privacy.html', label: 'Privacy notice' });
     return links;
   }
-  const links = [{ href: 'leader-dashboard.html', label: 'Dashboard' }];
-  links.push({ href: 'prepare-tonight.html', label: 'Prepare Tonight' });
-  links.push({ href: 'action-centre.html', label: 'Action Centre' });
+  // Prepare Tonight is retired from primary navigation (v3.0 §1.2 / gap G50): its
+  // meeting-readiness content now appears as the "Next section meeting / Tonight"
+  // card on the Leader Today home, which deep-links to the source modules.
+  const links = [{ href: 'leader-dashboard.html', label: 'Today' }];
+  links.push({ href: 'action-centre.html', label: 'Actions' });
   links.push({ href: 'search.html', label: 'Search' });
   if (cfg && cfg.eventHubEnabled) links.push({ href: 'events.html', label: 'Events & camps' });
   if (cfg && cfg.calendarEnabled) links.push({ href: 'calendar.html', label: 'Calendar' });
@@ -150,7 +152,6 @@ function renderBottomNav(me, cfg) {
   // Third slot: the primary planning surface enabled for this context.
   if (cfg && cfg.eventHubEnabled) items.push({ href: 'events.html', label: 'Events', icon: '\u{1F3D5}️', match: ['events.html', 'event-hub.html'] });
   else if (cfg && cfg.calendarEnabled) items.push({ href: 'calendar.html', label: 'Calendar', icon: '\u{1F4C5}', match: ['calendar.html'] });
-  else if (view === 'leader') items.push({ href: 'prepare-tonight.html', label: 'Tonight', icon: '\u{1F4CB}', match: ['prepare-tonight.html'] });
   else items.push({ href: 'notices.html', label: 'Notices', icon: '\u{1F4E3}', match: ['notices.html'] });
 
   const primaryActive = items.some(it => it.match.includes(current));
@@ -279,6 +280,9 @@ async function requireUserNav(pageView) {
   renderSidebar(me, cfg);
   renderBottomNav(me, cfg);
   renderFeedbackWidget(cfg);
+  // Canonical page header for registry-covered landing pages (v3.0 design system).
+  // Dynamic/detail pages render their own header in their page script.
+  if (typeof autoPageHeader === 'function') autoPageHeader();
   // Deep-link guard: if this page's module is switched off, show the unavailable
   // screen and return null so the page's own JS halts (it already does `if (!me)
   // return;`). Only block when cfg loaded and the flag is explicitly false - a

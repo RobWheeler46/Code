@@ -22,8 +22,13 @@ async function load() {
 function render(album) {
   const content = document.getElementById('content');
   const editable = album.status === 'draft';
+  const ALBUM_TONE = { draft: 'attention', published: 'ready', archived: 'blocked' };
+  renderPageHeader({
+    crumbs: [{ label: 'Photo gallery', href: 'leader-gallery.html' }, { label: album.title }],
+    title: album.title,
+    status: { label: String(album.status || '').replace(/_/g, ' '), tone: ALBUM_TONE[album.status] || 'neutral' },
+  });
   content.innerHTML = `
-    <h1>${escapeHtml(album.title)} ${statusBadge(album.status)}</h1>
     ${statusNote(album)}
 
     <div class="card">

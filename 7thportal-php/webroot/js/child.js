@@ -8,12 +8,15 @@
   try {
     const c = await Api.get(`/api/children/${linkId}`);
 
+    // Canonical header: My Children live under the parent Today home.
+    renderPageHeader({
+      crumbs: [{ label: 'Today', href: 'parent-dashboard.html' }, { label: c.name }],
+      title: c.name,
+      context: [c.sectionName, c.dob ? 'DOB ' + formatDate(c.dob) : '', c.patrol].filter(Boolean).join(' · ') || undefined,
+    });
+
     if (c.osmUnavailable) {
-      content.innerHTML = `
-        <h1>${escapeHtml(c.name)}</h1>
-        <p class="muted">${escapeHtml(c.sectionName || '')}</p>
-        ${osmUnavailableAlert(c.reason)}
-      `;
+      content.innerHTML = osmUnavailableAlert(c.reason);
       return;
     }
 
@@ -21,7 +24,7 @@
       <div class="child-card" style="margin-bottom:1.25rem;">
         <div class="child-avatar" style="width:64px;height:64px;font-size:1.4rem;">${escapeHtml(initials(c.name))}</div>
         <div>
-          <h1 style="margin-bottom:0.15rem;">${escapeHtml(c.name)}</h1>
+          <div style="font-weight:700;font-size:1.1rem;margin-bottom:0.15rem;">${escapeHtml(c.name)}</div>
           <span class="muted">${escapeHtml(c.sectionName || '')}${c.dob ? ' &middot; DOB ' + formatDate(c.dob) : ''}${c.patrol ? ' &middot; ' + escapeHtml(c.patrol) : ''}</span>
         </div>
       </div>`;

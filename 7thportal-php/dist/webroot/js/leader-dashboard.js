@@ -16,13 +16,20 @@ const PRIORITY_BADGE = { High: 'deleted', Medium: 'suspended', Low: 'draft' };
   const content = document.getElementById('content');
   const noticesBox = document.getElementById('notices');
 
-  // Dashboard + actions in parallel; a failed actions fetch must not break the page.
-  const [data, actions] = await Promise.all([
+  // Dashboard + actions + tonight prep in parallel; a failed side fetch must not
+  // break the page. Prepare Tonight is no longer its own destination (v3.0 §1.2 /
+  // gap G50) - its readiness summary rides here as the "Tonight" card.
+  const [data, actions, tonight] = await Promise.all([
     Api.get('/api/leader/dashboard').catch(e => ({ _error: e.message })),
     Api.get('/api/actions').catch(() => ({ items: [], summary: { total: 0, high: 0, dueThisWeek: 0 } })),
+    Api.get('/api/leader/prepare-tonight').catch(() => null),
   ]);
 
-  const today = renderToday(me, actions);
+  // Canonical page header (Today is a root destination - no breadcrumb). The greeting
+  // is the single H1; the action summary is the lede and the role is the context chip.
+  renderTodayHeader(me, actions);
+
+  const today = renderToday(me, actions) + tonightCard(tonight) + '<h2 style="margin:1.5rem 0 .75rem;">Your sections</h2>';
 
   if (data._error) {
     content.innerHTML = today + `<div class="alert alert-error">${escapeHtml(data._error)}</div>`;
@@ -38,15 +45,62 @@ const PRIORITY_BADGE = { High: 'deleted', Medium: 'suspended', Low: 'draft' };
   noticesBox.innerHTML = renderNotices(data.notices);
 })();
 
-function renderToday(me, actions) {
-  const items = (actions && actions.items) || [];
-  const summary = (actions && actions.summary) || { total: items.length, high: 0, dueThisWeek: 0 };
+function greetingFor(me) {
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-  const name = me.firstName || 'there';
+  const g = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  return `${g}, ${me.firstName || 'there'}`;
+}
+
+function renderTodayHeader(me, actions) {
+  const summary = (actions && actions.summary) || { total: ((actions && actions.items) || []).length, high: 0, dueThisWeek: 0 };
   const ctx = summary.total === 0
     ? 'You&rsquo;re all caught up &mdash; nothing needs you right now.'
     : `You have <strong>${summary.total}</strong> thing${summary.total === 1 ? '' : 's'} to look at${summary.high ? `, <strong>${summary.high}</strong> high priority` : ''}${summary.dueThisWeek ? ` &middot; ${summary.dueThisWeek} due this week` : ''}.`;
+  renderPageHeader({
+    title: greetingFor(me),
+    context: me.roleLabel ? `${me.roleLabel} view` : undefined,
+    description: ctx,
+  });
+}
+
+// Compact "Next section meeting / Tonight" card (v3.0): the meeting-readiness summary
+// that used to be the Prepare Tonight page, now a Today card that deep-links to the
+// authoritative source modules (attendance, activity forms, equipment).
+function tonightCard(t) {
+  if (!t) return '';
+  const on = (t.sections || []).filter(s => s.meetsToday);
+  const next = (t.sections || []).find(s => !s.meetsToday && s.nextMeetingLabel);
+  let lead;
+  if (on.length) {
+    const names = on.map(s => escapeHtml(s.sectionName)).join(', ');
+    const times = on.map(s => s.meetingTime ? `${escapeHtml(s.sectionName)} at ${escapeHtml(s.meetingTime)}` : '').filter(Boolean).join(' &middot; ');
+    lead = `<strong>Tonight: ${names}</strong>${times ? ` <span class="muted">${times}</span>` : ''}`;
+  } else if (next) {
+    lead = `<strong>No section meets tonight.</strong> <span class="muted">Next: ${escapeHtml(next.sectionName)} ${escapeHtml(next.nextMeetingLabel)}</span>`;
+  } else {
+    lead = `<strong>No section meets tonight.</strong> <span class="muted">Here&rsquo;s what&rsquo;s coming up.</span>`;
+  }
+  const chip = (label, n, href) => n ? `<a class="btn btn-secondary btn-sm" href="${href}">${escapeHtml(label)} <span class="badge" data-status="suspended" style="margin-left:.3rem">${n}</span></a>` : '';
+  const whatsOn = (t.whatsOn || []).length;
+  const chips = [
+    whatsOn ? `<a class="btn btn-secondary btn-sm" href="calendar.html">On today <span class="badge" data-status="draft" style="margin-left:.3rem">${whatsOn}</span></a>` : '',
+    chip('Forms to sort', (t.forms || []).length, 'activity-forms.html'),
+    chip('Equipment', (t.equipment || []).length, 'quartermaster.html'),
+    (t.attendance && t.attendance.link) ? `<a class="btn btn-secondary btn-sm" href="${escapeHtml(t.attendance.link)}">Attendance</a>` : '',
+  ].filter(Boolean).join('');
+  return `
+    <div class="card card-accent" style="margin-bottom:1.25rem;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:.5rem;flex-wrap:wrap;">
+        <h2 style="margin:0;">Next section meeting</h2>
+      </div>
+      <p style="margin:.35rem 0 ${chips ? '.7rem' : '0'};">${lead}</p>
+      ${chips ? `<div class="cap-actions">${chips}</div>` : ''}
+    </div>`;
+}
+
+function renderToday(me, actions) {
+  const items = (actions && actions.items) || [];
+  const summary = (actions && actions.summary) || { total: items.length, high: 0, dueThisWeek: 0 };
 
   const top = items.slice(0, 5);
   const cards = top.map(i => `
@@ -63,7 +117,7 @@ function renderToday(me, actions) {
 
   const needsYou = items.length
     ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem;">${cards}</div>
-       ${summary.total > top.length ? `<p style="margin:.7rem 0 0;"><a href="action-centre.html">View all ${summary.total} in the Action Centre &rsaquo;</a></p>` : ''}`
+       ${summary.total > top.length ? `<p style="margin:.7rem 0 0;"><a href="action-centre.html">View all ${summary.total} in Actions &rsaquo;</a></p>` : ''}`
     : `<div class="empty-state" style="padding:1.5rem;">
          <div style="font-size:1.8rem;">&#127881;</div>
          <strong>You&rsquo;re all caught up</strong>
@@ -71,13 +125,8 @@ function renderToday(me, actions) {
        </div>`;
 
   return `
-    <div class="card card-accent" style="margin-bottom:1.25rem;">
-      <h1 style="margin:0;">${greeting}, ${escapeHtml(name)}</h1>
-      <p class="muted" style="margin:.25rem 0 0;">${ctx}${me.roleLabel ? ` <span class="badge" data-role="admin" style="margin-left:.3rem;">${escapeHtml(me.roleLabel)} view</span>` : ''}</p>
-    </div>
     <h2 style="margin:0 0 .75rem;">Needs you now</h2>
-    ${needsYou}
-    <h2 style="margin:1.5rem 0 .75rem;">Your sections</h2>`;
+    ${needsYou}`;
 }
 
 function sectionsBlock(sections, clickable) {

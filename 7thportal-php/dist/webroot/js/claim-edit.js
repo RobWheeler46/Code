@@ -5,6 +5,8 @@ let RATES = [];
 let EVENTS = [];
 const claimId = new URLSearchParams(location.search).get('id');
 const VEHICLE_LABELS = { car: 'Car/van', motorcycle: 'Motorcycle', bicycle: 'Bicycle', other: 'Other' };
+const CLAIM_TONE = { draft: 'attention', submitted: 'pending', partially_approved: 'pending', approved: 'ready', partially_paid: 'ready', paid: 'ready', rejected: 'blocked' };
+const claimStatusLabel = s => String(s || '').replace(/_/g, ' ');
 
 (async () => {
   ME = await requireUserNav();
@@ -63,8 +65,15 @@ function render(claim) {
   const canAddItems = isOwner && ['draft', 'submitted', 'partially_approved'].includes(claim.status);
   const hasSubmittableItems = claim.items.some(i => i.myActions && ['draft', 'more_info_requested'].includes(i.status));
 
+  // Canonical header: Finance/Expenses > <claim reference>. Title is the human claim
+  // title; the reference is the breadcrumb tail and the status sits beside the H1.
+  renderPageHeader({
+    crumbs: [{ label: 'Expenses & mileage', href: 'expenses.html' }, { label: claim.claimNumber }],
+    title: claim.title,
+    status: { label: claimStatusLabel(claim.status), tone: CLAIM_TONE[claim.status] || 'pending' },
+  });
+
   content.innerHTML = `
-    <h1>${escapeHtml(claim.title)} <span class="muted">${escapeHtml(claim.claimNumber)}</span> ${statusBadge(claim.status)}</h1>
     ${claimStatusNote(claim)}
 
     <div class="card">

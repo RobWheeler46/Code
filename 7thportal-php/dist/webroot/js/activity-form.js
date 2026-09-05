@@ -6,6 +6,13 @@ const SKEY = { draft: 'suspended', awaiting_section: 'pending_approval', awaitin
   const me = await requireUserNav();
   if (!me) return;
   ID = new URLSearchParams(location.search).get('id');
+  // Canonical header: Activity Approval > <reference>. The reference + status fill in
+  // once the form loads (setPageHeaderRecord in load()).
+  renderPageHeader({
+    crumbs: [{ label: 'Activity Approval', href: 'activity-forms.html' }, { label: 'Form' }],
+    title: 'Activity Approval form',
+    actions: '<span class="cap-actions" id="af-head"></span>',
+  });
   document.getElementById('af-head').innerHTML = '<a class="btn btn-secondary" href="activity-forms.html">Back to forms</a>';
   if (!ID) { document.getElementById('content').innerHTML = '<div class="alert alert-error">No form specified.</div>'; return; }
   load();
@@ -20,17 +27,25 @@ async function load() {
   FORM = d.form; FILES = d.files; EVENTS = d.events; ACTIONS = d.myActions; MISSING = d.missing; META = d.meta;
   DLV_PACK = d.dlvPack; DLV_SETTINGS = d.dlvSettings;
 
+  // Reference + status now live in the canonical page header (Activity Approval > <ref>).
+  setPageHeaderRecord(FORM.reference, {
+    title: FORM.reference,
+    status: { label: FORM.statusLabel, tone: AF_TONE[FORM.status] || 'pending' },
+  });
+
   box.innerHTML = header() + returnedNote() + routeView() + (ACTIONS.canEdit ? editView() : readView()) + filesView() + approverPanel() + dlvPanel() + submitBar() + trailView();
   wire();
 }
+
+const AF_TONE = { draft: 'attention', awaiting_section: 'pending', awaiting_glv: 'pending', awaiting_dlv: 'pending', approved: 'ready', rejected: 'blocked', more_info: 'attention' };
 
 const F = (label, html, hint) => `<div class="field"><label>${label}</label>${html}${hint ? `<span class="field help">${hint}</span>` : ''}</div>`;
 const esc = s => escapeHtml(s == null ? '' : s);
 
 function header() {
-  return `<div class="card"><div class="cap-head"><h2 style="margin:0">${esc(FORM.reference)}</h2>
-    <span class="badge" data-status="${SKEY[FORM.status]}">${esc(FORM.statusLabel)}</span></div>
-    <p class="muted">${esc(FORM.activityDescription || 'Draft activity form')}</p></div>`;
+  // Reference/status are in the canonical page header now; keep a light summary line
+  // for the activity itself so the top of the record still reads at a glance.
+  return `<div class="card"><p class="muted" style="margin:0">${esc(FORM.activityDescription || 'Draft activity form')}</p></div>`;
 }
 function returnedNote() {
   if (FORM.status !== 'more_info') return '';

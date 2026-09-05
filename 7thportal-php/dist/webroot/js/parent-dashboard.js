@@ -22,6 +22,14 @@ const PRIORITY_BADGE = { High: 'deleted', Medium: 'suspended', Low: 'draft' };
   ]);
   const items = (actions && actions.items) || [];
 
+  // Canonical Today header for the parent home (root - no breadcrumb). Greeting is the
+  // single H1; the task summary is the lede.
+  const childCount = (data.children || []).length;
+  const sub = items.length
+    ? `You have <strong>${items.length}</strong> thing${items.length === 1 ? '' : 's'} to look at.`
+    : (childCount ? 'Nothing needs you right now &mdash; here&rsquo;s your family.' : '');
+  renderPageHeader({ title: greetingFor(me), description: sub || undefined });
+
   if (data._error) {
     content.innerHTML = topBlock(me, items, 0) + `<div class="alert alert-error">${escapeHtml(data._error)}</div>`;
     noticesBox.innerHTML = '<p class="muted">Notices are unavailable right now.</p>';
@@ -41,36 +49,26 @@ const PRIORITY_BADGE = { High: 'deleted', Medium: 'suspended', Low: 'draft' };
   noticesBox.innerHTML = renderNotices(data.notices);
 })();
 
-// Greeting + (only when there is something to do) a "Needs you now" block. For a
-// parent the children are the primary content, so an empty task list is folded
-// into the greeting line rather than shown as a big empty state.
-function topBlock(me, items, childCount) {
+function greetingFor(me) {
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-  const name = me.firstName || 'there';
-  const sub = items.length
-    ? `You have <strong>${items.length}</strong> thing${items.length === 1 ? '' : 's'} to look at.`
-    : (childCount ? 'Nothing needs you right now &mdash; here&rsquo;s your family.' : '');
+  const g = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  return `${g}, ${me.firstName || 'there'}`;
+}
 
-  let needs = '';
+// The "Needs you now" block + section headings. The greeting is now the page header,
+// so this returns only the in-content blocks. For a parent the children are the
+// primary content, so an empty task list is folded away rather than shown big.
+function topBlock(me, items, childCount) {
   if (items.length) {
     const top = items.slice(0, 5);
     const cards = top.map(actionCard).join('');
-    needs = `
+    return `
       <h2 style="margin:0 0 .75rem;">Needs you now</h2>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem;">${cards}</div>
-      ${items.length > top.length ? `<p style="margin:.7rem 0 0;"><a href="action-centre.html">View all ${items.length} in the Action Centre &rsaquo;</a></p>` : ''}
+      ${items.length > top.length ? `<p style="margin:.7rem 0 0;"><a href="action-centre.html">View all ${items.length} in Actions &rsaquo;</a></p>` : ''}
       <h2 style="margin:1.5rem 0 .75rem;">Your children</h2>`;
-  } else {
-    needs = childCount ? `<h2 style="margin:1.25rem 0 .75rem;">Your children</h2>` : '';
   }
-
-  return `
-    <div class="card card-accent" style="margin-bottom:1.25rem;">
-      <h1 style="margin:0;">${greeting}, ${escapeHtml(name)}</h1>
-      ${sub ? `<p class="muted" style="margin:.25rem 0 0;">${sub}</p>` : ''}
-    </div>
-    ${needs}`;
+  return childCount ? `<h2 style="margin:0 0 .75rem;">Your children</h2>` : '';
 }
 
 function actionCard(i) {

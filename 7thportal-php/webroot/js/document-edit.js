@@ -1,6 +1,7 @@
 let ME = null;
 const documentId = new URLSearchParams(location.search).get('id');
 const CATEGORY_LABELS = { policy: 'Policy', process: 'Process', template: 'Template', guidance: 'Guidance', other: 'Other' };
+const DOC_TONE = { draft: 'attention', published: 'ready', superseded: 'neutral', archived: 'blocked' };
 
 (async () => {
   ME = await requireUserNav();
@@ -24,8 +25,13 @@ function render(doc) {
   const content = document.getElementById('content');
   const categoryOptions = Object.entries(CATEGORY_LABELS).map(([value, label]) => `<option value="${value}" ${doc.category === value ? 'selected' : ''}>${label}</option>`).join('');
 
+  renderPageHeader({
+    crumbs: [{ label: 'Documents', href: 'documents.html' }, { label: doc.title }],
+    title: doc.title,
+    status: { label: String(doc.status || '').replace(/_/g, ' '), tone: DOC_TONE[doc.status] || 'neutral' },
+  });
+
   content.innerHTML = `
-    <h1>${escapeHtml(doc.title)} ${statusBadge(doc.status)}</h1>
     ${doc.status === 'draft' ? '<div class="alert alert-warning">Draft - not visible to other leaders until a version is published.</div>' : ''}
 
     <div class="card">

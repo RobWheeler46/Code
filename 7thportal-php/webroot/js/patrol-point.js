@@ -2,6 +2,7 @@
 // approvals and the live leaderboard.
 let C, TEAMS, CATS, ACTIVITIES, GUESTLINKS, PARTS, SUBS, BOARD, ACT, META, ID;
 const SKEY = { draft: 'suspended', open: 'active', paused: 'pending_approval', completed: 'active', archived: 'deleted' };
+const PP_TONE = { draft: 'attention', open: 'ready', paused: 'pending', completed: 'ready', archived: 'blocked' };
 const SUB_SKEY = { pending: 'pending_approval', approved: 'active', rejected: 'deleted', returned: 'suspended', withdrawn: 'deleted', superseded: 'suspended' };
 const SUB_LABEL = { pending: 'pending', approved: 'approved', rejected: 'rejected', returned: 'returned', withdrawn: 'withdrawn', superseded: 'superseded' };
 const esc = s => escapeHtml(s == null ? '' : String(s));
@@ -10,6 +11,12 @@ const esc = s => escapeHtml(s == null ? '' : String(s));
   const me = await requireUserNav();
   if (!me) return;
   ID = new URLSearchParams(location.search).get('id');
+  // Canonical header: Patrol Points > <competition>. Name + status fill in on load.
+  renderPageHeader({
+    crumbs: [{ label: 'Patrol Points', href: 'patrol-points.html' }, { label: 'Competition' }],
+    title: 'Competition',
+    actions: '<span class="cap-actions" id="pp-head"></span>',
+  });
   document.getElementById('pp-head').innerHTML = '<a class="btn btn-secondary" href="patrol-points.html">Back</a>';
   if (!ID) { document.getElementById('content').innerHTML = '<div class="alert alert-error">No competition specified.</div>'; return; }
   load();
@@ -21,7 +28,7 @@ async function load() {
   try { d = await Api.get(`/api/patrol-points/competitions/${ID}`); }
   catch (e) { box.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; return; }
   C = d.competition; TEAMS = d.teams; CATS = d.categories; ACTIVITIES = d.activities || []; GUESTLINKS = d.guestLinks || []; PARTS = d.participants || []; SUBS = d.submissions; BOARD = d.leaderboard; ACT = d.myActions; META = d.meta;
-  document.getElementById('pp-title').textContent = C.name;
+  setPageHeaderRecord(C.name, { title: C.name, status: { label: C.statusLabel || C.status, tone: PP_TONE[C.status] || 'neutral' } });
   document.getElementById('pp-head').innerHTML = (ACT.canSubmit ? `<a class="btn" href="patrol-score.html?id=${ID}">Quick Score</a>` : '') + lifecycleButtons() + '<a class="btn btn-secondary" href="patrol-points.html">Back</a>';
   const editable = ACT.canManage && ['draft', 'open', 'paused'].includes(C.status);
   box.innerHTML = summaryCard() + leaderboardCard() + (ACT.canSubmit ? submitCard() : '')

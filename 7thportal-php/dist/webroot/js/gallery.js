@@ -20,7 +20,7 @@ async function renderAlbumList() {
     content.innerHTML = '<div class="empty-state">No photo albums are available to you yet.</div>';
     return;
   }
-  content.innerHTML = `<h1>Photo gallery</h1><div class="album-grid">${albums.map(a => `
+  content.innerHTML = `<div class="album-grid">${albums.map(a => `
     <a class="album-tile" href="gallery.html?album=${a.id}">
       ${a.photos[0] ? `<img class="thumb" src="/api/gallery/photos/${a.photos[0].id}/image" alt="" oncontextmenu="return false" draggable="false">` : '<div class="thumb"></div>'}
       <div class="info">
@@ -34,10 +34,13 @@ async function renderAlbumList() {
 async function renderAlbum(albumId) {
   const content = document.getElementById('content');
   const album = await Api.get(`/api/gallery/albums/${albumId}`);
+  // Canonical header: Photo Gallery > <album>. Overrides the registry landing header.
+  renderPageHeader({
+    crumbs: [{ label: 'Photo gallery', href: 'gallery.html' }, { label: album.title }],
+    title: album.title,
+    context: [album.sectionName, album.groupingLabel].filter(Boolean).join(' · ') || undefined,
+  });
   content.innerHTML = `
-    <p><a href="gallery.html">&larr; Back to photo gallery</a></p>
-    <h1>${escapeHtml(album.title)}</h1>
-    <p class="muted">${escapeHtml(album.sectionName || '')}${album.groupingLabel ? ' &middot; ' + escapeHtml(album.groupingLabel) : ''}</p>
     <div class="photo-grid">${album.photos.map((p, i) => `
       <div class="photo-tile"><img data-open="${i}" src="/api/gallery/photos/${p.id}/image" alt="" oncontextmenu="return false" draggable="false"></div>
     `).join('')}</div>

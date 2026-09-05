@@ -318,6 +318,34 @@ textarea { min-height: 5rem; resize: vertical; }
 .cap-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 .cap-head h2 { margin: 0; }
 .cap-actions { display: inline-flex; gap: 0.5rem; flex-wrap: wrap; }
+
+/* ── Canonical PageHeader + breadcrumb (v3.0 design system) ──────────────
+   One shared page anatomy: breadcrumb (detail screens only) → one H1 with
+   optional status badge beside it → role/context chip shown separately →
+   lede → right-aligned actions. Rendered by js/pageheader.js. */
+.page-header { margin: 0 0 1.25rem; }
+.breadcrumb { font-size: 0.82rem; margin-bottom: 0.5rem; line-height: 1.4; }
+.breadcrumb .bc-trail { display: inline; color: var(--muted); }
+.breadcrumb a { color: var(--muted); text-decoration: none; }
+.breadcrumb a:hover { color: var(--purple); text-decoration: underline; }
+.breadcrumb .bc-sep { margin: 0 0.4rem; color: var(--muted); opacity: 0.7; }
+.breadcrumb .bc-here { color: var(--text); font-weight: 600; }
+.breadcrumb .bc-back { display: none; align-items: center; gap: 0.3rem; color: var(--muted); text-decoration: none; font-weight: 600; }
+.breadcrumb .bc-back:hover { color: var(--purple); }
+.page-header .ph-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.page-header .ph-titlewrap { min-width: 0; }
+.page-header .ph-titleline { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.page-header h1.ph-title { margin: 0; }
+.page-header .ph-context { display: inline-block; margin-top: 0.35rem; font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+.page-header .ph-desc { margin: 0.5rem 0 0; max-width: 62ch; }
+.page-header .ph-actions { display: inline-flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; flex-shrink: 0; }
+
+@media (max-width: 640px) {
+  /* Long trails compress to a single "‹ Back to <parent>" affordance (FR-UX-004). */
+  .breadcrumb .bc-trail { display: none; }
+  .breadcrumb .bc-back { display: inline-flex; }
+  .page-header .ph-actions { width: 100%; }
+}
 .af-sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.35rem 1rem; }
 .af-sec-opt { display: flex; align-items: center; gap: 0.45rem; font-weight: 400; padding: 0.15rem 0; }
 .af-sec-opt input { width: auto; margin: 0; }
@@ -368,7 +396,7 @@ textarea { min-height: 5rem; resize: vertical; }
 .eq-label-barcode svg { max-width: 100%; height: 44px; }
 .eq-label-code { font-family: ui-monospace, monospace; font-size: 0.8rem; letter-spacing: 0.06em; margin-top: 0.15rem; }
 @media print {
-  .app-nav, .app-sidebar, .nav-drawer, .bottom-nav, .demo-banner, .demo-fb-btn, #eq-labels-toolbar, .no-print { display: none !important; }
+  .app-nav, .app-sidebar, .nav-drawer, .bottom-nav, .demo-banner, .demo-fb-btn, #eq-labels-toolbar, .page-header, .no-print { display: none !important; }
   .app-layout, .app-main, .container { margin: 0; padding: 0; max-width: none; display: block; }
   .eq-label { border-color: #000; }
   .eq-label-grid { gap: 0.2rem; }

@@ -15,6 +15,16 @@ const esc = s => escapeHtml(s == null ? '' : String(s));
   try { d = await Api.get(`/api/patrol-points/competitions/${ID}`); }
   catch (e) { document.getElementById('content').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; return; }
   C = d.competition; TEAMS = d.teams; CATS = d.categories; ACTIVITIES = d.activities || []; ACT = d.myActions;
+  // Canonical header: Patrol Points > <competition> > Score.
+  renderPageHeader({
+    crumbs: [
+      { label: 'Patrol Points', href: 'patrol-points.html' },
+      { label: C.name, href: `patrol-point.html?id=${encodeURIComponent(ID)}` },
+      { label: 'Score' },
+    ],
+    title: 'Quick Score',
+    actions: `<a class="btn btn-secondary" href="patrol-point.html?id=${encodeURIComponent(ID)}">Back to competition</a>`,
+  });
   selCat = CATS.length ? CATS[0].id : null;
   const aParam = new URLSearchParams(location.search).get('activity');
   if (aParam) { const a = ACTIVITIES.find(x => x.id === Number(aParam)); if (a) { selActivity = a.id; selCat = a.categoryId; } }
@@ -33,10 +43,8 @@ function teamsInScope(p) { return p && p.teamScope ? TEAMS.filter(t => p.teamSco
 
 function render() {
   const box = document.getElementById('content');
-  const back = `<a class="btn btn-secondary" href="patrol-point.html?id=${ID}">Back to competition</a>`;
   if (!ACT.canSubmit) {
-    box.innerHTML = `<div class="cap-head"><h1 style="margin:0">${esc(C.name)}</h1>${back}</div>
-      <div class="alert alert-warning" style="margin-top:1rem">Quick Score is available once the competition is open and has teams and a scoring category.</div>`;
+    box.innerHTML = `<div class="alert alert-warning">Quick Score is available once the competition is open and has teams and a scoring category.</div>`;
     return;
   }
   const p = activeProfile();
@@ -63,8 +71,7 @@ function render() {
   const recent = RECENT.length ? `<div class="pp-qs-group"><div class="pp-qs-label">This session</div>
     <div class="pp-qs-recent">${RECENT.slice(0, 6).map(r => `<div>${esc(r.team)} ${r.points >= 0 ? '+' : ''}${r.points} <span class="muted">${esc(r.status)}</span></div>`).join('')}</div></div>` : '';
 
-  box.innerHTML = `<div class="cap-head"><h1 style="margin:0">Quick Score</h1>${back}</div>
-    <p class="muted">${esc(C.name)} · ${C.approvalMode === 'approval' ? 'scores need approval' : 'scores count immediately'}</p>
+  box.innerHTML = `<p class="muted" style="margin-top:0">${esc(C.name)} · ${C.approvalMode === 'approval' ? 'scores need approval' : 'scores count immediately'}</p>
     <div class="card pp-qs">
       ${activityRow}${catRow}${teamRow}${pointRow}${reasonRow}
       <div id="pp-qs-msg"></div>
