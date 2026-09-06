@@ -223,6 +223,15 @@ function runValueMigrations(db: DatabaseSync): void {
     db.exec("UPDATE settings SET satellite_min_elevation = 10 WHERE satellite_min_elevation = 15");
     db.exec("PRAGMA user_version = 1");
   }
+
+  // v2: re-apply the 15°->10° lowering. The v1 run could be reverted by a stale
+  // Settings save during the deploy window (the client PUTs the full config, so a
+  // page loaded before v1 ran would echo the old 15° back). Still preserves a
+  // genuinely customised value.
+  if (version < 2) {
+    db.exec("UPDATE settings SET satellite_min_elevation = 10 WHERE satellite_min_elevation = 15");
+    db.exec("PRAGMA user_version = 2");
+  }
 }
 
 /** Add a column to an existing table if it is not already present. */
