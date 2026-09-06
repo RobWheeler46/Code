@@ -139,7 +139,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   showLookNow: true,
   showAviationContext: true,
   showSatellites: true,
-  satelliteMinElevationDeg: 15,
+  satelliteMinElevationDeg: 10,
   satelliteShowStations: true,
   satelliteShowBright: true,
   satelliteShowStarlink: false,

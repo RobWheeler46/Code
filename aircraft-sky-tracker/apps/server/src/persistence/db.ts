@@ -75,7 +75,7 @@ function migrate(db: DatabaseSync): void {
       in_app_alerts       INTEGER NOT NULL DEFAULT 1,
       browser_notifications INTEGER NOT NULL DEFAULT 0,
       show_satellites     INTEGER NOT NULL DEFAULT 1,
-      satellite_min_elevation INTEGER NOT NULL DEFAULT 15,
+      satellite_min_elevation INTEGER NOT NULL DEFAULT 10,
       satellite_show_stations INTEGER NOT NULL DEFAULT 1,
       satellite_show_bright INTEGER NOT NULL DEFAULT 1,
       satellite_show_starlink INTEGER NOT NULL DEFAULT 0,
@@ -189,7 +189,7 @@ function migrate(db: DatabaseSync): void {
   ensureColumn(db, "aircraft_cache", "registered_country", "TEXT");
   ensureColumn(db, "route_cache", "sources", "TEXT");
   ensureColumn(db, "settings", "show_satellites", "INTEGER NOT NULL DEFAULT 1");
-  ensureColumn(db, "settings", "satellite_min_elevation", "INTEGER NOT NULL DEFAULT 15");
+  ensureColumn(db, "settings", "satellite_min_elevation", "INTEGER NOT NULL DEFAULT 10");
   ensureColumn(db, "settings", "satellite_show_stations", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn(db, "settings", "satellite_show_bright", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn(db, "settings", "satellite_show_starlink", "INTEGER NOT NULL DEFAULT 0");
@@ -203,6 +203,26 @@ function migrate(db: DatabaseSync): void {
   ensureColumn(db, "settings", "prediction_radius_miles", "INTEGER NOT NULL DEFAULT 40");
   ensureColumn(db, "settings", "show_look_now", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn(db, "settings", "show_aviation_context", "INTEGER NOT NULL DEFAULT 1");
+
+  runValueMigrations(db);
+}
+
+/**
+ * One-time value migrations, gated by SQLite's PRAGMA user_version so each runs
+ * exactly once (unlike the idempotent additive column migrations above). A
+ * customised setting is preserved - only values still on a superseded default
+ * are moved.
+ */
+function runValueMigrations(db: DatabaseSync): void {
+  const row = db.prepare("PRAGMA user_version").get() as { user_version?: number } | undefined;
+  const version = row?.user_version ?? 0;
+
+  // v1: lower the satellite minimum-elevation default from 15° to 10° so more of
+  // the sky is shown by default. Only touches installs still on the old default.
+  if (version < 1) {
+    db.exec("UPDATE settings SET satellite_min_elevation = 10 WHERE satellite_min_elevation = 15");
+    db.exec("PRAGMA user_version = 1");
+  }
 }
 
 /** Add a column to an existing table if it is not already present. */
