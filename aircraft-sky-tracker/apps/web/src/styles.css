@@ -646,6 +646,113 @@ button.danger {
   margin-top: 0.1rem;
 }
 
+/* Sky Insights banner (FRD v3.8 §91): one contextual line, bottom-centre so it
+   stays clear of overhead traffic near the zenith. Confidence tints the edge. */
+.insight-banner {
+  position: fixed;
+  bottom: 1.1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 21;
+  width: min(340px, 92vw);
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-left: 3px solid var(--secondary);
+  border-radius: 10px;
+  padding: 0.55rem 0.85rem;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  animation: alert-in 0.35s ease;
+  text-align: left;
+}
+.insight-banner.insight-confirmed,
+.insight-banner.insight-high {
+  border-left-color: #7fd6a2;
+}
+.insight-banner.insight-medium {
+  border-left-color: #ffcf6b;
+}
+.insight-banner.insight-low {
+  border-left-color: var(--secondary);
+}
+.insight-title {
+  color: var(--secondary);
+  font-size: calc(0.72rem * var(--ui-scale, 1));
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.insight-subject {
+  color: var(--primary);
+  font-size: calc(1.05rem * var(--ui-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin-top: 0.1rem;
+}
+.insight-line {
+  color: var(--secondary);
+  font-size: calc(0.86rem * var(--ui-scale, 1));
+  margin-top: 0.05rem;
+}
+.insight-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.35rem;
+}
+.insight-confidence {
+  color: var(--secondary);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.insight-why-toggle {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 0.72rem;
+  cursor: pointer;
+  padding: 0;
+}
+.insight-why {
+  margin: 0.35rem 0 0;
+  padding-left: 1rem;
+  color: var(--secondary);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+/* Sky Insights cards in the details drawer (FRD v3.8 §92, §103). */
+.insight-card {
+  margin: 0.4rem 0;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--panel-border);
+  border-left: 3px solid var(--secondary);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.insight-card.insight-confirmed,
+.insight-card.insight-high {
+  border-left-color: #7fd6a2;
+}
+.insight-card.insight-medium {
+  border-left-color: #ffcf6b;
+}
+.insight-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.insight-card-title {
+  color: var(--primary);
+  font-size: 0.8rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.insight-card-lines {
+  color: var(--secondary);
+  font-size: 0.85rem;
+  margin-top: 0.15rem;
+}
+
 /* Satellite pass alerts (FRD v3.2 §61-62): own corner + cyan accent. */
 .sat-alert-stack {
   top: 1rem;

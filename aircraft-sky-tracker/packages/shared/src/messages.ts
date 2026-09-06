@@ -3,6 +3,7 @@
 import type { Aircraft } from "./aircraft.js";
 import type { AppConfig } from "./config.js";
 import type { Satellite, SatellitePass } from "./satellite.js";
+import type { Insight } from "./insights.js";
 
 export type SourceStatus =
   | "connected"
@@ -56,6 +57,17 @@ export interface SatelliteAlertMessage {
   timestamp: number;
 }
 
+/**
+ * Current set of active Sky Insights (FRD v3.8 §63, §103-104). Broadcast whenever
+ * the engine adds, refreshes or expires an insight; the client picks the single
+ * main-screen one with `pickPrimaryInsight` and lists the rest in details.
+ */
+export interface InsightsSnapshotMessage {
+  type: "insights.snapshot";
+  timestamp: number;
+  insights: Insight[];
+}
+
 export type ServerMessage =
   | AircraftSnapshotMessage
   | ConfigUpdatedMessage
@@ -63,6 +75,7 @@ export type ServerMessage =
   | ErrorStatusMessage
   | AircraftInterestingEnterMessage
   | SatelliteSnapshotMessage
-  | SatelliteAlertMessage;
+  | SatelliteAlertMessage
+  | InsightsSnapshotMessage;
 
 export const WS_PATH = "/ws";

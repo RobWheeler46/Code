@@ -199,6 +199,7 @@ function migrate(db: DatabaseSync): void {
   ensureColumn(db, "settings", "satellite_alerts_enabled", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn(db, "settings", "satellite_alert_lead_minutes", "INTEGER NOT NULL DEFAULT 10");
   ensureColumn(db, "settings", "satellite_alert_visible_only", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db, "settings", "show_sky_insights", "INTEGER NOT NULL DEFAULT 1");
 }
 
 /** Add a column to an existing table if it is not already present. */

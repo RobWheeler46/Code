@@ -196,6 +196,8 @@ The browser talks only to the backend (FRD §39):
 | `GET` | `/api/aircraft/photo?reg=&hex=` | Aircraft photo (proxies planespotters.net) |
 | `GET` | `/api/aircraft/{icaoHex}` | Aircraft detail + registry metadata (adsbdb) |
 | `GET` | `/api/aircraft/{icaoHex}/flight-intelligence` | Operational flight data: state, OOOI, ETA, route (§102) |
+| `GET` | `/api/aircraft/{icaoHex}/insights` | Active Sky Insights for one aircraft, with evidence (§103) |
+| `GET` | `/api/insights` | All currently-active Sky Insights (§103) |
 | `GET` | `/api/view?postcode=` | Per-viewer snapshot for any postcode (read-only) |
 | `GET` | `/api/history?date=` | Aircraft pass history for a date (default today) |
 | `GET` | `/api/history/dates` | Retained dates with pass counts |
@@ -423,6 +425,19 @@ stale-ACARS / possible-diversion / OOOI scenarios. Served at
 `/api/aircraft/{hex}/flight-intelligence` and shown in the detail drawer's
 **Flight Intelligence** section. If the provider fails, only enrichment degrades —
 tracking, routes and history continue (§108).
+
+**Sky Insights engine (done, FRD v3.8 §55-63, §90-92, §103)** — the engine turns
+each aircraft's evidence (operational + route + a per-aircraft descent streak it
+tracks across snapshots) into short, validated statements: **possible route
+change**, **recently airborne**, **likely landing**, **landed**, **flight
+confirmed**. Every insight carries a **confidence** and its own **evidence**
+("Why?", §92); a low-confidence inference is never stated as fact. The main
+display shows at most **one** prominent contextual insight at a time (§91,
+bottom-centre banner, toggle in Settings via `showSkyInsights`); the rest appear
+in the drawer's **Sky insights** section. The engine bounds and throttles
+operational enrichment (nearest aircraft, cached per hex) so a future live
+Airframes path can't fan out. Broadcast over the WebSocket as `insights.snapshot`
+and served at `/api/insights` and `/api/aircraft/{hex}/insights`.
 
 **Google account & saved locations (done, FRD v3.6 §12, §26)** — an optional
 **Google Sign-In** (env-gated: `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`) lets the

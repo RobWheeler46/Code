@@ -33,6 +33,7 @@ interface SettingsRow {
   history_retention_days: number;
   in_app_alerts: number;
   browser_notifications: number;
+  show_sky_insights: number;
   show_satellites: number;
   satellite_min_elevation: number;
   satellite_show_stations: number;
@@ -88,6 +89,7 @@ function rowToConfig(row: SettingsRow): AppConfig {
     historyRetentionDays: row.history_retention_days,
     inAppAlerts: bool(row.in_app_alerts),
     browserNotifications: bool(row.browser_notifications),
+    showSkyInsights: bool(row.show_sky_insights),
     showSatellites: bool(row.show_satellites),
     satelliteMinElevationDeg: row.satellite_min_elevation,
     satelliteShowStations: bool(row.satellite_show_stations),
@@ -119,13 +121,13 @@ export class SettingsRepo {
           show_header, show_trails, show_destination_arcs,
           highlight_interesting, watchlist, low_altitude_threshold, hide_ground_aircraft,
           history_enabled, history_retention_days, in_app_alerts,
-          browser_notifications, show_satellites, satellite_min_elevation,
+          browser_notifications, show_sky_insights, show_satellites, satellite_min_elevation,
           satellite_show_stations, satellite_show_bright, satellite_show_starlink,
           view_mode, viewing_distance, display_scale,
           satellite_alerts_enabled, satellite_alert_lead_minutes, satellite_alert_visible_only,
           interpolation, created_at, updated_at
         ) VALUES (
-          1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )`,
       )
       .run(
@@ -157,6 +159,7 @@ export class SettingsRepo {
         defaults.historyRetentionDays,
         Number(defaults.inAppAlerts),
         Number(defaults.browserNotifications),
+        Number(defaults.showSkyInsights),
         Number(defaults.showSatellites),
         defaults.satelliteMinElevationDeg,
         Number(defaults.satelliteShowStations),
@@ -204,7 +207,7 @@ export class SettingsRepo {
           highlight_interesting = ?, watchlist = ?,
           low_altitude_threshold = ?, hide_ground_aircraft = ?, history_enabled = ?,
           history_retention_days = ?, in_app_alerts = ?,
-          browser_notifications = ?, show_satellites = ?,
+          browser_notifications = ?, show_sky_insights = ?, show_satellites = ?,
           satellite_min_elevation = ?, satellite_show_stations = ?,
           satellite_show_bright = ?, satellite_show_starlink = ?,
           view_mode = ?, viewing_distance = ?, display_scale = ?,
@@ -242,6 +245,7 @@ export class SettingsRepo {
         config.historyRetentionDays,
         Number(config.inAppAlerts),
         Number(config.browserNotifications),
+        Number(config.showSkyInsights),
         Number(config.showSatellites),
         config.satelliteMinElevationDeg,
         Number(config.satelliteShowStations),

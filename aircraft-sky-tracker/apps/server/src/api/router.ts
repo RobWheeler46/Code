@@ -17,6 +17,7 @@ import type {
   SatelliteDetail,
   DetectedLocation,
   FlightIntelligence,
+  Insight,
 } from "@ast/shared";
 import { basicAuthMiddleware, isAuthEnabled } from "./auth.js";
 
@@ -59,6 +60,8 @@ export interface ApiContext {
   photo(registration?: string, icaoHex?: string): Promise<PhotoResult>;
   aircraftDetail(icaoHex: string): Promise<{ aircraft: Aircraft | null; meta: AircraftMeta }>;
   flightIntelligence(icaoHex: string): Promise<FlightIntelligence>;
+  insights(): { generatedAt: string; insights: Insight[] };
+  aircraftInsights(icaoHex: string): Insight[];
   view(postcode: string): Promise<ViewResult>;
   history(date?: string): { date: string; passes: HistoryPass[] };
   historyDates(): HistoryDate[];
@@ -210,6 +213,22 @@ export function createApiRouter(ctx: ApiContext): Router {
     } catch (err) {
       res.status(502).json({ error: `Flight intelligence unavailable: ${String(err)}` });
     }
+  });
+
+  // GET /api/aircraft/:icaoHex/insights - active Sky Insights for one aircraft
+  // with their evidence (FRD v3.8 §92, §103). Public: part of the open display.
+  router.get("/aircraft/:icaoHex/insights", (req: Request, res: Response) => {
+    const hex = req.params.icaoHex ?? "";
+    if (!/^[0-9A-Fa-f]{6}$/.test(hex) && !/^[A-Za-z0-9]{3,8}$/.test(hex)) {
+      res.status(400).json({ error: "invalid icaoHex" });
+      return;
+    }
+    res.json({ subjectId: hex.toUpperCase(), insights: ctx.aircraftInsights(hex.toUpperCase()) });
+  });
+
+  // GET /api/insights - all currently-active Sky Insights (FRD v3.8 §103).
+  router.get("/insights", (_req: Request, res: Response) => {
+    res.json(ctx.insights());
   });
 
   // GET /api/health (FRD §42).

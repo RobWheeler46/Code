@@ -3,6 +3,7 @@ import {
   type Aircraft,
   type AircraftMeta,
   type FlightIntelligence,
+  type Insight,
   flightStateLabel,
   oooiRows,
 } from "@ast/shared";
@@ -70,6 +71,7 @@ export function AircraftDetailsOverlay({ aircraft, onClose }: Props) {
   const [photoLoaded, setPhotoLoaded] = useState(false);
   const [meta, setMeta] = useState<AircraftMeta | undefined>();
   const [flight, setFlight] = useState<FlightIntelligence | undefined>();
+  const [insights, setInsights] = useState<Insight[]>([]);
   const [showTechnical, setShowTechnical] = useState(false);
   const [showQuality, setShowQuality] = useState(false);
 
@@ -94,6 +96,11 @@ export function AircraftDetailsOverlay({ aircraft, onClose }: Props) {
     void fetch(`/api/aircraft/${encodeURIComponent(aircraft.icaoHex)}/flight-intelligence`)
       .then((r) => (r.ok ? (r.json() as Promise<FlightIntelligence>) : undefined))
       .then((f) => active && setFlight(f))
+      .catch(() => undefined);
+    setInsights([]);
+    void fetch(`/api/aircraft/${encodeURIComponent(aircraft.icaoHex)}/insights`)
+      .then((r) => (r.ok ? (r.json() as Promise<{ insights: Insight[] }>) : { insights: [] }))
+      .then((d) => active && setInsights(d.insights ?? []))
       .catch(() => undefined);
     return () => {
       active = false;
@@ -249,6 +256,8 @@ export function AircraftDetailsOverlay({ aircraft, onClose }: Props) {
           )}
         </div>
 
+        {insights.length > 0 && <InsightsSection insights={insights} />}
+
         {flight && <FlightIntelligenceSection flight={flight} />}
 
         <Section title="Live" rows={liveRows} />
@@ -341,6 +350,34 @@ function FlightIntelligenceSection({ flight }: { flight: FlightIntelligence }) {
       {flight.sources.length > 0 && (
         <div className="route-conf">Sources: {flight.sources.join(" · ")}</div>
       )}
+    </>
+  );
+}
+
+/** Sky Insights for this aircraft, each with its evidence ("Why?", §92, §103). */
+function InsightsSection({ insights }: { insights: Insight[] }) {
+  const ordered = [...insights].sort((a, b) => b.priority - a.priority);
+  return (
+    <>
+      <h2>Sky insights</h2>
+      {ordered.map((ins) => (
+        <div key={ins.id} className={`insight-card insight-${ins.confidence}`}>
+          <div className="insight-card-head">
+            <span className="insight-card-title">{ins.title}</span>
+            <span className="insight-confidence">{ins.confidence}</span>
+          </div>
+          {ins.lines.length > 1 && (
+            <div className="insight-card-lines">{ins.lines.slice(1).join(" · ")}</div>
+          )}
+          {ins.why.length > 0 && (
+            <ul className="insight-why">
+              {ins.why.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ))}
     </>
   );
 }

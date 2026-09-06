@@ -55,12 +55,14 @@ import {
   type DetectedLocation,
   type LocationSource,
   type FlightIntelligence,
+  type Insight,
 } from "@ast/shared";
 import {
   OperationalIntelligenceService,
   SimulationOperationalProvider,
   AirframesOperationalProvider,
 } from "./routes/operationalIntelligence.js";
+import { InsightsEngine } from "./insights/insightsEngine.js";
 import { AccountRepo } from "./persistence/accountRepo.js";
 import { GoogleAuth } from "./auth/googleAuth.js";
 import { createAuthRouter } from "./auth/authRouter.js";
@@ -146,6 +148,47 @@ async function main(): Promise<void> {
   history.configure(config.historyEnabled, config.historyRetentionDays);
   history.pruneExpired();
 
+  /**
+   * Build the operational picture for one aircraft (§53, §102): the live route
+   * decision (ADS-B + adsbdb) merged with operational evidence (OOOI / state /
+   * ETA / diversion). Shared by the /flight-intelligence endpoint and the Sky
+   * Insights Engine.
+   */
+  async function buildFlightIntelligence(aircraft: Aircraft): Promise<FlightIntelligence> {
+    const dest = aircraft.destination;
+    const airborne = aircraft.onGround !== true;
+    const op = await operational.lookup({
+      icaoHex: aircraft.icaoHex,
+      callsign: aircraft.callsign,
+      registration: aircraft.registration,
+      airborne,
+    });
+    const sources = new Set<string>(op?.sources ?? []);
+    for (const s of dest?.sources ?? []) sources.add(s);
+    sources.add("ADS-B");
+    return {
+      available: op !== undefined,
+      callsign: aircraft.callsign,
+      airline: dest?.airline ?? op?.airline,
+      origin: dest?.originName ?? op?.origin,
+      destination: dest?.displayName ?? op?.destination,
+      routeConfidence: dest?.confidence ?? op?.routeConfidenceHint ?? "unknown",
+      flightState: deriveFlightState(op?.oooi ?? {}, airborne),
+      oooi: op?.oooi ?? {},
+      eta: op?.eta,
+      possibleRouteChange: op?.possibleRouteChange,
+      sources: [...sources],
+    };
+  }
+
+  // Sky Insights Engine (FRD v3.8 §63): turns per-aircraft evidence into the
+  // one prominent main-screen insight (§91) plus the drawer's evidence list.
+  const insights = new InsightsEngine(
+    (aircraft) => buildFlightIntelligence(aircraft),
+    (active: Insight[]) =>
+      ws.broadcast({ type: "insights.snapshot", timestamp: Date.now(), insights: active }),
+  );
+
   // Satellite layer (FRD v3.2 §36-84) - independent of aircraft tracking.
   const satelliteConfigView = (): SatelliteConfigView => {
     const c = settings.get();
@@ -225,6 +268,10 @@ async function main(): Promise<void> {
       });
       // Record aircraft pass history (global location only, FRD §56).
       history.ingest(aircraft);
+      // Update Sky Insights from the new snapshot (§63); broadcasts on change.
+      void insights.onSnapshot(aircraft, Date.now()).catch((err: unknown) => {
+        log.debug("insights update failed", { error: String(err) });
+      });
       log.debug("poll processed", {
         received: meta.received,
         displayed: aircraft.length,
@@ -266,6 +313,7 @@ async function main(): Promise<void> {
         { type: "config.updated", config: settings.get() },
         { type: "aircraft.snapshot", timestamp: Date.now(), aircraft: state.snapshot() },
         { type: "satellite.snapshot", timestamp: Date.now(), satellites: satellites.getSnapshot() },
+        { type: "insights.snapshot", timestamp: Date.now(), insights: insights.list() },
         { type: "source.status", status: polling.getStatus() },
       ];
       return messages;
@@ -403,6 +451,7 @@ async function main(): Promise<void> {
         "historyEnabled",
         "inAppAlerts",
         "browserNotifications",
+        "showSkyInsights",
         "showSatellites",
         "satelliteShowStations",
         "satelliteShowBright",
@@ -548,35 +597,23 @@ async function main(): Promise<void> {
     },
     flightIntelligence: async (icaoHex): Promise<FlightIntelligence> => {
       const aircraft = state.snapshot().find((a) => a.icaoHex === icaoHex);
-      const dest = aircraft?.destination;
-      const airborne = aircraft ? aircraft.onGround !== true : false;
-      const op = aircraft
-        ? await operational.lookup({
-            icaoHex,
-            callsign: aircraft.callsign,
-            registration: aircraft.registration,
-            airborne,
-          })
-        : undefined;
-      // Route + confidence come from the live route decision (ADS-B + adsbdb);
-      // operational evidence adds flight state / OOOI / ETA / diversion (§53, §102).
-      const sources = new Set<string>(op?.sources ?? []);
-      for (const s of dest?.sources ?? []) sources.add(s);
-      if (aircraft) sources.add("ADS-B");
-      return {
-        available: op !== undefined,
-        callsign: aircraft?.callsign,
-        airline: dest?.airline ?? op?.airline,
-        origin: dest?.originName ?? op?.origin,
-        destination: dest?.displayName ?? op?.destination,
-        routeConfidence: dest?.confidence ?? op?.routeConfidenceHint ?? "unknown",
-        flightState: deriveFlightState(op?.oooi ?? {}, airborne),
-        oooi: op?.oooi ?? {},
-        eta: op?.eta,
-        possibleRouteChange: op?.possibleRouteChange,
-        sources: [...sources],
-      };
+      // Degrade cleanly when the aircraft is no longer tracked (§108).
+      if (!aircraft) {
+        return {
+          available: false,
+          routeConfidence: "unknown",
+          flightState: "unknown",
+          oooi: {},
+          sources: [],
+        };
+      }
+      return buildFlightIntelligence(aircraft);
     },
+    insights: () => ({
+      generatedAt: new Date().toISOString(),
+      insights: insights.list(),
+    }),
+    aircraftInsights: (icaoHex) => insights.forAircraft(icaoHex),
     view: (postcode) => viewService.getView(postcode),
 
     history: (date) => {

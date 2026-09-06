@@ -76,6 +76,8 @@ export interface AppConfig {
   satelliteShowBright: boolean;
   /** Include bright Starlink passes (FRD §51). */
   satelliteShowStarlink: boolean;
+  /** Show the single main-screen Sky Insight banner (FRD v3.8 §91). */
+  showSkyInsights: boolean;
   /** Alert ahead of an upcoming satellite pass (FRD §61-62). */
   satelliteAlertsEnabled: boolean;
   /** Advance-warning lead time in minutes for a satellite pass alert (FRD §62). */
@@ -122,6 +124,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   historyRetentionDays: 31,
   inAppAlerts: true,
   browserNotifications: false,
+  showSkyInsights: true,
   showSatellites: true,
   satelliteMinElevationDeg: 15,
   satelliteShowStations: true,
@@ -162,6 +165,7 @@ export type ConfigUpdate = Partial<
     | "historyRetentionDays"
     | "inAppAlerts"
     | "browserNotifications"
+    | "showSkyInsights"
     | "showSatellites"
     | "satelliteMinElevationDeg"
     | "satelliteShowStations"

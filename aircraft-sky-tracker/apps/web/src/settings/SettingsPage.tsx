@@ -212,6 +212,7 @@ export function SettingsPage({ onBack }: Props) {
         hideGroundAircraft: draft.hideGroundAircraft,
         inAppAlerts: draft.inAppAlerts,
         browserNotifications: draft.browserNotifications,
+        showSkyInsights: draft.showSkyInsights,
         historyEnabled: draft.historyEnabled,
         historyRetentionDays: draft.historyRetentionDays,
         showSatellites: draft.showSatellites,
@@ -583,6 +584,14 @@ export function SettingsPage({ onBack }: Props) {
             to receive alerts. The app works fine without them.
           </div>
         )}
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={draft.showSkyInsights}
+          onChange={(e) => setToggle("showSkyInsights", e.target.checked)}
+        />
+        Sky insights banner (one contextual line on the display)
+      </label>
 
       <h2>History</h2>
       <label className="check">
