@@ -44,6 +44,14 @@ export interface LiveState {
 }
 
 const MAX_BACKOFF_MS = 15_000;
+/**
+ * If no message arrives for this long the connection is treated as dead and
+ * force-reconnected. Snapshots arrive roughly every second, so this only trips on
+ * a genuinely stalled (half-open) socket - the kind that fires no close event and
+ * would otherwise leave the display frozen until the page is reloaded.
+ */
+const STALE_TIMEOUT_MS = 15_000;
+const WATCHDOG_INTERVAL_MS = 5_000;
 
 /**
  * Single persistent WebSocket to the backend (FRD §44). Parses normalised
@@ -74,6 +82,7 @@ export function useWebSocket(): LiveState {
     closedRef.current = false;
     let socket: WebSocket | undefined;
     let reconnectTimer: number | undefined;
+    let lastMessageAt = Date.now();
 
     const url = () => {
       const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -87,9 +96,11 @@ export function useWebSocket(): LiveState {
       ws.onopen = () => {
         setConnected(true);
         backoffRef.current = 1000;
+        lastMessageAt = Date.now();
       };
 
       ws.onmessage = (event: MessageEvent<string>) => {
+        lastMessageAt = Date.now();
         let message: ServerMessage;
         try {
           message = JSON.parse(event.data) as ServerMessage;
@@ -164,8 +175,22 @@ export function useWebSocket(): LiveState {
 
     connect();
 
+    // Watchdog: if the stream goes quiet for too long the socket is half-open
+    // (no close event will fire). Force-close it so onclose reconnects; otherwise
+    // the display would stay frozen on its last snapshot until a manual reload.
+    const watchdog = window.setInterval(() => {
+      if (
+        socket &&
+        socket.readyState === WebSocket.OPEN &&
+        Date.now() - lastMessageAt > STALE_TIMEOUT_MS
+      ) {
+        socket.close();
+      }
+    }, WATCHDOG_INTERVAL_MS);
+
     return () => {
       closedRef.current = true;
+      window.clearInterval(watchdog);
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
       socket?.close();
     };
