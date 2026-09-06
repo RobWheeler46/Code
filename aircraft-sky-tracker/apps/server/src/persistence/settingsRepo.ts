@@ -34,6 +34,8 @@ interface SettingsRow {
   in_app_alerts: number;
   browser_notifications: number;
   show_sky_insights: number;
+  prediction_radius_miles: number;
+  show_look_now: number;
   show_satellites: number;
   satellite_min_elevation: number;
   satellite_show_stations: number;
@@ -58,6 +60,7 @@ function rowToConfig(row: SettingsRow): AppConfig {
     latitude: row.latitude,
     longitude: row.longitude,
     radiusMiles: row.radius_miles,
+    predictionRadiusMiles: row.prediction_radius_miles ?? 40,
     locationSource: (row.location_source as AppConfig["locationSource"]) ?? "default",
     locationConfidence: (row.location_confidence as AppConfig["locationConfidence"]) ?? "good",
     locationAccuracyRadiusKm: row.location_accuracy_radius_km ?? undefined,
@@ -90,6 +93,7 @@ function rowToConfig(row: SettingsRow): AppConfig {
     inAppAlerts: bool(row.in_app_alerts),
     browserNotifications: bool(row.browser_notifications),
     showSkyInsights: bool(row.show_sky_insights),
+    showLookNow: bool(row.show_look_now),
     showSatellites: bool(row.show_satellites),
     satelliteMinElevationDeg: row.satellite_min_elevation,
     satelliteShowStations: bool(row.satellite_show_stations),
@@ -113,7 +117,7 @@ export class SettingsRepo {
     this.db
       .prepare(
         `INSERT INTO settings (
-          id, postcode, latitude, longitude, radius_miles,
+          id, postcode, latitude, longitude, radius_miles, prediction_radius_miles,
           location_source, location_confidence, location_accuracy_radius_km, location_name,
           aircraft_source,
           display_mode, show_registration, show_destination, show_flight_number,
@@ -121,13 +125,13 @@ export class SettingsRepo {
           show_header, show_trails, show_destination_arcs,
           highlight_interesting, watchlist, low_altitude_threshold, hide_ground_aircraft,
           history_enabled, history_retention_days, in_app_alerts,
-          browser_notifications, show_sky_insights, show_satellites, satellite_min_elevation,
+          browser_notifications, show_sky_insights, show_look_now, show_satellites, satellite_min_elevation,
           satellite_show_stations, satellite_show_bright, satellite_show_starlink,
           view_mode, viewing_distance, display_scale,
           satellite_alerts_enabled, satellite_alert_lead_minutes, satellite_alert_visible_only,
           interpolation, created_at, updated_at
         ) VALUES (
-          1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )`,
       )
       .run(
@@ -135,6 +139,7 @@ export class SettingsRepo {
         defaults.latitude,
         defaults.longitude,
         defaults.radiusMiles,
+        defaults.predictionRadiusMiles,
         defaults.locationSource,
         defaults.locationConfidence,
         defaults.locationAccuracyRadiusKm ?? null,
@@ -160,6 +165,7 @@ export class SettingsRepo {
         Number(defaults.inAppAlerts),
         Number(defaults.browserNotifications),
         Number(defaults.showSkyInsights),
+        Number(defaults.showLookNow),
         Number(defaults.showSatellites),
         defaults.satelliteMinElevationDeg,
         Number(defaults.satelliteShowStations),
@@ -198,6 +204,7 @@ export class SettingsRepo {
       .prepare(
         `UPDATE settings SET
           postcode = ?, latitude = ?, longitude = ?, radius_miles = ?,
+          prediction_radius_miles = ?,
           location_source = ?, location_confidence = ?,
           location_accuracy_radius_km = ?, location_name = ?,
           aircraft_source = ?, display_mode = ?, show_registration = ?,
@@ -207,7 +214,7 @@ export class SettingsRepo {
           highlight_interesting = ?, watchlist = ?,
           low_altitude_threshold = ?, hide_ground_aircraft = ?, history_enabled = ?,
           history_retention_days = ?, in_app_alerts = ?,
-          browser_notifications = ?, show_sky_insights = ?, show_satellites = ?,
+          browser_notifications = ?, show_sky_insights = ?, show_look_now = ?, show_satellites = ?,
           satellite_min_elevation = ?, satellite_show_stations = ?,
           satellite_show_bright = ?, satellite_show_starlink = ?,
           view_mode = ?, viewing_distance = ?, display_scale = ?,
@@ -221,6 +228,7 @@ export class SettingsRepo {
         config.latitude,
         config.longitude,
         config.radiusMiles,
+        config.predictionRadiusMiles,
         config.locationSource,
         config.locationConfidence,
         config.locationAccuracyRadiusKm ?? null,
@@ -246,6 +254,7 @@ export class SettingsRepo {
         Number(config.inAppAlerts),
         Number(config.browserNotifications),
         Number(config.showSkyInsights),
+        Number(config.showLookNow),
         Number(config.showSatellites),
         config.satelliteMinElevationDeg,
         Number(config.satelliteShowStations),

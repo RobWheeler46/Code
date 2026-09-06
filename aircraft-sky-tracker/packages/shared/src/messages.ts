@@ -4,6 +4,7 @@ import type { Aircraft } from "./aircraft.js";
 import type { AppConfig } from "./config.js";
 import type { Satellite, SatellitePass } from "./satellite.js";
 import type { Insight } from "./insights.js";
+import type { LookNowPrediction } from "./prediction.js";
 
 export type SourceStatus =
   | "connected"
@@ -102,6 +103,17 @@ export interface RouteUpdatedMessage {
   timestamp: number;
 }
 
+/**
+ * Current Look Now predictions (FRD v4.0 §16-19): approaching aircraft that are
+ * likely to enter the sky shortly, most imminent first. Broadcast when the set
+ * changes and sent on connect for state sync.
+ */
+export interface LookNowMessage {
+  type: "looknow.update";
+  timestamp: number;
+  predictions: LookNowPrediction[];
+}
+
 export type ServerMessage =
   | AircraftSnapshotMessage
   | ConfigUpdatedMessage
@@ -114,6 +126,7 @@ export type ServerMessage =
   | InsightCreatedMessage
   | InsightUpdatedMessage
   | InsightExpiredMessage
-  | RouteUpdatedMessage;
+  | RouteUpdatedMessage
+  | LookNowMessage;
 
 export const WS_PATH = "/ws";

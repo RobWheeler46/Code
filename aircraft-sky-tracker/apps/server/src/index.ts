@@ -62,6 +62,7 @@ import {
   AirframesOperationalProvider,
 } from "./routes/operationalIntelligence.js";
 import { InsightsEngine } from "./insights/insightsEngine.js";
+import { LookNowService } from "./aircraft/lookNowService.js";
 import { AccountRepo } from "./persistence/accountRepo.js";
 import { GoogleAuth } from "./auth/googleAuth.js";
 import { createAuthRouter } from "./auth/authRouter.js";
@@ -219,6 +220,12 @@ async function main(): Promise<void> {
     },
   );
 
+  // Look Now prediction engine (FRD v4.0 §16-19): projects approaching aircraft
+  // (in the prediction band, not yet displayed) to their closest point of approach.
+  const lookNow = new LookNowService((predictions) =>
+    ws.broadcast({ type: "looknow.update", timestamp: Date.now(), predictions }),
+  );
+
   // Satellite layer (FRD v3.2 §36-84) - independent of aircraft tracking.
   const satelliteConfigView = (): SatelliteConfigView => {
     const c = settings.get();
@@ -286,6 +293,7 @@ async function main(): Promise<void> {
         cfg.watchlist,
         cfg.lowAltitudeThresholdFeet,
         cfg.hideGroundAircraft,
+        cfg.predictionRadiusMiles,
       );
       ws.broadcast({
         type: "aircraft.snapshot",
@@ -302,6 +310,14 @@ async function main(): Promise<void> {
       void insights.onSnapshot(aircraft, Date.now()).catch((err: unknown) => {
         log.debug("insights update failed", { error: String(err) });
       });
+      // Look Now predictions run over the full tracked set (incl. the prediction
+      // band that is not displayed), so approaching aircraft can be surfaced.
+      lookNow.onSnapshot(
+        state.allTracked(),
+        { latitude: cfg.latitude, longitude: cfg.longitude },
+        cfg.radiusMiles,
+        Date.now(),
+      );
       log.debug("poll processed", {
         received: meta.received,
         displayed: aircraft.length,
@@ -321,7 +337,9 @@ async function main(): Promise<void> {
   polling.setCentre({
     latitude: config.latitude,
     longitude: config.longitude,
-    radiusMiles: config.radiusMiles,
+    // Query out to the prediction radius so Look Now sees approaching aircraft
+    // beyond the display radius (FRD v4.0 §15).
+    radiusMiles: Math.max(config.radiusMiles, config.predictionRadiusMiles),
   });
 
   const diagnostics = new DiagnosticsService(
@@ -344,6 +362,7 @@ async function main(): Promise<void> {
         { type: "aircraft.snapshot", timestamp: Date.now(), aircraft: state.snapshot() },
         { type: "satellite.snapshot", timestamp: Date.now(), satellites: satellites.getSnapshot() },
         { type: "insights.snapshot", timestamp: Date.now(), insights: insights.list() },
+        { type: "looknow.update", timestamp: Date.now(), predictions: lookNow.list() },
         { type: "source.status", status: polling.getStatus() },
       ];
       return messages;
@@ -357,7 +376,7 @@ async function main(): Promise<void> {
     polling.setCentre({
       latitude: next.latitude,
       longitude: next.longitude,
-      radiusMiles: next.radiusMiles,
+      radiusMiles: Math.max(next.radiusMiles, next.predictionRadiusMiles),
     });
     if (centreChanged) state.clear();
     ws.broadcast({ type: "config.updated", config: next });
@@ -433,6 +452,16 @@ async function main(): Promise<void> {
         next.radiusMiles = r;
       }
 
+      if (update.predictionRadiusMiles !== undefined) {
+        const pr = Number(update.predictionRadiusMiles);
+        if (!Number.isFinite(pr) || pr < 10 || pr > 250) {
+          return { ok: false, status: 400, error: "Prediction radius must be 10-250 miles" };
+        }
+        // Widening/narrowing the tracked area changes the provider query radius.
+        if (pr !== current.predictionRadiusMiles) centreChanged = true;
+        next.predictionRadiusMiles = pr;
+      }
+
       if (update.aircraftSource !== undefined) {
         if (!["internet", "local", "hybrid"].includes(update.aircraftSource)) {
           return { ok: false, status: 400, error: "Invalid aircraft source" };
@@ -482,6 +511,7 @@ async function main(): Promise<void> {
         "inAppAlerts",
         "browserNotifications",
         "showSkyInsights",
+        "showLookNow",
         "showSatellites",
         "satelliteShowStations",
         "satelliteShowBright",
@@ -644,6 +674,7 @@ async function main(): Promise<void> {
       insights: insights.list(),
     }),
     aircraftInsights: (icaoHex) => insights.forAircraft(icaoHex),
+    lookNow: () => ({ generatedAt: new Date().toISOString(), predictions: lookNow.list() }),
     view: (postcode) => viewService.getView(postcode),
 
     history: (date) => {

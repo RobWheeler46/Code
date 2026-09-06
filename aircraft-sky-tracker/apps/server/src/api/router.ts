@@ -18,6 +18,7 @@ import type {
   DetectedLocation,
   FlightIntelligence,
   Insight,
+  LookNowPrediction,
 } from "@ast/shared";
 import { basicAuthMiddleware, isAuthEnabled } from "./auth.js";
 
@@ -62,6 +63,7 @@ export interface ApiContext {
   flightIntelligence(icaoHex: string): Promise<FlightIntelligence>;
   insights(): { generatedAt: string; insights: Insight[] };
   aircraftInsights(icaoHex: string): Insight[];
+  lookNow(): { generatedAt: string; predictions: LookNowPrediction[] };
   view(postcode: string): Promise<ViewResult>;
   history(date?: string): { date: string; passes: HistoryPass[] };
   historyDates(): HistoryDate[];
@@ -229,6 +231,11 @@ export function createApiRouter(ctx: ApiContext): Router {
   // GET /api/insights - all currently-active Sky Insights (FRD v3.8 §103).
   router.get("/insights", (_req: Request, res: Response) => {
     res.json(ctx.insights());
+  });
+
+  // GET /api/looknow - approaching-aircraft predictions (FRD v4.0 §16-19).
+  router.get("/looknow", (_req: Request, res: Response) => {
+    res.json(ctx.lookNow());
   });
 
   // GET /api/health (FRD §42).

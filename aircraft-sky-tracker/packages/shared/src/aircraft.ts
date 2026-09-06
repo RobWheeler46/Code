@@ -75,6 +75,12 @@ export interface Aircraft {
   /** On the ground (ADS-B ground bit / alt_baro "ground"), not airborne. */
   onGround?: boolean;
   distanceMiles: number;
+  /**
+   * Within the display radius (shown on the sky) vs only within the wider
+   * prediction radius (tracked for Look Now but not displayed) (FRD v4.0 §15).
+   * Absent is treated as displayed for backward compatibility.
+   */
+  withinDisplayRadius?: boolean;
   bearingFromCentre: number;
   aircraftTypeCode?: string;
   aircraftCategory?: string;

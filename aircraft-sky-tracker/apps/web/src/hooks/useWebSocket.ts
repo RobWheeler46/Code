@@ -8,6 +8,7 @@ import {
   type Satellite,
   type SatellitePass,
   type Insight,
+  type LookNowPrediction,
 } from "@ast/shared";
 
 export interface InterestingEntry {
@@ -38,6 +39,8 @@ export interface LiveState {
   satelliteAlert: SatelliteAlertEntry | undefined;
   /** Current set of active Sky Insights (FRD v3.8 §63, §103). */
   insights: Insight[];
+  /** Current Look Now approaching-aircraft predictions (FRD v4.0 §16-19). */
+  lookNow: LookNowPrediction[];
 }
 
 const MAX_BACKOFF_MS = 15_000;
@@ -60,6 +63,7 @@ export function useWebSocket(): LiveState {
   const [satelliteTimestamp, setSatelliteTimestamp] = useState<number>(0);
   const [satelliteAlert, setSatelliteAlert] = useState<SatelliteAlertEntry | undefined>(undefined);
   const [insights, setInsights] = useState<Insight[]>([]);
+  const [lookNow, setLookNow] = useState<LookNowPrediction[]>([]);
 
   const backoffRef = useRef(1000);
   const closedRef = useRef(false);
@@ -123,6 +127,9 @@ export function useWebSocket(): LiveState {
           case "insight.expired":
             setInsights((prev) => prev.filter((i) => i.id !== message.id));
             break;
+          case "looknow.update":
+            setLookNow(message.predictions);
+            break;
           case "aircraft.interesting.enter":
             entryIdRef.current += 1;
             setInterestingEntry({ aircraft: message.aircraft, id: entryIdRef.current });
@@ -175,5 +182,6 @@ export function useWebSocket(): LiveState {
     satelliteTimestamp,
     satelliteAlert,
     insights,
+    lookNow,
   };
 }

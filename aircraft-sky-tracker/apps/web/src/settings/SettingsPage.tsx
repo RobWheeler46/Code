@@ -20,6 +20,7 @@ type Validation =
   | { state: "invalid"; message: string };
 
 const RADIUS_OPTIONS = [2, 5, 10, 15, 20, 30];
+const PREDICTION_RADIUS_OPTIONS = [20, 30, 40, 60, 80, 100];
 
 const DISPLAY_TOGGLES: { key: keyof AppConfig; label: string }[] = [
   { key: "showRegistration", label: "Registration" },
@@ -192,6 +193,7 @@ export function SettingsPage({ onBack }: Props) {
     try {
       const patch: ConfigUpdate = {
         radiusMiles: draft.radiusMiles,
+        predictionRadiusMiles: draft.predictionRadiusMiles,
         aircraftSource: draft.aircraftSource,
         viewMode: draft.viewMode,
         viewingDistance: draft.viewingDistance,
@@ -213,6 +215,7 @@ export function SettingsPage({ onBack }: Props) {
         inAppAlerts: draft.inAppAlerts,
         browserNotifications: draft.browserNotifications,
         showSkyInsights: draft.showSkyInsights,
+        showLookNow: draft.showLookNow,
         historyEnabled: draft.historyEnabled,
         historyRetentionDays: draft.historyRetentionDays,
         showSatellites: draft.showSatellites,
@@ -418,6 +421,27 @@ export function SettingsPage({ onBack }: Props) {
       </div>
 
       <div className="field">
+        <label htmlFor="prediction-radius">Prediction radius</label>
+        <select
+          id="prediction-radius"
+          value={draft.predictionRadiusMiles}
+          onChange={(e) =>
+            setDraft({ ...draft, predictionRadiusMiles: Number(e.target.value) })
+          }
+        >
+          {PREDICTION_RADIUS_OPTIONS.map((r) => (
+            <option key={r} value={r}>
+              {r} miles
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="hint">
+        Aircraft between the tracking and prediction radius are tracked but not shown,
+        so Look Now can warn you before they enter the sky.
+      </div>
+
+      <div className="field">
         <label htmlFor="source">Aircraft source</label>
         <select
           id="source"
@@ -591,6 +615,14 @@ export function SettingsPage({ onBack }: Props) {
           onChange={(e) => setToggle("showSkyInsights", e.target.checked)}
         />
         Sky insights banner (one contextual line on the display)
+      </label>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={draft.showLookNow}
+          onChange={(e) => setToggle("showLookNow", e.target.checked)}
+        />
+        Look Now banner (warn me about approaching aircraft)
       </label>
 
       <h2>History</h2>

@@ -753,6 +753,70 @@ button.danger {
   margin-top: 0.15rem;
 }
 
+/* Look Now banner (FRD v4.0 §16-19): a prominent top-centre "look up" prompt for
+   the most imminent approaching aircraft. Cyan by default; amber when the
+   approach is interesting (military / watchlist / rare, §19). */
+.looknow-banner {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 21;
+  width: min(340px, 92vw);
+  background: var(--panel);
+  border: 1px solid #274a58;
+  border-left: 3px solid #8fe3ff;
+  border-radius: 10px;
+  padding: 0.55rem 0.85rem;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  animation: alert-in 0.35s ease;
+  text-align: left;
+}
+.looknow-banner.looknow-interesting {
+  border-color: #4a3c1e;
+  border-left-color: #ffcf6b;
+}
+.looknow-banner.looknow-low {
+  opacity: 0.85;
+}
+.looknow-head {
+  color: #8fe3ff;
+  font-size: calc(0.72rem * var(--ui-scale, 1));
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.looknow-interesting .looknow-head {
+  color: #ffcf6b;
+}
+.looknow-subject {
+  color: var(--primary);
+  font-size: calc(1.05rem * var(--ui-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin: 0.1rem 0 0.35rem;
+}
+.looknow-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 1rem;
+  font-size: calc(0.85rem * var(--ui-scale, 1));
+}
+.looknow-grid .k {
+  color: var(--secondary);
+}
+.looknow-grid .v {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--primary);
+}
+.looknow-confidence {
+  color: var(--secondary);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 0.4rem;
+}
+
 /* Satellite pass alerts (FRD v3.2 §61-62): own corner + cyan accent. */
 .sat-alert-stack {
   top: 1rem;

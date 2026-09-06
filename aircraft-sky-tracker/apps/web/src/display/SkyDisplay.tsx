@@ -5,6 +5,7 @@ import {
   type SourceStatus,
   type Satellite,
   type Insight,
+  type LookNowPrediction,
   resolveDisplayScale,
   locationTooApproximateForTrueSky,
 } from "@ast/shared";
@@ -15,6 +16,7 @@ import { SatelliteDetailsOverlay } from "./SatelliteDetailsOverlay.js";
 import { InterestingAlert } from "./InterestingAlert.js";
 import { SatelliteAlert } from "./SatelliteAlert.js";
 import { InsightBanner } from "./InsightBanner.js";
+import { LookNowBanner } from "./LookNowBanner.js";
 import type { InterestingEntry, SatelliteAlertEntry } from "../hooks/useWebSocket.js";
 
 interface Props {
@@ -28,6 +30,7 @@ interface Props {
   satelliteTimestamp?: number;
   satelliteAlert?: SatelliteAlertEntry;
   insights?: Insight[];
+  lookNow?: LookNowPrediction[];
 }
 
 /** The main display: canvas + optional header + status (FRD §47, §56-59). */
@@ -42,6 +45,7 @@ export function SkyDisplay({
   satelliteTimestamp = 0,
   satelliteAlert,
   insights = [],
+  lookNow = [],
 }: Props) {
   const [selected, setSelected] = useState<Aircraft | null>(null);
   const [selectedSat, setSelectedSat] = useState<string | null>(null);
@@ -117,6 +121,8 @@ export function SkyDisplay({
         )}
 
       <DisplayStatus sourceStatus={sourceStatus} connected={connected} />
+
+      <LookNowBanner predictions={lookNow} enabled={config.showLookNow} />
 
       <InsightBanner insights={insights} enabled={config.showSkyInsights} />
 

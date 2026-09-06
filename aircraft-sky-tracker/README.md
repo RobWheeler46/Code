@@ -198,6 +198,7 @@ The browser talks only to the backend (FRD §39):
 | `GET` | `/api/aircraft/{icaoHex}/flight-intelligence` | Operational flight data: state, OOOI, ETA, route (§102) |
 | `GET` | `/api/aircraft/{icaoHex}/insights` | Active Sky Insights for one aircraft, with evidence (§103) |
 | `GET` | `/api/insights` | All currently-active Sky Insights (§103) |
+| `GET` | `/api/looknow` | Approaching-aircraft closest-approach predictions (v4.0 §16-19) |
 | `GET` | `/api/view?postcode=` | Per-viewer snapshot for any postcode (read-only) |
 | `GET` | `/api/history?date=` | Aircraft pass history for a date (default today) |
 | `GET` | `/api/history/dates` | Retained dates with pass counts |
@@ -454,6 +455,21 @@ operational evidence plus geographic movement"), and a geometric **divergence**
 (sustainedly tracking away from the filed destination → capped at *possible*,
 since geometry alone is not corroboration). Manoeuvring (a wide track spread) is
 discounted so a normal turn is not mistaken for a diversion.
+
+**Look Now closest-approach prediction (done, FRD v4.0 §15-19)** — answers "what
+is likely to enter my sky shortly?". A wider **prediction radius** (default 40 mi,
+configurable) is polled and aircraft between the display radius and it are
+**tracked but not displayed** (§15) — so the sky stays uncluttered while approaches
+can still be predicted. For each such aircraft the engine projects its **closest
+point of approach** from position, ground track, ground speed and vertical rate
+(`predictClosestApproach`): time to the closest point, predicted horizontal and
+slant range, elevation, altitude, and the compass direction to look (§16-17). A
+**confidence** rating (§18) falls when the aircraft is turning (a tracked
+track-spread check), climbing/descending hard, its position is stale, or the
+projection reaches far ahead — so an alert never implies certainty. The single
+most imminent approach shows as a top-centre **Look Now banner** (toggle
+`showLookNow`), highlighted when the aircraft is interesting (§19). Broadcast as
+`looknow.update` and served at `/api/looknow`.
 
 **Google account & saved locations (done, FRD v3.6 §12, §26)** — an optional
 **Google Sign-In** (env-gated: `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`) lets the

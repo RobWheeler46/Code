@@ -23,6 +23,12 @@ export interface AppConfig {
   latitude: number;
   longitude: number;
   radiusMiles: number;
+  /**
+   * Prediction radius (miles) for the Look Now engine (FRD v4.0 §15). Aircraft
+   * between the display radius and this are tracked but NOT displayed, so their
+   * approach can be predicted without cluttering the sky.
+   */
+  predictionRadiusMiles: number;
   /** How the current location was obtained (FRD v3.6 §8, §17). */
   locationSource: LocationSource;
   /** Trustworthiness of the observer centre (FRD v3.6 §8). */
@@ -78,6 +84,8 @@ export interface AppConfig {
   satelliteShowStarlink: boolean;
   /** Show the single main-screen Sky Insight banner (FRD v3.8 §91). */
   showSkyInsights: boolean;
+  /** Show the Look Now approaching-aircraft banner (FRD v4.0 §16-19). */
+  showLookNow: boolean;
   /** Alert ahead of an upcoming satellite pass (FRD §61-62). */
   satelliteAlertsEnabled: boolean;
   /** Advance-warning lead time in minutes for a satellite pass alert (FRD §62). */
@@ -98,6 +106,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   latitude: 0,
   longitude: 0,
   radiusMiles: DEFAULT_RADIUS_MILES,
+  predictionRadiusMiles: 40,
   locationSource: "default",
   locationConfidence: "good",
   aircraftSource: "internet",
@@ -125,6 +134,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   inAppAlerts: true,
   browserNotifications: false,
   showSkyInsights: true,
+  showLookNow: true,
   showSatellites: true,
   satelliteMinElevationDeg: 15,
   satelliteShowStations: true,
@@ -141,6 +151,7 @@ export type ConfigUpdate = Partial<
     AppConfig,
     | "postcode"
     | "radiusMiles"
+    | "predictionRadiusMiles"
     | "aircraftSource"
     | "displayMode"
     | "viewMode"
@@ -166,6 +177,7 @@ export type ConfigUpdate = Partial<
     | "inAppAlerts"
     | "browserNotifications"
     | "showSkyInsights"
+    | "showLookNow"
     | "showSatellites"
     | "satelliteMinElevationDeg"
     | "satelliteShowStations"

@@ -46,7 +46,19 @@ export class AircraftStateService {
     return this.counts;
   }
 
+  /** Displayable aircraft: those within the display radius (FRD §14, v4.0 §15). */
   snapshot(): Aircraft[] {
+    return [...this.tracked.values()]
+      .map((t) => t.aircraft)
+      .filter((a) => a.withinDisplayRadius !== false);
+  }
+
+  /**
+   * Every tracked aircraft, including those in the prediction band (display <
+   * distance <= prediction radius) that are NOT displayed. For the Look Now
+   * engine only (FRD v4.0 §15-16).
+   */
+  allTracked(): Aircraft[] {
     return [...this.tracked.values()].map((t) => t.aircraft);
   }
 
@@ -59,7 +71,10 @@ export class AircraftStateService {
     watchlist = "",
     lowAltitudeFeet?: number,
     hideGround = false,
+    predictionRadiusMiles: number = radiusMiles,
   ): Aircraft[] {
+    // The prediction radius is never smaller than the display radius.
+    const outerRadius = Math.max(radiusMiles, predictionRadiusMiles);
     let insideRadius = 0;
     const seen = new Set<string>();
     const watchTokens = parseWatchlist(watchlist);
@@ -79,12 +94,13 @@ export class AircraftStateService {
         normalised.longitude,
       );
 
-      if (distanceMiles > radiusMiles) {
-        // Live position outside the radius: ensure it is not displayed (FRD §14).
+      if (distanceMiles > outerRadius) {
+        // Beyond even the prediction radius: not tracked at all (FRD §14, v4.0 §15).
         this.tracked.delete(normalised.id);
         continue;
       }
-      insideRadius++;
+      const withinDisplay = distanceMiles <= radiusMiles;
+      if (withinDisplay) insideRadius++;
       seen.add(normalised.id);
 
       const bearingFromCentre = this.geo.bearingFromCentre(
@@ -95,7 +111,9 @@ export class AircraftStateService {
       // Registration fallback via adsbdb only when missing (FRD §21, §74).
       let registration = normalised.registration;
       let aircraftTypeCode = normalised.aircraftTypeCode;
-      if (!registration) {
+      // Route/registration enrichment is limited to displayed aircraft so the
+      // wider prediction band does not multiply lookups (FRD v4.0 §15).
+      if (!registration && withinDisplay) {
         const meta = this.routes.getRegistration(normalised.icaoHex);
         if (meta) {
           registration = registration ?? meta.registration;
@@ -103,14 +121,16 @@ export class AircraftStateService {
         }
       }
 
-      const destination = this.routes.getDestination({
-        icaoHex: normalised.icaoHex,
-        registration,
-        callsign: normalised.callsign,
-        latitude: normalised.latitude,
-        longitude: normalised.longitude,
-        trackDegrees: normalised.trackDegrees,
-      });
+      const destination = withinDisplay
+        ? this.routes.getDestination({
+            icaoHex: normalised.icaoHex,
+            registration,
+            callsign: normalised.callsign,
+            latitude: normalised.latitude,
+            longitude: normalised.longitude,
+            trackDegrees: normalised.trackDegrees,
+          })
+        : undefined;
 
       const silhouette = aircraftSilhouetteFromType(aircraftTypeCode);
       const category = categoryFromSilhouette(silhouette);
@@ -140,6 +160,7 @@ export class AircraftStateService {
         trackDegrees: normalised.trackDegrees,
         onGround: normalised.onGround,
         distanceMiles: round(distanceMiles, 2),
+        withinDisplayRadius: withinDisplay,
         bearingFromCentre: round(bearingFromCentre, 1),
         aircraftTypeCode,
         aircraftCategory: category,
@@ -175,7 +196,7 @@ export class AircraftStateService {
     this.counts = {
       received: raw.length,
       insideRadius,
-      displayed: this.tracked.size,
+      displayed: this.snapshot().length,
     };
     return this.snapshot();
   }
