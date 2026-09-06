@@ -68,6 +68,40 @@ export interface InsightsSnapshotMessage {
   insights: Insight[];
 }
 
+/**
+ * Sky Insight lifecycle deltas (FRD v3.8 §104). Broadcast as the engine adds,
+ * refreshes or expires an insight. The full `insights.snapshot` is still sent on
+ * connect for state sync; these deltas keep already-connected clients in step
+ * without resending the whole set each cycle.
+ */
+export interface InsightCreatedMessage {
+  type: "insight.created";
+  insight: Insight;
+  timestamp: number;
+}
+export interface InsightUpdatedMessage {
+  type: "insight.updated";
+  insight: Insight;
+  timestamp: number;
+}
+export interface InsightExpiredMessage {
+  type: "insight.expired";
+  id: string;
+  subjectId: string;
+  timestamp: number;
+}
+
+/** A route/destination decision changed for an aircraft (FRD v3.8 §59, §104). */
+export interface RouteUpdatedMessage {
+  type: "route.updated";
+  aircraftId: string;
+  previousDestination: string;
+  /** Empty when a divergence is detected but the new destination is unknown. */
+  newDestination: string;
+  confidence: "possible" | "likely" | "confirmed";
+  timestamp: number;
+}
+
 export type ServerMessage =
   | AircraftSnapshotMessage
   | ConfigUpdatedMessage
@@ -76,6 +110,10 @@ export type ServerMessage =
   | AircraftInterestingEnterMessage
   | SatelliteSnapshotMessage
   | SatelliteAlertMessage
-  | InsightsSnapshotMessage;
+  | InsightsSnapshotMessage
+  | InsightCreatedMessage
+  | InsightUpdatedMessage
+  | InsightExpiredMessage
+  | RouteUpdatedMessage;
 
 export const WS_PATH = "/ws";

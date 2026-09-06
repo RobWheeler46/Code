@@ -108,7 +108,20 @@ export function useWebSocket(): LiveState {
             setSatelliteTimestamp(message.timestamp);
             break;
           case "insights.snapshot":
+            // Full state sync (on connect / reconnect).
             setInsights(message.insights);
+            break;
+          case "insight.created":
+          case "insight.updated":
+            // Incremental delta: add or replace by id (FRD v3.8 §104).
+            setInsights((prev) => {
+              const next = prev.filter((i) => i.id !== message.insight.id);
+              next.push(message.insight);
+              return next;
+            });
+            break;
+          case "insight.expired":
+            setInsights((prev) => prev.filter((i) => i.id !== message.id));
             break;
           case "aircraft.interesting.enter":
             entryIdRef.current += 1;

@@ -6,6 +6,7 @@ export * from "./location.js";
 export * from "./account.js";
 export * from "./operations.js";
 export * from "./insights.js";
+export * from "./routeChange.js";
 export * from "./history.js";
 export * from "./satellite.js";
 export * from "./messages.js";

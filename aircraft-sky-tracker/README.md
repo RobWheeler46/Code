@@ -426,18 +426,34 @@ stale-ACARS / possible-diversion / OOOI scenarios. Served at
 **Flight Intelligence** section. If the provider fails, only enrichment degrades —
 tracking, routes and history continue (§108).
 
-**Sky Insights engine (done, FRD v3.8 §55-63, §90-92, §103)** — the engine turns
-each aircraft's evidence (operational + route + a per-aircraft descent streak it
-tracks across snapshots) into short, validated statements: **possible route
-change**, **recently airborne**, **likely landing**, **landed**, **flight
+**Sky Insights engine (done, FRD v3.8 §55-63, §90-92, §103-104)** — the engine
+turns each aircraft's evidence (operational + route + per-aircraft trajectory
+history) into short, validated statements: **possible route change**, **route
+updated**, **recently airborne**, **likely landing**, **landed**, **flight
 confirmed**. Every insight carries a **confidence** and its own **evidence**
 ("Why?", §92); a low-confidence inference is never stated as fact. The main
 display shows at most **one** prominent contextual insight at a time (§91,
 bottom-centre banner, toggle in Settings via `showSkyInsights`); the rest appear
 in the drawer's **Sky insights** section. The engine bounds and throttles
 operational enrichment (nearest aircraft, cached per hex) so a future live
-Airframes path can't fan out. Broadcast over the WebSocket as `insights.snapshot`
-and served at `/api/insights` and `/api/aircraft/{hex}/insights`.
+Airframes path can't fan out. Served at `/api/insights` and
+`/api/aircraft/{hex}/insights`.
+
+*Event stream (§104):* a full `insights.snapshot` is sent on connect for state
+sync; thereafter the engine streams **`insight.created` / `insight.updated` /
+`insight.expired`** deltas and **`route.updated`** so already-connected clients
+stay in step without resending the whole set each cycle.
+
+*History-based route-change detection (§43-44, §59):* the engine keeps a bounded
+per-aircraft trail of positions and resolved-destination decisions and feeds it to
+`assessRouteChange`, so a diversion is backed by real trajectory evidence rather
+than a single provider field. Three recognisers: a **decision change** (the
+resolved destination airport changed → *ROUTE UPDATED*, §59), an **operational
+report** that geometry can corroborate to lift confidence (§44 "likely = strong
+operational evidence plus geographic movement"), and a geometric **divergence**
+(sustainedly tracking away from the filed destination → capped at *possible*,
+since geometry alone is not corroboration). Manoeuvring (a wide track spread) is
+discounted so a normal turn is not mistaken for a diversion.
 
 **Google account & saved locations (done, FRD v3.6 §12, §26)** — an optional
 **Google Sign-In** (env-gated: `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`) lets the

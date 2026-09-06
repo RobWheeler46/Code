@@ -16,6 +16,7 @@
 
 import type { Aircraft } from "./aircraft.js";
 import type { FlightIntelligence } from "./operations.js";
+import type { RouteChangeAssessment } from "./routeChange.js";
 
 /**
  * The insight kinds this release supports. A deliberate subset of §55 - only
@@ -25,6 +26,7 @@ import type { FlightIntelligence } from "./operations.js";
  */
 export type InsightType =
   | "possible.diversion"
+  | "route.changed"
   | "likely.landing"
   | "recently.airborne"
   | "flight.landed"
@@ -80,6 +82,8 @@ export function insightPriority(type: InsightType): number {
   switch (type) {
     case "possible.diversion":
       return 80; // an unusual operational event - notable on the main screen
+    case "route.changed":
+      return 78; // the confirmed decision change (§59), just below a live diversion
     case "likely.landing":
       return 62; // behaviour explanation (§90: 60 band)
     case "recently.airborne":
@@ -97,6 +101,7 @@ export function insightPriority(type: InsightType): number {
 export function insightSurface(type: InsightType): InsightSurface {
   switch (type) {
     case "possible.diversion":
+    case "route.changed":
     case "likely.landing":
     case "recently.airborne":
       return "main";
@@ -112,6 +117,7 @@ export function insightSurface(type: InsightType): InsightSurface {
 export function insightTtlMs(type: InsightType): number {
   switch (type) {
     case "possible.diversion":
+    case "route.changed":
       return 5 * 60_000;
     case "likely.landing":
       return 2 * 60_000;
@@ -157,9 +163,20 @@ export interface AircraftInsightInput {
   aircraft: Aircraft;
   /** Operational enrichment (OOOI / state / ETA / diversion), if available. */
   flight?: FlightIntelligence;
+  /**
+   * History-based route-change assessment (§43-44, §59). When present it drives
+   * the route insight; otherwise the operational `possibleRouteChange` is used
+   * as a fallback so this function is still usable standalone.
+   */
+  routeChange?: RouteChangeAssessment;
   /** How long the aircraft has been descending continuously, ms (0 = not). */
   descentForMs?: number;
   nowMs: number;
+}
+
+/** Map a diversion confidence (§44) to an insight confidence. */
+function diversionToInsightConfidence(c: "possible" | "likely" | "confirmed"): InsightConfidence {
+  return c === "confirmed" ? "confirmed" : c === "likely" ? "high" : "medium";
 }
 
 function subjectLabel(a: Aircraft): string {
@@ -176,6 +193,22 @@ function minutesAgo(iso: string, nowMs: number): number {
  */
 export function deriveAircraftInsights(input: AircraftInsightInput): Insight[] {
   const { aircraft, flight, descentForMs = 0, nowMs } = input;
+  // Prefer the history-based assessment; fall back to a raw operational report so
+  // this function is still meaningful on its own (§43-44, §59).
+  const routeChange: RouteChangeAssessment | undefined =
+    input.routeChange ??
+    (flight?.possibleRouteChange
+      ? {
+          previousDestination: flight.possibleRouteChange.previousDestination,
+          newDestination: flight.possibleRouteChange.newDestination,
+          confidence: flight.possibleRouteChange.confidence,
+          kind: "operational",
+          evidence: [
+            `Filed destination ${flight.possibleRouteChange.previousDestination}`,
+            `Provider evidence now points to ${flight.possibleRouteChange.newDestination}`,
+          ],
+        }
+      : undefined);
   const iso = new Date(nowMs).toISOString();
   const label = subjectLabel(aircraft);
   const out: Insight[] = [];
@@ -204,24 +237,38 @@ export function deriveAircraftInsights(input: AircraftInsightInput): Insight[] {
     expiresAt: new Date(nowMs + insightTtlMs(type)).toISOString(),
   });
 
-  // --- Possible route change / diversion (§43, §59, §62) ---
-  const prc = flight?.possibleRouteChange;
-  if (prc) {
-    const confidence: InsightConfidence =
-      prc.confidence === "confirmed" ? "confirmed" : prc.confidence === "likely" ? "high" : "medium";
-    out.push(
-      make(
-        "possible.diversion",
-        confidence,
-        "POSSIBLE ROUTE CHANGE",
-        [label, `${prc.previousDestination} → ${prc.newDestination}`],
-        [
-          { source: "adsbdb", detail: `Filed destination ${prc.previousDestination}` },
-          { source: "Airframes", detail: `Evidence now points to ${prc.newDestination}` },
-          { source: "Sky Tracker", detail: `Assessed confidence: ${prc.confidence}` },
-        ],
-      ),
-    );
+  // --- Route change / diversion (§43-44, §59, §62) ---
+  if (routeChange) {
+    const confidence = diversionToInsightConfidence(routeChange.confidence);
+    const evidence: InsightEvidence[] = routeChange.evidence.map((detail) => ({
+      source: routeChange.kind === "operational" ? "Airframes" : "Sky Tracker",
+      detail,
+    }));
+    // A confident decision change is a ROUTE UPDATED insight (§59); everything
+    // else (operational report, geometric divergence) is POSSIBLE ROUTE CHANGE.
+    const isConfirmedDecision =
+      routeChange.kind === "decision" &&
+      (routeChange.confidence === "likely" || routeChange.confidence === "confirmed") &&
+      routeChange.newDestination.length > 0;
+    if (isConfirmedDecision) {
+      out.push(
+        make(
+          "route.changed",
+          confidence,
+          "ROUTE UPDATED",
+          [label, `Destination now ${routeChange.newDestination}`],
+          evidence,
+        ),
+      );
+    } else {
+      const arrow =
+        routeChange.newDestination.length > 0
+          ? `${routeChange.previousDestination} → ${routeChange.newDestination}`
+          : `Diverting from ${routeChange.previousDestination}`;
+      out.push(
+        make("possible.diversion", confidence, "POSSIBLE ROUTE CHANGE", [label, arrow], evidence),
+      );
+    }
   }
 
   // --- Recently airborne (§57): a fresh OFF event on the current flight ---

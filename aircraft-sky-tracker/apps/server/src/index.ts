@@ -55,7 +55,6 @@ import {
   type DetectedLocation,
   type LocationSource,
   type FlightIntelligence,
-  type Insight,
 } from "@ast/shared";
 import {
   OperationalIntelligenceService,
@@ -183,10 +182,41 @@ async function main(): Promise<void> {
 
   // Sky Insights Engine (FRD v3.8 §63): turns per-aircraft evidence into the
   // one prominent main-screen insight (§91) plus the drawer's evidence list.
+  // Lifecycle deltas + route.updated are streamed to clients (§104); the full
+  // snapshot is sent on connect (below) for state sync.
   const insights = new InsightsEngine(
     (aircraft) => buildFlightIntelligence(aircraft),
-    (active: Insight[]) =>
-      ws.broadcast({ type: "insights.snapshot", timestamp: Date.now(), insights: active }),
+    (events) => {
+      const timestamp = Date.now();
+      for (const e of events) {
+        switch (e.kind) {
+          case "created":
+            ws.broadcast({ type: "insight.created", insight: e.insight, timestamp });
+            break;
+          case "updated":
+            ws.broadcast({ type: "insight.updated", insight: e.insight, timestamp });
+            break;
+          case "expired":
+            ws.broadcast({
+              type: "insight.expired",
+              id: e.id,
+              subjectId: e.subjectId,
+              timestamp,
+            });
+            break;
+          case "route-updated":
+            ws.broadcast({
+              type: "route.updated",
+              aircraftId: e.aircraftId,
+              previousDestination: e.previousDestination,
+              newDestination: e.newDestination,
+              confidence: e.confidence,
+              timestamp,
+            });
+            break;
+        }
+      }
+    },
   );
 
   // Satellite layer (FRD v3.2 §36-84) - independent of aircraft tracking.

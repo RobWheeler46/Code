@@ -1,22 +1,43 @@
 /**
  * Sky Insights Engine (FRD v3.8 §63, §103-104). The stateful half of the
  * insights layer: on each aircraft snapshot it gathers the evidence for every
- * live object, runs the pure `deriveAircraftInsights` derivation, then owns the
- * lifecycle - creating, refreshing and expiring insights and broadcasting the
- * current set when it changes.
+ * live object, runs the pure derivation, then owns the lifecycle - creating,
+ * refreshing and expiring insights and emitting the deltas.
  *
  * Design notes:
  *   - Behaviour insights (likely landing) need history the raw snapshot lacks,
  *     so the engine tracks a per-aircraft descent streak across snapshots.
- *   - Operational enrichment (OOOI / state / ETA / diversion) is throttled per
- *     aircraft and bounded to the nearest few, so a future live Airframes path
- *     cannot fan out into one request per aircraft per second (§26 rate limits).
- *   - An insight is dropped as soon as its supporting evidence no longer holds,
- *     so the set always reflects the current sky (with expiresAt as a safety net).
+ *   - Route-change detection (§43-44, §59) is history-based: the engine keeps a
+ *     bounded per-aircraft trail of positions and resolved-destination decisions
+ *     and feeds it to `assessRouteChange`, so a diversion is backed by real
+ *     trajectory evidence rather than a single provider field.
+ *   - Operational enrichment is throttled per aircraft and bounded to the nearest
+ *     few, so a future live Airframes path can't fan out (§26 rate limits).
+ *   - Lifecycle deltas (created / updated / expired) plus route.updated events are
+ *     emitted for reactive consumers (§104); the full snapshot is sent on connect.
  */
 
-import type { Aircraft, FlightIntelligence, Insight } from "@ast/shared";
-import { deriveAircraftInsights, pickPrimaryInsight } from "@ast/shared";
+import type {
+  Aircraft,
+  FlightIntelligence,
+  Insight,
+  RouteChangeSample,
+  RouteChangeAssessment,
+} from "@ast/shared";
+import { deriveAircraftInsights, pickPrimaryInsight, assessRouteChange } from "@ast/shared";
+
+/** A lifecycle delta the engine emits for one reconcile pass (§104). */
+export type InsightStreamEvent =
+  | { kind: "created"; insight: Insight }
+  | { kind: "updated"; insight: Insight }
+  | { kind: "expired"; id: string; subjectId: string }
+  | {
+      kind: "route-updated";
+      aircraftId: string;
+      previousDestination: string;
+      newDestination: string;
+      confidence: "possible" | "likely" | "confirmed";
+    };
 
 export interface InsightsEngineOptions {
   now?: () => number;
@@ -37,18 +58,24 @@ interface EnrichCache {
 
 /** Descent rate (ft/min) below which an aircraft counts as descending. */
 const DESCENT_FPM = -400;
+/** How long a position/decision trail is retained per aircraft (ms). */
+const HISTORY_WINDOW_MS = 20 * 60_000;
+/** Hard cap on samples per aircraft (belt-and-braces against fast pollers). */
+const HISTORY_MAX = 80;
 
 export class InsightsEngine {
   private readonly active = new Map<string, Insight>();
   private readonly descent = new Map<string, DescentState>();
   private readonly enrichCache = new Map<string, EnrichCache>();
+  private readonly history = new Map<string, RouteChangeSample[]>();
+  private readonly lastRouteKey = new Map<string, string>();
   private readonly now: () => number;
   private readonly enrichTtlMs: number;
   private readonly maxEnrich: number;
 
   constructor(
     private readonly enrich: (a: Aircraft) => Promise<FlightIntelligence | undefined>,
-    private readonly onChange: (insights: Insight[]) => void,
+    private readonly emit: (events: InsightStreamEvent[]) => void,
     opts: InsightsEngineOptions = {},
   ) {
     this.now = opts.now ?? Date.now;
@@ -73,17 +100,14 @@ export class InsightsEngine {
   }
 
   /**
-   * Process a fresh aircraft snapshot: update streaks, gather evidence, derive
-   * insights and reconcile lifecycle. Broadcasts only when the set changes.
+   * Process a fresh aircraft snapshot: update streaks + trails, gather evidence,
+   * derive insights and reconcile lifecycle. Emits deltas only when they occur.
    */
   async onSnapshot(aircraft: Aircraft[], nowMs: number = this.now()): Promise<void> {
     const present = new Set(aircraft.map((a) => a.icaoHex));
 
     // 1. Descent streaks (cheap, every aircraft).
     for (const a of aircraft) this.updateDescent(a, nowMs);
-    for (const hex of [...this.descent.keys()]) {
-      if (!present.has(hex)) this.descent.delete(hex);
-    }
 
     // 2. Operational enrichment - throttled and bounded to the nearest aircraft.
     const nearest = [...aircraft]
@@ -95,29 +119,29 @@ export class InsightsEngine {
         flights.set(a.icaoHex, await this.enrichThrottled(a, nowMs));
       }),
     );
-    for (const hex of [...this.enrichCache.keys()]) {
-      if (!present.has(hex)) this.enrichCache.delete(hex);
-    }
 
-    // 3. Derive candidate insights from current evidence.
+    // 3. Route-change assessment + insight derivation from current evidence.
+    const events: InsightStreamEvent[] = [];
     const candidates: Insight[] = [];
     for (const a of aircraft) {
+      const flight = flights.get(a.icaoHex);
+      const routeChange = this.assessRoute(a, flight, nowMs, events);
       const ds = this.descent.get(a.icaoHex);
       const descentForMs = ds ? nowMs - ds.sinceMs : 0;
       candidates.push(
-        ...deriveAircraftInsights({
-          aircraft: a,
-          flight: flights.get(a.icaoHex),
-          descentForMs,
-          nowMs,
-        }),
+        ...deriveAircraftInsights({ aircraft: a, flight, routeChange, descentForMs, nowMs }),
       );
     }
 
-    // 4. Reconcile against the active set.
-    if (this.reconcile(candidates, present, nowMs)) {
-      this.onChange(this.list());
+    // 4. Reconcile against the active set, collecting created/updated/expired.
+    this.reconcile(candidates, present, nowMs, events);
+
+    // 5. Prune per-aircraft state for aircraft no longer present.
+    for (const map of [this.descent, this.enrichCache, this.history, this.lastRouteKey]) {
+      for (const hex of [...map.keys()]) if (!present.has(hex)) map.delete(hex);
     }
+
+    if (events.length > 0) this.emit(events);
   }
 
   private updateDescent(a: Aircraft, nowMs: number): void {
@@ -127,6 +151,59 @@ export class InsightsEngine {
     } else {
       this.descent.delete(a.icaoHex);
     }
+  }
+
+  /** Build the current sample, assess a route change against the trail, then
+   *  append the sample and emit a route.updated event on a fresh/changed result. */
+  private assessRoute(
+    a: Aircraft,
+    flight: FlightIntelligence | undefined,
+    nowMs: number,
+    events: InsightStreamEvent[],
+  ): RouteChangeAssessment | undefined {
+    const d = a.destination;
+    const current: RouteChangeSample = {
+      t: nowMs,
+      lat: a.latitude,
+      lon: a.longitude,
+      track: a.trackDegrees,
+      destIcao: d?.icao,
+      destName: d?.displayName ?? d?.airportName,
+      destLat: d?.latitude,
+      destLon: d?.longitude,
+      destConfidence: d?.confidence ?? "unknown",
+      sources: d?.sources ?? [],
+    };
+    const trail = this.history.get(a.icaoHex) ?? [];
+    const assessment = assessRouteChange({
+      current,
+      history: trail,
+      operational: flight?.possibleRouteChange,
+      nowMs,
+    });
+
+    // Append to the trail (bounded by window and count).
+    const next = [...trail, current].filter((s) => nowMs - s.t <= HISTORY_WINDOW_MS);
+    if (next.length > HISTORY_MAX) next.splice(0, next.length - HISTORY_MAX);
+    this.history.set(a.icaoHex, next);
+
+    // Emit route.updated when a change first appears or its destination shifts.
+    if (assessment) {
+      const key = `${assessment.kind}:${assessment.previousDestination}->${assessment.newDestination}:${assessment.confidence}`;
+      if (this.lastRouteKey.get(a.icaoHex) !== key) {
+        this.lastRouteKey.set(a.icaoHex, key);
+        events.push({
+          kind: "route-updated",
+          aircraftId: a.icaoHex,
+          previousDestination: assessment.previousDestination,
+          newDestination: assessment.newDestination,
+          confidence: assessment.confidence,
+        });
+      }
+    } else {
+      this.lastRouteKey.delete(a.icaoHex);
+    }
+    return assessment;
   }
 
   private async enrichThrottled(
@@ -141,21 +218,25 @@ export class InsightsEngine {
   }
 
   /** Upsert candidates and drop insights whose evidence no longer holds. */
-  private reconcile(candidates: Insight[], present: Set<string>, nowMs: number): boolean {
-    let changed = false;
+  private reconcile(
+    candidates: Insight[],
+    present: Set<string>,
+    nowMs: number,
+    events: InsightStreamEvent[],
+  ): void {
     const candidateKeys = new Set(candidates.map((c) => c.id));
 
     for (const c of candidates) {
       const existing = this.active.get(c.id);
       if (!existing) {
         this.active.set(c.id, c);
-        changed = true;
+        events.push({ kind: "created", insight: c });
         continue;
       }
       // Preserve the original creation time; refresh evidence and TTL.
       const merged: Insight = { ...c, createdAt: existing.createdAt };
       this.active.set(c.id, merged);
-      if (!sameInsight(existing, merged)) changed = true;
+      if (!sameInsight(existing, merged)) events.push({ kind: "updated", insight: merged });
     }
 
     for (const [key, ins] of [...this.active.entries()]) {
@@ -164,11 +245,9 @@ export class InsightsEngine {
       const unsupported = !candidateKeys.has(key);
       if (gone || stale || unsupported) {
         this.active.delete(key);
-        changed = true;
+        events.push({ kind: "expired", id: ins.id, subjectId: ins.subjectId });
       }
     }
-
-    return changed;
   }
 }
 
