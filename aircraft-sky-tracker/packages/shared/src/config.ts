@@ -86,6 +86,8 @@ export interface AppConfig {
   showSkyInsights: boolean;
   /** Show the Look Now approaching-aircraft banner (FRD v4.0 §16-19). */
   showLookNow: boolean;
+  /** Show aviation context: airspace, weather, contrail, military (FRD v4.0 §35-47). */
+  showAviationContext: boolean;
   /** Alert ahead of an upcoming satellite pass (FRD §61-62). */
   satelliteAlertsEnabled: boolean;
   /** Advance-warning lead time in minutes for a satellite pass alert (FRD §62). */
@@ -135,6 +137,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   browserNotifications: false,
   showSkyInsights: true,
   showLookNow: true,
+  showAviationContext: true,
   showSatellites: true,
   satelliteMinElevationDeg: 15,
   satelliteShowStations: true,
@@ -178,6 +181,7 @@ export type ConfigUpdate = Partial<
     | "browserNotifications"
     | "showSkyInsights"
     | "showLookNow"
+    | "showAviationContext"
     | "showSatellites"
     | "satelliteMinElevationDeg"
     | "satelliteShowStations"

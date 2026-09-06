@@ -4,6 +4,8 @@ import {
   type AircraftMeta,
   type FlightIntelligence,
   type Insight,
+  type AircraftAviationContext,
+  type AviationContext,
   flightStateLabel,
   oooiRows,
 } from "@ast/shared";
@@ -11,6 +13,8 @@ import {
 interface Props {
   aircraft: Aircraft;
   onClose: () => void;
+  /** Show the aviation-context section (config.showAviationContext, v4.0 §35-47). */
+  showAviation?: boolean;
 }
 
 interface Photo {
@@ -61,7 +65,7 @@ type Row = [string, string | undefined];
  * route / live / aircraft sections plus collapsible technical + data-quality,
  * and auto-closes after inactivity for kiosk use (FRD §86).
  */
-export function AircraftDetailsOverlay({ aircraft, onClose }: Props) {
+export function AircraftDetailsOverlay({ aircraft, onClose, showAviation = false }: Props) {
   const identifier = aircraft.registration ?? aircraft.callsign ?? aircraft.icaoHex;
   const dest = aircraft.destination;
   const silLabel = aircraft.silhouette ? SILHOUETTE_LABEL[aircraft.silhouette] : undefined;
@@ -72,6 +76,8 @@ export function AircraftDetailsOverlay({ aircraft, onClose }: Props) {
   const [meta, setMeta] = useState<AircraftMeta | undefined>();
   const [flight, setFlight] = useState<FlightIntelligence | undefined>();
   const [insights, setInsights] = useState<Insight[]>([]);
+  const [aviation, setAviation] = useState<AircraftAviationContext | undefined>();
+  const [observerAviation, setObserverAviation] = useState<AviationContext | undefined>();
   const [showTechnical, setShowTechnical] = useState(false);
   const [showQuality, setShowQuality] = useState(false);
 
@@ -102,6 +108,17 @@ export function AircraftDetailsOverlay({ aircraft, onClose }: Props) {
       .then((r) => (r.ok ? (r.json() as Promise<{ insights: Insight[] }>) : { insights: [] }))
       .then((d) => active && setInsights(d.insights ?? []))
       .catch(() => undefined);
+    if (showAviation) {
+      setAviation(undefined);
+      void fetch(`/api/aircraft/${encodeURIComponent(aircraft.icaoHex)}/aviation`)
+        .then((r) => (r.ok ? (r.json() as Promise<AircraftAviationContext>) : undefined))
+        .then((d) => active && setAviation(d))
+        .catch(() => undefined);
+      void fetch(`/api/aviation-context`)
+        .then((r) => (r.ok ? (r.json() as Promise<AviationContext>) : undefined))
+        .then((d) => active && setObserverAviation(d))
+        .catch(() => undefined);
+    }
     return () => {
       active = false;
     };
@@ -258,6 +275,10 @@ export function AircraftDetailsOverlay({ aircraft, onClose }: Props) {
 
         {insights.length > 0 && <InsightsSection insights={insights} />}
 
+        {showAviation && (aviation || observerAviation) && (
+          <AviationSection aircraft={aviation} observer={observerAviation} />
+        )}
+
         {flight && <FlightIntelligenceSection flight={flight} />}
 
         <Section title="Live" rows={liveRows} />
@@ -378,6 +399,85 @@ function InsightsSection({ insights }: { insights: Insight[] }) {
           )}
         </div>
       ))}
+    </>
+  );
+}
+
+/** Aviation context: airspace, contrail, nearest weather, military (v4.0 §35-47). */
+function AviationSection({
+  aircraft,
+  observer,
+}: {
+  aircraft?: AircraftAviationContext;
+  observer?: AviationContext;
+}) {
+  const memberships = aircraft?.airspace ?? [];
+  const contrail = aircraft?.contrail;
+  const weather = observer?.weather;
+  const military = observer?.military;
+  const contrailShown = contrail && contrail.likelihood !== "unknown";
+  if (memberships.length === 0 && !contrailShown && !weather && !military) return null;
+
+  return (
+    <>
+      <h2>Aviation context</h2>
+
+      {memberships.length > 0 && (
+        <div className="airspace-list">
+          {memberships.map((m) => (
+            <div key={m.region.id} className="airspace-item">
+              <span className="airspace-name">{m.region.name}</span>
+              <span className="airspace-band">
+                {m.region.lower.label}–{m.region.upper.label}
+                {m.verticalMatch === false ? " (below aircraft)" : ""}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {contrailShown && (
+        <div className="contrail">
+          Contrail formation: <strong>{capitalise(contrail!.likelihood)}</strong>
+          {contrail!.ambientTempC !== undefined && (
+            <span className="contrail-detail">
+              {" "}
+              ({Math.round(contrail!.ambientTempC)}°C, {Math.round(contrail!.relativeHumidity ?? 0)}% RH)
+            </span>
+          )}
+          <div className="contrail-note">{contrail!.note}</div>
+        </div>
+      )}
+
+      {weather && (
+        <div className="wx">
+          <div className="wx-head">
+            Nearest aviation weather — {weather.stationName ?? weather.stationIcao} (
+            {weather.distanceMiles} mi)
+          </div>
+          <Rows
+            rows={[
+              ["Conditions", weather.flightCategory === "UNKNOWN" ? undefined : weather.flightCategory],
+              ["Wind", weather.windSpeedKt !== undefined
+                ? `${weather.windDirectionDeg ?? "—"}° / ${weather.windSpeedKt} kt`
+                : undefined],
+              ["Visibility", weather.visibility],
+              ["Cloud", weather.cloudSummary],
+              ["Temp / dewpoint", weather.temperatureC !== undefined
+                ? `${weather.temperatureC}°C / ${weather.dewpointC ?? "—"}°C`
+                : undefined],
+            ]}
+          />
+        </div>
+      )}
+
+      {military && (
+        <div className="military-context">
+          <div className="military-head">Military context</div>
+          <div>{military.note}</div>
+          <div className="military-source">Source: {military.source}</div>
+        </div>
+      )}
     </>
   );
 }

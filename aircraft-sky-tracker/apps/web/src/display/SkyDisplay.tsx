@@ -131,7 +131,11 @@ export function SkyDisplay({
       <SatelliteAlert entry={satelliteAlert} config={config} />
 
       {selected && (
-        <AircraftDetailsOverlay aircraft={selected} onClose={() => setSelected(null)} />
+        <AircraftDetailsOverlay
+          aircraft={selected}
+          onClose={() => setSelected(null)}
+          showAviation={config.showAviationContext}
+        />
       )}
       {selectedSatellite && (
         <SatelliteDetailsOverlay

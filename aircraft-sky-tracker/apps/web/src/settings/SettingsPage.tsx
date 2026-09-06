@@ -216,6 +216,7 @@ export function SettingsPage({ onBack }: Props) {
         browserNotifications: draft.browserNotifications,
         showSkyInsights: draft.showSkyInsights,
         showLookNow: draft.showLookNow,
+        showAviationContext: draft.showAviationContext,
         historyEnabled: draft.historyEnabled,
         historyRetentionDays: draft.historyRetentionDays,
         showSatellites: draft.showSatellites,
@@ -623,6 +624,14 @@ export function SettingsPage({ onBack }: Props) {
           onChange={(e) => setToggle("showLookNow", e.target.checked)}
         />
         Look Now banner (warn me about approaching aircraft)
+      </label>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={draft.showAviationContext}
+          onChange={(e) => setToggle("showAviationContext", e.target.checked)}
+        />
+        Aviation context (airspace, weather, contrail, military — in aircraft details)
       </label>
 
       <h2>History</h2>

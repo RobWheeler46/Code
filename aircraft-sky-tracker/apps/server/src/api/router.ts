@@ -19,6 +19,8 @@ import type {
   FlightIntelligence,
   Insight,
   LookNowPrediction,
+  AviationContext,
+  AircraftAviationContext,
 } from "@ast/shared";
 import { basicAuthMiddleware, isAuthEnabled } from "./auth.js";
 
@@ -64,6 +66,8 @@ export interface ApiContext {
   insights(): { generatedAt: string; insights: Insight[] };
   aircraftInsights(icaoHex: string): Insight[];
   lookNow(): { generatedAt: string; predictions: LookNowPrediction[] };
+  aviationContext(): Promise<AviationContext>;
+  aircraftAviation(icaoHex: string): Promise<AircraftAviationContext | null>;
   view(postcode: string): Promise<ViewResult>;
   history(date?: string): { date: string; passes: HistoryPass[] };
   historyDates(): HistoryDate[];
@@ -236,6 +240,34 @@ export function createApiRouter(ctx: ApiContext): Router {
   // GET /api/looknow - approaching-aircraft predictions (FRD v4.0 §16-19).
   router.get("/looknow", (_req: Request, res: Response) => {
     res.json(ctx.lookNow());
+  });
+
+  // GET /api/aviation-context - observer-level airspace/weather/military (v4.0 §35-47).
+  router.get("/aviation-context", async (_req: Request, res: Response) => {
+    try {
+      res.json(await ctx.aviationContext());
+    } catch (err) {
+      res.status(502).json({ error: `Aviation context unavailable: ${String(err)}` });
+    }
+  });
+
+  // GET /api/aircraft/:icaoHex/aviation - airspace + contrail for one aircraft.
+  router.get("/aircraft/:icaoHex/aviation", async (req: Request, res: Response) => {
+    const hex = req.params.icaoHex ?? "";
+    if (!/^[0-9A-Fa-f]{6}$/.test(hex) && !/^[A-Za-z0-9]{3,8}$/.test(hex)) {
+      res.status(400).json({ error: "invalid icaoHex" });
+      return;
+    }
+    try {
+      const result = await ctx.aircraftAviation(hex.toUpperCase());
+      if (!result) {
+        res.status(404).json({ error: "aircraft not currently tracked" });
+        return;
+      }
+      res.json(result);
+    } catch (err) {
+      res.status(502).json({ error: `Aviation context unavailable: ${String(err)}` });
+    }
   });
 
   // GET /api/health (FRD §42).

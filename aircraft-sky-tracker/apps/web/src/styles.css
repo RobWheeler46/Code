@@ -753,6 +753,74 @@ button.danger {
   margin-top: 0.15rem;
 }
 
+/* Aviation context in the drawer (FRD v4.0 §35-47): airspace / contrail /
+   nearest weather / military context. */
+.airspace-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0.3rem 0;
+}
+.airspace-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.5rem;
+  border-left: 3px solid #8fe3ff;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 6px;
+}
+.airspace-name {
+  color: var(--primary);
+}
+.airspace-band {
+  color: var(--secondary);
+  font-variant-numeric: tabular-nums;
+}
+.contrail {
+  margin: 0.4rem 0;
+  font-size: 0.85rem;
+  color: var(--primary);
+}
+.contrail-detail {
+  color: var(--secondary);
+}
+.contrail-note {
+  color: var(--secondary);
+  font-size: 0.75rem;
+  margin-top: 0.15rem;
+}
+.wx {
+  margin: 0.4rem 0;
+}
+.wx-head {
+  color: var(--secondary);
+  font-size: 0.78rem;
+  margin-bottom: 0.25rem;
+}
+.military-context {
+  margin: 0.4rem 0;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #4a3c1e;
+  border-left: 3px solid #ffcf6b;
+  border-radius: 8px;
+  background: rgba(60, 45, 18, 0.35);
+  font-size: 0.85rem;
+}
+.military-head {
+  color: #ffcf6b;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.2rem;
+}
+.military-source {
+  color: var(--secondary);
+  font-size: 0.72rem;
+  margin-top: 0.2rem;
+}
+
 /* Look Now banner (FRD v4.0 §16-19): a prominent top-centre "look up" prompt for
    the most imminent approaching aircraft. Cyan by default; amber when the
    approach is interesting (military / watchlist / rare, §19). */

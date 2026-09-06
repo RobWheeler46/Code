@@ -63,6 +63,11 @@ import {
 } from "./routes/operationalIntelligence.js";
 import { InsightsEngine } from "./insights/insightsEngine.js";
 import { LookNowService } from "./aircraft/lookNowService.js";
+import { StaticUkAirspaceProvider } from "./aviation/airspaceProvider.js";
+import { AviationWeatherProvider } from "./aviation/aviationWeatherProvider.js";
+import { OpenMeteoUpperAirProvider } from "./aviation/openMeteoProvider.js";
+import { CuratedModProvider } from "./aviation/modProvider.js";
+import { AviationContextService } from "./aviation/aviationContextService.js";
 import { AccountRepo } from "./persistence/accountRepo.js";
 import { GoogleAuth } from "./auth/googleAuth.js";
 import { createAuthRouter } from "./auth/authRouter.js";
@@ -136,6 +141,14 @@ async function main(): Promise<void> {
   });
   const routes = new RouteService();
   const photos = new PhotoService();
+  // Aviation context (FRD v4.0 §35-47): curated airspace + free METAR/TAF +
+  // Open-Meteo upper air (contrail) + a modest, context-only military note.
+  const aviation = new AviationContextService(
+    new StaticUkAirspaceProvider(),
+    new AviationWeatherProvider(),
+    new OpenMeteoUpperAirProvider(),
+    new CuratedModProvider(),
+  );
   const state = new AircraftStateService(geo, routes);
   const ws = new WebSocketService();
   const provider = createAircraftProvider(env.aircraftProvider);
@@ -512,6 +525,7 @@ async function main(): Promise<void> {
         "browserNotifications",
         "showSkyInsights",
         "showLookNow",
+        "showAviationContext",
         "showSatellites",
         "satelliteShowStations",
         "satelliteShowBright",
@@ -675,6 +689,14 @@ async function main(): Promise<void> {
     }),
     aircraftInsights: (icaoHex) => insights.forAircraft(icaoHex),
     lookNow: () => ({ generatedAt: new Date().toISOString(), predictions: lookNow.list() }),
+    aviationContext: () => {
+      const c = settings.get();
+      return aviation.observerContext({ latitude: c.latitude, longitude: c.longitude });
+    },
+    aircraftAviation: async (icaoHex) => {
+      const aircraft = state.snapshot().find((a) => a.icaoHex === icaoHex);
+      return aircraft ? aviation.aircraftContext(aircraft) : null;
+    },
     view: (postcode) => viewService.getView(postcode),
 
     history: (date) => {

@@ -202,6 +202,7 @@ function migrate(db: DatabaseSync): void {
   ensureColumn(db, "settings", "show_sky_insights", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn(db, "settings", "prediction_radius_miles", "INTEGER NOT NULL DEFAULT 40");
   ensureColumn(db, "settings", "show_look_now", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db, "settings", "show_aviation_context", "INTEGER NOT NULL DEFAULT 1");
 }
 
 /** Add a column to an existing table if it is not already present. */

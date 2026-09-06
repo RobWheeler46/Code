@@ -199,6 +199,8 @@ The browser talks only to the backend (FRD §39):
 | `GET` | `/api/aircraft/{icaoHex}/insights` | Active Sky Insights for one aircraft, with evidence (§103) |
 | `GET` | `/api/insights` | All currently-active Sky Insights (§103) |
 | `GET` | `/api/looknow` | Approaching-aircraft closest-approach predictions (v4.0 §16-19) |
+| `GET` | `/api/aviation-context` | Observer airspace + nearest METAR/TAF + military context (v4.0 §35-47) |
+| `GET` | `/api/aircraft/{icaoHex}/aviation` | Airspace membership + contrail estimate for one aircraft |
 | `GET` | `/api/view?postcode=` | Per-viewer snapshot for any postcode (read-only) |
 | `GET` | `/api/history?date=` | Aircraft pass history for a date (default today) |
 | `GET` | `/api/history/dates` | Retained dates with pass counts |
@@ -470,6 +472,22 @@ projection reaches far ahead — so an alert never implies certainty. The single
 most imminent approach shows as a top-centre **Look Now banner** (toggle
 `showLookNow`), highlighted when the aircraft is interesting (§19). Broadcast as
 `looknow.update` and served at `/api/looknow`.
+
+**Aviation context (done, FRD v4.0 §35-47 — Release 4.3)** — the "where and in
+what conditions" layer, shown in the aircraft details drawer. **Nearest aviation
+weather** (§46): free **METAR/TAF** from AviationWeather.gov for the closest UK
+reporting aerodrome (station picked from a curated list, cached, backend-only).
+**Airspace** (§35): which curated UK regions the observer / a selected aircraft is
+inside, with a vertical-band check — behind an `AirspaceProvider` seam so a real
+**NATS AIP** dataset can replace the curated set later; per §36 it deliberately does
+**not** scrape NOTAMs. **Contrail estimate** (§47, experimental): *Likely / Possible
+/ Unlikely* from the aircraft's altitude and **Open-Meteo** upper-air temperature
+and humidity, always framed as an estimate. **Military context** (§37-38): a modest,
+**context-only** note ("training activity may be elevated near …") derived from
+proximity to curated military airspace — it never asserts a specific aircraft is on
+an exercise. Each provider fails soft: a missing weather/upper-air fetch just omits
+that part; curated airspace always works. Served at `/api/aviation-context` and
+`/api/aircraft/{hex}/aviation`; toggle `showAviationContext`.
 
 **Google account & saved locations (done, FRD v3.6 §12, §26)** — an optional
 **Google Sign-In** (env-gated: `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`) lets the
