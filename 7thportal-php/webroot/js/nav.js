@@ -205,6 +205,18 @@ function wireNotificationBell() {
   }).catch(() => { /* leave the bell unbadged */ });
 }
 
+// Show the running build in the header (build.txt is stamped at package time by
+// scripts/build-deploy.php, so this confirms exactly which deploy is live). Cache-
+// busted; silently hidden when there's no readable stamp (e.g. running from source).
+function showBuildVersion() {
+  const el = document.getElementById('app-version');
+  if (!el) return;
+  fetch('build.txt?_=' + Date.now())
+    .then(r => (r.ok ? r.text() : ''))
+    .then(t => { t = (t || '').trim(); if (t && t.length <= 40) el.textContent = 'Build ' + t; })
+    .catch(() => { /* no stamp available */ });
+}
+
 // A dual-role user's Parent/Leader toggle. Switching stores the view server-side
 // (audited) then lands on that view's dashboard.
 function viewSwitcherHtml(me) {
@@ -299,6 +311,7 @@ async function requireUserNav(pageView) {
       <div class="brand-block">
         <a class="brand" href="${activeView === 'parent' ? 'parent-dashboard.html' : 'leader-dashboard.html'}">7thPortal</a>
         <span class="tagline">Skills for Life | 7th Swindon</span>
+        <span class="app-version" id="app-version" title="The build currently running"></span>
       </div>
       <div class="nav-right">
         ${viewSwitcherHtml(me)}
@@ -318,6 +331,7 @@ async function requireUserNav(pageView) {
     wireViewSwitcher();
     renderMobileDrawer(me, cfg, pillLabel);
     wireNotificationBell();
+    showBuildVersion();
   }
   renderSidebar(me, cfg);
   renderBottomNav(me, cfg);
