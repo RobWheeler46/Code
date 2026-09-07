@@ -8,6 +8,26 @@
 /** Route classification (FRD v3.0 §35). */
 export type RouteConfidence = "confirmed" | "high" | "medium" | "low" | "unknown";
 
+/** Vertical movement of an aircraft, for display colouring. */
+export type VerticalTrend = "climbing" | "descending" | "level";
+
+/**
+ * Vertical rate (ft/min) below which an aircraft counts as level. Small rates are
+ * noise or minor corrections, so only a sustained climb/descent is coloured.
+ */
+export const VERTICAL_TREND_THRESHOLD_FPM = 300;
+
+/** Classify an aircraft's vertical movement (unknown / small rate => level). */
+export function verticalTrend(
+  verticalRateFpm: number | undefined,
+  thresholdFpm: number = VERTICAL_TREND_THRESHOLD_FPM,
+): VerticalTrend {
+  if (verticalRateFpm === undefined || !Number.isFinite(verticalRateFpm)) return "level";
+  if (verticalRateFpm >= thresholdFpm) return "climbing";
+  if (verticalRateFpm <= -thresholdFpm) return "descending";
+  return "level";
+}
+
 /** Why an aircraft is flagged as interesting (FRD Phase 3). */
 export interface AircraftInterest {
   /** Short primary label for display / alerts, e.g. "Military", "A380". */

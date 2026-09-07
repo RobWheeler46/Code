@@ -350,6 +350,12 @@ turboprop, helicopter, light aircraft, A400M, C-17, fighter/fast-jet, generic
 military and a generic fallback. Military and fighter **types** now also trigger
 interesting-aircraft detection.
 
+**Vertical-trend colouring (done)** — aircraft icons are coloured by climb/descent:
+**green** when climbing, **coral** when descending, and unchanged **white** when
+maintaining height (a small ±300 ft/min band counts as level, so minor corrections
+don't flicker). Interesting-aircraft **amber** still takes precedence. Classified by
+the shared `verticalTrend` helper.
+
 **Multi-provider failover (done)** — the default `failover` provider uses
 adsb.fi with OpenSky as an automatic backup (per-provider cooldown, auto
 recovery), so one source going down can't take the display offline.

@@ -23,6 +23,8 @@ interface Template {
   altitudeFeet: number;
   groundSpeedKnots: number;
   onGround?: boolean;
+  /** Climb (+) / descent (-) rate, ft/min; drives altitude and display colour. */
+  verticalRateFpm?: number;
 }
 
 /**
@@ -30,27 +32,27 @@ interface Template {
  * simulation table. Others exercise the heading / registration fallbacks.
  */
 const ROSTER: Template[] = [
-  { icaoHex: "SIM001", registration: "G-EUUA", callsign: "BAW1462", aircraftTypeCode: "A320", altitudeFeet: 13250, groundSpeedKnots: 312 },
-  { icaoHex: "SIM002", registration: "G-EZTA", callsign: "EZY812", aircraftTypeCode: "A319", altitudeFeet: 9800, groundSpeedKnots: 280 },
-  { icaoHex: "SIM003", registration: "G-LCYP", callsign: "RYR4TG", aircraftTypeCode: "B738", altitudeFeet: 15200, groundSpeedKnots: 330 },
-  { icaoHex: "SIM004", registration: "PH-BXA", callsign: "KLM43F", aircraftTypeCode: "B738", altitudeFeet: 21000, groundSpeedKnots: 360 },
-  { icaoHex: "SIM005", registration: "G-TAWK", callsign: "TOM7YT", aircraftTypeCode: "B738", altitudeFeet: 7400, groundSpeedKnots: 260 },
-  { icaoHex: "SIM006", registration: "G-EZUI", callsign: "EZY23UI", aircraftTypeCode: "A320", altitudeFeet: 4200, groundSpeedKnots: 240 },
+  { icaoHex: "SIM001", registration: "G-EUUA", callsign: "BAW1462", aircraftTypeCode: "A320", altitudeFeet: 13250, groundSpeedKnots: 312, verticalRateFpm: 1800 },
+  { icaoHex: "SIM002", registration: "G-EZTA", callsign: "EZY812", aircraftTypeCode: "A319", altitudeFeet: 9800, groundSpeedKnots: 280, verticalRateFpm: -1500 },
+  { icaoHex: "SIM003", registration: "G-LCYP", callsign: "RYR4TG", aircraftTypeCode: "B738", altitudeFeet: 15200, groundSpeedKnots: 330, verticalRateFpm: 0 },
+  { icaoHex: "SIM004", registration: "PH-BXA", callsign: "KLM43F", aircraftTypeCode: "B738", altitudeFeet: 21000, groundSpeedKnots: 360, verticalRateFpm: 1200 },
+  { icaoHex: "SIM005", registration: "G-TAWK", callsign: "TOM7YT", aircraftTypeCode: "B738", altitudeFeet: 7400, groundSpeedKnots: 260, verticalRateFpm: -900 },
+  { icaoHex: "SIM006", registration: "G-EZUI", callsign: "EZY23UI", aircraftTypeCode: "A320", altitudeFeet: 4200, groundSpeedKnots: 240, verticalRateFpm: -1800 },
   // Registration present, callsign unknown to the route table -> heading fallback.
-  { icaoHex: "SIM007", registration: "G-ABCD", callsign: "PVT001", aircraftTypeCode: "C172", altitudeFeet: 2500, groundSpeedKnots: 110 },
+  { icaoHex: "SIM007", registration: "G-ABCD", callsign: "PVT001", aircraftTypeCode: "C172", altitudeFeet: 2500, groundSpeedKnots: 110, verticalRateFpm: 0 },
   // No registration and no callsign -> displays ICAO hex (FRD §74).
-  { icaoHex: "SIM008", aircraftTypeCode: "PA28", altitudeFeet: 1800, groundSpeedKnots: 95 },
+  { icaoHex: "SIM008", aircraftTypeCode: "PA28", altitudeFeet: 1800, groundSpeedKnots: 95, verticalRateFpm: 500 },
   // Distinct silhouettes / interesting aircraft (FRD v3.0 §20, §67).
-  { icaoHex: "SIM009", registration: "A6-EDA", callsign: "UAE7", aircraftTypeCode: "A388", altitudeFeet: 38000, groundSpeedKnots: 480 },
-  { icaoHex: "SIM010", registration: "G-CIVD", callsign: "BAW9", aircraftTypeCode: "B744", altitudeFeet: 34000, groundSpeedKnots: 470 },
-  { icaoHex: "SIM011", registration: "ZM406", callsign: "RRR406", aircraftTypeCode: "A400", altitudeFeet: 6000, groundSpeedKnots: 260 },
-  { icaoHex: "SIM012", registration: "ZZ173", callsign: "RRR73", aircraftTypeCode: "C17", altitudeFeet: 8000, groundSpeedKnots: 300 },
-  { icaoHex: "SIM013", registration: "ZK355", callsign: "TARTN1", aircraftTypeCode: "EUFI", altitudeFeet: 5000, groundSpeedKnots: 420 },
-  { icaoHex: "SIM014", registration: "G-BIZJ", callsign: "EJA123", aircraftTypeCode: "E55P", altitudeFeet: 28000, groundSpeedKnots: 400 },
-  { icaoHex: "SIM015", registration: "G-POLA", callsign: "NPAS01", aircraftTypeCode: "EC35", altitudeFeet: 1200, groundSpeedKnots: 120 },
-  { icaoHex: "SIM016", registration: "G-SPIT", aircraftTypeCode: "SPIT", altitudeFeet: 1500, groundSpeedKnots: 180 },
+  { icaoHex: "SIM009", registration: "A6-EDA", callsign: "UAE7", aircraftTypeCode: "A388", altitudeFeet: 38000, groundSpeedKnots: 480, verticalRateFpm: 0 },
+  { icaoHex: "SIM010", registration: "G-CIVD", callsign: "BAW9", aircraftTypeCode: "B744", altitudeFeet: 34000, groundSpeedKnots: 470, verticalRateFpm: -1000 },
+  { icaoHex: "SIM011", registration: "ZM406", callsign: "RRR406", aircraftTypeCode: "A400", altitudeFeet: 6000, groundSpeedKnots: 260, verticalRateFpm: 0 },
+  { icaoHex: "SIM012", registration: "ZZ173", callsign: "RRR73", aircraftTypeCode: "C17", altitudeFeet: 8000, groundSpeedKnots: 300, verticalRateFpm: 1500 },
+  { icaoHex: "SIM013", registration: "ZK355", callsign: "TARTN1", aircraftTypeCode: "EUFI", altitudeFeet: 5000, groundSpeedKnots: 420, verticalRateFpm: 2500 },
+  { icaoHex: "SIM014", registration: "G-BIZJ", callsign: "EJA123", aircraftTypeCode: "E55P", altitudeFeet: 28000, groundSpeedKnots: 400, verticalRateFpm: -1200 },
+  { icaoHex: "SIM015", registration: "G-POLA", callsign: "NPAS01", aircraftTypeCode: "EC35", altitudeFeet: 1200, groundSpeedKnots: 120, verticalRateFpm: 0 },
+  { icaoHex: "SIM016", registration: "G-SPIT", aircraftTypeCode: "SPIT", altitudeFeet: 1500, groundSpeedKnots: 180, verticalRateFpm: 0 },
   // On the ground (taxiing) - hidden when "hide ground aircraft" is enabled.
-  { icaoHex: "SIM017", registration: "G-TAXI", callsign: "GND17", aircraftTypeCode: "A320", altitudeFeet: 0, groundSpeedKnots: 12, onGround: true },
+  { icaoHex: "SIM017", registration: "G-TAXI", callsign: "GND17", aircraftTypeCode: "A320", altitudeFeet: 0, groundSpeedKnots: 12, onGround: true, verticalRateFpm: 0 },
 ];
 
 interface SimFlight extends Template {
@@ -91,6 +93,7 @@ export class SimulationProvider implements AircraftProvider {
       groundSpeedKnots: f.groundSpeedKnots,
       trackDegrees: Math.round(f.trackDegrees),
       onGround: f.onGround,
+      verticalRateFpm: f.onGround ? 0 : f.verticalRateFpm,
       positionAgeSeconds: 1,
     }));
   }
@@ -109,6 +112,11 @@ export class SimulationProvider implements AircraftProvider {
       f.latitude += north / MILES_PER_DEGREE_LAT;
       f.longitude +=
         east / (MILES_PER_DEGREE_LAT * Math.cos(toRadians(f.latitude)));
+      // Evolve altitude by the vertical rate; clamp and hold at the bounds.
+      if (!f.onGround && f.verticalRateFpm) {
+        const next = f.altitudeFeet + (f.verticalRateFpm * dtSeconds) / 60;
+        f.altitudeFeet = Math.max(500, Math.min(42000, next));
+      }
     }
   }
 

@@ -24,6 +24,7 @@ import {
   resolveDisplayScale,
   isCompactDisplay,
   observerLookAngles,
+  verticalTrend,
   FEET_TO_METRES,
 } from "@ast/shared";
 
@@ -33,6 +34,11 @@ const IMPLAUSIBLE_JUMP_MILES = 5; // snap instead of interpolate (FRD §53)
 const ICON_SIZE = 34; // px (FRD §55: ~30-45)
 const TRAIL_MAX_POINTS = 24; // ~24s of history at 1 Hz
 const INTEREST_COLOUR = "#ffcf6b"; // amber highlight for interesting aircraft
+// Vertical-trend colours (FRD §51). Level keeps today's white; a sustained climb
+// or descent is coloured. Chosen to stay distinct from the amber interest highlight.
+const CLIMB_COLOUR = "#64d98a"; // green - gaining height
+const DESCEND_COLOUR = "#ff8f6b"; // coral - losing height
+const LEVEL_COLOUR = "#f2f2f2"; // white - maintaining height (unchanged)
 
 interface Fix {
   latitude: number;
@@ -693,9 +699,11 @@ export class SkyRenderer {
       ctx.restore();
     }
 
+    // Interest highlighting takes precedence; otherwise colour by vertical trend.
+    const colour = highlight ? INTEREST_COLOUR : trendColour(p.data.verticalRateFpm);
     ctx.save();
     ctx.globalAlpha = p.alpha;
-    this.drawIcon(p.x, p.y, p.track ?? 0, p.silhouette, highlight);
+    this.drawIcon(p.x, p.y, p.track ?? 0, p.silhouette, colour);
     ctx.restore();
 
     // Labels stay horizontal (FRD §51).
@@ -763,7 +771,7 @@ export class SkyRenderer {
     y: number,
     trackDegrees: number,
     silhouette: AircraftSilhouette,
-    highlight = false,
+    colour: string = LEVEL_COLOUR,
   ): void {
     const ctx = this.ctx;
     const s = this.iconSize / 34;
@@ -774,7 +782,7 @@ export class SkyRenderer {
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
     ctx.lineWidth = 1.6;
-    ctx.strokeStyle = highlight ? INTEREST_COLOUR : "#f2f2f2";
+    ctx.strokeStyle = colour;
     ctx.fillStyle = "rgba(10,12,16,0.55)";
     switch (silhouette) {
       case "a380": this.pathQuadWide(22, 19); break;
@@ -1189,6 +1197,18 @@ interface LabelLine {
 
 function font(size: number, bold: boolean): string {
   return `${bold ? "600" : "400"} ${size}px Inter, Arial, sans-serif`;
+}
+
+/** Icon colour for an aircraft's vertical trend (FRD §51). */
+function trendColour(verticalRateFpm: number | undefined): string {
+  switch (verticalTrend(verticalRateFpm)) {
+    case "climbing":
+      return CLIMB_COLOUR;
+    case "descending":
+      return DESCEND_COLOUR;
+    default:
+      return LEVEL_COLOUR;
+  }
 }
 
 /** Compact miles: integer when whole, else one decimal (e.g. 2.5). */
