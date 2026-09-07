@@ -730,7 +730,7 @@ async function renderFeatures() {
 async function renderSettings() {
   const box = document.getElementById('tab-content');
   box.innerHTML = '<p class="muted">Loading&hellip;</p>';
-  const [settings, sectionsResp, dlv] = await Promise.all([Api.get('/api/admin/settings'), getSections(), Api.get('/api/admin/dlv-settings').catch(() => null)]);
+  const [settings, sectionsResp, dlv, email] = await Promise.all([Api.get('/api/admin/settings'), getSections(), Api.get('/api/admin/dlv-settings').catch(() => null), Api.get('/api/admin/email-settings').catch(() => null)]);
   const sections = sectionsResp.sections || [];
   const visible = settings.visibleSectionIds;
 
@@ -748,6 +748,38 @@ async function renderSettings() {
         <span id="settings-saved"></span>
       </form>
     </div>
+    ${email ? `<div class="card">
+      <h2>Email / mail server</h2>
+      <p class="muted">SMTP settings the portal uses to send email (parent invites, DLV approval packs, notifications). Configured here or via the server .env; in-app values take priority. The password is stored securely and never shown back.${email.usingEnvFallback ? ' <strong>Currently using .env values</strong> - saving here overrides them.' : ''}</p>
+      <form id="email-settings-form">
+        <div class="grid cols-2">
+          <div class="field"><label>Host</label><input id="em-host" value="${escapeHtml(email.host)}" placeholder="smtp.example.com"></div>
+          <div class="field"><label>Port</label><input id="em-port" type="number" value="${email.port || 587}" style="max-width:120px"></div>
+          <div class="field"><label>Security</label><select id="em-security">
+            <option value="starttls"${email.security === 'starttls' ? ' selected' : ''}>STARTTLS (587)</option>
+            <option value="ssl"${email.security === 'ssl' ? ' selected' : ''}>SSL/TLS (465)</option>
+            <option value="none"${email.security === 'none' ? ' selected' : ''}>None</option>
+          </select></div>
+          <div class="field"><label>Username</label><input id="em-user" value="${escapeHtml(email.user)}" placeholder="Often the full email address" autocomplete="off"></div>
+          <div class="field"><label>Password ${email.passwordSet ? '<span class="muted" style="font-weight:400">(set - leave blank to keep)</span>' : ''}</label><input id="em-pass" type="password" placeholder="${email.passwordSet ? '••••••••' : 'SMTP password'}" autocomplete="new-password"></div>
+          <div class="field"><label>From address</label><input id="em-from" value="${escapeHtml(email.from)}" placeholder="noreply@your-domain.org"></div>
+          <div class="field"><label>From name (optional)</label><input id="em-fromname" value="${escapeHtml(email.fromName)}" placeholder="7th Swindon Scouts"></div>
+          <div class="field"><label>Reply-To (optional)</label><input id="em-replyto" value="${escapeHtml(email.replyTo)}" placeholder="leaders@your-domain.org"></div>
+        </div>
+        ${email.passwordSet ? '<div class="field"><label style="font-weight:400"><input type="checkbox" id="em-clearpass"> Clear the saved password</label></div>' : ''}
+        <button class="btn btn-primary" type="submit">Save mail settings</button>
+        <span id="email-settings-saved"></span>
+      </form>
+      <div style="border-top:1px solid var(--border);margin-top:1rem;padding-top:1rem">
+        <h3 style="margin:0 0 .4rem">Send a test email</h3>
+        <p class="muted" style="margin:0 0 .5rem">Save your settings first, then send a test to confirm they work.</p>
+        <div class="cap-actions" style="align-items:flex-end">
+          <div class="field" style="flex:1 1 16rem;margin:0"><label>Send to</label><input id="em-test-to" type="email" placeholder="you@example.com"></div>
+          <button class="btn btn-secondary" id="em-test-btn" type="button">Send test email</button>
+        </div>
+        <div id="em-test-msg" style="margin-top:.6rem"></div>
+      </div>
+    </div>` : ''}
     <div class="card">
       <h2>Visible sections</h2>
       <p class="muted">Limit which sections appear on leader dashboards - useful for a phased rollout (FRD FR-057). Leave everything unticked to show all sections a leader is permitted to see in OSM.</p>
@@ -994,6 +1026,43 @@ async function renderSettings() {
     await Api.put('/api/admin/settings', { patrolPointsEnabled: document.getElementById('patrol-points-enabled').checked, ppGuestEnabled: document.getElementById('pp-guest-enabled').checked });
     document.getElementById('patrol-points-settings-saved').textContent = 'Saved.';
   });
+  const emailForm = document.getElementById('email-settings-form');
+  if (emailForm) {
+    emailForm.addEventListener('submit', async e => {
+      e.preventDefault();
+      const saved = document.getElementById('email-settings-saved');
+      const body = {
+        host: document.getElementById('em-host').value.trim(),
+        port: Number(document.getElementById('em-port').value) || 587,
+        security: document.getElementById('em-security').value,
+        user: document.getElementById('em-user').value.trim(),
+        from: document.getElementById('em-from').value.trim(),
+        fromName: document.getElementById('em-fromname').value.trim(),
+        replyTo: document.getElementById('em-replyto').value.trim(),
+      };
+      const pass = document.getElementById('em-pass').value;
+      if (pass) body.password = pass;
+      if (document.getElementById('em-clearpass')?.checked) body.clearPassword = true;
+      try {
+        await Api.put('/api/admin/email-settings', body);
+        saved.textContent = 'Saved.';
+        renderSettings(); // refresh so the "password set" state + env-fallback note update
+      } catch (err) { saved.innerHTML = `<span class="alert alert-error">${escapeHtml(err.message)}</span>`; }
+    });
+    document.getElementById('em-test-btn').addEventListener('click', async () => {
+      const msg = document.getElementById('em-test-msg');
+      const to = document.getElementById('em-test-to').value.trim();
+      const btn = document.getElementById('em-test-btn');
+      msg.innerHTML = '';
+      btn.disabled = true; btn.textContent = 'Sending…';
+      try {
+        const r = await Api.post('/api/admin/email/test', { to });
+        msg.innerHTML = `<div class="alert alert-success">${escapeHtml(r.message || 'Test email sent.')}</div>`;
+      } catch (err) {
+        msg.innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+      } finally { btn.disabled = false; btn.textContent = 'Send test email'; }
+    });
+  }
   async function wireDemoReset() {
     let cfg; try { cfg = await Api.get('/api/config'); } catch (e) { return; }
     if (!cfg || !cfg.demoModeAllowed) return; // demo/test environments only

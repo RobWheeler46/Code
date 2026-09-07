@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle', 'logic_forms', 'logic_forms_admin', 'logic_forms_files', 'logic_pp_wizard'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle', 'logic_forms', 'logic_forms_admin', 'logic_forms_files', 'logic_pp_wizard', 'logic_email'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -914,6 +914,35 @@ function scenario_logic_forms_admin(): void
     // Schema validation catches duplicate ids and missing choice options.
     check('forms-admin: duplicate field ids are caught', count(formValidateSchema(['sections' => [['fields' => [['id' => 'a', 'label' => 'A', 'type' => 'text'], ['id' => 'a', 'label' => 'B', 'type' => 'text']]]]])) > 0);
     check('forms-admin: choice field without options is caught', count(formValidateSchema(['sections' => [['fields' => [['id' => 'a', 'label' => 'A', 'type' => 'select']]]]])) > 0);
+}
+
+// Email / SMTP config: in-app settings drive smtpConfig, security auto-detects from the
+// port, and From falls back to the username. (FR-ADMIN §21.1)
+function scenario_logic_email(): void
+{
+    useDb(tmpDb('email')); boot(); loadLibs();
+    require_once dirname(__DIR__) . '/src/env.php';
+    require_once dirname(__DIR__) . '/src/lib/mailer.php';
+
+    check('email: unconfigured by default', smtpConfigured() === false);
+
+    $set = fn($k, $v) => dbRun('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', [$k, $v]);
+    $set('smtp_host', 'smtp.example.com');
+    $set('smtp_user', 'leaders@example.org');
+    $set('smtp_pass', 'secret');
+    $set('smtp_port', '465');
+    $c = smtpConfig();
+    check('email: configured once a host is set', smtpConfigured() === true);
+    check('email: implicit TLS auto-detected on port 465', $c['security'] === 'ssl');
+    check('email: From falls back to the username when unset', $c['from'] === 'leaders@example.org');
+
+    $set('smtp_port', '587');
+    check('email: STARTTLS auto-detected on port 587', smtpConfig()['security'] === 'starttls');
+    $set('smtp_security', 'none');
+    check('email: an explicit security choice is honoured', smtpConfig()['security'] === 'none');
+    $set('smtp_from', 'noreply@example.org');
+    $set('smtp_from_name', '7th Swindon');
+    check('email: From header quotes the display name', smtpFromHeader(smtpConfig()) === '"7th Swindon" <noreply@example.org>');
 }
 
 // Patrol Points setup wizard: one transaction builds the competition + teams +

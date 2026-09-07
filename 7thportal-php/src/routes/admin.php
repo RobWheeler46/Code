@@ -454,6 +454,71 @@ $router->put('/api/admin/settings', function ($params) {
     jsonResponse(['ok' => true]);
 });
 
+// ── Email / SMTP configuration (FR-ADMIN, §21.1). Host/port/security/auth/From/
+// Reply-To configurable in-app; the password is masked and never returned. ────────
+$router->get('/api/admin/email-settings', function ($params) {
+    $user = requireAuth();
+    requireAdmin($user);
+    $c = smtpConfig();
+    $stored = [];
+    foreach (dbAll("SELECT key, value FROM settings WHERE key = 'smtp_pass'") as $r) $stored[$r['key']] = $r['value'];
+    jsonResponse([
+        'host' => $c['host'], 'port' => $c['port'], 'security' => $c['security'],
+        'user' => $c['user'], 'from' => $c['from'], 'fromName' => $c['fromName'], 'replyTo' => $c['replyTo'],
+        'passwordSet' => ($c['pass'] !== ''),        // whether a password is in effect (masked)
+        'configured' => smtpConfigured(),
+        'usingEnvFallback' => empty($stored['smtp_pass']) && (env('SMTP_HOST') || env('SMTP_PASS')),
+    ]);
+});
+
+$router->put('/api/admin/email-settings', function ($params) {
+    $user = requireAuth();
+    requireAdmin($user);
+    $b = requestBody();
+    if (array_key_exists('from', $b) && trim((string) $b['from']) !== '' && !filter_var(trim((string) $b['from']), FILTER_VALIDATE_EMAIL)) {
+        jsonResponse(['error' => 'Enter a valid From address.'], 422);
+    }
+    if (array_key_exists('replyTo', $b) && trim((string) $b['replyTo']) !== '' && !filter_var(trim((string) $b['replyTo']), FILTER_VALIDATE_EMAIL)) {
+        jsonResponse(['error' => 'Enter a valid Reply-To address, or leave it blank.'], 422);
+    }
+    $upsert = fn($key, $value) => dbRun('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', [$key, (string) $value]);
+    if (array_key_exists('host', $b)) $upsert('smtp_host', trim((string) $b['host']));
+    if (array_key_exists('port', $b)) $upsert('smtp_port', (string) ((int) $b['port'] ?: 587));
+    if (array_key_exists('security', $b)) $upsert('smtp_security', in_array($b['security'] ?? '', ['starttls', 'ssl', 'none'], true) ? $b['security'] : 'starttls');
+    if (array_key_exists('user', $b)) $upsert('smtp_user', trim((string) $b['user']));
+    if (array_key_exists('from', $b)) $upsert('smtp_from', trim((string) $b['from']));
+    if (array_key_exists('fromName', $b)) $upsert('smtp_from_name', trim((string) $b['fromName']));
+    if (array_key_exists('replyTo', $b)) $upsert('smtp_reply_to', trim((string) $b['replyTo']));
+    // Password: only overwrite when a new one is supplied; a "clearPassword" flag empties it.
+    if (!empty($b['clearPassword'])) $upsert('smtp_pass', '');
+    elseif (array_key_exists('password', $b) && trim((string) $b['password']) !== '') $upsert('smtp_pass', (string) $b['password']);
+    // Audit without the secret.
+    logAudit(['userId' => $user['id'], 'action' => 'admin_email_settings', 'entityType' => 'settings', 'entityId' => null, 'ipAddress' => clientIp(), 'details' => array_intersect_key($b, array_flip(['host', 'port', 'security', 'user', 'from', 'fromName', 'replyTo', 'clearPassword']))]);
+    jsonResponse(['ok' => true]);
+});
+
+// Send a diagnostic test email with the current settings. Errors are surfaced with the
+// password redacted so an admin can diagnose without exposing the secret.
+$router->post('/api/admin/email/test', function ($params) {
+    $user = requireAuth();
+    requireAdmin($user);
+    $to = trim((string) (requestBody()['to'] ?? ''));
+    if (!filter_var($to, FILTER_VALIDATE_EMAIL)) jsonResponse(['error' => 'Enter a valid email address to send the test to.'], 422);
+    if (!smtpConfigured()) jsonResponse(['error' => 'Set the mail server host first, then save, before sending a test.'], 409);
+    try {
+        $ok = sendTestEmail($to);
+        if (!$ok) jsonResponse(['error' => 'The mail server is not configured.'], 409);
+        logAudit(['userId' => $user['id'], 'action' => 'admin_email_test', 'entityType' => 'settings', 'entityId' => null, 'ipAddress' => clientIp(), 'details' => ['to' => $to, 'result' => 'sent']]);
+        jsonResponse(['ok' => true, 'message' => 'Test email sent to ' . $to . '.']);
+    } catch (Throwable $e) {
+        $pass = smtpConfig()['pass'];
+        $msg = $e->getMessage();
+        if ($pass !== '') $msg = str_replace([$pass, base64_encode($pass)], '***', $msg); // never echo the secret
+        logAudit(['userId' => $user['id'], 'action' => 'admin_email_test', 'entityType' => 'settings', 'entityId' => null, 'ipAddress' => clientIp(), 'details' => ['to' => $to, 'result' => 'failed']]);
+        jsonResponse(['error' => 'The mail server rejected the message: ' . $msg], 502);
+    }
+});
+
 // ── Users and roles (FR-056, FR-061) ──────────────────────────────────────
 $router->get('/api/admin/users', function ($params) {
     requireAdmin(requireAuth());
