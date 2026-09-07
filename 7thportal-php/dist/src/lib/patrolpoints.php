@@ -163,6 +163,36 @@ function ppParseReasons($v): ?string
     foreach ($v as $s) { $s = trim((string) $s); if ($s !== '') $out[] = $s; }
     return $out ? json_encode(array_values(array_slice($out, 0, 12))) : null;
 }
+// Build a competition with its teams + scoring categories in one transaction, from
+// already-validated wizard input (FRD s13.2). Optionally opens it. Returns the new id.
+function ppBuildCompetition(int $creatorId, array $b): int
+{
+    $mode = in_array($b['approvalMode'] ?? '', ['immediate', 'approval'], true) ? $b['approvalMode'] : 'immediate';
+    $teams = array_values(array_filter(array_map(fn($t) => trim((string) $t), is_array($b['teams'] ?? null) ? $b['teams'] : []), fn($t) => $t !== ''));
+    $cats = is_array($b['categories'] ?? null) ? $b['categories'] : [];
+    $start = !empty($b['start']) && $teams && $cats;
+    db()->beginTransaction();
+    try {
+        $id = (int) dbRun(
+            "INSERT INTO pp_competitions (name, description, approval_mode, visibility, allow_deductions, osm_section_id, section_name, created_by) VALUES (?, ?, ?, 'leaders', ?, ?, ?, ?)",
+            [trim((string) $b['name']), trim((string) ($b['description'] ?? '')) ?: null, $mode, !empty($b['allowDeductions']) ? 1 : 0, $b['sectionId'] ?? null, trim((string) ($b['sectionName'] ?? '')) ?: null, $creatorId]
+        )['lastInsertId'];
+        $so = 0;
+        foreach ($teams as $tn) dbRun('INSERT INTO pp_teams (competition_id, name, sort_order) VALUES (?, ?, ?)', [$id, $tn, ++$so]);
+        $cso = 0;
+        foreach ($cats as $ct) {
+            $type = in_array($ct['pointsType'] ?? '', ['free', 'fixed'], true) ? $ct['pointsType'] : 'free';
+            dbRun('INSERT INTO pp_categories (competition_id, name, points_type, fixed_points, point_buttons, reason_presets, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [$id, trim((string) $ct['name']), $type, $type === 'fixed' ? (int) $ct['fixedPoints'] : null, ppParseButtons($ct['pointButtons'] ?? null), ppParseReasons($ct['reasonPresets'] ?? null), ++$cso]);
+        }
+        if ($start) dbRun("UPDATE pp_competitions SET status = 'open', updated_at = datetime('now') WHERE id = ?", [$id]);
+        db()->commit();
+        return $id;
+    } catch (Throwable $e) {
+        db()->rollBack();
+        throw $e;
+    }
+}
 function serializePpSubmission(array $s, array $lines, array $teamNames, array $catNames, array $userNames): array
 {
     // Display status folds the withdraw flag and supersession over the stored status.

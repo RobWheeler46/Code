@@ -67,6 +67,36 @@ $router->post('/api/patrol-points/competitions', function ($params) {
     jsonResponse(serializePpCompetition(ppCompetitionOr404($id), true), 201);
 });
 
+// Setup wizard (FRD s13.2, App. E): create a competition with its teams and scoring
+// categories in one step, optionally opening it (Review & Start). Transactional so a
+// half-built competition is never left behind.
+$router->post('/api/patrol-points/competitions/wizard', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requirePatrolPointsEnabled();
+    if (!ppCanManage($user)) jsonResponse(['error' => 'Your role cannot create competitions.'], 403);
+    $b = requestBody();
+    $name = trim((string) ($b['name'] ?? ''));
+    if ($name === '') jsonResponse(['error' => 'A competition name is required.'], 422);
+    $mode = in_array($b['approvalMode'] ?? '', ['immediate', 'approval'], true) ? $b['approvalMode'] : 'immediate';
+    $teams = array_values(array_filter(array_map(fn($t) => trim((string) $t), is_array($b['teams'] ?? null) ? $b['teams'] : []), fn($t) => $t !== ''));
+    $cats = is_array($b['categories'] ?? null) ? $b['categories'] : [];
+    foreach ($cats as $ct) {
+        if (trim((string) ($ct['name'] ?? '')) === '') jsonResponse(['error' => 'Each scoring category needs a name.'], 422);
+        if (($ct['pointsType'] ?? 'free') === 'fixed' && !is_numeric($ct['fixedPoints'] ?? null)) jsonResponse(['error' => 'A fixed-value category needs a points value.'], 422);
+    }
+    $start = !empty($b['start']);
+    if ($start && (!$teams || !$cats)) jsonResponse(['error' => 'Add at least one team and one scoring category before starting.'], 422);
+
+    try {
+        $id = ppBuildCompetition((int) $user['id'], $b);
+    } catch (Throwable $e) {
+        jsonResponse(['error' => 'Could not create the competition.'], 500);
+    }
+    logAudit(['userId' => $user['id'], 'action' => 'pp_competition_wizard', 'entityType' => 'pp_competition', 'entityId' => (string) $id, 'ipAddress' => clientIp(), 'details' => ['teams' => count($teams), 'categories' => count($cats), 'started' => $start]]);
+    jsonResponse(serializePpCompetition(ppCompetitionOr404($id), true), 201);
+});
+
 // ── Detail ──────────────────────────────────────────────────────────────────────
 $router->get('/api/patrol-points/competitions/:id', function ($params) {
     $user = requireAuth();

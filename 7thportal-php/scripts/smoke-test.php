@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle', 'logic_forms', 'logic_forms_admin', 'logic_forms_files'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle', 'logic_forms', 'logic_forms_admin', 'logic_forms_files', 'logic_pp_wizard'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -914,6 +914,33 @@ function scenario_logic_forms_admin(): void
     // Schema validation catches duplicate ids and missing choice options.
     check('forms-admin: duplicate field ids are caught', count(formValidateSchema(['sections' => [['fields' => [['id' => 'a', 'label' => 'A', 'type' => 'text'], ['id' => 'a', 'label' => 'B', 'type' => 'text']]]]])) > 0);
     check('forms-admin: choice field without options is caught', count(formValidateSchema(['sections' => [['fields' => [['id' => 'a', 'label' => 'A', 'type' => 'select']]]]])) > 0);
+}
+
+// Patrol Points setup wizard: one transaction builds the competition + teams +
+// scoring, and Review & Start opens it only with a team and a category (FRD s13.2).
+function scenario_logic_pp_wizard(): void
+{
+    useDb(tmpDb('ppwiz')); boot(); loadLibs();
+    require_once dirname(__DIR__) . '/src/lib/osm.php';
+    $creator = (int) dbRun("INSERT INTO users (auth_type,email,first_name,last_name,portal_role) VALUES ('local','a@x.com','Ada','A','admin')")['lastInsertId'];
+
+    $id = ppBuildCompetition($creator, [
+        'name' => 'Autumn League', 'approvalMode' => 'approval', 'allowDeductions' => true,
+        'teams' => ['Eagles', 'Foxes', '  ', 'Owls'],
+        'categories' => [['name' => 'Teamwork', 'pointsType' => 'free', 'pointButtons' => [5, 10], 'reasonPresets' => ['Kindness', 'Effort']], ['name' => 'Bonus', 'pointsType' => 'fixed', 'fixedPoints' => 20]],
+        'start' => true,
+    ]);
+    $c = dbGet('SELECT * FROM pp_competitions WHERE id=?', [$id]);
+    check('pp-wizard: competition created + opened (has teams + categories)', $c['status'] === 'open' && $c['approval_mode'] === 'approval' && (int) $c['allow_deductions'] === 1);
+    check('pp-wizard: blank team names are dropped', (int) dbGet('SELECT COUNT(*) n FROM pp_teams WHERE competition_id=?', [$id])['n'] === 3);
+    $bonus = dbGet("SELECT * FROM pp_categories WHERE competition_id=? AND name='Bonus'", [$id]);
+    check('pp-wizard: fixed category stores its value', $bonus && $bonus['points_type'] === 'fixed' && (int) $bonus['fixed_points'] === 20);
+    $tw = dbGet("SELECT * FROM pp_categories WHERE competition_id=? AND name='Teamwork'", [$id]);
+    check('pp-wizard: Quick Score presets are stored', str_contains((string) $tw['point_buttons'], '10') && str_contains((string) $tw['reason_presets'], 'Kindness'));
+
+    // Review & Start must NOT open a competition with no scoring category.
+    $id2 = ppBuildCompetition($creator, ['name' => 'Empty', 'teams' => ['A'], 'categories' => [], 'start' => true]);
+    check('pp-wizard: start is refused (stays draft) without a category', dbGet('SELECT status FROM pp_competitions WHERE id=?', [$id2])['status'] === 'draft');
 }
 
 // Forms part 3: on-behalf completion (recorded, not impersonated) + required file
