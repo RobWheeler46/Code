@@ -128,6 +128,8 @@ const PAGE_HEADERS = {
   'forms.html': { title: 'Forms', description: 'Start a published form and track your submissions.' },
   'expenses.html': { title: 'Expenses & mileage', description: 'Your claims, receipts and mileage. Submit for approval and track payment status.' },
   'treasurer.html': { title: 'Treasurer', description: 'Approved items awaiting payment, payment recording and finance exports.' },
+  'finance-accounts.html': { title: 'Accounts', crumbs: [{ label: 'Finance', href: 'treasurer.html' }, { label: 'Accounts' }], description: 'Spend by account across the claim pipeline.' },
+  'finance-exports.html': { title: 'Exports', crumbs: [{ label: 'Finance', href: 'treasurer.html' }, { label: 'Exports' }], description: 'Download claim and payment data as CSV.' },
   'governance.html': { title: 'Trustee dashboard', description: 'Read-only board oversight across the operational modules.' },
   // Finance detail reached from the Trustee dashboard's Finance panel - a second-level
   // drilldown, not a second root. Distinct canonical name + hierarchy resolves the

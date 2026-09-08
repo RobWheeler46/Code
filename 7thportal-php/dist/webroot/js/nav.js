@@ -241,6 +241,7 @@ function wireViewSwitcher(root = document) {
 const PAGE_FEATURE_MAP = {
   'gallery.html': 'galleryEnabled', 'leader-gallery.html': 'galleryEnabled', 'album-edit.html': 'galleryEnabled',
   'expenses.html': 'financeEnabled', 'claim-edit.html': 'financeEnabled', 'treasurer.html': 'financeEnabled',
+  'finance-accounts.html': 'financeEnabled', 'finance-exports.html': 'financeEnabled',
   'documents.html': 'documentLibraryEnabled', 'document-edit.html': 'documentLibraryEnabled',
   'equipment.html': 'equipmentRegisterEnabled', 'equipment-labels.html': 'equipmentRegisterEnabled',
   'quartermaster.html': 'qmBookingEnabled',

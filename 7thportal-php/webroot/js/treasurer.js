@@ -18,6 +18,12 @@ async function load() {
     content.innerHTML = '<div class="alert alert-warning">Expenses and mileage claims are not enabled yet. Turn this on in Admin Settings.</div>';
     return;
   }
+  // Finance local views (FR-FIN-003) reachable from the payments hub.
+  renderPageHeader({
+    title: 'Treasurer',
+    description: 'Approved items awaiting payment, payment recording and finance exports.',
+    actions: '<a class="btn btn-secondary" href="finance-accounts.html">Accounts</a><a class="btn btn-secondary" href="finance-exports.html">Exports</a>',
+  });
   const [payable, batches, rates, awaiting] = await Promise.all([
     Api.get('/api/treasurer/payable-items'), Api.get('/api/treasurer/payment-batches'), Api.get('/api/finance/mileage-rates'),
     Api.get('/api/finance/oversight/awaiting'),

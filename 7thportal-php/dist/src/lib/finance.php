@@ -644,6 +644,33 @@ function financeSeedDemoDataIfMissing(): void
 // payment date") ─────────────────────────────────────────────────────────
 
 // $rows must come from itemWithClaimQuery() (needs claim_number/claim_claimant_user_id).
+// Per-account spend breakdown for the Finance Accounts view (FR-FIN-003). Splits
+// non-draft item value into in-flight (awaiting a decision), payable (approved but not
+// yet paid), paid this financial year, and paid all-time; plus a totals row.
+function financeAccountsSummary(): array
+{
+    $accounts = dbAll('SELECT * FROM expense_accounts ORDER BY active DESC, name');
+    $items = dbAll("SELECT * FROM expense_claim_items WHERE status != 'draft'");
+    $yearStart = date('Y-01-01');
+    $amt = fn($i) => (float) ($i['approved_amount'] ?? $i['claimed_amount'] ?? 0);
+    $byAcct = [];
+    foreach ($items as $i) $byAcct[(int) $i['account_id']][] = $i;
+    $rows = [];
+    $tot = ['inFlight' => 0, 'payable' => 0, 'paidYtd' => 0, 'paid' => 0, 'items' => 0];
+    foreach ($accounts as $a) {
+        $its = $byAcct[(int) $a['id']] ?? [];
+        $inFlight = array_sum(array_map(fn($i) => (float) ($i['claimed_amount'] ?? 0), array_filter($its, fn($i) => in_array($i['status'], ['submitted', 'pending_second_approval', 'more_info_requested'], true))));
+        $payable = array_sum(array_map($amt, array_filter($its, fn($i) => in_array($i['status'], ['approved', 'ready_for_payment'], true))));
+        $paidItems = array_filter($its, fn($i) => in_array($i['status'], ['paid', 'archived'], true));
+        $paid = array_sum(array_map($amt, $paidItems));
+        $paidYtd = array_sum(array_map($amt, array_filter($paidItems, fn($i) => ($i['paid_at'] ?? '') >= $yearStart)));
+        $rows[] = ['id' => (int) $a['id'], 'name' => $a['name'], 'code' => $a['code'] ?? null, 'active' => (bool) $a['active'], 'itemCount' => count($its), 'inFlight' => round($inFlight, 2), 'payable' => round($payable, 2), 'paidYtd' => round($paidYtd, 2), 'paid' => round($paid, 2)];
+        $tot['inFlight'] += $inFlight; $tot['payable'] += $payable; $tot['paidYtd'] += $paidYtd; $tot['paid'] += $paid; $tot['items'] += count($its);
+    }
+    foreach (['inFlight', 'payable', 'paidYtd', 'paid'] as $k) $tot[$k] = round($tot[$k], 2);
+    return ['accounts' => $rows, 'totals' => $tot, 'yearStart' => $yearStart];
+}
+
 function itemsToCsv(array $rows): string
 {
     $out = fopen('php://temp', 'r+');

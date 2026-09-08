@@ -422,6 +422,8 @@ textarea { min-height: 5rem; resize: vertical; }
 }
 .data-table th, .data-table td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .data-table th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.data-table th.num, .data-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.data-table tfoot .fin-total td { border-top: 2px solid var(--border); border-bottom: none; font-weight: 700; }
 .data-table input { padding: 0.3rem 0.4rem; border: 1px solid var(--border); border-radius: 5px; font: inherit; }
 /* Capacity RAG statuses (good/watch/full/over/unset) inherit the shared status-pill
    tints defined with the .badge rules above — no separate solid-fill rules needed. */

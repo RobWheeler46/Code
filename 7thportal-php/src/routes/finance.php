@@ -718,6 +718,49 @@ $router->get('/api/trustee/dashboard', function ($params) {
     ]);
 });
 
+// ── Finance Accounts view (FR-FIN-003): per-account spend oversight ─────────
+$router->get('/api/finance/accounts-summary', function ($params) {
+    $user = requireAuth();
+    requireFinanceEnabled();
+    if (!isTrusteeDashboardRole($user['portal_role'])) jsonResponse(['error' => 'Finance oversight access is required for the Accounts view.'], 403);
+    jsonResponse(financeAccountsSummary());
+});
+
+// ── Finance Exports view (FR-FIN-003): filtered claim-item CSV export ────────
+// Options for the export filters (all accounts incl. inactive, since history may sit on
+// a since-retired account) plus the status labels.
+$router->get('/api/finance/export-options', function ($params) {
+    $user = requireAuth();
+    requireFinanceEnabled();
+    if (!isTreasurerRole($user['portal_role'])) jsonResponse(['error' => 'Treasurer access required.'], 403);
+    jsonResponse([
+        'accounts' => array_map(fn($a) => ['id' => (int) $a['id'], 'name' => $a['name'], 'active' => (bool) $a['active']], dbAll('SELECT id, name, active FROM expense_accounts ORDER BY active DESC, name')),
+        'statuses' => [
+            'submitted' => 'Submitted', 'pending_second_approval' => 'Awaiting second approval', 'more_info_requested' => 'More info requested',
+            'approved' => 'Approved', 'ready_for_payment' => 'Ready for payment', 'rejected' => 'Rejected', 'paid' => 'Paid', 'archived' => 'Archived',
+        ],
+    ]);
+});
+
+$router->get('/api/finance/export.csv', function ($params) {
+    $user = requireAuth();
+    requireFinanceEnabled();
+    if (!isTreasurerRole($user['portal_role'])) jsonResponse(['error' => 'Treasurer access required.'], 403);
+    $where = ["eci.status != 'draft'"];
+    $args = [];
+    if ($accountId = queryParam('accountId')) { $where[] = 'eci.account_id = ?'; $args[] = (int) $accountId; }
+    $status = queryParam('status');
+    if ($status && $status !== 'all') { $where[] = 'eci.status = ?'; $args[] = $status; }
+    if ($from = queryParam('from')) { $where[] = 'eci.expense_date >= ?'; $args[] = $from; }
+    if ($to = queryParam('to')) { $where[] = 'eci.expense_date <= ?'; $args[] = $to; }
+    $rows = dbAll(itemWithClaimQuery() . ' WHERE ' . implode(' AND ', $where) . ' ORDER BY eci.created_at DESC', $args);
+    logAudit(['userId' => $user['id'], 'action' => 'finance_export_csv', 'ipAddress' => clientIp(), 'details' => ['count' => count($rows), 'accountId' => $accountId ?: null, 'status' => $status ?: null]]);
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="7thportal-finance-export.csv"');
+    echo itemsToCsv($rows);
+    exit;
+});
+
 // ── Admin: accounts, categories, mileage rates ──────────────────────────────
 
 $router->get('/api/admin/finance/accounts', function ($params) {

@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle', 'logic_forms', 'logic_forms_admin', 'logic_forms_files', 'logic_pp_wizard', 'logic_email'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle', 'logic_forms', 'logic_forms_admin', 'logic_forms_files', 'logic_pp_wizard', 'logic_email', 'logic_finance_accounts'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -943,6 +943,36 @@ function scenario_logic_email(): void
     $set('smtp_from', 'noreply@example.org');
     $set('smtp_from_name', '7th Swindon');
     check('email: From header quotes the display name', smtpFromHeader(smtpConfig()) === '"7th Swindon" <noreply@example.org>');
+}
+
+// Finance Accounts view: per-account spend buckets (in-flight / payable / paid YTD /
+// paid all-time), drafts excluded, totals summed (FR-FIN-003).
+function scenario_logic_finance_accounts(): void
+{
+    useDb(tmpDb('finacct')); boot(); loadLibs();
+    $u = (int) dbRun("INSERT INTO users (auth_type,email,first_name,last_name,portal_role) VALUES ('local','c@x.com','C','C','section_leader')")['lastInsertId'];
+    $a1 = (int) dbRun("INSERT INTO expense_accounts (name,code) VALUES ('General','GEN')")['lastInsertId'];
+    $a2 = (int) dbRun("INSERT INTO expense_accounts (name,active) VALUES ('Old',0)")['lastInsertId'];
+    $claim = (int) dbRun("INSERT INTO expense_claims (claim_number,claimant_user_id,title) VALUES ('CLM-1',?,'x')", [$u])['lastInsertId'];
+    $n = 0;
+    $ins = function ($acct, $status, $claimed, $approved = null, $paidAt = null) use ($claim, &$n) {
+        $n++;
+        dbRun("INSERT INTO expense_claim_items (claim_id,item_number,item_type,title,account_id,claimed_amount,approved_amount,status,paid_at) VALUES (?,?,'receipt','t',?,?,?,?,?)", [$claim, $n, $acct, $claimed, $approved, $status, $paidAt]);
+    };
+    $ins($a1, 'submitted', 10.00);
+    $ins($a1, 'approved', 20.00, 20.00);
+    $ins($a1, 'paid', 30.00, 30.00, date('Y-01-15'));
+    $ins($a1, 'draft', 999);
+    $ins($a2, 'paid', 5.00, 5.00, '2020-06-01');
+    $sum = financeAccountsSummary();
+    $by = [];
+    foreach ($sum['accounts'] as $r) $by[$r['name']] = $r;
+    check('fin-accounts: in-flight = submitted claimed amount', abs($by['General']['inFlight'] - 10.00) < 0.001);
+    check('fin-accounts: payable = approved amount', abs($by['General']['payable'] - 20.00) < 0.001);
+    check('fin-accounts: paid YTD and all-time both count the paid item', abs($by['General']['paidYtd'] - 30.00) < 0.001 && abs($by['General']['paid'] - 30.00) < 0.001);
+    check('fin-accounts: draft excluded from item count', $by['General']['itemCount'] === 3);
+    check('fin-accounts: inactive account paid all-time but not YTD', abs($by['Old']['paid'] - 5.00) < 0.001 && (float) $by['Old']['paidYtd'] === 0.0 && $by['Old']['active'] === false);
+    check('fin-accounts: totals sum across accounts', abs($sum['totals']['paid'] - 35.00) < 0.001 && abs($sum['totals']['payable'] - 20.00) < 0.001);
 }
 
 // Patrol Points setup wizard: one transaction builds the competition + teams +
