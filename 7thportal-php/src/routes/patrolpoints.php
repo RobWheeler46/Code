@@ -21,7 +21,7 @@ $router->get('/api/patrol-points/competitions', function ($params) {
     jsonResponse([
         'competitions' => array_map(fn($c) => serializePpCompetition($c), $rows),
         'canManage' => ppCanManage($user),
-        'meta' => ['statuses' => PP_STATUSES, 'approvalModes' => PP_APPROVAL_MODES, 'pointsTypes' => PP_POINTS_TYPES],
+        'meta' => ['statuses' => PP_STATUSES, 'approvalModes' => PP_APPROVAL_MODES, 'pointsTypes' => PP_POINTS_TYPES, 'presets' => ppPresets()],
     ]);
 });
 

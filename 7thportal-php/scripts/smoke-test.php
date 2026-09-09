@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle', 'logic_forms', 'logic_forms_admin', 'logic_forms_files', 'logic_pp_wizard', 'logic_email', 'logic_finance_accounts', 'logic_pp_access', 'logic_pp_triage'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle', 'logic_forms', 'logic_forms_admin', 'logic_forms_files', 'logic_pp_wizard', 'logic_email', 'logic_finance_accounts', 'logic_pp_access', 'logic_pp_triage', 'logic_pp_presets'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -1072,6 +1072,31 @@ function scenario_logic_pp_triage(): void
     check('pp-triage: large value flagged', in_array('large_value', $f(['guest_link_id' => null, 'revises_id' => null, 'disposition_reason' => null], [['points' => 60]]), true));
     check('pp-triage: correction flagged', in_array('revision', $f(['guest_link_id' => null, 'revises_id' => 9, 'disposition_reason' => null], [['points' => 5]]), true));
     check('pp-triage: a normal score is straightforward (no flags)', $f(['guest_link_id' => null, 'revises_id' => null, 'disposition_reason' => 'score_directly'], [['points' => 5]]) === []);
+}
+
+// Patrol Points v2.4 PP4: access/approval presets seed a covered capability-model
+// competition, and no pending-producing preset leaves an uncovered route (FRD s4.3/s5).
+function scenario_logic_pp_presets(): void
+{
+    useDb(tmpDb('pppre')); boot(); loadLibs();
+    dbRun("INSERT OR REPLACE INTO settings (key,value) VALUES ('patrol_points_enabled','true')");
+    dbRun("INSERT INTO users (auth_type,email,first_name,last_name,portal_role) VALUES ('local','g@x','G','L','group_leadership')");
+    $cr = (int) dbRun("INSERT INTO users (auth_type,email,first_name,last_name,portal_role) VALUES ('local','a@x','A','A','admin')")['lastInsertId'];
+    $presets = ppPresets();
+    check('pp-presets: five presets defined', count($presets) === 5);
+    $ok = true;
+    foreach ($presets as $p) {
+        $pending = ($p['approvalMode'] === 'approval') || !empty($p['deductionsRequireApproval']);
+        $hasApprove = false;
+        foreach ($p['assignments'] as $a) if ($a['capability'] === 'approve') $hasApprove = true;
+        if ($pending && !$hasApprove) $ok = false;
+    }
+    check('pp-presets: every pending-producing preset names an approver', $ok);
+    $id = ppBuildCompetition($cr, ['name' => 'Mod', 'preset' => 'moderated', 'teams' => ['A', 'B'], 'categories' => [['name' => 'Gen', 'pointsType' => 'free']], 'start' => true]);
+    $c = dbGet('SELECT * FROM pp_competitions WHERE id=?', [$id]);
+    check('pp-presets: a preset build turns on the capability model + approval mode', (int) $c['uses_capability_model'] === 1 && $c['approval_mode'] === 'approval');
+    check('pp-presets: a preset build opens with no coverage error', $c['status'] === 'open' && ppApprovalCoverageError($c) === null);
+    check('pp-presets: the preset seeded an approve assignment', (int) dbGet("SELECT COUNT(*) n FROM pp_access_assignments WHERE competition_id=? AND capability='approve'", [$id])['n'] > 0);
 }
 
 // Forms part 3: on-behalf completion (recorded, not impersonated) + required file

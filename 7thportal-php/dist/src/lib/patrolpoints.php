@@ -196,6 +196,36 @@ function ppInsertAssignment(int $compId, array $a, int $userId): void
         [$compId, $kind, $val, $cap, $a['scopeActivityId'] ?? null, $a['scopeCategoryId'] ?? null, $a['scopeSection'] ?? null, $userId]);
 }
 
+// Recommended access & approval presets (FRD PP2.4 s4.3). Role-based starting points a
+// manager applies then adjusts; each pending-producing preset always names an approver
+// so it can never leave an uncovered route. Roles map to real portal roles.
+function ppPresets(): array
+{
+    $a = fn($role, $cap) => ['subjectKind' => 'role', 'subjectValue' => $role, 'capability' => $cap];
+    return [
+        ['key' => 'trusted', 'label' => 'Trusted leaders', 'description' => 'Leaders score immediately; exceptions such as deductions go to Group Leadership.',
+            'approvalMode' => 'immediate', 'deductionsRequireApproval' => true,
+            'assignments' => [$a('group_leadership', 'score_direct'), $a('section_leader', 'score_direct'), $a('group_leadership', 'approve')]],
+        ['key' => 'moderated', 'label' => 'Moderated competition', 'description' => 'Assigned scorers submit; every score is approved by the Group Leadership group.',
+            'approvalMode' => 'approval', 'deductionsRequireApproval' => true,
+            'assignments' => [$a('section_leader', 'submit'), $a('assistant_leader', 'submit'), $a('group_leadership', 'approve')]],
+        ['key' => 'camp_stations', 'label' => 'Camp activity stations', 'description' => 'Group Leadership score immediately; station volunteers submit for approval by Group Leadership.',
+            'approvalMode' => 'immediate', 'deductionsRequireApproval' => true,
+            'assignments' => [$a('group_leadership', 'score_direct'), $a('assistant_leader', 'submit'), $a('group_leadership', 'approve')]],
+        ['key' => 'guest_qr', 'label' => 'Guest QR scoring', 'description' => 'Every score needs approval, suitable when guest links are used. Approved by Group Leadership.',
+            'approvalMode' => 'approval', 'deductionsRequireApproval' => true,
+            'assignments' => [$a('section_leader', 'submit'), $a('group_leadership', 'approve')]],
+        ['key' => 'restricted', 'label' => 'Restricted competition', 'description' => 'Every score needs approval. Start here, then add the named people who may score and approve.',
+            'approvalMode' => 'approval', 'deductionsRequireApproval' => true,
+            'assignments' => [$a('group_leadership', 'approve')]],
+    ];
+}
+function ppPreset(string $key): ?array
+{
+    foreach (ppPresets() as $p) if ($p['key'] === $key) return $p;
+    return null;
+}
+
 // The Access and approvals surface payload: policy, current assignments, the people who
 // could be named as approvers/scorers, coverage status and the capability labels.
 function ppAccessPayload(array $c): array
@@ -220,6 +250,7 @@ function ppAccessPayload(array $c): array
         'capabilityLabels' => ['submit' => 'Submit points', 'score_direct' => 'Score directly', 'approve' => 'Approve points', 'view_detail' => 'View detail', 'manage' => 'Manage competition', 'manage_access' => 'Manage access'],
         'pendingRouteExists' => ppPendingRouteExists($c),
         'coverageError' => ppApprovalCoverageError($c),
+        'presets' => ppPresets(),
     ];
 }
 
@@ -360,15 +391,18 @@ function ppParseReasons($v): ?string
 // already-validated wizard input (FRD s13.2). Optionally opens it. Returns the new id.
 function ppBuildCompetition(int $creatorId, array $b): int
 {
-    $mode = in_array($b['approvalMode'] ?? '', ['immediate', 'approval'], true) ? $b['approvalMode'] : 'immediate';
+    // An access/approval preset (FRD s4.3/s5) seeds the policy + capability model.
+    $preset = !empty($b['preset']) ? ppPreset((string) $b['preset']) : null;
+    $mode = $preset ? $preset['approvalMode'] : (in_array($b['approvalMode'] ?? '', ['immediate', 'approval'], true) ? $b['approvalMode'] : 'immediate');
+    $dedApp = $preset ? (!empty($preset['deductionsRequireApproval']) ? 1 : 0) : 1;
     $teams = array_values(array_filter(array_map(fn($t) => trim((string) $t), is_array($b['teams'] ?? null) ? $b['teams'] : []), fn($t) => $t !== ''));
     $cats = is_array($b['categories'] ?? null) ? $b['categories'] : [];
     $start = !empty($b['start']) && $teams && $cats;
     db()->beginTransaction();
     try {
         $id = (int) dbRun(
-            "INSERT INTO pp_competitions (name, description, approval_mode, visibility, allow_deductions, osm_section_id, section_name, created_by) VALUES (?, ?, ?, 'leaders', ?, ?, ?, ?)",
-            [trim((string) $b['name']), trim((string) ($b['description'] ?? '')) ?: null, $mode, !empty($b['allowDeductions']) ? 1 : 0, $b['sectionId'] ?? null, trim((string) ($b['sectionName'] ?? '')) ?: null, $creatorId]
+            "INSERT INTO pp_competitions (name, description, approval_mode, visibility, allow_deductions, deductions_require_approval, uses_capability_model, osm_section_id, section_name, created_by) VALUES (?, ?, ?, 'leaders', ?, ?, ?, ?, ?, ?)",
+            [trim((string) $b['name']), trim((string) ($b['description'] ?? '')) ?: null, $mode, !empty($b['allowDeductions']) ? 1 : 0, $dedApp, $preset ? 1 : 0, $b['sectionId'] ?? null, trim((string) ($b['sectionName'] ?? '')) ?: null, $creatorId]
         )['lastInsertId'];
         $so = 0;
         foreach ($teams as $tn) dbRun('INSERT INTO pp_teams (competition_id, name, sort_order) VALUES (?, ?, ?)', [$id, $tn, ++$so]);
@@ -378,7 +412,11 @@ function ppBuildCompetition(int $creatorId, array $b): int
             dbRun('INSERT INTO pp_categories (competition_id, name, points_type, fixed_points, point_buttons, reason_presets, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
                 [$id, trim((string) $ct['name']), $type, $type === 'fixed' ? (int) $ct['fixedPoints'] : null, ppParseButtons($ct['pointButtons'] ?? null), ppParseReasons($ct['reasonPresets'] ?? null), ++$cso]);
         }
-        if ($start) dbRun("UPDATE pp_competitions SET status = 'open', updated_at = datetime('now') WHERE id = ?", [$id]);
+        if ($preset) foreach ($preset['assignments'] as $a) ppInsertAssignment($id, $a, $creatorId);
+        // Only open if there is no uncovered approval route (AC24-07); presets always cover.
+        if ($start && ppApprovalCoverageError(dbGet('SELECT * FROM pp_competitions WHERE id = ?', [$id])) === null) {
+            dbRun("UPDATE pp_competitions SET status = 'open', updated_at = datetime('now') WHERE id = ?", [$id]);
+        }
         db()->commit();
         return $id;
     } catch (Throwable $e) {

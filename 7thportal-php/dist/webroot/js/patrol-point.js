@@ -566,8 +566,12 @@ function renderAccessBody() {
   const whoOpts = ACCESS.approverCandidates.map(u => `<option value="user:${u.id}">${esc(u.name)} (${esc(u.role)})</option>`).join('')
     + Object.entries(ACCESS.roleOptions).map(([k, v]) => `<option value="role:${k}">${esc(v)} (role)</option>`).join('');
   const capOpts = Object.entries(ACCESS.capabilityLabels).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('');
+  const presetOpts = (ACCESS.presets || []).map(pr => `<option value="${esc(pr.key)}">${esc(pr.label)}</option>`).join('');
   body.innerHTML = `
     ${ACCESS.coverageError ? `<div class="alert alert-warning">${esc(ACCESS.coverageError)}</div>` : ''}
+    ${(ACCESS.presets || []).length ? `<div class="field"><label>Start from a preset</label>
+      <select id="pp-acc-preset"><option value="">Choose a preset&hellip;</option>${presetOpts}</select>
+      <span class="field help" id="pp-acc-preset-desc"></span></div>` : ''}
     <div class="cap-actions" style="align-items:flex-end;flex-wrap:wrap">
       <div class="field"><label>All scores need approval</label><select id="pp-acc-mode"><option value="immediate"${p.approvalMode === 'immediate' ? ' selected' : ''}>No, use capabilities</option><option value="approval"${p.approvalMode === 'approval' ? ' selected' : ''}>Yes, every score</option></select></div>
       <div class="field"><label style="font-weight:400"><input type="checkbox" id="pp-acc-ded"${p.deductionsRequireApproval ? ' checked' : ''}> Deductions always need approval</label></div>
@@ -582,6 +586,16 @@ function renderAccessBody() {
     <div id="pp-acc-msg"></div>
     <div class="cap-actions" style="margin-top:.6rem"><button class="btn" id="pp-acc-save">Save access &amp; approvals</button></div>`;
   body.querySelectorAll('.pp-acc-del').forEach(b => b.addEventListener('click', () => { ACCESS_ROWS.splice(+b.dataset.i, 1); renderAccessBody(); }));
+  const presetSel = document.getElementById('pp-acc-preset');
+  if (presetSel) presetSel.addEventListener('change', () => {
+    const pr = (ACCESS.presets || []).find(x => x.key === presetSel.value);
+    if (!pr) return;
+    ACCESS.policy = { ...ACCESS.policy, approvalMode: pr.approvalMode, deductionsRequireApproval: !!pr.deductionsRequireApproval };
+    ACCESS_ROWS = pr.assignments.map(a => ({ subjectKind: a.subjectKind, subjectValue: a.subjectValue, capability: a.capability, subjectLabel: (ACCESS.roleOptions[a.subjectValue] || a.subjectValue) }));
+    renderAccessBody();
+    const desc = document.getElementById('pp-acc-preset-desc');
+    if (desc) desc.textContent = pr.description + ' Adjust the rows below, then Save.';
+  });
   document.getElementById('pp-acc-add').addEventListener('click', () => {
     const who = document.getElementById('pp-acc-who').value;
     if (!who) return;

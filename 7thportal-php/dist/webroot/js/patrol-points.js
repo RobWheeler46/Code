@@ -134,11 +134,18 @@ function stepReview() {
   const teams = WIZ.teams.map(t => t.trim()).filter(Boolean);
   const cats = WIZ.categories.filter(c => c.name.trim());
   const line = (label, val) => `<tr><td class="muted">${label}</td><td>${val}</td></tr>`;
+  const presets = WIZ.meta.presets || [];
+  const chosen = presets.find(p => p.key === WIZ.preset);
+  const presetPicker = presets.length ? `<div class="field"><label>Access &amp; approvals preset</label>
+      <select id="wz-preset"><option value="">Simple (leaders score, approval follows the mode above)</option>
+      ${presets.map(p => `<option value="${escapeHtml(p.key)}"${WIZ.preset === p.key ? ' selected' : ''}>${escapeHtml(p.label)}</option>`).join('')}</select>
+      <span class="field help">${chosen ? escapeHtml(chosen.description) : 'Pick a preset to control who scores directly and who approves. You can fine-tune it later under Access &amp; approvals.'}</span></div>` : '';
   return `<p class="muted">Check everything, then save as a draft or create and open for scoring right away.</p>
+    ${presetPicker}
     <table class="kv-table">
       ${line('Name', escapeHtml(WIZ.name) || '<span class="err" style="color:var(--red)">Needs a name</span>')}
       ${WIZ.description ? line('Description', escapeHtml(WIZ.description)) : ''}
-      ${line('Scoring approval', escapeHtml(WIZ.meta.approvalModes[WIZ.approvalMode] || WIZ.approvalMode))}
+      ${line('Scoring approval', chosen ? escapeHtml(WIZ.meta.approvalModes[chosen.approvalMode] || chosen.approvalMode) + ' <span class="muted">(from preset)</span>' : escapeHtml(WIZ.meta.approvalModes[WIZ.approvalMode] || WIZ.approvalMode))}
       ${line('Deductions', WIZ.allowDeductions ? 'Allowed' : 'Not allowed')}
       ${line('Teams (' + teams.length + ')', teams.length ? teams.map(escapeHtml).join(', ') : '<span class="muted">None yet</span>')}
       ${line('Scoring (' + cats.length + ')', cats.length ? cats.map(c => escapeHtml(c.name) + (c.pointsType === 'fixed' ? ` (fixed ${escapeHtml(c.fixedPoints)})` : '')).join(', ') : '<span class="muted">None yet</span>')}
@@ -162,6 +169,8 @@ function collectWizStep() {
       pointButtons: el.querySelector('.wz-cat-buttons').value,
       reasonPresets: el.querySelector('.wz-cat-reasons').value,
     }));
+  } else if (WIZ.step === 4) {
+    WIZ.preset = val('wz-preset', WIZ.preset || '');
   }
 }
 function val(id, fallback) { const el = document.getElementById(id); return el ? el.value : fallback; }
@@ -181,6 +190,8 @@ function wireWizard() {
 
   // Step 1: clone
   document.getElementById('wz-clone')?.addEventListener('change', e => { if (e.target.value) cloneFrom(e.target.value); });
+  // Step 4: preset picker (refresh the review so the description + approval line update)
+  document.getElementById('wz-preset')?.addEventListener('change', e => { WIZ.preset = e.target.value; renderWizard(); });
   // Step 2: team add/remove/templates
   document.getElementById('wz-team-add')?.addEventListener('click', () => { collectWizStep(); WIZ.teams.push(''); renderWizard(); });
   document.querySelectorAll('.wz-team-del').forEach(b => b.addEventListener('click', () => { collectWizStep(); WIZ.teams.splice(+b.dataset.i, 1); renderWizard(); }));
@@ -223,6 +234,7 @@ async function finishWizard(start) {
   if (!WIZ.name.trim()) { goStep(1); return wizMsg('Give the competition a name.'); }
   const payload = {
     name: WIZ.name.trim(), description: WIZ.description, approvalMode: WIZ.approvalMode, allowDeductions: WIZ.allowDeductions,
+    preset: WIZ.preset || undefined,
     teams: WIZ.teams.map(t => t.trim()).filter(Boolean),
     categories: WIZ.categories.filter(c => c.name.trim()).map(c => ({
       name: c.name.trim(), pointsType: c.pointsType, fixedPoints: c.fixedPoints,
