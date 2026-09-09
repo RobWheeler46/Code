@@ -58,7 +58,7 @@ function ppPlatformCeiling(array $user): array
 
 // Capabilities granted to a user by this competition's access assignments (user / role /
 // section subjects; group and section-approver resolution is deferred to a later slice).
-function ppAssignmentCapsForUser(array $user, array $comp): array
+function ppAssignmentCapsForUser(array $user, array $comp, ?int $activityId = null): array
 {
     $caps = [];
     $sectionIds = function_exists('sectionsUserSectionIds') ? sectionsUserSectionIds($user) : [];
@@ -66,14 +66,18 @@ function ppAssignmentCapsForUser(array $user, array $comp): array
         $m = ($a['subject_kind'] === 'user' && (int) $a['subject_value'] === (int) $user['id'])
             || ($a['subject_kind'] === 'role' && $a['subject_value'] === $user['portal_role'])
             || ($a['subject_kind'] === 'section' && in_array($a['subject_value'], $sectionIds, true));
-        if ($m) $caps[] = $a['capability'];
+        if (!$m) continue;
+        // An activity-scoped grant only applies in that activity's context (FRD s7). An
+        // unscoped grant applies everywhere. Reads with no activity context see unscoped only.
+        if ($a['scope_activity_id'] !== null && (int) $a['scope_activity_id'] !== (int) $activityId) continue;
+        $caps[] = $a['capability'];
     }
     return $caps;
 }
 
 // The user's effective capabilities on a competition (assignments intersected with the
 // platform ceiling). Managing a competition never implies Approve or Score Directly.
-function ppUserCapabilities(array $user, array $comp): array
+function ppUserCapabilities(array $user, array $comp, ?int $activityId = null): array
 {
     $ceiling = ppPlatformCeiling($user);
     if (!$ceiling) return [];
@@ -86,17 +90,32 @@ function ppUserCapabilities(array $user, array $comp): array
     $caps = ['view'];
     if ((int) $comp['created_by'] === (int) $user['id']) $caps = array_merge($caps, ['view_detail', 'view_history', 'manage', 'manage_access']);
     if (ppCanManage($user)) $caps = array_merge($caps, ['view_detail', 'view_history', 'manage']);
-    $caps = array_merge($caps, ppAssignmentCapsForUser($user, $comp));
+    $caps = array_merge($caps, ppAssignmentCapsForUser($user, $comp, $activityId));
     return array_values(array_unique(array_intersect($caps, $ceiling)));
 }
-function ppHasCapability(array $user, array $comp, string $cap): bool
+function ppHasCapability(array $user, array $comp, string $cap, ?int $activityId = null): bool
 {
-    return in_array($cap, ppUserCapabilities($user, $comp), true);
+    return in_array($cap, ppUserCapabilities($user, $comp, $activityId), true);
+}
+// Can this user submit or score anywhere in the competition (unscoped or in any activity)?
+// Used to decide whether to show Quick Score at all.
+function ppCanScoreAnywhere(array $user, array $comp): bool
+{
+    if (ppHasCapability($user, $comp, 'submit') || ppHasCapability($user, $comp, 'score_direct')) return true;
+    if (empty($comp['uses_capability_model']) || !in_array('submit', ppPlatformCeiling($user), true)) return false;
+    $sectionIds = function_exists('sectionsUserSectionIds') ? sectionsUserSectionIds($user) : [];
+    foreach (dbAll("SELECT * FROM pp_access_assignments WHERE competition_id = ? AND capability IN ('submit','score_direct')", [$comp['id']]) as $a) {
+        $m = ($a['subject_kind'] === 'user' && (int) $a['subject_value'] === (int) $user['id'])
+            || ($a['subject_kind'] === 'role' && $a['subject_value'] === $user['portal_role'])
+            || ($a['subject_kind'] === 'section' && in_array($a['subject_value'], $sectionIds, true));
+        if ($m) return true;
+    }
+    return false;
 }
 
 // Score disposition decision (FRD PP2.4 s4.1), evaluated in strict rule order. Returns
 // ['status' => 'approved'|'pending'|'prohibited', 'reason' => <ScoreDisposition audit>].
-function ppScoreDisposition(array $comp, array $user, array $cat, array $lineValues, bool $isGuest = false): array
+function ppScoreDisposition(array $comp, array $user, array $cat, array $lineValues, bool $isGuest = false, ?int $activityId = null): array
 {
     if ($isGuest) return ['status' => 'pending', 'reason' => 'guest'];
     if (($comp['approval_mode'] ?? '') === 'approval') return ['status' => 'pending', 'reason' => 'all_approval'];
@@ -107,7 +126,9 @@ function ppScoreDisposition(array $comp, array $user, array $cat, array $lineVal
     if ($hasDeduction && !empty($comp['deductions_require_approval'])) return ['status' => 'pending', 'reason' => 'deduction'];
     $thr = $comp['large_value_threshold'] ?? null;
     if ($thr !== null && $thr !== '' && $maxAbs > (int) $thr) return ['status' => 'pending', 'reason' => 'large_value'];
-    $caps = ppUserCapabilities($user, $comp);
+    // Score Directly / Submit are evaluated in the activity context, so an activity-scoped
+    // grant only makes a score effective when scored under that activity.
+    $caps = ppUserCapabilities($user, $comp, $activityId);
     if (in_array('score_direct', $caps, true)) return ['status' => 'approved', 'reason' => 'score_directly'];
     if (in_array('submit', $caps, true)) return ['status' => 'pending', 'reason' => 'submit_only'];
     return ['status' => 'prohibited', 'reason' => 'no_capability'];
@@ -181,7 +202,9 @@ function ppCanApprove(array $user, array $submission): bool
     $comp = dbGet('SELECT * FROM pp_competitions WHERE id = ?', [$submission['competition_id']]);
     if (!$comp) return false;
     if (empty($comp['uses_capability_model'])) return ppCanManage($user);
-    return ppHasCapability($user, $comp, 'approve');
+    // An activity-scoped approver may only approve submissions made under that activity.
+    $activityId = isset($submission['activity_id']) && $submission['activity_id'] !== null ? (int) $submission['activity_id'] : null;
+    return ppHasCapability($user, $comp, 'approve', $activityId);
 }
 
 // Human label for an assignment subject (for the Access and approvals surface).
@@ -240,9 +263,13 @@ function ppPreset(string $key): ?array
 // could be named as approvers/scorers, coverage status and the capability labels.
 function ppAccessPayload(array $c): array
 {
+    $activityNames = [];
+    foreach (dbAll('SELECT id, name FROM pp_activities WHERE competition_id = ? ORDER BY sort_order, name', [$c['id']]) as $a) $activityNames[(int) $a['id']] = $a['name'];
     $assignments = array_map(fn($a) => [
         'id' => (int) $a['id'], 'subjectKind' => $a['subject_kind'], 'subjectValue' => $a['subject_value'],
         'capability' => $a['capability'], 'subjectLabel' => ppSubjectLabel($a),
+        'scopeActivityId' => $a['scope_activity_id'] !== null ? (int) $a['scope_activity_id'] : null,
+        'scopeLabel' => $a['scope_activity_id'] !== null ? ($activityNames[(int) $a['scope_activity_id']] ?? 'activity') : 'Whole competition',
     ], dbAll('SELECT * FROM pp_access_assignments WHERE competition_id = ? ORDER BY capability, id', [$c['id']]));
     $cands = array_map(fn($u) => ['id' => (int) $u['id'], 'name' => trim($u['first_name'] . ' ' . $u['last_name']), 'role' => $u['portal_role']],
         dbAll("SELECT id, first_name, last_name, portal_role FROM users WHERE account_status = 'active' AND portal_role IN ('section_leader','assistant_leader','group_leadership','chair','admin') ORDER BY first_name, last_name"));
@@ -257,6 +284,7 @@ function ppAccessPayload(array $c): array
         'assignments' => $assignments,
         'approverCandidates' => $cands,
         'roleOptions' => ['section_leader' => 'Section Leaders', 'assistant_leader' => 'Assistant Leaders', 'group_leadership' => 'Group Leadership', 'chair' => 'Chair'],
+        'activities' => array_map(fn($id, $name) => ['id' => $id, 'name' => $name], array_keys($activityNames), array_values($activityNames)),
         'capabilityLabels' => ['submit' => 'Submit points', 'score_direct' => 'Score directly', 'approve' => 'Approve points', 'view_detail' => 'View detail', 'manage' => 'Manage competition', 'manage_access' => 'Manage access'],
         'pendingRouteExists' => ppPendingRouteExists($c),
         'coverageError' => ppApprovalCoverageError($c),
@@ -449,6 +477,7 @@ function serializePpSubmission(array $s, array $lines, array $teamNames, array $
         'decidedBy' => $s['decided_by'] !== null ? ($userNames[(int) $s['decided_by']] ?? 'Leader') : null,
         'decisionComment' => $s['decision_comment'], 'createdAt' => $s['created_at'],
         'dispositionReason' => $s['disposition_reason'] ?? null,
+        'activityId' => isset($s['activity_id']) && $s['activity_id'] !== null ? (int) $s['activity_id'] : null,
         'triage' => (($s['status'] === 'pending' && empty($s['withdrawn'])) ? ['bucket' => (ppTriageFlags($s, $lines) ? 'needs_attention' : 'straightforward'), 'flags' => ppTriageFlags($s, $lines)] : null),
         'lines' => array_map(fn($l) => ['teamId' => (int) $l['team_id'], 'teamName' => $teamNames[(int) $l['team_id']] ?? '—', 'points' => (int) $l['points']], $lines),
     ];

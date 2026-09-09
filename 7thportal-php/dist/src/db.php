@@ -1242,6 +1242,7 @@ CREATE TABLE IF NOT EXISTS pp_submissions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   competition_id INTEGER NOT NULL REFERENCES pp_competitions(id) ON DELETE CASCADE,
   category_id INTEGER NOT NULL REFERENCES pp_categories(id) ON DELETE CASCADE,
+  activity_id INTEGER REFERENCES pp_activities(id) ON DELETE SET NULL,
   submitted_by INTEGER NOT NULL REFERENCES users(id),
   comment TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'approved' CHECK(status IN ('pending','approved','rejected','returned')),
@@ -1611,6 +1612,11 @@ if ($ppCompsSql && !str_contains($ppCompsSql, 'uses_capability_model')) {
 $ppSubsSql2 = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='pp_submissions'")['sql'] ?? '';
 if ($ppSubsSql2 && !str_contains($ppSubsSql2, 'disposition_reason')) {
     db()->exec('ALTER TABLE pp_submissions ADD COLUMN disposition_reason TEXT');
+}
+// Migration: Patrol Points v2.4 per-activity scoping - tag a submission with the activity
+// it was scored under, so activity-scoped scorer/approver assignments can take effect.
+if ($ppSubsSql2 && !str_contains($ppSubsSql2, 'activity_id')) {
+    db()->exec('ALTER TABLE pp_submissions ADD COLUMN activity_id INTEGER');
 }
 // Migration: equipment_assets gained a maintenance lock (QM inspection workflow).
 $eqSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='equipment_assets'")['sql'] ?? '';

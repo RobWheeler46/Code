@@ -551,16 +551,18 @@ async function loadAccess() {
   body.innerHTML = '<p class="muted">Loading&hellip;</p>';
   try { ACCESS = await Api.get(`/api/patrol-points/competitions/${ID}/access`); }
   catch (e) { body.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`; return; }
-  ACCESS_ROWS = ACCESS.assignments.map(a => ({ subjectKind: a.subjectKind, subjectValue: a.subjectValue, capability: a.capability, subjectLabel: a.subjectLabel }));
+  ACCESS_ROWS = ACCESS.assignments.map(a => ({ subjectKind: a.subjectKind, subjectValue: a.subjectValue, capability: a.capability, subjectLabel: a.subjectLabel, scopeActivityId: a.scopeActivityId }));
   renderAccessBody();
 }
 function renderAccessBody() {
   const body = document.getElementById('pp-access-body');
   const p = ACCESS.policy;
   const capLabel = c => ACCESS.capabilityLabels[c] || c;
+  const acts = ACCESS.activities || [];
+  const scopeName = id => (acts.find(a => a.id === id) || {}).name || 'activity';
   const rows = ACCESS_ROWS.map((r, i) => `<tr>
       <td class="rcard-title">${esc(r.subjectLabel || r.subjectValue)}</td>
-      <td data-label="Can">${esc(capLabel(r.capability))}</td>
+      <td data-label="Can">${esc(capLabel(r.capability))}${r.scopeActivityId ? ` <span class="muted">· ${esc(scopeName(r.scopeActivityId))}</span>` : ''}</td>
       <td class="rcard-actions"><button class="btn btn-secondary btn-sm pp-acc-del" data-i="${i}">Remove</button></td>
     </tr>`).join('') || '<tr><td colspan="3" class="muted">No assignments yet.</td></tr>';
   const whoOpts = ACCESS.approverCandidates.map(u => `<option value="user:${u.id}">${esc(u.name)} (${esc(u.role)})</option>`).join('')
@@ -581,6 +583,7 @@ function renderAccessBody() {
     <div class="cap-actions" style="align-items:flex-end;flex-wrap:wrap">
       <div class="field" style="flex:2 1 12rem"><label>Add someone</label><select id="pp-acc-who">${whoOpts}</select></div>
       <div class="field"><label>Capability</label><select id="pp-acc-cap">${capOpts}</select></div>
+      ${acts.length ? `<div class="field"><label>Scope</label><select id="pp-acc-scope"><option value="">Whole competition</option>${acts.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('')}</select></div>` : ''}
       <button class="btn btn-secondary btn-sm" id="pp-acc-add">Add</button>
     </div>
     <div id="pp-acc-msg"></div>
@@ -601,7 +604,9 @@ function renderAccessBody() {
     if (!who) return;
     const [kind, value] = who.split(':');
     const label = document.querySelector(`#pp-acc-who option[value="${who}"]`).textContent;
-    ACCESS_ROWS.push({ subjectKind: kind, subjectValue: value, capability: document.getElementById('pp-acc-cap').value, subjectLabel: label });
+    const scope = document.getElementById('pp-acc-scope');
+    const scopeActivityId = scope && scope.value ? Number(scope.value) : null;
+    ACCESS_ROWS.push({ subjectKind: kind, subjectValue: value, capability: document.getElementById('pp-acc-cap').value, subjectLabel: label, scopeActivityId });
     renderAccessBody();
   });
   document.getElementById('pp-acc-save').addEventListener('click', saveAccess);
@@ -612,11 +617,11 @@ async function saveAccess() {
     approvalMode: document.getElementById('pp-acc-mode').value,
     deductionsRequireApproval: document.getElementById('pp-acc-ded').checked,
     largeValueThreshold: document.getElementById('pp-acc-large').value === '' ? null : Number(document.getElementById('pp-acc-large').value),
-    assignments: ACCESS_ROWS.map(r => ({ subjectKind: r.subjectKind, subjectValue: r.subjectValue, capability: r.capability })),
+    assignments: ACCESS_ROWS.map(r => ({ subjectKind: r.subjectKind, subjectValue: r.subjectValue, capability: r.capability, scopeActivityId: r.scopeActivityId || null })),
   };
   try {
     ACCESS = await Api.put(`/api/patrol-points/competitions/${ID}/access`, body);
-    ACCESS_ROWS = ACCESS.assignments.map(a => ({ subjectKind: a.subjectKind, subjectValue: a.subjectValue, capability: a.capability, subjectLabel: a.subjectLabel }));
+    ACCESS_ROWS = ACCESS.assignments.map(a => ({ subjectKind: a.subjectKind, subjectValue: a.subjectValue, capability: a.capability, subjectLabel: a.subjectLabel, scopeActivityId: a.scopeActivityId }));
     renderAccessBody();
     document.getElementById('pp-acc-msg').innerHTML = '<div class="alert alert-success">Saved.</div>';
   } catch (e) { msg.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`; }

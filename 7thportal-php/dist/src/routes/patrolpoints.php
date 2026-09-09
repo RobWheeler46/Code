@@ -151,7 +151,7 @@ $router->get('/api/patrol-points/competitions/:id', function ($params) {
         'leaderboard' => ppLeaderboard((int) $c['id']),
         'myActions' => [
             'canManage' => ppCanManage($user),
-            'canSubmit' => (ppHasCapability($user, $c, 'submit') || ppHasCapability($user, $c, 'score_direct')) && $c['status'] === 'open' && $teams && $cats,
+            'canSubmit' => ppCanScoreAnywhere($user, $c) && $c['status'] === 'open' && $teams && $cats,
             'canManageAccess' => ppHasCapability($user, $c, 'manage_access'),
             'capabilities' => ppUserCapabilities($user, $c),
             'usesCapabilityModel' => (bool) $c['uses_capability_model'],
@@ -702,8 +702,8 @@ $router->post('/api/guest/patrol/:token/submit', function ($params) {
         [$link['id'], $scorer, $teamId, $points, $reason]);
     if ($dup) jsonResponse(['ok' => true, 'status' => 'pending', 'duplicate' => true], 200);
     $gid = ppGuestUserId();
-    $res = dbRun("INSERT INTO pp_submissions (competition_id, category_id, submitted_by, comment, status, guest_link_id, guest_name) VALUES (?, ?, ?, ?, 'pending', ?, ?)",
-        [$c['id'], $a['category_id'], $gid, $reason, $link['id'], $scorer]);
+    $res = dbRun("INSERT INTO pp_submissions (competition_id, category_id, activity_id, submitted_by, comment, status, guest_link_id, guest_name) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)",
+        [$c['id'], $a['category_id'], (int) $a['id'], $gid, $reason, $link['id'], $scorer]);
     $sid = (int) $res['lastInsertId'];
     dbRun('INSERT INTO pp_score_lines (submission_id, team_id, points) VALUES (?, ?, ?)', [$sid, $teamId, $points]);
     logAudit(['userId' => $gid, 'action' => 'pp_guest_submit', 'entityType' => 'pp_submission', 'entityId' => (string) $sid, 'ipAddress' => clientIp(), 'details' => ['link' => (int) $link['id'], 'scorer' => $scorer]]);
@@ -718,8 +718,14 @@ $router->post('/api/patrol-points/competitions/:id/submissions', function ($para
     requirePatrolPointsEnabled();
     $c = ppCompetitionOr404($params['id']);
     if ($c['status'] !== 'open') jsonResponse(['error' => 'Scores can only be submitted while the competition is open.'], 409);
-    if (!ppHasCapability($user, $c, 'submit') && !ppHasCapability($user, $c, 'score_direct')) jsonResponse(['error' => 'You do not have permission to submit scores in this competition.'], 403);
     $b = requestBody();
+    // Optional activity/station context: activity-scoped grants apply only under it.
+    $activityId = null;
+    if (!empty($b['activityId'])) {
+        $act = dbGet('SELECT id FROM pp_activities WHERE id = ? AND competition_id = ?', [(int) $b['activityId'], $c['id']]);
+        if ($act) $activityId = (int) $act['id'];
+    }
+    if (!ppHasCapability($user, $c, 'submit', $activityId) && !ppHasCapability($user, $c, 'score_direct', $activityId)) jsonResponse(['error' => 'You do not have permission to submit scores in this competition.'], 403);
     $comment = trim((string) ($b['comment'] ?? ''));
     if ($comment === '') jsonResponse(['error' => 'A comment is required for every score submission.'], 422);
     $cat = dbGet('SELECT * FROM pp_categories WHERE id = ? AND competition_id = ?', [(int) ($b['categoryId'] ?? 0), $c['id']]);
@@ -727,10 +733,10 @@ $router->post('/api/patrol-points/competitions/:id/submissions', function ($para
     $clean = ppCleanLines($cat, $c, $b['lines'] ?? []);
 
     // Score disposition (FRD PP2.4 s4.1): the rule order decides effective vs pending.
-    $disp = ppScoreDisposition($c, $user, $cat, array_values($clean));
+    $disp = ppScoreDisposition($c, $user, $cat, array_values($clean), false, $activityId);
     if ($disp['status'] === 'prohibited') jsonResponse(['error' => 'You do not have permission to submit scores in this competition.'], 403);
     $status = $disp['status'];
-    $res = dbRun('INSERT INTO pp_submissions (competition_id, category_id, submitted_by, comment, status, disposition_reason) VALUES (?, ?, ?, ?, ?, ?)', [$c['id'], $cat['id'], $user['id'], $comment, $status, $disp['reason']]);
+    $res = dbRun('INSERT INTO pp_submissions (competition_id, category_id, activity_id, submitted_by, comment, status, disposition_reason) VALUES (?, ?, ?, ?, ?, ?, ?)', [$c['id'], $cat['id'], $activityId, $user['id'], $comment, $status, $disp['reason']]);
     $sid = (int) $res['lastInsertId'];
     foreach ($clean as $tid => $pts) dbRun('INSERT INTO pp_score_lines (submission_id, team_id, points) VALUES (?, ?, ?)', [$sid, $tid, $pts]);
     logAudit(['userId' => $user['id'], 'action' => 'pp_submission_create', 'entityType' => 'pp_submission', 'entityId' => (string) $sid, 'ipAddress' => clientIp(), 'details' => ['status' => $status, 'reason' => $disp['reason']]]);
@@ -949,7 +955,7 @@ $router->post('/api/patrol-points/competitions/:id/submissions/:sid/revise', fun
     $cat = dbGet('SELECT * FROM pp_categories WHERE id = ?', [$orig['category_id']]);
     $clean = ppCleanLines($cat, $c, $b['lines'] ?? []);
     // Corrections always require approval, regardless of the competition mode (PP-APR-007).
-    $res = dbRun("INSERT INTO pp_submissions (competition_id, category_id, submitted_by, comment, status, revises_id) VALUES (?, ?, ?, ?, 'pending', ?)", [$c['id'], $orig['category_id'], $user['id'], $comment, $orig['id']]);
+    $res = dbRun("INSERT INTO pp_submissions (competition_id, category_id, activity_id, submitted_by, comment, status, revises_id) VALUES (?, ?, ?, ?, ?, 'pending', ?)", [$c['id'], $orig['category_id'], $orig['activity_id'] ?? null, $user['id'], $comment, $orig['id']]);
     $sid = (int) $res['lastInsertId'];
     foreach ($clean as $tid => $pts) dbRun('INSERT INTO pp_score_lines (submission_id, team_id, points) VALUES (?, ?, ?)', [$sid, $tid, $pts]);
     logAudit(['userId' => $user['id'], 'action' => 'pp_submission_revise', 'entityType' => 'pp_submission', 'entityId' => (string) $sid, 'ipAddress' => clientIp(), 'details' => ['revises' => (int) $orig['id']]]);

@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle', 'logic_forms', 'logic_forms_admin', 'logic_forms_files', 'logic_pp_wizard', 'logic_email', 'logic_finance_accounts', 'logic_pp_access', 'logic_pp_triage', 'logic_pp_presets', 'logic_pp_uat'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle', 'logic_forms', 'logic_forms_admin', 'logic_forms_files', 'logic_pp_wizard', 'logic_email', 'logic_finance_accounts', 'logic_pp_access', 'logic_pp_triage', 'logic_pp_presets', 'logic_pp_uat', 'logic_pp_activity_scope'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -1123,6 +1123,33 @@ function scenario_logic_pp_uat(): void
     // A Group Leadership approver (ceiling includes approve) does cover it.
     dbRun("INSERT INTO pp_access_assignments (competition_id,subject_kind,subject_value,capability,created_by) VALUES (?, 'role','group_leadership','approve',?)", [$cid, $cr]);
     check('pp-uat: a ceiling-capable approver covers the route', ppApprovalCoverageError($comp()) === null);
+}
+
+// Patrol Points v2.4 per-activity scoping: an activity-scoped scorer/approver grant
+// only takes effect under that activity (FRD s7).
+function scenario_logic_pp_activity_scope(): void
+{
+    useDb(tmpDb('ppact')); boot(); loadLibs();
+    dbRun("INSERT OR REPLACE INTO settings (key,value) VALUES ('patrol_points_enabled','true')");
+    $cr = (int) dbRun("INSERT INTO users (auth_type,email,first_name,last_name,portal_role) VALUES ('local','cr@x','C','R','admin')")['lastInsertId'];
+    $S = (int) dbRun("INSERT INTO users (auth_type,email,first_name,last_name,portal_role) VALUES ('local','s@x','S','S','section_leader')")['lastInsertId'];
+    $P = (int) dbRun("INSERT INTO users (auth_type,email,first_name,last_name,portal_role) VALUES ('local','p@x','P','P','group_leadership')")['lastInsertId'];
+    $cid = (int) dbRun("INSERT INTO pp_competitions (name,approval_mode,uses_capability_model,created_by,status) VALUES ('C','immediate',1,?, 'open')", [$cr])['lastInsertId'];
+    $cat = (int) dbRun("INSERT INTO pp_categories (competition_id,name,points_type,sort_order) VALUES (?, 'Gen','free',0)", [$cid])['lastInsertId'];
+    $act = (int) dbRun("INSERT INTO pp_activities (competition_id,category_id,name,sort_order) VALUES (?,?,?,0)", [$cid, $cat, 'Archery'])['lastInsertId'];
+    $other = (int) dbRun("INSERT INTO pp_activities (competition_id,category_id,name,sort_order) VALUES (?,?,?,1)", [$cid, $cat, 'Wide Game'])['lastInsertId'];
+    dbRun("INSERT INTO pp_access_assignments (competition_id,subject_kind,subject_value,capability,scope_activity_id,created_by) VALUES (?, 'user', ?, 'score_direct', ?, ?)", [$cid, (string) $S, $act, $cr]);
+    dbRun("INSERT INTO pp_access_assignments (competition_id,subject_kind,subject_value,capability,scope_activity_id,created_by) VALUES (?, 'user', ?, 'approve', ?, ?)", [$cid, (string) $P, $act, $cr]);
+    $comp = dbGet('SELECT * FROM pp_competitions WHERE id=?', [$cid]);
+    $uS = dbGet('SELECT * FROM users WHERE id=?', [$S]);
+    $uP = dbGet('SELECT * FROM users WHERE id=?', [$P]);
+    $catRow = dbGet('SELECT * FROM pp_categories WHERE id=?', [$cat]);
+    check('pp-scope: scoped scorer is effective in their activity', ppScoreDisposition($comp, $uS, $catRow, [10], false, $act)['status'] === 'approved');
+    check('pp-scope: scoped scorer cannot score another activity', ppScoreDisposition($comp, $uS, $catRow, [10], false, $other)['status'] === 'prohibited');
+    check('pp-scope: scoped scorer cannot free-score', ppScoreDisposition($comp, $uS, $catRow, [10], false, null)['status'] === 'prohibited');
+    check('pp-scope: ppCanScoreAnywhere is true for a scoped scorer', ppCanScoreAnywhere($uS, $comp) === true);
+    check('pp-scope: scoped approver can approve their activity', ppCanApprove($uP, ['submitted_by' => $S, 'competition_id' => $cid, 'activity_id' => $act]) === true);
+    check('pp-scope: scoped approver cannot approve another activity', ppCanApprove($uP, ['submitted_by' => $S, 'competition_id' => $cid, 'activity_id' => $other]) === false);
 }
 
 // Forms part 3: on-behalf completion (recorded, not impersonated) + required file

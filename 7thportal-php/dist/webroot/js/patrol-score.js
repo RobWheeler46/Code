@@ -168,7 +168,7 @@ async function submit() {
   if (!p) return;
   const lines = selTeams.map(id => ({ teamId: id, points: selPoints }));
   try {
-    const r = await Api.post(`/api/patrol-points/competitions/${ID}/submissions`, { categoryId: p.categoryId, comment, lines });
+    const r = await Api.post(`/api/patrol-points/competitions/${ID}/submissions`, { categoryId: p.categoryId, activityId: selActivity, comment, lines });
     const teamNames = selTeams.map(id => (TEAMS.find(t => t.id === id) || {}).name);
     teamNames.forEach(name => RECENT.unshift({ team: name, points: selPoints, status: r.status === 'pending' ? 'pending' : 'awarded' }));
     LAST = { subId: r.id, teamIds: [...selTeams], teamNames, points: selPoints, reason: selReason, note: noteVal().trim(), categoryId: p.categoryId, status: r.status };
