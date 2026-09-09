@@ -1231,6 +1231,9 @@ CREATE TABLE IF NOT EXISTS pp_categories (
   fixed_points INTEGER,
   point_buttons TEXT,
   reason_presets TEXT,
+  -- Patrol Points v2.4: a category/activity override that forces every score in it to
+  -- approval, regardless of the scorer's Score Directly capability (disposition rule 3).
+  requires_approval INTEGER NOT NULL DEFAULT 0,
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -1585,6 +1588,9 @@ if ($ppSubsSql && !str_contains($ppSubsSql, 'revises_id')) {
 // Migration: pp_categories gained Quick Score config - configurable point buttons
 // and reason presets (FRD v2.4 s13.7).
 $ppCatsSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='pp_categories'")['sql'] ?? '';
+if ($ppCatsSql && !str_contains($ppCatsSql, 'requires_approval')) {
+    db()->exec('ALTER TABLE pp_categories ADD COLUMN requires_approval INTEGER NOT NULL DEFAULT 0');
+}
 if ($ppCatsSql && !str_contains($ppCatsSql, 'point_buttons')) {
     db()->exec('ALTER TABLE pp_categories ADD COLUMN point_buttons TEXT');
     db()->exec('ALTER TABLE pp_categories ADD COLUMN reason_presets TEXT');

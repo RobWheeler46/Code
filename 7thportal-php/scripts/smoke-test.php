@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle', 'logic_forms', 'logic_forms_admin', 'logic_forms_files', 'logic_pp_wizard', 'logic_email', 'logic_finance_accounts', 'logic_pp_access'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle', 'logic_forms', 'logic_forms_admin', 'logic_forms_files', 'logic_pp_wizard', 'logic_email', 'logic_finance_accounts', 'logic_pp_access', 'logic_pp_triage'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -1047,6 +1047,31 @@ function scenario_logic_pp_access(): void
 
     dbRun("UPDATE pp_competitions SET approval_mode = 'approval' WHERE id = ?", [$cid]);
     check('pp-access: all-scores-require-approval overrides direct scoring (rule 2)', ppScoreDisposition($comp(), $u($C), $catRow, [10])['reason'] === 'all_approval');
+}
+
+// Patrol Points v2.4 PP2: category approval override (disposition rule 3) + approval
+// triage classification (FRD s7/s8, PP24-APR-004).
+function scenario_logic_pp_triage(): void
+{
+    useDb(tmpDb('pptri')); boot(); loadLibs();
+    dbRun("INSERT OR REPLACE INTO settings (key,value) VALUES ('patrol_points_enabled','true')");
+    $cr = (int) dbRun("INSERT INTO users (auth_type,email,first_name,last_name,portal_role) VALUES ('local','cr@x','X','Y','admin')")['lastInsertId'];
+    $sc = (int) dbRun("INSERT INTO users (auth_type,email,first_name,last_name,portal_role) VALUES ('local','sc@x','S','C','section_leader')")['lastInsertId'];
+    $cid = (int) dbRun("INSERT INTO pp_competitions (name, approval_mode, allow_deductions, deductions_require_approval, uses_capability_model, created_by, status) VALUES ('C','immediate',1,1,1,?,'open')", [$cr])['lastInsertId'];
+    dbRun("INSERT INTO pp_access_assignments (competition_id,subject_kind,subject_value,capability,created_by) VALUES (?, 'user', ?, 'score_direct', ?)", [$cid, (string) $sc, $cr]);
+    $catN = (int) dbRun("INSERT INTO pp_categories (competition_id,name,points_type,requires_approval,sort_order) VALUES (?, 'Normal','free',0,0)", [$cid])['lastInsertId'];
+    $catA = (int) dbRun("INSERT INTO pp_categories (competition_id,name,points_type,requires_approval,sort_order) VALUES (?, 'Inspection','free',1,1)", [$cid])['lastInsertId'];
+    $comp = dbGet('SELECT * FROM pp_competitions WHERE id=?', [$cid]);
+    $u = dbGet('SELECT * FROM users WHERE id=?', [$sc]);
+    check('pp-triage: direct scorer is effective in a normal category', ppScoreDisposition($comp, $u, dbGet('SELECT * FROM pp_categories WHERE id=?', [$catN]), [10])['status'] === 'approved');
+    check('pp-triage: an approval-only category forces pending (rule 3)', ppScoreDisposition($comp, $u, dbGet('SELECT * FROM pp_categories WHERE id=?', [$catA]), [10])['reason'] === 'category');
+
+    $f = fn($s, $lines) => ppTriageFlags($s, $lines);
+    check('pp-triage: guest entry flagged', in_array('guest', $f(['guest_link_id' => 5, 'revises_id' => null, 'disposition_reason' => 'guest'], [['points' => 3]]), true));
+    check('pp-triage: deduction flagged', in_array('deduction', $f(['guest_link_id' => null, 'revises_id' => null, 'disposition_reason' => 'deduction'], [['points' => -5]]), true));
+    check('pp-triage: large value flagged', in_array('large_value', $f(['guest_link_id' => null, 'revises_id' => null, 'disposition_reason' => null], [['points' => 60]]), true));
+    check('pp-triage: correction flagged', in_array('revision', $f(['guest_link_id' => null, 'revises_id' => 9, 'disposition_reason' => null], [['points' => 5]]), true));
+    check('pp-triage: a normal score is straightforward (no flags)', $f(['guest_link_id' => null, 'revises_id' => null, 'disposition_reason' => 'score_directly'], [['points' => 5]]) === []);
 }
 
 // Forms part 3: on-behalf completion (recorded, not impersonated) + required file

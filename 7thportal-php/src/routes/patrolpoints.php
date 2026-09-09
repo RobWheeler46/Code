@@ -115,7 +115,12 @@ $router->get('/api/patrol-points/competitions/:id', function ($params) {
     foreach (dbAll('SELECT l.* FROM pp_score_lines l JOIN pp_submissions s ON s.id = l.submission_id WHERE s.competition_id = ?', [$c['id']]) as $l) {
         $linesBySub[(int) $l['submission_id']][] = $l;
     }
-    $submissions = array_map(fn($s) => serializePpSubmission($s, $linesBySub[(int) $s['id']] ?? [], $teamNames, $catNames, $userNames), $subs);
+    $submissions = array_map(function ($s) use ($linesBySub, $teamNames, $catNames, $userNames, $user) {
+        $ser = serializePpSubmission($s, $linesBySub[(int) $s['id']] ?? [], $teamNames, $catNames, $userNames);
+        // Per-viewer approve eligibility so the queue can group "unavailable to you" (s8).
+        $ser['canApprove'] = ($s['status'] === 'pending' && empty($s['withdrawn'])) ? ppCanApprove($user, $s) : false;
+        return $ser;
+    }, $subs);
 
     $participants = array_map('serializePpParticipant', dbAll('SELECT * FROM pp_participants WHERE competition_id = ? ORDER BY display_name', [$c['id']]));
     $catsById = []; foreach ($cats as $ct) $catsById[(int) $ct['id']] = $ct;
@@ -450,7 +455,7 @@ $router->post('/api/patrol-points/competitions/:id/categories', function ($param
         $fixed = (int) $b['fixedPoints'];
     }
     $next = (int) dbGet('SELECT COALESCE(MAX(sort_order), 0) + 1 AS n FROM pp_categories WHERE competition_id = ?', [$c['id']])['n'];
-    dbRun('INSERT INTO pp_categories (competition_id, name, points_type, fixed_points, point_buttons, reason_presets, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)', [$c['id'], $name, $type, $fixed, ppParseButtons($b['pointButtons'] ?? null), ppParseReasons($b['reasonPresets'] ?? null), $next]);
+    dbRun('INSERT INTO pp_categories (competition_id, name, points_type, fixed_points, point_buttons, reason_presets, requires_approval, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [$c['id'], $name, $type, $fixed, ppParseButtons($b['pointButtons'] ?? null), ppParseReasons($b['reasonPresets'] ?? null), !empty($b['requiresApproval']) ? 1 : 0, $next]);
     jsonResponse(['ok' => true], 201);
 });
 // Update a category's Quick Score config (point buttons + reason presets).
@@ -462,7 +467,8 @@ $router->patch('/api/patrol-points/competitions/:id/categories/:cid', function (
     $cat = dbGet('SELECT * FROM pp_categories WHERE id = ? AND competition_id = ?', [(int) $params['cid'], $c['id']]);
     if (!$cat) jsonResponse(['error' => 'Category not found.'], 404);
     $b = requestBody();
-    dbRun('UPDATE pp_categories SET point_buttons = ?, reason_presets = ? WHERE id = ?', [ppParseButtons($b['pointButtons'] ?? null), ppParseReasons($b['reasonPresets'] ?? null), $cat['id']]);
+    $reqApp = array_key_exists('requiresApproval', $b) ? (!empty($b['requiresApproval']) ? 1 : 0) : (int) $cat['requires_approval'];
+    dbRun('UPDATE pp_categories SET point_buttons = ?, reason_presets = ?, requires_approval = ? WHERE id = ?', [ppParseButtons($b['pointButtons'] ?? null), ppParseReasons($b['reasonPresets'] ?? null), $reqApp, $cat['id']]);
     jsonResponse(['ok' => true]);
 });
 $router->delete('/api/patrol-points/competitions/:id/categories/:cid', function ($params) {

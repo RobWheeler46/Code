@@ -296,9 +296,25 @@ function serializePpCategory(array $c, bool $allowDeductions = true): array
         'pointsTypeLabel' => PP_POINTS_TYPES[$c['points_type']] ?? $c['points_type'],
         'fixedPoints' => $c['fixed_points'] !== null ? (int) $c['fixed_points'] : null,
         'freeEntry' => $c['points_type'] === 'free',
+        'requiresApproval' => (bool) ($c['requires_approval'] ?? 0),
         'pointButtons' => array_values(array_map('intval', $buttons)),
         'reasonPresets' => array_values(array_map('strval', $reasons)),
     ];
+}
+// Approval-triage classification (FRD PP2.4 s8 / PP24-APR-004). Flags the exceptions an
+// approver must look at individually; anything with no flag is "straightforward".
+const PP_TRIAGE_LABELS = ['guest' => 'Guest entry', 'deduction' => 'Deduction', 'large_value' => 'Large value', 'revision' => 'Correction', 'returned' => 'Returned then resubmitted', 'category' => 'Approval-only category'];
+function ppTriageFlags(array $s, array $lines): array
+{
+    $flags = [];
+    if (!empty($s['guest_link_id'])) $flags[] = 'guest';
+    if ($s['revises_id'] !== null) $flags[] = 'revision';
+    foreach ($lines as $l) if ((int) ($l['points'] ?? 0) < 0) { $flags[] = 'deduction'; break; }
+    $maxAbs = 0;
+    foreach ($lines as $l) { $a = abs((int) ($l['points'] ?? 0)); if ($a > $maxAbs) $maxAbs = $a; }
+    if ($maxAbs >= 50) $flags[] = 'large_value';
+    if (in_array($s['disposition_reason'] ?? '', ['category', 'large_value'], true) && !in_array('large_value', $flags, true) && ($s['disposition_reason'] ?? '') === 'category') $flags[] = 'category';
+    return array_values(array_unique($flags));
 }
 // An activity/station profile: a category plus its own Quick Score buttons/reasons
 // and optional team scope. Falls back to the category's config where unset.
@@ -384,6 +400,8 @@ function serializePpSubmission(array $s, array $lines, array $teamNames, array $
         'submittedBy' => $isGuest ? ('Guest Quick Entry: ' . ($s['guest_name'] ?? 'guest')) : ($userNames[(int) $s['submitted_by']] ?? 'Leader'), 'submittedById' => (int) $s['submitted_by'],
         'decidedBy' => $s['decided_by'] !== null ? ($userNames[(int) $s['decided_by']] ?? 'Leader') : null,
         'decisionComment' => $s['decision_comment'], 'createdAt' => $s['created_at'],
+        'dispositionReason' => $s['disposition_reason'] ?? null,
+        'triage' => (($s['status'] === 'pending' && empty($s['withdrawn'])) ? ['bucket' => (ppTriageFlags($s, $lines) ? 'needs_attention' : 'straightforward'), 'flags' => ppTriageFlags($s, $lines)] : null),
         'lines' => array_map(fn($l) => ['teamId' => (int) $l['team_id'], 'teamName' => $teamNames[(int) $l['team_id']] ?? '—', 'points' => (int) $l['points']], $lines),
     ];
 }

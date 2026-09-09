@@ -5,6 +5,7 @@ const SKEY = { draft: 'suspended', open: 'active', paused: 'pending_approval', c
 const PP_TONE = { draft: 'attention', open: 'ready', paused: 'pending', completed: 'ready', archived: 'blocked' };
 const SUB_SKEY = { pending: 'pending_approval', approved: 'active', rejected: 'deleted', returned: 'suspended', withdrawn: 'deleted', superseded: 'suspended' };
 const SUB_LABEL = { pending: 'pending', approved: 'approved', rejected: 'rejected', returned: 'returned', withdrawn: 'withdrawn', superseded: 'superseded' };
+const TRIAGE_LABELS = { guest: 'Guest entry', deduction: 'Deduction', large_value: 'Large value', revision: 'Correction', returned: 'Returned', category: 'Approval-only category' };
 const esc = s => escapeHtml(s == null ? '' : String(s));
 
 (async () => {
@@ -245,12 +246,19 @@ function renderScoreInputs() {
 function submissionsCard() {
   if (!SUBS.length) return '<div class="card"><h2>Score history</h2><p class="muted">No scores submitted yet.</p></div>';
   const openComp = ['open', 'paused'].includes(C.status);
-  const rows = SUBS.map(s => {
+  // Approval triage (FRD PP2.4 s8): exceptions first, then routine pending, then the rest.
+  const rank = s => s.status !== 'pending' ? 3 : (s.triage && s.triage.bucket === 'needs_attention' ? 0 : 1);
+  const ordered = [...SUBS].sort((a, b) => rank(a) - rank(b));
+  const attention = SUBS.filter(s => s.triage && s.triage.bucket === 'needs_attention').length;
+  const pending = SUBS.filter(s => s.status === 'pending').length;
+
+  const row = s => {
     const lines = s.lines.map(l => `${esc(l.teamName)}: ${l.points >= 0 ? '+' : ''}${l.points}`).join(' · ');
     const mine = s.submittedById === ACT.userId;
     const dim = ['withdrawn', 'superseded', 'rejected'].includes(s.status) ? ' style="opacity:.6"' : '';
+    const flags = (s.triage && s.triage.flags || []).map(f => `<span class="badge" data-status="suspended">${esc(TRIAGE_LABELS[f] || f)}</span>`).join(' ');
     let actions = '';
-    if (openComp && s.status === 'pending' && ACT.canManage && !mine) {
+    if (openComp && s.status === 'pending' && s.canApprove) {
       actions = `<div class="cap-actions" style="margin-top:.4rem">
         <input class="pp-d-comment" data-id="${s.id}" placeholder="Comment (needed to reject/return)" style="flex:1;min-width:180px">
         <button class="btn btn-sm pp-approve" data-id="${s.id}">Approve</button>
@@ -261,18 +269,22 @@ function submissionsCard() {
         ${s.status === 'pending' ? '<span class="field help" style="margin:0">Awaiting another leader\'s approval.</span>' : ''}
         <button class="btn btn-secondary btn-sm pp-amend" data-id="${s.id}" style="margin-left:auto">Amend</button>
         <button class="btn btn-secondary btn-sm pp-withdraw" data-id="${s.id}">Withdraw</button></div>`;
-    } else if (openComp && s.status === 'approved' && ACT.canManage) {
+    } else if (openComp && s.status === 'pending' && !mine) {
+      actions = '<div class="field help" style="margin:.3rem 0 0">This score is outside your approval scope.</div>';
+    } else if (openComp && s.status === 'approved' && (ACT.canManage || mine)) {
       actions = `<div class="cap-actions" style="margin-top:.4rem"><button class="btn btn-secondary btn-sm pp-revise" data-id="${s.id}" style="margin-left:auto">Propose correction</button></div>`;
     }
     return `<div${dim} style="padding:.5rem 0;border-bottom:1px solid var(--border)">
       <div class="cap-head"><strong>${esc(s.categoryName)}${s.isRevision ? ' <span class="muted">· correction</span>' : ''}</strong>
         <span class="badge" data-status="${SUB_SKEY[s.status]}">${esc(SUB_LABEL[s.status] || s.status)}</span></div>
+      ${s.status === 'pending' && flags ? `<div class="pp-flags" style="margin:.2rem 0;display:flex;gap:.3rem;flex-wrap:wrap">${flags}</div>` : ''}
       <div>${lines}</div>
       <div class="muted" style="font-size:.85rem">“${esc(s.comment)}” — ${esc(s.submittedBy)}${s.decidedBy ? ` · decided by ${esc(s.decidedBy)}` : ''}${s.decisionComment ? ` — ${esc(s.decisionComment)}` : ''}</div>
       ${actions}
       <div class="pp-editor-slot" data-id="${s.id}"></div></div>`;
-  }).join('');
-  return `<div class="card"><h2>Score history</h2>${rows}</div>`;
+  };
+  const sub = pending ? `<p class="muted" style="margin:.2rem 0 .6rem">${pending} awaiting approval${attention ? `, ${attention} need attention` : ''}.</p>` : '';
+  return `<div class="card"><h2>Score history</h2>${sub}${ordered.map(row).join('')}</div>`;
 }
 
 // Reports: on-screen summary (computed from loaded data) + server-side CSV exports.
@@ -436,11 +448,13 @@ function wire() {
     slot.innerHTML = `<div style="margin:.4rem 0;padding:.5rem;background:var(--bg);border-radius:8px">
       <div class="field" style="margin:0 0 .4rem"><label>Point buttons (comma-separated)</label><input class="pp-cfg-btns" value="${esc((c.pointButtons || []).join(', '))}"></div>
       <div class="field" style="margin:0 0 .4rem"><label>Reason presets (comma-separated)</label><input class="pp-cfg-reasons" value="${esc((c.reasonPresets || []).join(', '))}"></div>
+      <div class="field" style="margin:0 0 .4rem"><label style="font-weight:400"><input type="checkbox" class="pp-cfg-approval"${c.requiresApproval ? ' checked' : ''}> Scores in this category always need approval</label></div>
       <button class="btn btn-secondary btn-sm pp-cfg-save">Save</button></div>`;
     slot.querySelector('.pp-cfg-save').addEventListener('click', async () => {
       const pointButtons = slot.querySelector('.pp-cfg-btns').value.split(',').map(s => s.trim()).filter(s => s !== '' && !isNaN(Number(s))).map(Number);
       const reasonPresets = slot.querySelector('.pp-cfg-reasons').value.split(',').map(s => s.trim()).filter(Boolean);
-      try { await Api.patch(`/api/patrol-points/competitions/${ID}/categories/${c.id}`, { pointButtons, reasonPresets }); load(); } catch (e) { msg(e.message, true); }
+      const requiresApproval = slot.querySelector('.pp-cfg-approval').checked;
+      try { await Api.patch(`/api/patrol-points/competitions/${ID}/categories/${c.id}`, { pointButtons, reasonPresets, requiresApproval }); load(); } catch (e) { msg(e.message, true); }
     });
   }));
 
