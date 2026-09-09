@@ -659,7 +659,7 @@ $router->post('/api/patrol-points/competitions/:id/submissions', function ($para
         $who = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')) ?: 'A leader';
         ppNotifyApprovers((int) $user['id'], 'Score to approve: ' . $c['name'], $who . ' submitted scores in "' . $cat['name'] . '" for approval.', 'patrol-point.html?id=' . $c['id']);
     }
-    jsonResponse(['ok' => true, 'status' => $status, 'reason' => $disp['reason']], 201);
+    jsonResponse(['ok' => true, 'id' => $sid, 'status' => $status, 'reason' => $disp['reason']], 201);
 });
 
 // ── Approve / reject / return a pending submission (atomic) ──────────────────────
@@ -855,11 +855,12 @@ $router->post('/api/patrol-points/competitions/:id/submissions/:sid/revise', fun
     $user = requireAuth();
     requireLeader($user);
     requirePatrolPointsEnabled();
-    if (!ppCanManage($user)) jsonResponse(['error' => 'Your role cannot propose corrections.'], 403);
     $c = ppCompetitionOr404($params['id']);
     if (in_array($c['status'], ['completed', 'archived'], true)) jsonResponse(['error' => 'This competition can no longer be changed.'], 409);
     $orig = dbGet('SELECT * FROM pp_submissions WHERE id = ? AND competition_id = ?', [(int) $params['sid'], (int) $c['id']]);
     if (!$orig) jsonResponse(['error' => 'Submission not found.'], 404);
+    // A correction may be proposed by a manager or by the scorer correcting their own score.
+    if (!ppCanManage($user) && (int) $orig['submitted_by'] !== (int) $user['id']) jsonResponse(['error' => 'You cannot propose a correction to this score.'], 403);
     if ($orig['status'] !== 'approved' || !empty($orig['superseded_by']) || !empty($orig['withdrawn'])) jsonResponse(['error' => 'Only an effective approved score can be corrected.'], 409);
     if (dbGet("SELECT 1 FROM pp_submissions WHERE revises_id = ? AND status = 'pending' AND withdrawn = 0 LIMIT 1", [$orig['id']])) jsonResponse(['error' => 'A correction is already pending for this score.'], 409);
     $b = requestBody();
