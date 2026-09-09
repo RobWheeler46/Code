@@ -38,12 +38,189 @@ function ppCanManage(array $user): bool
 {
     return in_array($user['portal_role'], PP_MANAGER_ROLES, true);
 }
-// Who may approve a pending submission: a manager who is not the submitter
-// (self-approval is blocked, FRD s13.2).
+// ── Patrol Points v2.4 capability & approval model (FRD PP2.4 s3/s4) ─────────────
+// Access is expressed as separate capabilities. Platform role is the hard ceiling;
+// a competition can only narrow or assign within it. Legacy competitions (before the
+// capability model was switched on) keep the v2.3 role behaviour untouched.
+const PP_CAPABILITIES = ['view', 'view_detail', 'view_history', 'submit', 'score_direct', 'approve', 'manage', 'manage_access'];
+
+// What a user is eligible to hold at platform level (the ceiling; not an automatic grant).
+function ppPlatformCeiling(array $user): array
+{
+    $role = $user['portal_role'];
+    if ($role === 'admin') return PP_CAPABILITIES;
+    if ($role === 'parent') return ['view'];
+    if (!isLeaderRole($role)) return [];
+    $caps = ['view', 'view_detail', 'view_history', 'submit'];
+    if (in_array($role, PP_MANAGER_ROLES, true)) $caps = array_merge($caps, ['score_direct', 'approve', 'manage', 'manage_access']);
+    return array_values(array_unique($caps));
+}
+
+// Capabilities granted to a user by this competition's access assignments (user / role /
+// section subjects; group and section-approver resolution is deferred to a later slice).
+function ppAssignmentCapsForUser(array $user, array $comp): array
+{
+    $caps = [];
+    $sectionIds = function_exists('sectionsUserSectionIds') ? sectionsUserSectionIds($user) : [];
+    foreach (dbAll('SELECT * FROM pp_access_assignments WHERE competition_id = ?', [$comp['id']]) as $a) {
+        $m = ($a['subject_kind'] === 'user' && (int) $a['subject_value'] === (int) $user['id'])
+            || ($a['subject_kind'] === 'role' && $a['subject_value'] === $user['portal_role'])
+            || ($a['subject_kind'] === 'section' && in_array($a['subject_value'], $sectionIds, true));
+        if ($m) $caps[] = $a['capability'];
+    }
+    return $caps;
+}
+
+// The user's effective capabilities on a competition (assignments intersected with the
+// platform ceiling). Managing a competition never implies Approve or Score Directly.
+function ppUserCapabilities(array $user, array $comp): array
+{
+    $ceiling = ppPlatformCeiling($user);
+    if (!$ceiling) return [];
+    if (empty($comp['uses_capability_model'])) {
+        if ($user['portal_role'] === 'parent') return array_values(array_intersect(['view'], $ceiling));
+        $caps = ['view', 'view_detail', 'view_history'];
+        if (ppCanManage($user)) $caps = array_merge($caps, ['submit', 'score_direct', 'approve', 'manage', 'manage_access']);
+        return array_values(array_unique(array_intersect($caps, $ceiling)));
+    }
+    $caps = ['view'];
+    if ((int) $comp['created_by'] === (int) $user['id']) $caps = array_merge($caps, ['view_detail', 'view_history', 'manage', 'manage_access']);
+    if (ppCanManage($user)) $caps = array_merge($caps, ['view_detail', 'view_history', 'manage']);
+    $caps = array_merge($caps, ppAssignmentCapsForUser($user, $comp));
+    return array_values(array_unique(array_intersect($caps, $ceiling)));
+}
+function ppHasCapability(array $user, array $comp, string $cap): bool
+{
+    return in_array($cap, ppUserCapabilities($user, $comp), true);
+}
+
+// Score disposition decision (FRD PP2.4 s4.1), evaluated in strict rule order. Returns
+// ['status' => 'approved'|'pending'|'prohibited', 'reason' => <ScoreDisposition audit>].
+function ppScoreDisposition(array $comp, array $user, array $cat, array $lineValues, bool $isGuest = false): array
+{
+    if ($isGuest) return ['status' => 'pending', 'reason' => 'guest'];
+    if (($comp['approval_mode'] ?? '') === 'approval') return ['status' => 'pending', 'reason' => 'all_approval'];
+    if (!empty($cat['requires_approval'])) return ['status' => 'pending', 'reason' => 'category'];
+    $hasDeduction = false;
+    $maxAbs = 0;
+    foreach ($lineValues as $p) { $p = (int) $p; if ($p < 0) $hasDeduction = true; if (abs($p) > $maxAbs) $maxAbs = abs($p); }
+    if ($hasDeduction && !empty($comp['deductions_require_approval'])) return ['status' => 'pending', 'reason' => 'deduction'];
+    $thr = $comp['large_value_threshold'] ?? null;
+    if ($thr !== null && $thr !== '' && $maxAbs > (int) $thr) return ['status' => 'pending', 'reason' => 'large_value'];
+    $caps = ppUserCapabilities($user, $comp);
+    if (in_array('score_direct', $caps, true)) return ['status' => 'approved', 'reason' => 'score_directly'];
+    if (in_array('submit', $caps, true)) return ['status' => 'pending', 'reason' => 'submit_only'];
+    return ['status' => 'prohibited', 'reason' => 'no_capability'];
+}
+
+// Resolve an approver assignment subject to concrete user ids (user + role for now).
+function ppResolveSubjectUserIds(array $a): array
+{
+    if ($a['subject_kind'] === 'user') return [(int) $a['subject_value']];
+    if ($a['subject_kind'] === 'role') return array_map(fn($u) => (int) $u['id'], dbAll("SELECT id FROM users WHERE account_status = 'active' AND portal_role = ?", [$a['subject_value']]));
+    return [];
+}
+
+// User ids eligible to approve in this competition, optionally excluding one (a submitter,
+// so self-approval never counts toward coverage). Legacy competitions fall back to managers.
+function ppEligibleApproverIds(array $comp, ?int $excludeUserId = null): array
+{
+    $ids = [];
+    if (empty($comp['uses_capability_model'])) {
+        $ph = implode(',', array_fill(0, count(PP_MANAGER_ROLES), '?'));
+        foreach (dbAll("SELECT id FROM users WHERE account_status = 'active' AND portal_role IN ($ph)", PP_MANAGER_ROLES) as $u) $ids[(int) $u['id']] = true;
+    } else {
+        foreach (dbAll("SELECT * FROM pp_access_assignments WHERE competition_id = ? AND capability = 'approve'", [$comp['id']]) as $a) {
+            foreach (ppResolveSubjectUserIds($a) as $uid) $ids[$uid] = true;
+        }
+    }
+    if ($excludeUserId !== null) unset($ids[$excludeUserId]);
+    return array_keys($ids);
+}
+
+// Does any permitted scoring route on this competition produce Pending Approval?
+function ppPendingRouteExists(array $comp): bool
+{
+    if (($comp['approval_mode'] ?? '') === 'approval') return true;
+    if (!empty($comp['allow_deductions']) && !empty($comp['deductions_require_approval'])) return true;
+    if (($comp['large_value_threshold'] ?? null) !== null && $comp['large_value_threshold'] !== '') return true;
+    if (!empty($comp['uses_capability_model'])) {
+        $hasSubmit = dbGet("SELECT 1 FROM pp_access_assignments WHERE competition_id = ? AND capability = 'submit' LIMIT 1", [$comp['id']]);
+        $hasDirect = dbGet("SELECT 1 FROM pp_access_assignments WHERE competition_id = ? AND capability = 'score_direct' LIMIT 1", [$comp['id']]);
+        if ($hasSubmit && !$hasDirect) return true;
+    }
+    return false;
+}
+
+// AC24-07 / PP24-APR-003: a competition may not start (or save an access change) when a
+// pending-producing route has no eligible approver. Returns an error string, or null.
+function ppApprovalCoverageError(array $comp): ?string
+{
+    if (!ppPendingRouteExists($comp)) return null;
+    if (count(ppEligibleApproverIds($comp)) === 0) {
+        return 'This competition can produce scores that need approval, but no eligible approver is assigned. Add an approver under Access and approvals first.';
+    }
+    return null;
+}
+
+// Who may approve a pending submission: holds Approve in scope and is not the submitter
+// (self-approval is prohibited, FRD PP2.4 s4.2 / PP24-APR-002).
 function ppCanApprove(array $user, array $submission): bool
 {
     if ((int) $submission['submitted_by'] === (int) $user['id']) return false;
-    return ppCanManage($user);
+    $comp = dbGet('SELECT * FROM pp_competitions WHERE id = ?', [$submission['competition_id']]);
+    if (!$comp) return false;
+    if (empty($comp['uses_capability_model'])) return ppCanManage($user);
+    return ppHasCapability($user, $comp, 'approve');
+}
+
+// Human label for an assignment subject (for the Access and approvals surface).
+function ppSubjectLabel(array $a): string
+{
+    if ($a['subject_kind'] === 'user') {
+        $u = dbGet('SELECT first_name, last_name FROM users WHERE id = ?', [$a['subject_value']]);
+        return $u ? trim($u['first_name'] . ' ' . $u['last_name']) : ('User ' . $a['subject_value']);
+    }
+    if ($a['subject_kind'] === 'role') return roleLabel($a['subject_value']);
+    return (string) $a['subject_value'];
+}
+
+// Insert one validated access assignment. Silently ignores an invalid row.
+function ppInsertAssignment(int $compId, array $a, int $userId): void
+{
+    $kind = in_array($a['subjectKind'] ?? '', ['user', 'role', 'section', 'group'], true) ? $a['subjectKind'] : null;
+    $cap = in_array($a['capability'] ?? '', PP_CAPABILITIES, true) ? $a['capability'] : null;
+    $val = trim((string) ($a['subjectValue'] ?? ''));
+    if (!$kind || !$cap || $val === '') return;
+    dbRun('INSERT INTO pp_access_assignments (competition_id, subject_kind, subject_value, capability, scope_activity_id, scope_category_id, scope_section, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [$compId, $kind, $val, $cap, $a['scopeActivityId'] ?? null, $a['scopeCategoryId'] ?? null, $a['scopeSection'] ?? null, $userId]);
+}
+
+// The Access and approvals surface payload: policy, current assignments, the people who
+// could be named as approvers/scorers, coverage status and the capability labels.
+function ppAccessPayload(array $c): array
+{
+    $assignments = array_map(fn($a) => [
+        'id' => (int) $a['id'], 'subjectKind' => $a['subject_kind'], 'subjectValue' => $a['subject_value'],
+        'capability' => $a['capability'], 'subjectLabel' => ppSubjectLabel($a),
+    ], dbAll('SELECT * FROM pp_access_assignments WHERE competition_id = ? ORDER BY capability, id', [$c['id']]));
+    $cands = array_map(fn($u) => ['id' => (int) $u['id'], 'name' => trim($u['first_name'] . ' ' . $u['last_name']), 'role' => $u['portal_role']],
+        dbAll("SELECT id, first_name, last_name, portal_role FROM users WHERE account_status = 'active' AND portal_role IN ('section_leader','assistant_leader','group_leadership','chair','admin') ORDER BY first_name, last_name"));
+    return [
+        'usesCapabilityModel' => (bool) $c['uses_capability_model'],
+        'policy' => [
+            'approvalMode' => $c['approval_mode'],
+            'deductionsRequireApproval' => (bool) $c['deductions_require_approval'],
+            'largeValueThreshold' => $c['large_value_threshold'] !== null ? (int) $c['large_value_threshold'] : null,
+            'allowDeductions' => (bool) $c['allow_deductions'],
+        ],
+        'assignments' => $assignments,
+        'approverCandidates' => $cands,
+        'roleOptions' => ['section_leader' => 'Section Leaders', 'assistant_leader' => 'Assistant Leaders', 'group_leadership' => 'Group Leadership', 'chair' => 'Chair'],
+        'capabilityLabels' => ['submit' => 'Submit points', 'score_direct' => 'Score directly', 'approve' => 'Approve points', 'view_detail' => 'View detail', 'manage' => 'Manage competition', 'manage_access' => 'Manage access'],
+        'pendingRouteExists' => ppPendingRouteExists($c),
+        'coverageError' => ppApprovalCoverageError($c),
+    ];
 }
 
 // Notify eligible approvers (managers) of a pending submission, excluding the

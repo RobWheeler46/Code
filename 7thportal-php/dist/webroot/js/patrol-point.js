@@ -34,8 +34,10 @@ async function load() {
   box.innerHTML = summaryCard() + leaderboardCard() + (ACT.canSubmit ? submitCard() : '')
     + ((editable || TEAMS.length) ? teamsCard(!editable) : '')
     + (editable ? membersCard() + categoriesCard() + activitiesCard() + guestCard() : '') + submissionsCard()
+    + (ACT.canManageAccess && C.status !== 'archived' ? accessCard() : '')
     + (ACT.canManage ? reportsCard() : '');
   wire();
+  document.getElementById('pp-access-open')?.addEventListener('click', loadAccess);
 }
 
 function lifecycleButtons() {
@@ -518,4 +520,74 @@ function wire() {
   }));
   document.querySelectorAll('.pp-amend').forEach(b => b.addEventListener('click', () => openEditor(Number(b.dataset.id), 'amend')));
   document.querySelectorAll('.pp-revise').forEach(b => b.addEventListener('click', () => openEditor(Number(b.dataset.id), 'revise')));
+}
+
+// ── Access & approvals (FRD PP2.4 s5): manage per-competition capabilities. ──────
+let ACCESS = null, ACCESS_ROWS = [];
+function accessCard() {
+  return `<div class="card"><div class="cap-head"><h2 style="margin:0">Access &amp; approvals</h2>
+    <button class="btn btn-secondary btn-sm" id="pp-access-open">Manage access &amp; approvals</button></div>
+    <p class="muted">Control who can view, submit, score directly and approve in this competition. ${C.usesCapabilityModel ? 'This competition uses the advanced access model.' : 'Currently using the simple model: leaders score and managers approve.'}</p>
+    <div id="pp-access-body"></div></div>`;
+}
+async function loadAccess() {
+  const body = document.getElementById('pp-access-body');
+  body.innerHTML = '<p class="muted">Loading&hellip;</p>';
+  try { ACCESS = await Api.get(`/api/patrol-points/competitions/${ID}/access`); }
+  catch (e) { body.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`; return; }
+  ACCESS_ROWS = ACCESS.assignments.map(a => ({ subjectKind: a.subjectKind, subjectValue: a.subjectValue, capability: a.capability, subjectLabel: a.subjectLabel }));
+  renderAccessBody();
+}
+function renderAccessBody() {
+  const body = document.getElementById('pp-access-body');
+  const p = ACCESS.policy;
+  const capLabel = c => ACCESS.capabilityLabels[c] || c;
+  const rows = ACCESS_ROWS.map((r, i) => `<tr>
+      <td class="rcard-title">${esc(r.subjectLabel || r.subjectValue)}</td>
+      <td data-label="Can">${esc(capLabel(r.capability))}</td>
+      <td class="rcard-actions"><button class="btn btn-secondary btn-sm pp-acc-del" data-i="${i}">Remove</button></td>
+    </tr>`).join('') || '<tr><td colspan="3" class="muted">No assignments yet.</td></tr>';
+  const whoOpts = ACCESS.approverCandidates.map(u => `<option value="user:${u.id}">${esc(u.name)} (${esc(u.role)})</option>`).join('')
+    + Object.entries(ACCESS.roleOptions).map(([k, v]) => `<option value="role:${k}">${esc(v)} (role)</option>`).join('');
+  const capOpts = Object.entries(ACCESS.capabilityLabels).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('');
+  body.innerHTML = `
+    ${ACCESS.coverageError ? `<div class="alert alert-warning">${esc(ACCESS.coverageError)}</div>` : ''}
+    <div class="cap-actions" style="align-items:flex-end;flex-wrap:wrap">
+      <div class="field"><label>All scores need approval</label><select id="pp-acc-mode"><option value="immediate"${p.approvalMode === 'immediate' ? ' selected' : ''}>No, use capabilities</option><option value="approval"${p.approvalMode === 'approval' ? ' selected' : ''}>Yes, every score</option></select></div>
+      <div class="field"><label style="font-weight:400"><input type="checkbox" id="pp-acc-ded"${p.deductionsRequireApproval ? ' checked' : ''}> Deductions always need approval</label></div>
+      <div class="field"><label>Approval over value</label><input id="pp-acc-large" type="number" value="${p.largeValueThreshold ?? ''}" placeholder="none" style="width:110px"></div>
+    </div>
+    <table class="data-table rcards" style="margin:.5rem 0"><thead><tr><th>Who</th><th>Can</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="cap-actions" style="align-items:flex-end;flex-wrap:wrap">
+      <div class="field" style="flex:2 1 12rem"><label>Add someone</label><select id="pp-acc-who">${whoOpts}</select></div>
+      <div class="field"><label>Capability</label><select id="pp-acc-cap">${capOpts}</select></div>
+      <button class="btn btn-secondary btn-sm" id="pp-acc-add">Add</button>
+    </div>
+    <div id="pp-acc-msg"></div>
+    <div class="cap-actions" style="margin-top:.6rem"><button class="btn" id="pp-acc-save">Save access &amp; approvals</button></div>`;
+  body.querySelectorAll('.pp-acc-del').forEach(b => b.addEventListener('click', () => { ACCESS_ROWS.splice(+b.dataset.i, 1); renderAccessBody(); }));
+  document.getElementById('pp-acc-add').addEventListener('click', () => {
+    const who = document.getElementById('pp-acc-who').value;
+    if (!who) return;
+    const [kind, value] = who.split(':');
+    const label = document.querySelector(`#pp-acc-who option[value="${who}"]`).textContent;
+    ACCESS_ROWS.push({ subjectKind: kind, subjectValue: value, capability: document.getElementById('pp-acc-cap').value, subjectLabel: label });
+    renderAccessBody();
+  });
+  document.getElementById('pp-acc-save').addEventListener('click', saveAccess);
+}
+async function saveAccess() {
+  const msg = document.getElementById('pp-acc-msg');
+  const body = {
+    approvalMode: document.getElementById('pp-acc-mode').value,
+    deductionsRequireApproval: document.getElementById('pp-acc-ded').checked,
+    largeValueThreshold: document.getElementById('pp-acc-large').value === '' ? null : Number(document.getElementById('pp-acc-large').value),
+    assignments: ACCESS_ROWS.map(r => ({ subjectKind: r.subjectKind, subjectValue: r.subjectValue, capability: r.capability })),
+  };
+  try {
+    ACCESS = await Api.put(`/api/patrol-points/competitions/${ID}/access`, body);
+    ACCESS_ROWS = ACCESS.assignments.map(a => ({ subjectKind: a.subjectKind, subjectValue: a.subjectValue, capability: a.capability, subjectLabel: a.subjectLabel }));
+    renderAccessBody();
+    document.getElementById('pp-acc-msg').innerHTML = '<div class="alert alert-success">Saved.</div>';
+  } catch (e) { msg.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`; }
 }

@@ -146,7 +146,10 @@ $router->get('/api/patrol-points/competitions/:id', function ($params) {
         'leaderboard' => ppLeaderboard((int) $c['id']),
         'myActions' => [
             'canManage' => ppCanManage($user),
-            'canSubmit' => ppCanManage($user) && $c['status'] === 'open' && $teams && $cats,
+            'canSubmit' => (ppHasCapability($user, $c, 'submit') || ppHasCapability($user, $c, 'score_direct')) && $c['status'] === 'open' && $teams && $cats,
+            'canManageAccess' => ppHasCapability($user, $c, 'manage_access'),
+            'capabilities' => ppUserCapabilities($user, $c),
+            'usesCapabilityModel' => (bool) $c['uses_capability_model'],
             'isCreator' => (int) $c['created_by'] === (int) $user['id'],
             'userId' => (int) $user['id'],
         ],
@@ -184,6 +187,8 @@ $router->post('/api/patrol-points/competitions/:id/status', function ($params) {
     if ($to === 'open' && !dbGet('SELECT 1 FROM pp_teams WHERE competition_id = ? LIMIT 1', [$c['id']])) {
         jsonResponse(['error' => 'Add at least one team before opening the competition.'], 422);
     }
+    // AC24-07 / PP24-APR-003: cannot open with a pending-producing route and no approver.
+    if ($to === 'open' && ($cov = ppApprovalCoverageError($c)) !== null) jsonResponse(['error' => $cov], 422);
     if ($to === 'completed') {
         $pending = (int) dbGet("SELECT COUNT(*) n FROM pp_submissions WHERE competition_id = ? AND status = 'pending' AND withdrawn = 0", [$c['id']])['n'];
         if ($pending > 0) jsonResponse(['error' => "Resolve the $pending pending submission(s) before completing."], 409);
@@ -204,6 +209,56 @@ $router->delete('/api/patrol-points/competitions/:id', function ($params) {
     if ($c['status'] !== 'draft') jsonResponse(['error' => 'Only a draft competition can be deleted.'], 409);
     dbRun('DELETE FROM pp_competitions WHERE id = ?', [$c['id']]);
     jsonResponse(['ok' => true]);
+});
+
+// ── Access & approvals (FRD PP2.4 s5). Requires the Manage access capability. ────
+$router->get('/api/patrol-points/competitions/:id/access', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requirePatrolPointsEnabled();
+    $c = ppCompetitionOr404($params['id']);
+    if (!ppHasCapability($user, $c, 'manage_access')) jsonResponse(['error' => 'You do not have permission to manage access for this competition.'], 403);
+    jsonResponse(ppAccessPayload($c));
+});
+
+$router->put('/api/patrol-points/competitions/:id/access', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requirePatrolPointsEnabled();
+    $c = ppCompetitionOr404($params['id']);
+    if (!ppHasCapability($user, $c, 'manage_access')) jsonResponse(['error' => 'You do not have permission to manage access for this competition.'], 403);
+    if (in_array($c['status'], ['completed', 'archived'], true)) jsonResponse(['error' => 'A completed competition can no longer be changed.'], 409);
+    $b = requestBody();
+    $mode = in_array($b['approvalMode'] ?? $c['approval_mode'], ['immediate', 'approval'], true) ? ($b['approvalMode'] ?? $c['approval_mode']) : $c['approval_mode'];
+    $dedApp = array_key_exists('deductionsRequireApproval', $b) ? (!empty($b['deductionsRequireApproval']) ? 1 : 0) : (int) $c['deductions_require_approval'];
+    $largeThr = array_key_exists('largeValueThreshold', $b)
+        ? (is_numeric($b['largeValueThreshold']) ? (int) $b['largeValueThreshold'] : null)
+        : ($c['large_value_threshold'] !== null ? (int) $c['large_value_threshold'] : null);
+    $assignments = is_array($b['assignments'] ?? null) ? $b['assignments'] : null;
+
+    // Enabling the capability model but naming no one who can submit would lock scoring.
+    if ($assignments !== null && count($assignments) > 0) {
+        $hasScorer = false;
+        foreach ($assignments as $a) if (in_array($a['capability'] ?? '', ['submit', 'score_direct'], true)) { $hasScorer = true; break; }
+        if (!$hasScorer) jsonResponse(['error' => 'Add at least one person or role who can submit or score, otherwise no one could enter scores.'], 422);
+    }
+
+    db()->beginTransaction();
+    dbRun("UPDATE pp_competitions SET approval_mode = ?, deductions_require_approval = ?, large_value_threshold = ?, uses_capability_model = 1, updated_at = datetime('now') WHERE id = ?", [$mode, $dedApp, $largeThr, $c['id']]);
+    if ($assignments !== null) {
+        dbRun('DELETE FROM pp_access_assignments WHERE competition_id = ?', [$c['id']]);
+        foreach ($assignments as $a) ppInsertAssignment((int) $c['id'], is_array($a) ? $a : [], (int) $user['id']);
+    }
+    // Coverage is validated against the just-written rows (same connection sees them).
+    $fresh = dbGet('SELECT * FROM pp_competitions WHERE id = ?', [$c['id']]);
+    $cov = ppApprovalCoverageError($fresh);
+    if ($cov !== null) {
+        db()->rollBack();
+        jsonResponse(['error' => $cov, 'code' => 'no_approver'], 422);
+    }
+    db()->commit();
+    logAudit(['userId' => $user['id'], 'action' => 'pp_access_changed', 'entityType' => 'pp_competition', 'entityId' => (string) $c['id'], 'ipAddress' => clientIp(), 'details' => ['approvalMode' => $mode, 'assignments' => $assignments !== null ? count($assignments) : null]]);
+    jsonResponse(ppAccessPayload($fresh));
 });
 
 // ── Teams ───────────────────────────────────────────────────────────────────────
@@ -581,9 +636,9 @@ $router->post('/api/patrol-points/competitions/:id/submissions', function ($para
     $user = requireAuth();
     requireLeader($user);
     requirePatrolPointsEnabled();
-    if (!ppCanManage($user)) jsonResponse(['error' => 'Your role cannot submit scores.'], 403);
     $c = ppCompetitionOr404($params['id']);
     if ($c['status'] !== 'open') jsonResponse(['error' => 'Scores can only be submitted while the competition is open.'], 409);
+    if (!ppHasCapability($user, $c, 'submit') && !ppHasCapability($user, $c, 'score_direct')) jsonResponse(['error' => 'You do not have permission to submit scores in this competition.'], 403);
     $b = requestBody();
     $comment = trim((string) ($b['comment'] ?? ''));
     if ($comment === '') jsonResponse(['error' => 'A comment is required for every score submission.'], 422);
@@ -591,17 +646,20 @@ $router->post('/api/patrol-points/competitions/:id/submissions', function ($para
     if (!$cat) jsonResponse(['error' => 'Choose a valid scoring category.'], 422);
     $clean = ppCleanLines($cat, $c, $b['lines'] ?? []);
 
-    $status = $c['approval_mode'] === 'approval' ? 'pending' : 'approved';
-    $res = dbRun('INSERT INTO pp_submissions (competition_id, category_id, submitted_by, comment, status) VALUES (?, ?, ?, ?, ?)', [$c['id'], $cat['id'], $user['id'], $comment, $status]);
+    // Score disposition (FRD PP2.4 s4.1): the rule order decides effective vs pending.
+    $disp = ppScoreDisposition($c, $user, $cat, array_values($clean));
+    if ($disp['status'] === 'prohibited') jsonResponse(['error' => 'You do not have permission to submit scores in this competition.'], 403);
+    $status = $disp['status'];
+    $res = dbRun('INSERT INTO pp_submissions (competition_id, category_id, submitted_by, comment, status, disposition_reason) VALUES (?, ?, ?, ?, ?, ?)', [$c['id'], $cat['id'], $user['id'], $comment, $status, $disp['reason']]);
     $sid = (int) $res['lastInsertId'];
     foreach ($clean as $tid => $pts) dbRun('INSERT INTO pp_score_lines (submission_id, team_id, points) VALUES (?, ?, ?)', [$sid, $tid, $pts]);
-    logAudit(['userId' => $user['id'], 'action' => 'pp_submission_create', 'entityType' => 'pp_submission', 'entityId' => (string) $sid, 'ipAddress' => clientIp(), 'details' => ['status' => $status]]);
+    logAudit(['userId' => $user['id'], 'action' => 'pp_submission_create', 'entityType' => 'pp_submission', 'entityId' => (string) $sid, 'ipAddress' => clientIp(), 'details' => ['status' => $status, 'reason' => $disp['reason']]]);
     // Notify approvers when the score needs approval (PP-NOT-001).
     if ($status === 'pending') {
         $who = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')) ?: 'A leader';
         ppNotifyApprovers((int) $user['id'], 'Score to approve: ' . $c['name'], $who . ' submitted scores in "' . $cat['name'] . '" for approval.', 'patrol-point.html?id=' . $c['id']);
     }
-    jsonResponse(['ok' => true, 'status' => $status], 201);
+    jsonResponse(['ok' => true, 'status' => $status, 'reason' => $disp['reason']], 201);
 });
 
 // ── Approve / reject / return a pending submission (atomic) ──────────────────────

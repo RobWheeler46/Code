@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle', 'logic_forms', 'logic_forms_admin', 'logic_forms_files', 'logic_pp_wizard', 'logic_email', 'logic_finance_accounts'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle', 'logic_forms', 'logic_forms_admin', 'logic_forms_files', 'logic_pp_wizard', 'logic_email', 'logic_finance_accounts', 'logic_pp_access'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -1000,6 +1000,53 @@ function scenario_logic_pp_wizard(): void
     // Review & Start must NOT open a competition with no scoring category.
     $id2 = ppBuildCompetition($creator, ['name' => 'Empty', 'teams' => ['A'], 'categories' => [], 'start' => true]);
     check('pp-wizard: start is refused (stays draft) without a category', dbGet('SELECT status FROM pp_competitions WHERE id=?', [$id2])['status'] === 'draft');
+}
+
+// Patrol Points v2.4 PP0: capability model, score disposition rule order, no
+// self-approval, and start-time approver coverage (AC24-01..07 / PP24-*).
+function scenario_logic_pp_access(): void
+{
+    useDb(tmpDb('ppacc')); boot(); loadLibs();
+    dbRun("INSERT OR REPLACE INTO settings (key,value) VALUES ('patrol_points_enabled','true')");
+    $mk = fn($e, $r) => (int) dbRun("INSERT INTO users (auth_type,email,first_name,last_name,portal_role) VALUES ('local',?,?,?,?)", [$e, $e, 'X', $r])['lastInsertId'];
+    $A = $mk('a@x', 'section_leader');       // submit only
+    $B = $mk('b@x', 'group_leadership');     // approver (and a submitter, to test self-approval)
+    $C = $mk('c@x', 'assistant_leader');     // direct scorer
+    $D = $mk('d@x', 'group_leadership');     // manager without approve
+    $E = $mk('e@x', 'group_leadership');     // second approver
+    $cr = $mk('cr@x', 'admin');
+    $cid = (int) dbRun("INSERT INTO pp_competitions (name, approval_mode, allow_deductions, deductions_require_approval, uses_capability_model, created_by, status) VALUES ('Camp','immediate',1,1,1,?,'draft')", [$cr])['lastInsertId'];
+    dbRun("INSERT INTO pp_teams (competition_id,name,sort_order) VALUES (?, 'Eagles', 1)", [$cid]);
+    $cat = (int) dbRun("INSERT INTO pp_categories (competition_id,name,points_type,sort_order) VALUES (?, 'General','free',0)", [$cid])['lastInsertId'];
+    $assign = fn($val, $cap) => dbRun("INSERT INTO pp_access_assignments (competition_id,subject_kind,subject_value,capability,created_by) VALUES (?, 'user', ?, ?, ?)", [$cid, (string) $val, $cap, $cr]);
+    $assign($A, 'submit');
+    $assign($C, 'score_direct');
+    $assign($D, 'manage');
+    $u = fn($id) => dbGet('SELECT * FROM users WHERE id = ?', [$id]);
+    $comp = fn() => dbGet('SELECT * FROM pp_competitions WHERE id = ?', [$cid]);
+    $catRow = dbGet('SELECT * FROM pp_categories WHERE id = ?', [$cat]);
+
+    check('pp-access: submit-only scorer holds submit, not score_direct', in_array('submit', ppUserCapabilities($u($A), $comp()), true) && !in_array('score_direct', ppUserCapabilities($u($A), $comp()), true));
+    check('pp-access: submit-only score is pending (AC24-02)', ppScoreDisposition($comp(), $u($A), $catRow, [10])['status'] === 'pending');
+    check('pp-access: direct scorer is effective (AC24-03)', ppScoreDisposition($comp(), $u($C), $catRow, [10])['status'] === 'approved');
+    check('pp-access: a deduction forces pending even for a direct scorer', ppScoreDisposition($comp(), $u($C), $catRow, [-5])['reason'] === 'deduction');
+    check('pp-access: managing does not grant approve (AC24-04)', in_array('manage', ppUserCapabilities($u($D), $comp()), true) && !in_array('approve', ppUserCapabilities($u($D), $comp()), true));
+
+    check('pp-access: coverage fails with a pending route and no approver (AC24-07)', ppApprovalCoverageError($comp()) !== null);
+    $assign($B, 'approve');
+    check('pp-access: coverage passes once an approver is assigned', ppApprovalCoverageError($comp()) === null);
+
+    $sid = (int) dbRun("INSERT INTO pp_submissions (competition_id,category_id,submitted_by,comment,status) VALUES (?,?,?, 'x','pending')", [$cid, $cat, $B])['lastInsertId'];
+    $sub = fn() => dbGet('SELECT * FROM pp_submissions WHERE id = ?', [$sid]);
+    check('pp-access: submitter cannot approve their own (AC24-05)', ppCanApprove($u($B), $sub()) === false);
+    $assign($E, 'approve');
+    check('pp-access: a non-submitter approver can approve', ppCanApprove($u($E), $sub()) === true);
+    check('pp-access: a manager without approve cannot approve (AC24-04)', ppCanApprove($u($D), $sub()) === false);
+    dbRun("DELETE FROM pp_access_assignments WHERE competition_id = ? AND subject_value = ? AND capability = 'approve'", [$cid, (string) $E]);
+    check('pp-access: removing an approver removes eligibility (AC24-06)', ppCanApprove($u($E), $sub()) === false);
+
+    dbRun("UPDATE pp_competitions SET approval_mode = 'approval' WHERE id = ?", [$cid]);
+    check('pp-access: all-scores-require-approval overrides direct scoring (rule 2)', ppScoreDisposition($comp(), $u($C), $catRow, [10])['reason'] === 'all_approval');
 }
 
 // Forms part 3: on-behalf completion (recorded, not impersonated) + required file

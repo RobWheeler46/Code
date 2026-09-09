@@ -1203,6 +1203,12 @@ CREATE TABLE IF NOT EXISTS pp_competitions (
   approval_mode TEXT NOT NULL DEFAULT 'immediate' CHECK(approval_mode IN ('immediate','approval')),
   visibility TEXT NOT NULL DEFAULT 'leaders' CHECK(visibility IN ('leaders','parents')),
   allow_deductions INTEGER NOT NULL DEFAULT 0,
+  -- Patrol Points v2.4 scoring policy: deductions default to always requiring approval;
+  -- an optional large-value threshold sends unusually large awards to approval; the
+  -- capability model is opt-in per competition (legacy competitions keep role behaviour).
+  deductions_require_approval INTEGER NOT NULL DEFAULT 1,
+  large_value_threshold INTEGER,
+  uses_capability_model INTEGER NOT NULL DEFAULT 0,
   osm_section_id TEXT, section_name TEXT,
   created_by INTEGER NOT NULL REFERENCES users(id),
   completed_at TEXT,
@@ -1236,6 +1242,9 @@ CREATE TABLE IF NOT EXISTS pp_submissions (
   submitted_by INTEGER NOT NULL REFERENCES users(id),
   comment TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'approved' CHECK(status IN ('pending','approved','rejected','returned')),
+  -- Patrol Points v2.4 ScoreDisposition audit: why this submission was effective or
+  -- pending (guest / all_approval / category / deduction / large_value / score_directly / submit_only).
+  disposition_reason TEXT,
   withdrawn INTEGER NOT NULL DEFAULT 0,
   revises_id INTEGER REFERENCES pp_submissions(id) ON DELETE SET NULL,
   superseded_by INTEGER REFERENCES pp_submissions(id) ON DELETE SET NULL,
@@ -1302,6 +1311,24 @@ CREATE TABLE IF NOT EXISTS pp_guest_links (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_pp_guest_links_comp ON pp_guest_links(competition_id);
+-- Patrol Points v2.4 per-competition access & approval assignments (CompetitionAccessAssignment).
+-- Each row grants one capability to a subject (a named user, a portal role, a section, or a
+-- competition role group), optionally scoped to an activity/category/section. Platform
+-- eligibility is still the ceiling; these only narrow or assign within it. Approver rows
+-- (capability='approve') drive the no-self-approval and start-time coverage rules.
+CREATE TABLE IF NOT EXISTS pp_access_assignments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  competition_id INTEGER NOT NULL REFERENCES pp_competitions(id) ON DELETE CASCADE,
+  subject_kind TEXT NOT NULL CHECK(subject_kind IN ('user','role','section','group')),
+  subject_value TEXT NOT NULL,
+  capability TEXT NOT NULL CHECK(capability IN ('view','view_detail','view_history','submit','score_direct','approve','manage','manage_access')),
+  scope_activity_id INTEGER REFERENCES pp_activities(id) ON DELETE CASCADE,
+  scope_category_id INTEGER REFERENCES pp_categories(id) ON DELETE CASCADE,
+  scope_section TEXT,
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_pp_access_comp ON pp_access_assignments(competition_id, capability);
 -- Demo/UAT feedback (Test Environment pack DEMO-FB): testers leave feedback from
 -- any page in demo mode - persona, page, device, rating, category and comment.
 CREATE TABLE IF NOT EXISTS demo_feedback (
@@ -1567,6 +1594,17 @@ if ($ppCatsSql && !str_contains($ppCatsSql, 'point_buttons')) {
 $ppCompsSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='pp_competitions'")['sql'] ?? '';
 if ($ppCompsSql && !str_contains($ppCompsSql, 'allow_deductions')) {
     db()->exec('ALTER TABLE pp_competitions ADD COLUMN allow_deductions INTEGER NOT NULL DEFAULT 0');
+}
+// Migration: Patrol Points v2.4 scoring policy + capability model (FRD PP2.4).
+if ($ppCompsSql && !str_contains($ppCompsSql, 'uses_capability_model')) {
+    db()->exec('ALTER TABLE pp_competitions ADD COLUMN deductions_require_approval INTEGER NOT NULL DEFAULT 1');
+    db()->exec('ALTER TABLE pp_competitions ADD COLUMN large_value_threshold INTEGER');
+    db()->exec('ALTER TABLE pp_competitions ADD COLUMN uses_capability_model INTEGER NOT NULL DEFAULT 0');
+}
+// Migration: Patrol Points v2.4 ScoreDisposition audit field.
+$ppSubsSql2 = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='pp_submissions'")['sql'] ?? '';
+if ($ppSubsSql2 && !str_contains($ppSubsSql2, 'disposition_reason')) {
+    db()->exec('ALTER TABLE pp_submissions ADD COLUMN disposition_reason TEXT');
 }
 // Migration: equipment_assets gained a maintenance lock (QM inspection workflow).
 $eqSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='equipment_assets'")['sql'] ?? '';
