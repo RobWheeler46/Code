@@ -195,13 +195,72 @@ $router->post('/api/patrol-points/competitions/:id/status', function ($params) {
     // AC24-07 / PP24-APR-003: cannot open with a pending-producing route and no approver.
     if ($to === 'open' && ($cov = ppApprovalCoverageError($c)) !== null) jsonResponse(['error' => $cov], 422);
     if ($to === 'completed') {
+        // Completion readiness (FRD PP2.4 s10 / PP24-CLOSE-001): unresolved approvals and
+        // revisions block; active Guest Quick Entry links are revoked automatically.
         $pending = (int) dbGet("SELECT COUNT(*) n FROM pp_submissions WHERE competition_id = ? AND status = 'pending' AND withdrawn = 0", [$c['id']])['n'];
-        if ($pending > 0) jsonResponse(['error' => "Resolve the $pending pending submission(s) before completing."], 409);
+        if ($pending > 0) jsonResponse(['error' => "Resolve the $pending item(s) still awaiting approval before completing."], 409);
     }
     $completedAt = $to === 'completed' ? "datetime('now')" : 'completed_at';
     dbRun("UPDATE pp_competitions SET status = ?, completed_at = $completedAt, updated_at = datetime('now') WHERE id = ?", [$to, $c['id']]);
-    logAudit(['userId' => $user['id'], 'action' => 'pp_competition_status', 'entityType' => 'pp_competition', 'entityId' => (string) $c['id'], 'ipAddress' => clientIp(), 'details' => ['to' => $to]]);
+    $revokedGuest = 0;
+    if ($to === 'completed') {
+        $revokedGuest = (int) (dbGet("SELECT COUNT(*) n FROM pp_guest_links WHERE competition_id = ? AND status = 'active'", [$c['id']])['n'] ?? 0);
+        if ($revokedGuest > 0) dbRun("UPDATE pp_guest_links SET status = 'revoked' WHERE competition_id = ? AND status = 'active'", [$c['id']]);
+    }
+    logAudit(['userId' => $user['id'], 'action' => 'pp_competition_status', 'entityType' => 'pp_competition', 'entityId' => (string) $c['id'], 'ipAddress' => clientIp(), 'details' => ['to' => $to, 'revokedGuestLinks' => $revokedGuest]]);
     jsonResponse(serializePpCompetition(ppCompetitionOr404($c['id']), true));
+});
+
+// ── Completion readiness (FRD PP2.4 s10 / AC24-11): what must be resolved before a
+// competition can be permanently completed, plus the final standings to confirm. ──
+$router->get('/api/patrol-points/competitions/:id/completion-readiness', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requirePatrolPointsEnabled();
+    if (!ppCanManage($user)) jsonResponse(['error' => 'Only a competition manager can complete a competition.'], 403);
+    $c = ppCompetitionOr404($params['id']);
+    $pendingApprovals = (int) dbGet("SELECT COUNT(*) n FROM pp_submissions WHERE competition_id = ? AND status = 'pending' AND withdrawn = 0 AND revises_id IS NULL", [$c['id']])['n'];
+    $pendingRevisions = (int) dbGet("SELECT COUNT(*) n FROM pp_submissions WHERE competition_id = ? AND status = 'pending' AND withdrawn = 0 AND revises_id IS NOT NULL", [$c['id']])['n'];
+    $activeGuest = (int) dbGet("SELECT COUNT(*) n FROM pp_guest_links WHERE competition_id = ? AND status = 'active'", [$c['id']])['n'];
+    $blockers = [];
+    if ($pendingApprovals > 0) $blockers[] = $pendingApprovals . ' score' . ($pendingApprovals === 1 ? '' : 's') . ' still awaiting approval';
+    if ($pendingRevisions > 0) $blockers[] = $pendingRevisions . ' correction' . ($pendingRevisions === 1 ? '' : 's') . ' still awaiting approval';
+    jsonResponse([
+        'pendingApprovals' => $pendingApprovals,
+        'pendingRevisions' => $pendingRevisions,
+        'activeGuestLinks' => $activeGuest,
+        'finalLeaderboard' => ppLeaderboard((int) $c['id']),
+        'blockers' => $blockers,
+        'canComplete' => count($blockers) === 0 && in_array('completed', PP_TRANSITIONS[$c['status']] ?? [], true),
+    ]);
+});
+
+// ── Presentation leaderboard (FRD PP2.4 s9 / AC24-10): viewer-safe fields only,
+// effective scores only. Never names, comments, evidence or approval history. ──
+$router->get('/api/patrol-points/competitions/:id/presentation', function ($params) {
+    $user = requireAuth();
+    requirePatrolPointsEnabled();
+    $c = ppCompetitionOr404($params['id']);
+    if ($user['portal_role'] === 'parent') {
+        if ($c['visibility'] !== 'parents') jsonResponse(['error' => 'This leaderboard is not shared.'], 403);
+    } elseif (!isLeaderRole($user['portal_role'])) {
+        jsonResponse(['error' => 'Not permitted.'], 403);
+    }
+    // Latest effective award: team + points only (no reason/comment, no person) - AC24-10.
+    $latest = dbGet("SELECT id FROM pp_submissions WHERE competition_id = ? AND status = 'approved' AND superseded_by IS NULL AND withdrawn = 0 ORDER BY COALESCE(decided_at, created_at) DESC, id DESC LIMIT 1", [$c['id']]);
+    $latestAward = null;
+    if ($latest) {
+        $line = dbGet('SELECT l.points, t.name FROM pp_score_lines l JOIN pp_teams t ON t.id = l.team_id WHERE l.submission_id = ? ORDER BY l.id LIMIT 1', [$latest['id']]);
+        if ($line) $latestAward = ['teamName' => $line['name'], 'points' => (int) $line['points']];
+    }
+    jsonResponse([
+        'name' => $c['name'],
+        'status' => $c['status'],
+        'statusLabel' => PP_STATUSES[$c['status']] ?? $c['status'],
+        'final' => in_array($c['status'], ['completed', 'archived'], true),
+        'leaderboard' => ppLeaderboard((int) $c['id']),
+        'latestAward' => $latestAward,
+    ]);
 });
 
 // ── Delete (draft only) ─────────────────────────────────────────────────────────

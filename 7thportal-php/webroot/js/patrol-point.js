@@ -30,7 +30,8 @@ async function load() {
   catch (e) { box.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; return; }
   C = d.competition; TEAMS = d.teams; CATS = d.categories; ACTIVITIES = d.activities || []; GUESTLINKS = d.guestLinks || []; PARTS = d.participants || []; SUBS = d.submissions; BOARD = d.leaderboard; ACT = d.myActions; META = d.meta;
   setPageHeaderRecord(C.name, { title: C.name, status: { label: C.statusLabel || C.status, tone: PP_TONE[C.status] || 'neutral' } });
-  document.getElementById('pp-head').innerHTML = (ACT.canSubmit ? `<a class="btn" href="patrol-score.html?id=${ID}">Quick Score</a>` : '') + lifecycleButtons() + '<a class="btn btn-secondary" href="patrol-points.html">Back</a>';
+  const presentBtn = (TEAMS.length && ['open', 'paused', 'completed'].includes(C.status)) ? `<a class="btn btn-secondary" href="patrol-present.html?id=${ID}" target="_blank" rel="noopener">Presentation</a>` : '';
+  document.getElementById('pp-head').innerHTML = (ACT.canSubmit ? `<a class="btn" href="patrol-score.html?id=${ID}">Quick Score</a>` : '') + presentBtn + lifecycleButtons() + '<a class="btn btn-secondary" href="patrol-points.html">Back</a>';
   const editable = ACT.canManage && ['draft', 'open', 'paused'].includes(C.status);
   box.innerHTML = summaryCard() + leaderboardCard() + (ACT.canSubmit ? submitCard() : '')
     + ((editable || TEAMS.length) ? teamsCard(!editable) : '')
@@ -377,6 +378,7 @@ function wire() {
   const msg = (t, err) => { const m = document.getElementById('pp-msg'); if (m) m.innerHTML = `<div class="alert alert-${err ? 'error' : 'success'}">${escapeHtml(t)}</div>`; };
 
   document.querySelectorAll('.pp-status').forEach(b => b.addEventListener('click', async () => {
+    if (b.dataset.to === 'completed') { openCompletionReadiness(); return; } // safe-completion flow (s10)
     try { await Api.post(`/api/patrol-points/competitions/${ID}/status`, { status: b.dataset.to }); load(); }
     catch (e) { msg(e.message, true); }
   }));
@@ -604,4 +606,34 @@ async function saveAccess() {
     renderAccessBody();
     document.getElementById('pp-acc-msg').innerHTML = '<div class="alert alert-success">Saved.</div>';
   } catch (e) { msg.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`; }
+}
+
+// ── Safe completion (FRD PP2.4 s10 / AC24-11): show what must be resolved, the final
+// standings and the guest-link revocation, then confirm the permanent completion. ──
+async function openCompletionReadiness() {
+  const box = document.getElementById('pp-msg');
+  if (!box) return;
+  box.innerHTML = '<p class="muted">Checking completion readiness&hellip;</p>';
+  let d;
+  try { d = await Api.get(`/api/patrol-points/competitions/${ID}/completion-readiness`); }
+  catch (e) { box.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`; return; }
+  const standings = (d.finalLeaderboard || []).map(r => `<tr><td data-label="Position">${r.position}</td><td data-label="Team" class="rcard-title">${esc(r.teamName)}</td><td data-label="Total"><strong>${r.total}</strong></td></tr>`).join('');
+  const blockers = d.blockers.length
+    ? `<div class="alert alert-warning"><strong>Resolve before completing:</strong><ul style="margin:.3rem 0 0">${d.blockers.map(b => `<li>${esc(b)}</li>`).join('')}</ul></div>`
+    : '<div class="alert alert-success">Nothing is outstanding. This competition is ready to complete.</div>';
+  const guestNote = d.activeGuestLinks ? `<p class="muted">${d.activeGuestLinks} active guest link${d.activeGuestLinks === 1 ? '' : 's'} will be revoked automatically on completion.</p>` : '';
+  box.innerHTML = `<div class="card card-accent accent-yellow" style="margin-top:.6rem">
+    <h3 style="margin:0 0 .3rem">Complete this competition</h3>
+    <p class="muted" style="margin:.1rem 0 .5rem">Completion is permanent: live scoring stops and the result is locked.</p>
+    ${blockers}${guestNote}
+    <table class="data-table rcards" style="margin:.3rem 0"><thead><tr><th>Position</th><th>Team</th><th>Total</th></tr></thead><tbody>${standings || '<tr><td colspan="3" class="muted">No scores.</td></tr>'}</tbody></table>
+    <div id="pp-complete-msg"></div>
+    <div class="cap-actions"><button class="btn" id="pp-complete-go"${d.canComplete ? '' : ' disabled'}>Complete competition</button>
+      <button class="btn btn-secondary" id="pp-complete-cancel">Cancel</button></div></div>`;
+  document.getElementById('pp-complete-cancel').addEventListener('click', () => { box.innerHTML = ''; });
+  const go = document.getElementById('pp-complete-go');
+  if (go) go.addEventListener('click', async () => {
+    try { await Api.post(`/api/patrol-points/competitions/${ID}/status`, { status: 'completed' }); load(); }
+    catch (e) { document.getElementById('pp-complete-msg').innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`; }
+  });
 }

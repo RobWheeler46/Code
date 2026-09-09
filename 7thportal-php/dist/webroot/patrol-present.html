@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Leaderboard - 7thPortal</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css?v=202609091759">
+<style>
+  body.pp-present { margin: 0; background: var(--bg); color: var(--text); min-height: 100vh; }
+  .pp-pr { max-width: 1100px; margin: 0 auto; padding: 2vh 3vw 6rem; }
+  .pp-pr-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.2rem; }
+  .pp-pr-title { font-size: clamp(1.6rem, 4vw, 3rem); font-weight: 800; color: var(--purple); margin: 0; letter-spacing: -.01em; }
+  .pp-pr-final { font-size: .8rem; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; background: var(--purple); color: #fff; padding: .25rem .6rem; border-radius: 999px; }
+  .pp-pr-board { display: flex; flex-direction: column; gap: .5rem; }
+  .pp-pr-row { display: grid; grid-template-columns: 2.4em 1fr auto; align-items: center; gap: 1rem; background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: .7em 1em; font-size: clamp(1.2rem, 3.2vw, 2.4rem); }
+  .pp-pr-row.lead { border-color: var(--purple); box-shadow: 0 0 0 2px var(--purple) inset; }
+  .pp-pr-pos { font-weight: 800; color: var(--muted); text-align: center; }
+  .pp-pr-team { font-weight: 700; }
+  .pp-pr-total { font-weight: 800; font-variant-numeric: tabular-nums; }
+  .pp-pr-latest { margin: 0 0 1rem; padding: .7rem 1rem; border-radius: 12px; background: var(--nav-tint); font-size: clamp(1rem, 2.6vw, 1.6rem); font-weight: 700; }
+  .pp-pr-latest .t { color: var(--purple); }
+  @media (prefers-reduced-motion: no-preference) { .pp-pr-latest { animation: ppfade .5s ease-out; } @keyframes ppfade { from { opacity: 0; transform: translateY(-4px); } } }
+  .pp-pr-ctrl { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: .4rem; flex-wrap: wrap; justify-content: center; padding: .5rem; background: color-mix(in srgb, var(--card) 92%, transparent); border-top: 1px solid var(--border); }
+  .pp-pr-ctrl button { font: inherit; font-size: .85rem; border: 1px solid var(--border); background: var(--card); color: var(--text); border-radius: 8px; padding: .4rem .7rem; cursor: pointer; }
+  .pp-pr-ctrl button:hover { border-color: var(--purple); color: var(--purple); }
+  .pp-pr-empty { padding: 3rem 1rem; text-align: center; color: var(--muted); font-size: 1.2rem; }
+</style>
+</head>
+<body class="pp-present pp-present">
+  <div id="present"><p class="pp-pr-empty">Loading&hellip;</p></div>
+  <script src="js/api.js?v=202609091759"></script>
+  <script src="js/patrol-present.js?v=202609091759"></script>
+</body>
+</html>
