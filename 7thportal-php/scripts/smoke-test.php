@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle', 'logic_forms', 'logic_forms_admin', 'logic_forms_files', 'logic_pp_wizard', 'logic_email', 'logic_finance_accounts', 'logic_pp_access', 'logic_pp_triage', 'logic_pp_presets'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle', 'logic_forms', 'logic_forms_admin', 'logic_forms_files', 'logic_pp_wizard', 'logic_email', 'logic_finance_accounts', 'logic_pp_access', 'logic_pp_triage', 'logic_pp_presets', 'logic_pp_uat'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -1097,6 +1097,32 @@ function scenario_logic_pp_presets(): void
     check('pp-presets: a preset build turns on the capability model + approval mode', (int) $c['uses_capability_model'] === 1 && $c['approval_mode'] === 'approval');
     check('pp-presets: a preset build opens with no coverage error', $c['status'] === 'open' && ppApprovalCoverageError($c) === null);
     check('pp-presets: the preset seeded an approve assignment', (int) dbGet("SELECT COUNT(*) n FROM pp_access_assignments WHERE competition_id=? AND capability='approve'", [$id])['n'] > 0);
+}
+
+// Patrol Points v2.4 PP5 release-gate hardening: coverage names the uncovered route
+// (AC-318) and approver eligibility respects the platform ceiling (AC-322).
+function scenario_logic_pp_uat(): void
+{
+    useDb(tmpDb('ppuat')); boot(); loadLibs();
+    dbRun("INSERT OR REPLACE INTO settings (key,value) VALUES ('patrol_points_enabled','true')");
+    $cr = (int) dbRun("INSERT INTO users (auth_type,email,first_name,last_name,portal_role) VALUES ('local','a@x','A','A','admin')")['lastInsertId'];
+    $tr = (int) dbRun("INSERT INTO users (auth_type,email,first_name,last_name,portal_role) VALUES ('local','t@x','T','R','treasurer')")['lastInsertId'];
+    dbRun("INSERT INTO users (auth_type,email,first_name,last_name,portal_role) VALUES ('local','g@x','G','L','group_leadership')");
+    $cid = (int) dbRun("INSERT INTO pp_competitions (name,approval_mode,uses_capability_model,created_by,status) VALUES ('U','approval',1,?, 'draft')", [$cr])['lastInsertId'];
+    $comp = fn() => dbGet('SELECT * FROM pp_competitions WHERE id=?', [$cid]);
+
+    $err = ppApprovalCoverageError($comp());
+    check('pp-uat: coverage error names the uncovered route (AC-318)', is_string($err) && strpos($err, 'all scores') !== false);
+
+    // A Treasurer cannot hold Approve at platform level, so assigning it must not cover.
+    dbRun("INSERT INTO pp_access_assignments (competition_id,subject_kind,subject_value,capability,created_by) VALUES (?, 'role','treasurer','approve',?)", [$cid, $cr]);
+    $trUser = dbGet('SELECT * FROM users WHERE id=?', [$tr]);
+    check('pp-uat: an assignment above the ceiling does not take effect (AC-322)', !in_array('approve', ppUserCapabilities($trUser, $comp()), true));
+    check('pp-uat: a below-ceiling approver does not cover the route', ppApprovalCoverageError($comp()) !== null);
+
+    // A Group Leadership approver (ceiling includes approve) does cover it.
+    dbRun("INSERT INTO pp_access_assignments (competition_id,subject_kind,subject_value,capability,created_by) VALUES (?, 'role','group_leadership','approve',?)", [$cid, $cr]);
+    check('pp-uat: a ceiling-capable approver covers the route', ppApprovalCoverageError($comp()) === null);
 }
 
 // Forms part 3: on-behalf completion (recorded, not impersonated) + required file

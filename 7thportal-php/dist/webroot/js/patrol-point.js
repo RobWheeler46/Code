@@ -636,15 +636,21 @@ async function openCompletionReadiness() {
     ? `<div class="alert alert-warning"><strong>Resolve before completing:</strong><ul style="margin:.3rem 0 0">${d.blockers.map(b => `<li>${esc(b)}</li>`).join('')}</ul></div>`
     : '<div class="alert alert-success">Nothing is outstanding. This competition is ready to complete.</div>';
   const guestNote = d.activeGuestLinks ? `<p class="muted">${d.activeGuestLinks} active guest link${d.activeGuestLinks === 1 ? '' : 's'} will be revoked automatically on completion.</p>` : '';
+  const warnings = (d.warnings && d.warnings.length)
+    ? `<div class="alert alert-warning"><strong>Please review:</strong><ul style="margin:.3rem 0 .4rem">${d.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul>
+        <label style="font-weight:400"><input type="checkbox" id="pp-complete-ack"> I have reviewed these and want to complete anyway</label></div>`
+    : '';
   box.innerHTML = `<div class="card card-accent accent-yellow" style="margin-top:.6rem">
     <h3 style="margin:0 0 .3rem">Complete this competition</h3>
     <p class="muted" style="margin:.1rem 0 .5rem">Completion is permanent: live scoring stops and the result is locked.</p>
-    ${blockers}${guestNote}
+    ${blockers}${warnings}${guestNote}
     <table class="data-table rcards" style="margin:.3rem 0"><thead><tr><th>Position</th><th>Team</th><th>Total</th></tr></thead><tbody>${standings || '<tr><td colspan="3" class="muted">No scores.</td></tr>'}</tbody></table>
     <div id="pp-complete-msg"></div>
-    <div class="cap-actions"><button class="btn" id="pp-complete-go"${d.canComplete ? '' : ' disabled'}>Complete competition</button>
+    <div class="cap-actions"><button class="btn" id="pp-complete-go"${(d.canComplete && !warnings) ? '' : ' disabled'}>Complete competition</button>
       <button class="btn btn-secondary" id="pp-complete-cancel">Cancel</button></div></div>`;
   document.getElementById('pp-complete-cancel').addEventListener('click', () => { box.innerHTML = ''; });
+  const ack = document.getElementById('pp-complete-ack');
+  if (ack) ack.addEventListener('change', () => { const g = document.getElementById('pp-complete-go'); if (g) g.disabled = !(d.canComplete && ack.checked); });
   const go = document.getElementById('pp-complete-go');
   if (go) go.addEventListener('click', async () => {
     try { await Api.post(`/api/patrol-points/competitions/${ID}/status`, { status: 'completed' }); load(); }

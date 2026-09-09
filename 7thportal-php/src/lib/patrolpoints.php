@@ -131,34 +131,44 @@ function ppEligibleApproverIds(array $comp, ?int $excludeUserId = null): array
         foreach (dbAll("SELECT id FROM users WHERE account_status = 'active' AND portal_role IN ($ph)", PP_MANAGER_ROLES) as $u) $ids[(int) $u['id']] = true;
     } else {
         foreach (dbAll("SELECT * FROM pp_access_assignments WHERE competition_id = ? AND capability = 'approve'", [$comp['id']]) as $a) {
-            foreach (ppResolveSubjectUserIds($a) as $uid) $ids[$uid] = true;
+            foreach (ppResolveSubjectUserIds($a) as $uid) {
+                // Only count users who can actually hold Approve at platform level (AC-322):
+                // an assignment above someone's ceiling never makes them a real approver.
+                $u = dbGet('SELECT portal_role FROM users WHERE id = ?', [$uid]);
+                if ($u && in_array('approve', ppPlatformCeiling(['portal_role' => $u['portal_role']]), true)) $ids[$uid] = true;
+            }
         }
     }
     if ($excludeUserId !== null) unset($ids[$excludeUserId]);
     return array_keys($ids);
 }
 
-// Does any permitted scoring route on this competition produce Pending Approval?
-function ppPendingRouteExists(array $comp): bool
+// Named scoring routes on this competition that produce Pending Approval (FRD s4.1).
+// Naming them lets Review & Start identify exactly what is uncovered (AC-318).
+function ppPendingRoutes(array $comp): array
 {
-    if (($comp['approval_mode'] ?? '') === 'approval') return true;
-    if (!empty($comp['allow_deductions']) && !empty($comp['deductions_require_approval'])) return true;
-    if (($comp['large_value_threshold'] ?? null) !== null && $comp['large_value_threshold'] !== '') return true;
+    $routes = [];
+    if (($comp['approval_mode'] ?? '') === 'approval') $routes[] = 'all scores (approval mode)';
+    if (!empty($comp['allow_deductions']) && !empty($comp['deductions_require_approval'])) $routes[] = 'deductions';
+    if (($comp['large_value_threshold'] ?? null) !== null && $comp['large_value_threshold'] !== '') $routes[] = 'large values';
+    if (dbGet("SELECT 1 FROM pp_categories WHERE competition_id = ? AND requires_approval = 1 LIMIT 1", [$comp['id']])) $routes[] = 'approval-only categories';
     if (!empty($comp['uses_capability_model'])) {
         $hasSubmit = dbGet("SELECT 1 FROM pp_access_assignments WHERE competition_id = ? AND capability = 'submit' LIMIT 1", [$comp['id']]);
         $hasDirect = dbGet("SELECT 1 FROM pp_access_assignments WHERE competition_id = ? AND capability = 'score_direct' LIMIT 1", [$comp['id']]);
-        if ($hasSubmit && !$hasDirect) return true;
+        if ($hasSubmit && !$hasDirect) $routes[] = 'submit-only scorers';
     }
-    return false;
+    return $routes;
 }
+function ppPendingRouteExists(array $comp): bool { return ppPendingRoutes($comp) !== []; }
 
-// AC24-07 / PP24-APR-003: a competition may not start (or save an access change) when a
-// pending-producing route has no eligible approver. Returns an error string, or null.
+// AC24-07 / AC-318 / PP24-APR-003: a competition may not start (or save an access change)
+// when a pending-producing route has no eligible approver. Names the uncovered route(s).
 function ppApprovalCoverageError(array $comp): ?string
 {
-    if (!ppPendingRouteExists($comp)) return null;
+    $routes = ppPendingRoutes($comp);
+    if (!$routes) return null;
     if (count(ppEligibleApproverIds($comp)) === 0) {
-        return 'This competition can produce scores that need approval, but no eligible approver is assigned. Add an approver under Access and approvals first.';
+        return 'No eligible approver is assigned for the scores that need approval (' . implode(', ', $routes) . '). Add an approver under Access and approvals first.';
     }
     return null;
 }

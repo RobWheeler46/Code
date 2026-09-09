@@ -222,15 +222,30 @@ $router->get('/api/patrol-points/competitions/:id/completion-readiness', functio
     $pendingApprovals = (int) dbGet("SELECT COUNT(*) n FROM pp_submissions WHERE competition_id = ? AND status = 'pending' AND withdrawn = 0 AND revises_id IS NULL", [$c['id']])['n'];
     $pendingRevisions = (int) dbGet("SELECT COUNT(*) n FROM pp_submissions WHERE competition_id = ? AND status = 'pending' AND withdrawn = 0 AND revises_id IS NOT NULL", [$c['id']])['n'];
     $activeGuest = (int) dbGet("SELECT COUNT(*) n FROM pp_guest_links WHERE competition_id = ? AND status = 'active'", [$c['id']])['n'];
+    // Possible duplicates (FRD s10): the same team getting the same points in the same
+    // category more than once, among live (approved/pending) submissions. A warning to
+    // acknowledge, not a hard blocker.
+    $possibleDuplicates = (int) (dbGet(
+        "SELECT COUNT(*) n FROM (
+           SELECT l.team_id, l.points, s.category_id
+           FROM pp_score_lines l JOIN pp_submissions s ON s.id = l.submission_id
+           WHERE s.competition_id = ? AND s.withdrawn = 0 AND s.superseded_by IS NULL AND s.status IN ('approved','pending')
+           GROUP BY l.team_id, l.points, s.category_id HAVING COUNT(*) > 1)",
+        [$c['id']]
+    )['n'] ?? 0);
     $blockers = [];
     if ($pendingApprovals > 0) $blockers[] = $pendingApprovals . ' score' . ($pendingApprovals === 1 ? '' : 's') . ' still awaiting approval';
     if ($pendingRevisions > 0) $blockers[] = $pendingRevisions . ' correction' . ($pendingRevisions === 1 ? '' : 's') . ' still awaiting approval';
+    $warnings = [];
+    if ($possibleDuplicates > 0) $warnings[] = $possibleDuplicates . ' possible duplicate ' . ($possibleDuplicates === 1 ? 'award' : 'awards') . ' (same team, points and category)';
     jsonResponse([
         'pendingApprovals' => $pendingApprovals,
         'pendingRevisions' => $pendingRevisions,
         'activeGuestLinks' => $activeGuest,
+        'possibleDuplicates' => $possibleDuplicates,
         'finalLeaderboard' => ppLeaderboard((int) $c['id']),
         'blockers' => $blockers,
+        'warnings' => $warnings,
         'canComplete' => count($blockers) === 0 && in_array('completed', PP_TRANSITIONS[$c['status']] ?? [], true),
     ]);
 });
