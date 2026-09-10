@@ -300,6 +300,28 @@ $router->get('/api/patrol-points/competitions/:id/access', function ($params) {
     jsonResponse(ppAccessPayload($c));
 });
 
+// Effective Access inspector (FRD PP2.5 s17.5 / AC-325): a read-only lookup of one user's
+// effective capabilities in this competition, with the contributing role/group/person.
+$router->get('/api/patrol-points/competitions/:id/effective-access', function ($params) {
+    $user = requireAuth();
+    requireLeader($user);
+    requirePatrolPointsEnabled();
+    $c = ppCompetitionOr404($params['id']);
+    if (!ppHasCapability($user, $c, 'manage_access')) jsonResponse(['error' => 'You do not have permission to inspect access for this competition.'], 403);
+    $target = dbGet('SELECT * FROM users WHERE id = ?', [(int) queryParam('userId')]);
+    if (!$target) jsonResponse(['error' => 'Choose a valid person to inspect.'], 422);
+    $activityId = queryParam('activityId') ? (int) queryParam('activityId') : null;
+    $eff = ppEffectiveAccess($target, $c, $activityId);
+    jsonResponse([
+        'userId' => (int) $target['id'],
+        'name' => trim($target['first_name'] . ' ' . $target['last_name']),
+        'role' => $target['portal_role'],
+        'capabilities' => $eff['capabilities'],
+        'contributors' => $eff['contributors'],
+        'capabilityLabels' => ['view' => 'View leaderboard', 'view_detail' => 'View detail', 'view_history' => 'View history', 'submit' => 'Submit points', 'score_direct' => 'Score directly', 'approve' => 'Approve points', 'manage' => 'Manage competition', 'manage_access' => 'Manage access'],
+    ]);
+});
+
 $router->put('/api/patrol-points/competitions/:id/access', function ($params) {
     $user = requireAuth();
     requireLeader($user);

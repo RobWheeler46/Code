@@ -65,7 +65,8 @@ function ppAssignmentCapsForUser(array $user, array $comp, ?int $activityId = nu
     foreach (dbAll('SELECT * FROM pp_access_assignments WHERE competition_id = ?', [$comp['id']]) as $a) {
         $m = ($a['subject_kind'] === 'user' && (int) $a['subject_value'] === (int) $user['id'])
             || ($a['subject_kind'] === 'role' && $a['subject_value'] === $user['portal_role'])
-            || ($a['subject_kind'] === 'section' && in_array($a['subject_value'], $sectionIds, true));
+            || ($a['subject_kind'] === 'section' && in_array($a['subject_value'], $sectionIds, true))
+            || ($a['subject_kind'] === 'group' && function_exists('accessGroupIsMember') && accessGroupIsMember((int) $a['subject_value'], (int) $user['id']));
         if (!$m) continue;
         // An activity-scoped grant only applies in that activity's context (FRD s7). An
         // unscoped grant applies everywhere. Reads with no activity context see unscoped only.
@@ -139,6 +140,7 @@ function ppResolveSubjectUserIds(array $a): array
 {
     if ($a['subject_kind'] === 'user') return [(int) $a['subject_value']];
     if ($a['subject_kind'] === 'role') return array_map(fn($u) => (int) $u['id'], dbAll("SELECT id FROM users WHERE account_status = 'active' AND portal_role = ?", [$a['subject_value']]));
+    if ($a['subject_kind'] === 'group' && function_exists('accessGroupMemberIds')) return accessGroupMemberIds((int) $a['subject_value']);
     return [];
 }
 
@@ -215,7 +217,42 @@ function ppSubjectLabel(array $a): string
         return $u ? trim($u['first_name'] . ' ' . $u['last_name']) : ('User ' . $a['subject_value']);
     }
     if ($a['subject_kind'] === 'role') return roleLabel($a['subject_value']);
+    if ($a['subject_kind'] === 'group') {
+        $g = dbGet('SELECT name FROM access_groups WHERE id = ?', [$a['subject_value']]);
+        return $g ? ($g['name'] . ' (group)') : ('Group ' . $a['subject_value']);
+    }
     return (string) $a['subject_value'];
+}
+
+// Effective access with explainability (FRD PP2.5 s17.4/s17.5 / FR-PP-019 / AC-325).
+// Returns the user's effective capabilities in the (optional) activity scope, plus the
+// contributing role/group/person assignments for each capability actually held.
+function ppEffectiveAccess(array $user, array $comp, ?int $activityId = null): array
+{
+    $ceiling = ppPlatformCeiling($user);
+    $held = ppUserCapabilities($user, $comp, $activityId);
+    $contrib = [];
+    if (!empty($comp['uses_capability_model'])) {
+        // Manager / creator derived grants (not from an assignment row).
+        if ((int) $comp['created_by'] === (int) $user['id']) foreach (['manage', 'manage_access', 'view_detail', 'view_history'] as $c) if (in_array($c, $held, true)) $contrib[] = ['capability' => $c, 'via' => 'competition creator'];
+        elseif (ppCanManage($user)) foreach (['manage', 'view_detail', 'view_history'] as $c) if (in_array($c, $held, true)) $contrib[] = ['capability' => $c, 'via' => 'manager role (' . roleLabel($user['portal_role']) . ')'];
+        // Assignment-derived grants (role / group / person), scope-and-ceiling filtered.
+        $sectionIds = function_exists('sectionsUserSectionIds') ? sectionsUserSectionIds($user) : [];
+        foreach (dbAll('SELECT * FROM pp_access_assignments WHERE competition_id = ?', [$comp['id']]) as $a) {
+            $match = ($a['subject_kind'] === 'user' && (int) $a['subject_value'] === (int) $user['id'])
+                || ($a['subject_kind'] === 'role' && $a['subject_value'] === $user['portal_role'])
+                || ($a['subject_kind'] === 'section' && in_array($a['subject_value'], $sectionIds, true))
+                || ($a['subject_kind'] === 'group' && accessGroupIsMember((int) $a['subject_value'], (int) $user['id']));
+            if (!$match) continue;
+            if ($a['scope_activity_id'] !== null && (int) $a['scope_activity_id'] !== (int) $activityId) continue;
+            if (!in_array($a['capability'], $ceiling, true)) continue; // never above the ceiling
+            if (!in_array($a['capability'], $held, true)) continue;
+            $contrib[] = ['capability' => $a['capability'], 'via' => ppSubjectLabel($a) . ($a['scope_activity_id'] !== null ? ' (activity-scoped)' : '')];
+        }
+    } else {
+        foreach ($held as $c) $contrib[] = ['capability' => $c, 'via' => 'role (' . roleLabel($user['portal_role']) . ')'];
+    }
+    return ['capabilities' => $held, 'contributors' => $contrib];
 }
 
 // Insert one validated access assignment. Silently ignores an invalid row.
@@ -284,6 +321,9 @@ function ppAccessPayload(array $c): array
         'assignments' => $assignments,
         'approverCandidates' => $cands,
         'roleOptions' => ['section_leader' => 'Section Leaders', 'assistant_leader' => 'Assistant Leaders', 'group_leadership' => 'Group Leadership', 'chair' => 'Chair'],
+        'groups' => array_map(fn($g) => serializeAccessGroup($g), dbAll("SELECT * FROM access_groups WHERE retired = 0 ORDER BY name")),
+        'people' => array_map(fn($u) => ['id' => (int) $u['id'], 'name' => trim($u['first_name'] . ' ' . $u['last_name']), 'role' => $u['portal_role']],
+            dbAll("SELECT id, first_name, last_name, portal_role FROM users WHERE account_status = 'active' ORDER BY first_name, last_name")),
         'activities' => array_map(fn($id, $name) => ['id' => $id, 'name' => $name], array_keys($activityNames), array_values($activityNames)),
         'capabilityLabels' => ['submit' => 'Submit points', 'score_direct' => 'Score directly', 'approve' => 'Approve points', 'view_detail' => 'View detail', 'manage' => 'Manage competition', 'manage_access' => 'Manage access'],
         'pendingRouteExists' => ppPendingRouteExists($c),

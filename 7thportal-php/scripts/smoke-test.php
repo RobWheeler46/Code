@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle', 'logic_forms', 'logic_forms_admin', 'logic_forms_files', 'logic_pp_wizard', 'logic_email', 'logic_finance_accounts', 'logic_pp_access', 'logic_pp_triage', 'logic_pp_presets', 'logic_pp_uat', 'logic_pp_activity_scope'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle', 'logic_forms', 'logic_forms_admin', 'logic_forms_files', 'logic_pp_wizard', 'logic_email', 'logic_finance_accounts', 'logic_pp_access', 'logic_pp_triage', 'logic_pp_presets', 'logic_pp_uat', 'logic_pp_activity_scope', 'logic_pp_groups'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -32,7 +32,7 @@ function useDb(string $file): void { putenv('SEVENTHPORTAL_DB=' . $file); }
 function boot(): void { require dirname(__DIR__) . '/src/db.php'; }
 function loadLibs(): void
 {
-    foreach (['helpers', 'notifications', 'finance', 'incidents', 'patrolpoints', 'events', 'equipment', 'actions', 'quartermaster', 'prepare', 'features', 'attendance', 'demoseed', 'calendar', 'activity', 'pdf', 'dlv', 'forms'] as $lib) {
+    foreach (['helpers', 'notifications', 'finance', 'incidents', 'accessgroups', 'patrolpoints', 'events', 'equipment', 'actions', 'quartermaster', 'prepare', 'features', 'attendance', 'demoseed', 'calendar', 'activity', 'pdf', 'dlv', 'forms'] as $lib) {
         require_once dirname(__DIR__) . '/src/lib/' . $lib . '.php';
     }
 }
@@ -1150,6 +1150,53 @@ function scenario_logic_pp_activity_scope(): void
     check('pp-scope: ppCanScoreAnywhere is true for a scoped scorer', ppCanScoreAnywhere($uS, $comp) === true);
     check('pp-scope: scoped approver can approve their activity', ppCanApprove($uP, ['submitted_by' => $S, 'competition_id' => $cid, 'activity_id' => $act]) === true);
     check('pp-scope: scoped approver cannot approve another activity', ppCanApprove($uP, ['submitted_by' => $S, 'competition_id' => $cid, 'activity_id' => $other]) === false);
+}
+
+// Patrol Points v2.5 subject-based access: admin-defined groups as an access subject,
+// cross-role membership, effective-access explainability, dynamic coverage, expiry and
+// anti-elevation (FRD s17 / AC-323..328).
+function scenario_logic_pp_groups(): void
+{
+    useDb(tmpDb('ppgrp')); boot(); loadLibs();
+    dbRun("INSERT OR REPLACE INTO settings (key,value) VALUES ('patrol_points_enabled','true')");
+    $mk = fn($e, $r) => (int) dbRun("INSERT INTO users (auth_type,email,first_name,last_name,portal_role) VALUES ('local',?,?,?,?)", [$e, $e, 'X', $r])['lastInsertId'];
+    $admin = $mk('a@x', 'admin');
+    $glv = $mk('g@x', 'group_leadership'); // can hold Approve at platform level
+    $sl = $mk('s@x', 'section_leader');     // can Submit
+    $tr = $mk('t@x', 'treasurer');          // leader, but ceiling excludes Approve
+    $par = $mk('p@x', 'parent');            // ceiling = view only
+    // A cross-role admin-defined group.
+    $g = (int) dbRun("INSERT INTO access_groups (name, created_by) VALUES ('Camp Leads', ?)", [$admin])['lastInsertId'];
+    foreach ([$glv, $tr, $par] as $u) dbRun('INSERT INTO access_group_members (group_id, user_id) VALUES (?, ?)', [$g, $u]);
+    check('pp-groups: members keep their own portal roles (AC-324)', dbGet('SELECT portal_role FROM users WHERE id=?', [$tr])['portal_role'] === 'treasurer' && dbGet('SELECT portal_role FROM users WHERE id=?', [$par])['portal_role'] === 'parent');
+
+    $cid = (int) dbRun("INSERT INTO pp_competitions (name,approval_mode,uses_capability_model,created_by,status) VALUES ('C','approval',1,?, 'open')", [$admin])['lastInsertId'];
+    dbRun("INSERT INTO pp_teams (competition_id,name,sort_order) VALUES (?, 'A', 0)", [$cid]);
+    dbRun("INSERT INTO pp_categories (competition_id,name,points_type,sort_order) VALUES (?, 'G','free',0)", [$cid]);
+    $assign = fn($kind, $val, $cap) => dbRun("INSERT INTO pp_access_assignments (competition_id,subject_kind,subject_value,capability,created_by) VALUES (?,?,?,?,?)", [$cid, $kind, (string) $val, $cap, $admin]);
+    $assign('role', 'section_leader', 'submit');   // role subject
+    $assign('group', $g, 'approve');                // group subject
+    $assign('user', $sl, 'manage');                 // named-person subject
+    $comp = fn() => dbGet('SELECT * FROM pp_competitions WHERE id=?', [$cid]);
+    $u = fn($id) => dbGet('SELECT * FROM users WHERE id=?', [$id]);
+
+    check('pp-groups: role Submit grant enforced (AC-323)', in_array('submit', ppUserCapabilities($u($sl), $comp()), true));
+    check('pp-groups: group Approve reaches an eligible member (AC-323)', in_array('approve', ppUserCapabilities($u($glv), $comp()), true));
+    check('pp-groups: named-person Manage grant enforced (AC-323)', in_array('manage', ppUserCapabilities($u($sl), $comp()), true));
+    check('pp-groups: group grant capped by ceiling - treasurer gets no Approve (AC-328)', !in_array('approve', ppUserCapabilities($u($tr), $comp()), true));
+    check('pp-groups: group grant capped by ceiling - parent gets no Approve (AC-328)', !in_array('approve', ppUserCapabilities($u($par), $comp()), true));
+
+    check('pp-groups: a group approver satisfies coverage (AC-327)', ppApprovalCoverageError($comp()) === null);
+    dbRun('DELETE FROM access_group_members WHERE group_id=? AND user_id=?', [$g, $glv]);
+    check('pp-groups: removing the only eligible member leaves the route uncovered (AC-326/327)', ppApprovalCoverageError($comp()) !== null);
+    dbRun('INSERT INTO access_group_members (group_id, user_id) VALUES (?, ?)', [$g, $glv]);
+
+    $eff = ppEffectiveAccess($u($glv), $comp());
+    $approveVia = implode(' ', array_map(fn($c) => $c['via'], array_filter($eff['contributors'], fn($c) => $c['capability'] === 'approve')));
+    check('pp-groups: effective access explains Approve via the group (AC-325)', strpos($approveVia, 'Camp Leads') !== false);
+
+    dbRun("UPDATE access_groups SET expires_at='2000-01-01 00:00:00' WHERE id=?", [$g]);
+    check('pp-groups: an expired group grants nothing (AC-326)', !in_array('approve', ppUserCapabilities($u($glv), $comp())));
 }
 
 // Forms part 3: on-behalf completion (recorded, not impersonated) + required file

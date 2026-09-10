@@ -1333,6 +1333,29 @@ CREATE TABLE IF NOT EXISTS pp_access_assignments (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_pp_access_comp ON pp_access_assignments(competition_id, capability);
+-- Shared admin-defined access groups (FRD PP2.5 s17.3 / FR-PP-018): a named collection of
+-- authenticated users maintained by administrators, independent of the members' portal
+-- roles. A shared 7thPortal access primitive (Patrol Points is the first consumer); group
+-- membership grants nothing until a module assigns a capability to the group. Retired
+-- groups are kept (not deleted) so historical assignment/audit references survive.
+CREATE TABLE IF NOT EXISTS access_groups (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  description TEXT,
+  expires_at TEXT,
+  retired INTEGER NOT NULL DEFAULT 0,
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS access_group_members (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  group_id INTEGER NOT NULL REFERENCES access_groups(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(group_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_access_group_members ON access_group_members(group_id);
 -- Demo/UAT feedback (Test Environment pack DEMO-FB): testers leave feedback from
 -- any page in demo mode - persona, page, device, rating, category and comment.
 CREATE TABLE IF NOT EXISTS demo_feedback (

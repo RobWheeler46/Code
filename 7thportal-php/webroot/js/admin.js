@@ -730,7 +730,7 @@ async function renderFeatures() {
 async function renderSettings() {
   const box = document.getElementById('tab-content');
   box.innerHTML = '<p class="muted">Loading&hellip;</p>';
-  const [settings, sectionsResp, dlv, email] = await Promise.all([Api.get('/api/admin/settings'), getSections(), Api.get('/api/admin/dlv-settings').catch(() => null), Api.get('/api/admin/email-settings').catch(() => null)]);
+  const [settings, sectionsResp, dlv, email, groupsResp] = await Promise.all([Api.get('/api/admin/settings'), getSections(), Api.get('/api/admin/dlv-settings').catch(() => null), Api.get('/api/admin/email-settings').catch(() => null), Api.get('/api/access/groups').catch(() => null)]);
   const sections = sectionsResp.sections || [];
   const visible = settings.visibleSectionIds;
 
@@ -780,6 +780,7 @@ async function renderSettings() {
         <div id="em-test-msg" style="margin-top:.6rem"></div>
       </div>
     </div>` : ''}
+    ${groupsResp ? accessGroupsCardHtml(groupsResp) : ''}
     <div class="card">
       <h2>Visible sections</h2>
       <p class="muted">Limit which sections appear on leader dashboards - useful for a phased rollout (FRD FR-057). Leave everything unticked to show all sections a leader is permitted to see in OSM.</p>
@@ -1063,6 +1064,7 @@ async function renderSettings() {
       } finally { btn.disabled = false; btn.textContent = 'Send test email'; }
     });
   }
+  if (groupsResp) wireAccessGroups(groupsResp);
   async function wireDemoReset() {
     let cfg; try { cfg = await Api.get('/api/config'); } catch (e) { return; }
     if (!cfg || !cfg.demoModeAllowed) return; // demo/test environments only
@@ -1385,4 +1387,70 @@ async function renderAudit() {
         <td>${escapeHtml(e.ipAddress || '')}</td>
       </tr>`).join('')}</tbody>
   </table></div>`;
+}
+
+// ── Shared admin-defined access groups (FRD PP2.5 s17.3) ─────────────────────────
+function accessGroupsCardHtml(g) {
+  const esc = escapeHtml;
+  const rows = (g.groups || []).map(gr => `
+    <tr><td class="rcard-title"><strong>${esc(gr.name)}</strong>${gr.retired ? ' <span class="badge" data-status="archived">retired</span>' : (gr.active ? '' : ' <span class="badge" data-status="suspended">expired</span>')}${gr.description ? `<br><span class="muted" style="font-size:.8rem">${esc(gr.description)}</span>` : ''}</td>
+      <td data-label="Members">${gr.memberCount}</td><td data-label="Used by">${gr.usageCount}</td>
+      <td data-label="Expiry" class="muted">${gr.expiresAt ? formatDate(gr.expiresAt) : '—'}</td>
+      <td class="rcard-actions"><button class="btn btn-secondary btn-sm ag-members" data-id="${gr.id}">Members</button>${gr.retired ? '' : `<button class="btn btn-secondary btn-sm ag-retire" data-id="${gr.id}">Retire</button>`}</td></tr>
+    <tr class="ag-editor-row" data-id="${gr.id}" hidden><td colspan="5"><div class="ag-editor-slot" data-id="${gr.id}"></div></td></tr>`).join('') || '<tr><td colspan="5" class="muted">No groups yet.</td></tr>';
+  return `<div class="card">
+    <h2>Access groups</h2>
+    <p class="muted">Shared, administrator-defined groups of people, used to grant Patrol Points access. Membership here does not change anyone's portal role and grants nothing until a competition assigns the group a capability.</p>
+    <div class="cap-actions" style="align-items:flex-end">
+      <div class="field"><label>New group name</label><input id="ag-name" placeholder="e.g. Summer Camp Activity Leads"></div>
+      <div class="field"><label>Expiry (optional)</label><input id="ag-expiry" type="date"></div>
+      <button class="btn btn-secondary" id="ag-create">Create group</button>
+    </div>
+    <div id="ag-msg"></div>
+    <table class="data-table rcards" style="margin-top:.6rem"><thead><tr><th>Group</th><th>Members</th><th>Used by</th><th>Expiry</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+}
+
+function wireAccessGroups(g) {
+  const esc = escapeHtml;
+  const msg = (t, err) => { const m = document.getElementById('ag-msg'); if (m) m.innerHTML = `<div class="alert alert-${err ? 'error' : 'success'}">${esc(t)}</div>`; };
+  document.getElementById('ag-create')?.addEventListener('click', async () => {
+    const name = document.getElementById('ag-name').value.trim();
+    if (!name) return msg('A group name is required.', true);
+    try { await Api.post('/api/access/groups', { name, expiresAt: document.getElementById('ag-expiry').value || null }); renderSettings(); }
+    catch (e) { msg(e.message, true); }
+  });
+  document.querySelectorAll('.ag-retire').forEach(b => b.addEventListener('click', async () => {
+    try { await Api.post(`/api/access/groups/${b.dataset.id}/retire`, {}); renderSettings(); } catch (e) { msg(e.message, true); }
+  }));
+  document.querySelectorAll('.ag-members').forEach(b => b.addEventListener('click', async () => {
+    const row = document.querySelector(`.ag-editor-row[data-id="${b.dataset.id}"]`);
+    const slot = document.querySelector(`.ag-editor-slot[data-id="${b.dataset.id}"]`);
+    if (!row.hidden) { row.hidden = true; return; }
+    row.hidden = false;
+    await renderGroupMembers(b.dataset.id, g.people, slot);
+  }));
+}
+
+async function renderGroupMembers(id, people, slot) {
+  const esc = escapeHtml;
+  slot.innerHTML = '<p class="muted">Loading&hellip;</p>';
+  let d; try { d = await Api.get(`/api/access/groups/${id}`); } catch (e) { slot.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`; return; }
+  const memberIds = new Set(d.members.map(m => m.userId));
+  const memberList = d.members.length
+    ? d.members.map(m => `<span class="pp-chip">${esc(m.name)}${m.role ? ` <span class="muted">(${esc(m.role)})</span>` : ''}<button class="pp-chip-x ag-mem-del" data-g="${id}" data-u="${m.userId}" title="Remove">×</button></span>`).join('')
+    : '<span class="muted">No members yet.</span>';
+  const addOpts = (people || []).filter(p => !memberIds.has(p.id)).map(p => `<option value="${p.id}">${esc(p.name)} (${esc(p.role)})</option>`).join('');
+  slot.innerHTML = `<div style="padding:.4rem 0">
+    <p class="muted" style="margin:0 0 .3rem;font-size:.82rem">Members can hold any portal role; membership here does not change it.</p>
+    <div class="pp-chips" style="margin-bottom:.4rem">${memberList}</div>
+    <div class="cap-actions"><select class="ag-add-who">${addOpts}</select><button class="btn btn-secondary btn-sm ag-mem-add" data-g="${id}">Add member</button></div></div>`;
+  slot.querySelector('.ag-mem-add')?.addEventListener('click', async () => {
+    const uid = slot.querySelector('.ag-add-who').value;
+    if (!uid) return;
+    try { await Api.post(`/api/access/groups/${id}/members`, { userId: Number(uid) }); await renderGroupMembers(id, people, slot); } catch (e) { slot.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`; }
+  });
+  slot.querySelectorAll('.ag-mem-del').forEach(x => x.addEventListener('click', async () => {
+    try { await Api.delete(`/api/access/groups/${x.dataset.g}/members/${x.dataset.u}`); await renderGroupMembers(id, people, slot); } catch (e) { slot.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`; }
+  }));
 }

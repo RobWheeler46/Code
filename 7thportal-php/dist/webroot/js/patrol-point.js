@@ -566,7 +566,8 @@ function renderAccessBody() {
       <td class="rcard-actions"><button class="btn btn-secondary btn-sm pp-acc-del" data-i="${i}">Remove</button></td>
     </tr>`).join('') || '<tr><td colspan="3" class="muted">No assignments yet.</td></tr>';
   const whoOpts = ACCESS.approverCandidates.map(u => `<option value="user:${u.id}">${esc(u.name)} (${esc(u.role)})</option>`).join('')
-    + Object.entries(ACCESS.roleOptions).map(([k, v]) => `<option value="role:${k}">${esc(v)} (role)</option>`).join('');
+    + Object.entries(ACCESS.roleOptions).map(([k, v]) => `<option value="role:${k}">${esc(v)} (role)</option>`).join('')
+    + (ACCESS.groups || []).map(g => `<option value="group:${g.id}">${esc(g.name)} (group, ${g.memberCount} member${g.memberCount === 1 ? '' : 's'})</option>`).join('');
   const capOpts = Object.entries(ACCESS.capabilityLabels).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('');
   const presetOpts = (ACCESS.presets || []).map(pr => `<option value="${esc(pr.key)}">${esc(pr.label)}</option>`).join('');
   body.innerHTML = `
@@ -586,6 +587,12 @@ function renderAccessBody() {
       ${acts.length ? `<div class="field"><label>Scope</label><select id="pp-acc-scope"><option value="">Whole competition</option>${acts.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('')}</select></div>` : ''}
       <button class="btn btn-secondary btn-sm" id="pp-acc-add">Add</button>
     </div>
+    <details class="wiz-adv" style="margin-top:.6rem"><summary>Effective access inspector</summary>
+      <p class="field help" style="margin:.2rem 0 .4rem">See a person's effective capabilities in this competition and where each one comes from.</p>
+      <div class="cap-actions" style="align-items:flex-end">
+        <div class="field" style="flex:1 1 12rem"><label>Person</label><select id="pp-eff-who">${(ACCESS.people || []).map(u => `<option value="${u.id}">${esc(u.name)} (${esc(u.role)})</option>`).join('')}</select></div>
+        <button class="btn btn-secondary btn-sm" id="pp-eff-go">Inspect</button></div>
+      <div id="pp-eff-out" style="margin-top:.4rem"></div></details>
     <div id="pp-acc-msg"></div>
     <div class="cap-actions" style="margin-top:.6rem"><button class="btn" id="pp-acc-save">Save access &amp; approvals</button></div>`;
   body.querySelectorAll('.pp-acc-del').forEach(b => b.addEventListener('click', () => { ACCESS_ROWS.splice(+b.dataset.i, 1); renderAccessBody(); }));
@@ -610,6 +617,26 @@ function renderAccessBody() {
     renderAccessBody();
   });
   document.getElementById('pp-acc-save').addEventListener('click', saveAccess);
+  document.getElementById('pp-eff-go')?.addEventListener('click', inspectEffectiveAccess);
+}
+
+async function inspectEffectiveAccess() {
+  const out = document.getElementById('pp-eff-out');
+  const uid = document.getElementById('pp-eff-who').value;
+  out.innerHTML = '<p class="muted">Looking up&hellip;</p>';
+  try {
+    const d = await Api.get(`/api/patrol-points/competitions/${ID}/effective-access?userId=${uid}`);
+    const all = Object.entries(d.capabilityLabels);
+    const rows = all.map(([k, label]) => {
+      const held = d.capabilities.includes(k);
+      const via = d.contributors.filter(c => c.capability === k).map(c => c.via);
+      return `<tr><td class="rcard-title">${esc(label)}</td>
+        <td>${held ? `<span class="badge" data-status="active">granted</span>` : '<span class="muted">not granted</span>'}</td>
+        <td class="muted" style="font-size:.85rem">${held ? esc(via.join('; ') || 'derived') : ''}</td></tr>`;
+    }).join('');
+    out.innerHTML = `<p class="muted" style="margin:.2rem 0">${esc(d.name)} (${esc(d.role)})</p>
+      <table class="data-table rcards" style="margin:0"><thead><tr><th>Capability</th><th>Effective</th><th>Via</th></tr></thead><tbody>${rows}</tbody></table>`;
+  } catch (e) { out.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`; }
 }
 async function saveAccess() {
   const msg = document.getElementById('pp-acc-msg');
