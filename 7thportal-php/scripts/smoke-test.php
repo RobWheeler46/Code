@@ -1325,19 +1325,38 @@ function scenario_logic_osm_discovery(): void
     check('osmd-live: a failed startup probe is Error, not Unavailable (AC-332)', osmdClassifyFromStartup(['ok' => false, 'error' => 'probe_failed:boom', 'sections' => [], 'terms' => [], 'globals' => []], 'programme')['status'] === 'error');
     check('osmd-live: no live token yields Unknown, not Unavailable (AC-332)', osmdClassifyFromStartup(['ok' => false, 'error' => 'no_live_token', 'sections' => [], 'terms' => [], 'globals' => []], 'members')['status'] === 'unknown');
 
-    // Member probe: a real (injected) contact-grid read lights up Members - counts only,
-    // never names/personal data, scoped to the sections that returned.
-    $memReader = fn($tok, $sid, $termId) => ['ok' => true, 'count' => $sid === 's101' ? 12 : 8, 'members' => [['name' => 'SHOULD NOT BE STORED']]];
-    $mem = osmdProbeMembers('live-token', $startupOk, 'extended', $memReader);
-    check('osmd-live: member probe lights up Members with a count, scoped to sections', $mem['status'] === 'available' && count($mem['scope']) === 2);
-    check('osmd-live: member probe retains counts only, no names/personal data (FR-OSMD-007)', strpos(json_encode($mem), 'SHOULD NOT BE STORED') === false && strpos($mem['evidence']['detail'], '20 member') !== false);
-    // A blocked/throttled read is Error, never Unavailable; no token is Unknown.
-    check('osmd-live: a blocked member read is Error, not Unavailable (AC-332)', osmdProbeMembers('live-token', $startupOk, 'extended', fn($t, $s, $tm) => ['ok' => false, 'blocked' => true])['status'] === 'error');
-    check('osmd-live: member probe with no token is Unknown, not Unavailable (AC-332)', osmdProbeMembers(null, $startupOk, 'safe', $memReader)['status'] === 'unknown');
-    // Safe mode samples a subset; extended covers all - a 2-section fixture returns both either way,
-    // so assert the sample note appears only when sections exceed the safe cap.
-    $bigStartup = $startupOk; for ($i = 0; $i < 6; $i++) { $bigStartup['sections']["s20$i"] = "Extra $i"; $bigStartup['terms']["s20$i"] = [['termid' => "x$i", 'startdate' => '2000-01-01', 'enddate' => '2100-01-01']]; }
-    check('osmd-live: safe mode reads a representative sample of sections', strpos(osmdProbeMembers('t', $bigStartup, 'safe', fn($t, $s, $tm) => ['ok' => true, 'count' => 1])['evidence']['detail'], 'representative sample') !== false);
+    // Live-read gather: one pass reads members/events/programme/badges (counts only) and
+    // lights up Members, Patrols, Events, Programme, Badges and a Census/capacity proxy.
+    $startupOk['sectionTypes'] = ['s101' => 'cubs', 's102' => 'scouts'];
+    $readers = [
+        // The member reader also returns a personal-data marker the gather must ignore.
+        'members' => fn($t, $s, $tm, $ty) => ['ok' => true, 'count' => $s === 's101' ? 12 : 8, 'patrols' => 2, 'members' => [['name' => 'ZZLEAKZZ']]],
+        'events' => fn($t, $s, $tm, $ty) => ['ok' => true, 'count' => 3],
+        'programme' => fn($t, $s, $tm, $ty) => ['ok' => true, 'count' => 5],
+        'badges' => fn($t, $s, $tm, $ty) => ['ok' => true, 'count' => 20],
+    ];
+    $g = osmdLiveGather('live-token', $startupOk, 'extended', $readers);
+    $cl = fn($cap) => osmdClassifyLive($cap, $startupOk, $g, 'extended');
+    check('osmd-live: members read lights up with a total count, scoped to sections', $cl('members')['status'] === 'available' && count($cl('members')['scope']) === 2 && strpos($cl('members')['evidence']['detail'], '20 member') !== false);
+    check('osmd-live: gather retains counts only - a member name marker never reaches the aggregate or result (FR-OSMD-007)', strpos(json_encode($g), 'ZZLEAKZZ') === false && strpos(json_encode($cl('members')), 'ZZLEAKZZ') === false);
+    check('osmd-live: patrols derived from the member grid (no extra call)', $cl('patrols')['status'] === 'available' && $cl('patrols')['scope'] === ['Cubs', 'Scouts']);
+    check('osmd-live: events read lights up Events with a count', $cl('events')['status'] === 'available' && strpos($cl('events')['evidence']['detail'], '6 event') !== false);
+    check('osmd-live: programme item read upgrades Programme to Available', $cl('programme')['status'] === 'available' && strpos($cl('programme')['evidence']['detail'], '10 programme item') !== false);
+    check('osmd-live: badge catalogue read lights up Badges', $cl('badges')['status'] === 'available');
+    check('osmd-live: census/capacity is a Partial proxy from membership counts', $cl('census_capacity')['status'] === 'partial' && strpos($cl('census_capacity')['evidence']['detail'], '20 across') !== false);
+
+    // Programme with no item read but startup terms present -> falls back to Partial.
+    $gNoProg = osmdLiveGather('t', $startupOk, 'extended', ['members' => fn($t, $s, $tm, $ty) => ['ok' => true, 'count' => 1, 'patrols' => 1], 'events' => fn(...$a) => ['ok' => true, 'count' => 0], 'programme' => fn(...$a) => ['ok' => false], 'badges' => fn(...$a) => ['ok' => false]]);
+    check('osmd-live: programme falls back to Partial (term metadata) when no item read', osmdClassifyLive('programme', $startupOk, $gNoProg, 'extended')['status'] === 'partial');
+
+    // A blocked read stops the pass and is Error, never Unavailable; no token is Unknown.
+    $gBlocked = osmdLiveGather('t', $startupOk, 'extended', ['members' => fn(...$a) => ['ok' => false, 'blocked' => true]]);
+    check('osmd-live: a blocked read is Error, not Unavailable, and halts the pass (AC-332)', $gBlocked['blocked'] === true && osmdClassifyLive('members', $startupOk, $gBlocked, 'extended')['status'] === 'error');
+    check('osmd-live: no token yields Unknown across live reads, not Unavailable (AC-332)', osmdClassifyLive('members', $startupOk, osmdLiveGather(null, $startupOk, 'safe', $readers), 'safe')['status'] === 'unknown');
+
+    // Safe mode samples a subset of sections (representative), Extended covers all.
+    $bigStartup = $startupOk; for ($i = 0; $i < 6; $i++) { $bigStartup['sections']["s20$i"] = "Extra $i"; $bigStartup['terms']["s20$i"] = [['termid' => "x$i", 'startdate' => '2000-01-01', 'enddate' => '2100-01-01']]; $bigStartup['sectionTypes']["s20$i"] = 'cubs'; }
+    check('osmd-live: safe mode reads a representative sample of sections', strpos(osmdClassifyLive('members', $bigStartup, osmdLiveGather('t', $bigStartup, 'safe', $readers), 'safe')['evidence']['detail'], 'representative sample') !== false);
 }
 
 // Forms part 3: on-behalf completion (recorded, not impersonated) + required file

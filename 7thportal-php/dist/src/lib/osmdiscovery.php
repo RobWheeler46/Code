@@ -179,50 +179,136 @@ function osmdFetchStartupWith(?string $token): array
     try {
         $g = osmGetStartupData($token)['data']['globals'] ?? [];
         $sections = [];
+        $sectionTypes = [];
         foreach ((is_array($g['roles'] ?? null) ? $g['roles'] : []) as $r) {
-            if (!empty($r['sectionid'])) $sections[(string) $r['sectionid']] = $r['sectionname'] ?? ('Section ' . $r['sectionid']);
+            if (!empty($r['sectionid'])) {
+                $sections[(string) $r['sectionid']] = $r['sectionname'] ?? ('Section ' . $r['sectionid']);
+                $sectionTypes[(string) $r['sectionid']] = $r['section'] ?? null; // cubs/scouts/... - needed for badge reads
+            }
         }
-        return ['ok' => true, 'globals' => $g, 'sections' => $sections, 'terms' => is_array($g['terms'] ?? null) ? $g['terms'] : [], 'error' => null];
+        return ['ok' => true, 'globals' => $g, 'sections' => $sections, 'sectionTypes' => $sectionTypes, 'terms' => is_array($g['terms'] ?? null) ? $g['terms'] : [], 'error' => null];
     } catch (Throwable $e) {
         return ['ok' => false, 'globals' => [], 'sections' => [], 'terms' => [], 'error' => 'probe_failed:' . osmdRedactMessage($e->getMessage())];
     }
 }
 
-// Representative member probe: for each accessible section, resolve the current term and
-// read the contact grid, keeping ONLY a count - never names, DOB, contact or medical data
-// (FR-OSMD-007, data minimisation). Safe mode samples the first few sections; Extended
-// covers all. $reader is injectable for testing (defaults to the live osmGridMembers).
-function osmdProbeMembers(?string $token, array $startup, string $mode = 'safe', ?callable $reader = null): array
+// Read helpers normalised to {ok, count, blocked?, patrols?} so the gather loop is
+// uniform and each real OSM read stays in one place. Counts only - no rows retained.
+function osmdNormMembers(array $r): array
 {
-    $ev = fn($status, $scope, $class, $detail) => ['status' => $status, 'scope' => $scope, 'evidence' => ['class' => $class, 'detail' => $detail], 'response_class' => $class, 'duration_ms' => 1];
-    if (!empty($startup['error'])) {
-        if ($startup['error'] === 'no_live_token') return $ev('unknown', [], 'no_evidence', 'No live token available to read members');
-        return $ev('error', [], 'error', 'Member read skipped after a failed startup probe');
+    if (empty($r['ok'])) return ['ok' => false, 'blocked' => !empty($r['blocked'])];
+    $patrols = [];
+    foreach (($r['members'] ?? []) as $m) { $p = $m['patrol'] ?? null; if ($p) $patrols[$p] = true; }
+    return ['ok' => true, 'count' => (int) ($r['count'] ?? count($r['members'] ?? [])), 'patrols' => count($patrols)];
+}
+function osmdNormItems(array $r): array
+{
+    // osmGetSectionEvents / osmGetSectionProgramme return ['available'=>bool,'items'=>[...]].
+    if (empty($r['available'])) return ['ok' => false];
+    return ['ok' => true, 'count' => count($r['items'] ?? [])];
+}
+function osmdReadBadges(?string $token, ?string $type, string $sid, ?string $termId): array
+{
+    if (!$token || !$termId) return ['ok' => false];
+    try {
+        $resp = osmGet($token, '/ext/badges/records/', ['action' => 'getAvailableBadges', 'section' => $type, 'section_id' => $sid, 'term_id' => $termId, 'type_id' => '1', 'context' => 'none']);
+        $data = $resp['data'] ?? [];
+        return ['ok' => true, 'count' => is_array($data) ? count($data) : 0];
+    } catch (Throwable $e) {
+        return ['ok' => false];
     }
-    if (!$token) return $ev('unknown', [], 'no_evidence', 'No live token available to read members');
-    $reader = $reader ?? 'osmGridMembers';
-    $limit = $mode === 'extended' ? 100 : 3; // representative sample in safe mode
-    $covered = []; $total = 0; $tried = 0; $blocked = false; $errored = false;
+}
+
+// One representative pass over the accessible sections that reads members, events,
+// programme and badges - keeping ONLY counts (FR-OSMD-007, data minimisation). Safe mode
+// samples the first few sections; Extended covers all. A blocked/throttled response stops
+// the pass immediately so OSM is never hammered. $readers is injectable for testing; each
+// returns the normalised {ok,count,...} shape.
+function osmdLiveGather(?string $token, array $startup, string $mode = 'safe', array $readers = []): array
+{
+    $g = [
+        'ran' => false, 'blocked' => false, 'sampled' => false,
+        'members' => ['covered' => [], 'total' => 0, 'error' => false],
+        'patrols' => ['covered' => [], 'total' => 0],
+        'events' => ['covered' => [], 'total' => 0, 'error' => false],
+        'programme' => ['covered' => [], 'total' => 0, 'error' => false],
+        'badges' => ['covered' => [], 'total' => 0, 'error' => false],
+    ];
+    if (!$token || empty($startup['ok'])) return $g;
+    $g['ran'] = true;
+    $R = [
+        'members' => $readers['members'] ?? fn($t, $s, $tm, $ty) => osmdNormMembers(osmGridMembers($t, $s, $tm)),
+        'events' => $readers['events'] ?? fn($t, $s, $tm, $ty) => osmdNormItems(osmGetSectionEvents($t, $s)),
+        'programme' => $readers['programme'] ?? fn($t, $s, $tm, $ty) => osmdNormItems(osmGetSectionProgramme($t, $s, $tm)),
+        'badges' => $readers['badges'] ?? fn($t, $s, $tm, $ty) => osmdReadBadges($t, $ty, $s, $tm),
+    ];
+    $limit = $mode === 'extended' ? 100 : 3;
+    $i = 0;
     foreach ($startup['sections'] as $sid => $name) {
-        if ($tried >= $limit) break;
+        if ($i >= $limit) { $g['sampled'] = true; break; }
+        $i++;
         $term = function_exists('osmCurrentTermFromData') ? osmCurrentTermFromData($startup['terms'], (string) $sid) : null;
         $termId = is_array($term) ? ($term['termId'] ?? null) : null;
-        if (!$termId) continue; // cannot read members without a term
-        $tried++;
-        try {
-            $r = $reader($token, (string) $sid, (string) $termId);
-        } catch (Throwable $e) { $errored = true; continue; }
-        if (!empty($r['ok'])) { $covered[] = $name; $total += (int) ($r['count'] ?? 0); }
-        elseif (!empty($r['blocked'])) { $blocked = true; }
-        else { $errored = true; }
+        $type = $startup['sectionTypes'][(string) $sid] ?? null;
+        foreach (['members', 'events', 'programme', 'badges'] as $cap) {
+            if ($cap !== 'events' && !$termId) continue; // members/programme/badges need a term
+            try {
+                $r = $R[$cap]($token, (string) $sid, $termId, $type);
+            } catch (Throwable $e) { $g[$cap]['error'] = true; continue; }
+            if (!empty($r['blocked'])) { $g['blocked'] = true; break 2; } // stop hammering OSM
+            if (!empty($r['ok'])) {
+                $g[$cap]['covered'][] = $name;
+                $g[$cap]['total'] += (int) ($r['count'] ?? 0);
+                if ($cap === 'members' && !empty($r['patrols'])) { $g['patrols']['total'] += (int) $r['patrols']; $g['patrols']['covered'][] = $name; }
+            } else {
+                $g[$cap]['error'] = true;
+            }
+        }
     }
-    if ($covered) {
-        $sampled = ($mode !== 'extended' && count($startup['sections']) > $limit) ? ' (representative sample)' : '';
-        return $ev('available', $covered, 'ok', $total . ' member reference(s) readable across ' . count($covered) . ' section(s)' . $sampled . '; counts only, no names/DOB/contact/medical retained');
+    return $g;
+}
+
+// Classify a live-read capability from the gathered aggregate. Counts and section scope
+// only; a blocked read is Error, a missing token/term Unknown - never Unavailable (AC-332).
+function osmdClassifyLive(string $cap, array $startup, array $g, string $mode = 'safe'): array
+{
+    $ev = fn($status, $scope, $class, $detail) => ['status' => $status, 'scope' => $scope, 'evidence' => ['class' => $class, 'detail' => $detail], 'response_class' => $class, 'duration_ms' => 1];
+    if (empty($g['ran'])) {
+        if (($startup['error'] ?? '') === 'no_live_token') return $ev('unknown', [], 'no_evidence', 'No live token available to probe this capability');
+        if (!empty($startup['error'])) return $ev('error', [], 'error', 'Live read skipped after a failed startup probe');
+        return $ev('unknown', [], 'no_evidence', 'Not probed');
     }
-    if ($blocked) return $ev('error', [], 'rate_limited', 'OSM blocked or throttled the member read; capability not confirmed');
-    if ($errored) return $ev('error', [], 'error', 'The member read failed; capability not confirmed');
-    return $ev('unknown', [], 'no_evidence', 'No section with a current term was available to read members');
+    $note = !empty($g['sampled']) ? ' (representative sample)' : '';
+    $n = fn($cap2) => count($g[$cap2]['covered']);
+    switch ($cap) {
+        case 'members':
+            if ($g['members']['covered']) return $ev('available', $g['members']['covered'], 'ok', $g['members']['total'] . ' member reference(s) across ' . $n('members') . ' section(s)' . $note . '; counts only, no names/DOB/contact/medical retained');
+            if ($g['blocked']) return $ev('error', [], 'rate_limited', 'OSM blocked or throttled the member read; capability not confirmed');
+            if ($g['members']['error']) return $ev('error', [], 'error', 'The member read failed; capability not confirmed');
+            return $ev('unknown', [], 'no_evidence', 'No section with a current term was available to read members');
+        case 'patrols':
+            return $g['patrols']['covered']
+                ? $ev('available', $g['patrols']['covered'], 'ok', $g['patrols']['total'] . ' patrol/six grouping(s) across ' . $n('patrols') . ' section(s)' . $note . '; counts only')
+                : $ev('unknown', [], 'no_evidence', 'No patrol/six groupings were present in the member read');
+        case 'events':
+            if ($g['events']['covered']) return $ev('available', $g['events']['covered'], 'ok', $g['events']['total'] . ' event(s) readable across ' . $n('events') . ' section(s)' . $note);
+            if ($g['blocked']) return $ev('error', [], 'rate_limited', 'OSM blocked or throttled the events read');
+            if ($g['events']['error']) return $ev('error', [], 'error', 'The events read failed');
+            return $ev('unknown', [], 'no_evidence', 'Events were not probed');
+        case 'programme':
+            if ($g['programme']['covered']) return $ev('available', $g['programme']['covered'], 'ok', $g['programme']['total'] . ' programme item(s) readable across ' . $n('programme') . ' section(s)' . $note);
+            return osmdClassifyFromStartup($startup, 'programme', $mode); // fall back to term metadata (Partial)
+        case 'badges':
+            if ($g['badges']['covered']) return $ev('available', $g['badges']['covered'], 'ok', 'Badge catalogue readable across ' . $n('badges') . ' section(s)' . $note . ' (' . $g['badges']['total'] . ' badge records sampled)');
+            if ($g['blocked']) return $ev('error', [], 'rate_limited', 'OSM blocked or throttled the badge read');
+            if ($g['badges']['error']) return $ev('error', [], 'error', 'The badge read failed');
+            return $ev('unknown', [], 'no_evidence', 'Badges were not probed');
+        case 'census_capacity':
+            return $g['members']['covered']
+                ? $ev('partial', $g['members']['covered'], 'ok', 'Aggregate membership counts available (' . $g['members']['total'] . ' across ' . $n('members') . ' section(s))' . $note . '; full census breakdown not read')
+                : $ev('unknown', [], 'no_evidence', 'No membership counts available to derive capacity');
+    }
+    return $ev('unknown', [], 'no_evidence', 'Not probed');
 }
 
 // Pure classifier: resolve one capability from an already-fetched startup state. Kept
@@ -281,9 +367,13 @@ function osmdMakeLiveProvider(?array $actor = null, string $tokenSource = 'servi
         $state['token'] = (empty($tok['unavailable']) && !empty($tok['token']) && $tok['token'] !== 'demo') ? $tok['token'] : null;
         $state['startup'] = osmdFetchStartupWith($state['token']);
     };
-    return function (string $capKey, array $ctx, string $mode) use (&$state, $ensure) {
+    $liveCaps = ['members', 'patrols', 'events', 'programme', 'badges', 'census_capacity'];
+    return function (string $capKey, array $ctx, string $mode) use (&$state, $ensure, $liveCaps) {
         $ensure();
-        if ($capKey === 'members') return osmdProbeMembers($state['token'], $state['startup'], $mode);
+        if (in_array($capKey, $liveCaps, true)) {
+            if (!array_key_exists('gather', $state)) $state['gather'] = osmdLiveGather($state['token'], $state['startup'], $mode);
+            return osmdClassifyLive($capKey, $state['startup'], $state['gather'], $mode);
+        }
         return osmdClassifyFromStartup($state['startup'], $capKey, $mode);
     };
 }
