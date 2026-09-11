@@ -233,9 +233,17 @@ function ppEffectiveAccess(array $user, array $comp, ?int $activityId = null): a
     $held = ppUserCapabilities($user, $comp, $activityId);
     $contrib = [];
     if (!empty($comp['uses_capability_model'])) {
-        // Manager / creator derived grants (not from an assignment row).
-        if ((int) $comp['created_by'] === (int) $user['id']) foreach (['manage', 'manage_access', 'view_detail', 'view_history'] as $c) if (in_array($c, $held, true)) $contrib[] = ['capability' => $c, 'via' => 'competition creator'];
-        elseif (ppCanManage($user)) foreach (['manage', 'view_detail', 'view_history'] as $c) if (in_array($c, $held, true)) $contrib[] = ['capability' => $c, 'via' => 'manager role (' . roleLabel($user['portal_role']) . ')'];
+        // Everyone who can see the competition holds View as a platform baseline.
+        if (in_array('view', $held, true)) $contrib[] = ['capability' => 'view', 'via' => 'platform baseline'];
+        // Manager / creator derived grants (not from an assignment row). Braces matter:
+        // without them the elseif dangles onto the inner `if (in_array...)` and the
+        // manager-role branch never runs for a non-creator manager (their manage /
+        // view_detail / view_history would then show with no contributor).
+        if ((int) $comp['created_by'] === (int) $user['id']) {
+            foreach (['manage', 'manage_access', 'view_detail', 'view_history'] as $c) if (in_array($c, $held, true)) $contrib[] = ['capability' => $c, 'via' => 'competition creator'];
+        } elseif (ppCanManage($user)) {
+            foreach (['manage', 'view_detail', 'view_history'] as $c) if (in_array($c, $held, true)) $contrib[] = ['capability' => $c, 'via' => 'manager role (' . roleLabel($user['portal_role']) . ')'];
+        }
         // Assignment-derived grants (role / group / person), scope-and-ceiling filtered.
         $sectionIds = function_exists('sectionsUserSectionIds') ? sectionsUserSectionIds($user) : [];
         foreach (dbAll('SELECT * FROM pp_access_assignments WHERE competition_id = ?', [$comp['id']]) as $a) {

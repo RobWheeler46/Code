@@ -779,7 +779,14 @@ function ppDecide(string $action, string $newStatus, $params): void
     $s = dbGet('SELECT * FROM pp_submissions WHERE id = ?', [(int) $params['sid']]);
     if (!$s || (int) $s['competition_id'] !== (int) $params['id']) jsonResponse(['error' => 'Submission not found.'], 404);
     if ($s['status'] !== 'pending') jsonResponse(['error' => 'This submission has already been decided.'], 409);
-    if (!ppCanApprove($user, $s)) jsonResponse(['error' => 'You cannot approve your own submission.'], 403);
+    if (!ppCanApprove($user, $s)) {
+        // Two distinct reasons ppCanApprove denies: it is the user's own submission,
+        // or the user no longer holds Approve here (e.g. removed from an approver group).
+        $msg = ((int) $s['submitted_by'] === (int) $user['id'])
+            ? 'You cannot approve your own submission.'
+            : 'You do not have permission to approve scores in this competition.';
+        jsonResponse(['error' => $msg], 403);
+    }
     $comment = trim((string) (requestBody()['comment'] ?? '')) ?: null;
     if (in_array($action, ['reject', 'return'], true) && !$comment) jsonResponse(['error' => 'A comment is required to reject or return a submission.'], 422);
     dbRun("UPDATE pp_submissions SET status = ?, decided_by = ?, decided_at = datetime('now'), decision_comment = ? WHERE id = ?", [$newStatus, $user['id'], $comment, $s['id']]);

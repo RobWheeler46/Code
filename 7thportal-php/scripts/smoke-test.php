@@ -1194,6 +1194,19 @@ function scenario_logic_pp_groups(): void
     $eff = ppEffectiveAccess($u($glv), $comp());
     $approveVia = implode(' ', array_map(fn($c) => $c['via'], array_filter($eff['contributors'], fn($c) => $c['capability'] === 'approve')));
     check('pp-groups: effective access explains Approve via the group (AC-325)', strpos($approveVia, 'Camp Leads') !== false);
+    // Every held capability must name a contributor - glv is also a manager role, so its
+    // manage / view_detail / view_history baseline caps must be attributed too, not left blank.
+    $capsWithVia = array_column($eff['contributors'], 'capability');
+    check('pp-groups: every effective capability names a contributor (AC-325)', count(array_diff($eff['capabilities'], $capsWithVia)) === 0);
+    check('pp-groups: a non-creator manager\'s baseline Manage is attributed to the manager role (AC-325)', (bool) array_filter($eff['contributors'], fn($c) => $c['capability'] === 'manage' && strpos($c['via'], 'manager role') !== false));
+
+    // Removing a group member drops future Approve but is NOT a self-approval case:
+    // ppCanApprove denies on lost capability, and the submitter is someone else.
+    $sid = (int) dbRun("INSERT INTO pp_submissions (competition_id,category_id,submitted_by,comment,status) VALUES (?, (SELECT id FROM pp_categories WHERE competition_id=? LIMIT 1), ?, 'x', 'pending')", [$cid, $cid, $sl])['lastInsertId'];
+    dbRun('DELETE FROM access_group_members WHERE group_id=? AND user_id=?', [$g, $glv]);
+    $sub = dbGet('SELECT * FROM pp_submissions WHERE id=?', [$sid]);
+    check('pp-groups: removed member cannot approve another\'s submission, and it is not their own (AC-326)', ppCanApprove($u($glv), $sub) === false && (int) $sub['submitted_by'] !== $glv);
+    dbRun('INSERT INTO access_group_members (group_id, user_id) VALUES (?, ?)', [$g, $glv]);
 
     dbRun("UPDATE access_groups SET expires_at='2000-01-01 00:00:00' WHERE id=?", [$g]);
     check('pp-groups: an expired group grants nothing (AC-326)', !in_array('approve', ppUserCapabilities($u($glv), $comp())));
