@@ -78,8 +78,14 @@ async function renderSummary() {
   (ch.statusChanged || []).forEach(c => changeRows.push(`<div class="chg">~ ${esc(capLabel(d, c.key))}: ${esc(statusLabel(c.from))} &rarr; ${esc(statusLabel(c.to))}</div>`));
   (ch.scopeChanged || []).forEach(k => changeRows.push(`<div class="chg">~ ${esc(capLabel(d, k))}: scope changed</div>`));
 
+  // A "read as me" run that returned no accessible sections is not a failure - the
+  // signed-in person's OSM identity simply carries no section roles. Guide, don't alarm.
+  const emptyMeRun = d.lastRun && d.lastRun.context && d.lastRun.context.readVia === 'me'
+    && (d.lastRun.summary && Number(d.lastRun.summary.sections) === 0);
+
   box().innerHTML = `
     ${d.stale ? '<div class="alert alert-warning">The most recent discovery run did not complete, so the capabilities below are the last known state and may be stale.</div>' : ''}
+    ${emptyMeRun ? '<div class="alert alert-info">This run read as an administrator OSM sign-in, which returned no accessible sections &mdash; that OSM account holds no section roles. Use the service connection for a full check, or sign in as a leader whose OSM account has section access.</div>' : ''}
     <div class="card">
       <h2>Connection</h2>
       <p>${esc((d.context && d.context.account) || 'OSM context')}${d.context && d.context.demo ? ' <span class="badge" data-status="draft">demo</span>' : ''}
