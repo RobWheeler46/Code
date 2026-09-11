@@ -1305,14 +1305,25 @@ function scenario_logic_osm_discovery(): void
     // AC-341 / AC-318 equivalent: discovery status never enables a feature or grants access.
     check('osmd: Available does not imply feature enablement (AC-341)', osmdFeatureReadinessFor('available') === 'ready' && osmdFeatureReadinessFor('partial') !== 'ready' && osmdFeatureReadinessFor('permission_limited') !== 'ready');
 
-    // AC-330/331/335: on a LIVE connection with no real read adapter, the provider must not
-    // fabricate Available from demo evidence. Only the established session (identity) is
-    // Available; every data-read capability is Unknown, never Available with no tested scope.
+    // AC-330/331/335: the DEMO-evidence provider must not fabricate Available on a live
+    // context - defensive guard (identity Available, every data-read capability Unknown).
     $liveCtx = ['account' => 'Connected OSM context', 'sections' => [], 'connected' => true, 'authFresh' => true, 'demo' => false];
-    $liveRun = osmdRunDiscovery($admin, 'extended', null, null, $liveCtx);
+    $liveRun = osmdRunDiscovery($admin, 'extended', null, 'osmdDefaultProvider', $liveCtx);
     $liveRes = array_column(array_map(fn($r) => ['k' => $r['capability_key'], 's' => $r['status']], dbAll('SELECT capability_key, status FROM osm_discovery_results WHERE run_id=?', [$liveRun])), 's', 'k');
-    $liveAvailable = array_keys(array_filter($liveRes, fn($s) => $s === 'available'));
-    check('osmd: a live run does not fabricate Available from demo evidence (AC-330/331/335)', $liveAvailable === ['identity_session'] && ($liveRes['programme'] ?? '') === 'unknown' && ($liveRes['badges'] ?? '') === 'unknown');
+    check('osmd: demo provider does not fabricate Available on a live context (AC-330/331/335)', array_keys(array_filter($liveRes, fn($s) => $s === 'available')) === ['identity_session'] && ($liveRes['badges'] ?? '') === 'unknown');
+
+    // Live startup probe classifier: from one real startup payload it evidences identity,
+    // the accessible sections and (via term metadata) programme + connector rate limits;
+    // every capability needing a further blocked read stays Unknown, never Unavailable.
+    $startupOk = ['ok' => true, 'error' => null, 'globals' => ['user_id' => 'u1', 'roles' => [['sectionid' => 's101', 'sectionname' => 'Cubs'], ['sectionid' => 's102', 'sectionname' => 'Scouts']]],
+        'sections' => ['s101' => 'Cubs', 's102' => 'Scouts'], 'terms' => ['s101' => [['termid' => 't1', 'startdate' => '2000-01-01', 'enddate' => '2100-01-01']], 's102' => [['termid' => 't2', 'startdate' => '2000-01-01', 'enddate' => '2100-01-01']]]];
+    $cf = fn($k) => osmdClassifyFromStartup($startupOk, $k);
+    check('osmd-live: startup evidences identity, sections (scoped) and rate limits (AC-331)', $cf('identity_session')['status'] === 'available' && $cf('sections')['status'] === 'available' && count($cf('sections')['scope']) === 2 && $cf('rate_limits')['status'] === 'available');
+    check('osmd-live: startup term metadata makes programme Partial, not a full read', $cf('programme')['status'] === 'partial' && count($cf('programme')['scope']) === 2);
+    check('osmd-live: a read the startup does not cover is Unknown, never fabricated (AC-332)', $cf('members')['status'] === 'unknown' && $cf('badges')['status'] === 'unknown' && $cf('events')['status'] === 'unknown');
+    // A failed startup is Error (not Unavailable); no token is Unknown (not Unavailable).
+    check('osmd-live: a failed startup probe is Error, not Unavailable (AC-332)', osmdClassifyFromStartup(['ok' => false, 'error' => 'probe_failed:boom', 'sections' => [], 'terms' => [], 'globals' => []], 'programme')['status'] === 'error');
+    check('osmd-live: no live token yields Unknown, not Unavailable (AC-332)', osmdClassifyFromStartup(['ok' => false, 'error' => 'no_live_token', 'sections' => [], 'terms' => [], 'globals' => []], 'members')['status'] === 'unknown');
 }
 
 // Forms part 3: on-behalf completion (recorded, not impersonated) + required file

@@ -150,18 +150,104 @@ function osmdDefaultProvider(string $capKey, array $ctx, string $mode): array
     ];
 }
 
+// ── Live probe adapter (startup call) ─────────────────────────────────────────
+// OSM tolerates one read from the server: the startup payload (/ext/generic/startup/,
+// action=getDataPayload). It carries the connected identity, the accessible sections
+// (via roles) and per-section term metadata - enough to genuinely evidence a handful of
+// capabilities. Everything else needs a further /ext read that is blocked from the server
+// IP, so it stays Unknown, never Unavailable (AC-332). Cached once per request so a full
+// run makes a single startup call, not one per capability.
+function osmdFetchStartupOnce(): array
+{
+    static $cache = null;
+    if ($cache !== null) return $cache;
+    $cache = ['ok' => false, 'globals' => [], 'sections' => [], 'terms' => [], 'error' => 'no_live_token'];
+    try {
+        $svc = function_exists('getServiceAccount') ? getServiceAccount() : null;
+        $tok = ($svc && function_exists('osmDataReadTokenFor')) ? osmDataReadTokenFor($svc) : ['unavailable' => true];
+        if (!empty($tok['unavailable']) || empty($tok['token']) || $tok['token'] === 'demo') {
+            $cache['error'] = 'no_live_token';
+            return $cache;
+        }
+        $startup = osmGetStartupData($tok['token']);      // the one tolerated /ext read
+        $g = $startup['data']['globals'] ?? [];
+        $sections = [];
+        foreach ((is_array($g['roles'] ?? null) ? $g['roles'] : []) as $r) {
+            if (!empty($r['sectionid'])) $sections[(string) $r['sectionid']] = $r['sectionname'] ?? ('Section ' . $r['sectionid']);
+        }
+        $cache = ['ok' => true, 'globals' => $g, 'sections' => $sections, 'terms' => is_array($g['terms'] ?? null) ? $g['terms'] : [], 'error' => null];
+    } catch (Throwable $e) {
+        // A token was present but the call failed: a probe Error, distinct from "no connection".
+        $cache = ['ok' => false, 'globals' => [], 'sections' => [], 'terms' => [], 'error' => 'probe_failed:' . osmdRedactMessage($e->getMessage())];
+    }
+    return $cache;
+}
+
+// Pure classifier: resolve one capability from an already-fetched startup state. Kept
+// separate from the fetch so it is unit-testable with a synthetic payload.
+function osmdClassifyFromStartup(array $s, string $capKey, string $mode = 'safe'): array
+{
+    $ev = fn($status, $scope, $class, $detail) => ['status' => $status, 'scope' => $scope, 'evidence' => ['class' => $class, 'detail' => $detail], 'response_class' => $class, 'duration_ms' => 1];
+    if (!empty($s['error'])) {
+        // No usable startup evidence. A missing token is "no live probe" (Unknown); a
+        // failed call is an Error - never Unavailable merely because the probe failed.
+        if ($s['error'] === 'no_live_token') return $ev('unknown', [], 'no_evidence', 'No live service connection is available to probe this capability');
+        return $ev('error', [], 'error', 'OSM startup probe failed: ' . substr($s['error'], strlen('probe_failed:')));
+    }
+    $sectionNames = array_values($s['sections']);
+    $hasIdentity = !empty($s['globals']['user_id']) || !empty($s['globals']['roles']);
+    switch ($capKey) {
+        case 'identity_session':
+            return $hasIdentity
+                ? $ev('available', [], 'ok', 'Connected identity and roles resolved from the OSM startup payload')
+                : $ev('unknown', [], 'no_evidence', 'Startup payload carried no identity to confirm the session');
+        case 'sections':
+            return $sectionNames
+                ? $ev('available', $sectionNames, 'ok', count($sectionNames) . ' accessible section(s) resolved from startup roles')
+                : $ev('unknown', [], 'no_evidence', 'Startup payload exposed no accessible sections');
+        case 'programme':
+            // Startup carries per-section term metadata, which programme reads depend on.
+            // That is real metadata evidence, but not a full programme-item read: Partial.
+            $withTerm = [];
+            foreach ($s['sections'] as $sid => $name) {
+                if (function_exists('osmCurrentTermFromData') && osmCurrentTermFromData($s['terms'], (string) $sid)) $withTerm[] = $name;
+            }
+            return $withTerm
+                ? $ev('partial', $withTerm, 'ok', 'Section and current-term metadata available from startup; full programme item read not performed')
+                : $ev('unknown', [], 'no_evidence', 'No current-term metadata in startup to confirm programme access');
+        case 'rate_limits':
+            return $ev('available', [], 'ok', 'Startup call completed within connector limits');
+        default:
+            // Members, badges, events, attendance, patrols, parents, etc. all need a
+            // dedicated /ext read the startup call does not provide (and which is blocked
+            // from the server IP): honestly Unknown until a real probe exists (AC-332).
+            return $ev('unknown', [], 'no_evidence', 'Not evidenced by the startup probe; a dedicated read is required and is not available from this connector yet');
+    }
+}
+
+// The live provider used on a real connection: fetch startup once, then classify.
+function osmdMakeLiveProvider(): callable
+{
+    return function (string $capKey, array $ctx, string $mode) {
+        return osmdClassifyFromStartup(osmdFetchStartupOnce(), $capKey, $mode);
+    };
+}
+
 // Run a discovery. $onlyKeys limits to a targeted re-test; $provider is swappable so
 // failure/outage paths are testable. Returns the run id. Enforces one full run per
 // connection at a time (FR-OSMD-012 / AC-342). Pre-flight failures (no connection /
 // auth) leave the prior registry intact and stale rather than overwriting it (AC-337).
 function osmdRunDiscovery(array $actor, string $mode = 'safe', ?array $onlyKeys = null, ?callable $provider = null, ?array $ctxOverride = null): int
 {
-    $provider = $provider ?? 'osmdDefaultProvider';
     $isTargeted = $onlyKeys !== null;
     if (!$isTargeted && dbGet("SELECT 1 FROM osm_discovery_runs WHERE status = 'running'")) {
         throw new RuntimeException('A discovery run is already in progress for this connection.');
     }
     $ctx = $ctxOverride ?? osmdBuildContext();
+    // Choose the default provider from the context: the live startup-based probe on a real
+    // connection, the demo/evidence classifier in the demo/UAT context. An explicit
+    // provider (tests) always wins.
+    if ($provider === null) $provider = empty($ctx['demo']) ? osmdMakeLiveProvider() : 'osmdDefaultProvider';
     $runId = (int) dbRun(
         "INSERT INTO osm_discovery_runs (mode, status, actor_user_id, connector_version, context_json, scope_note, started_at) VALUES (?, 'running', ?, ?, ?, ?, datetime('now'))",
         [$isTargeted ? 'targeted' : $mode, $actor['id'] ?? null, OSMD_CONNECTOR_VERSION, json_encode($ctx), $isTargeted ? implode(',', $onlyKeys) : null]
@@ -205,7 +291,10 @@ function osmdRunDiscovery(array $actor, string $mode = 'safe', ?array $onlyKeys 
         logAudit(['userId' => $actor['id'] ?? null, 'action' => 'osm_discovery_capability_lost', 'entityType' => 'osm_discovery_run', 'entityId' => (string) $runId, 'ipAddress' => clientIp(), 'details' => ['lost' => $changes['lost']]]);
     }
 
-    $sectionsCount = count($ctx['sections'] ?? []);
+    // Sections discovered: the pre-probe context may not enumerate them (live), so prefer
+    // the scope resolved by the 'sections' capability probe, falling back to the context.
+    $secResult = dbGet("SELECT scope_json FROM osm_discovery_results WHERE run_id = ? AND capability_key = 'sections'", [$runId]);
+    $sectionsCount = $secResult ? count(json_decode($secResult['scope_json'] ?? '[]', true) ?: []) : count($ctx['sections'] ?? []);
     $summary = ['counts' => $counts, 'sections' => $sectionsCount, 'mode' => $isTargeted ? 'targeted' : $mode];
     dbRun("UPDATE osm_discovery_runs SET status = 'complete', completed_at = datetime('now'), summary_json = ?, changes_json = ? WHERE id = ?",
         [json_encode($summary), json_encode($changes), $runId]);
