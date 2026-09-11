@@ -113,6 +113,20 @@ function osmdDefaultProvider(string $capKey, array $ctx, string $mode): array
     $entry = $cat[$capKey] ?? null;
     if (!$entry) return ['status' => 'unknown', 'scope' => [], 'evidence' => ['class' => 'no_probe', 'detail' => 'Unknown capability'], 'response_class' => 'excluded', 'duration_ms' => 0];
     $t0 = microtime(true);
+    // On a LIVE connection (not the demo/evidence context) we must not assert the
+    // catalogue's representative classifications as though a real read happened - no live
+    // /ext read adapter is wired yet (and /ext reads are blocked from the server IP), so
+    // there is no probe evidence. Report honestly: the established session proves identity
+    // and connector characteristics; every capability that needs a live data read is
+    // Unknown until a real probe exists (spec s6 - "no reliable probe/evidence"). This
+    // keeps a live run from fabricating Available with no tested scope (AC-330/331/335).
+    if (empty($ctx['demo'])) {
+        $dur = max(1, (int) round((microtime(true) - $t0) * 1000));
+        if ($capKey === 'identity_session') {
+            return ['status' => 'available', 'scope' => [], 'evidence' => ['class' => 'ok', 'detail' => 'Connected identity and roles resolved from the live session context'], 'response_class' => 'ok', 'duration_ms' => $dur];
+        }
+        return ['status' => 'unknown', 'scope' => [], 'evidence' => ['class' => 'no_evidence', 'detail' => 'No live read probe is configured for this connector yet; discovery cannot confirm this capability from the connected context'], 'response_class' => 'no_evidence', 'duration_ms' => $dur];
+    }
     $status = $entry['demo']['status'];
     $evidence = $entry['demo']['evidence'];
     // Extended read validation may resolve a Partial to Available where a representative

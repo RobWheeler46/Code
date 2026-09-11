@@ -1304,6 +1304,15 @@ function scenario_logic_osm_discovery(): void
 
     // AC-341 / AC-318 equivalent: discovery status never enables a feature or grants access.
     check('osmd: Available does not imply feature enablement (AC-341)', osmdFeatureReadinessFor('available') === 'ready' && osmdFeatureReadinessFor('partial') !== 'ready' && osmdFeatureReadinessFor('permission_limited') !== 'ready');
+
+    // AC-330/331/335: on a LIVE connection with no real read adapter, the provider must not
+    // fabricate Available from demo evidence. Only the established session (identity) is
+    // Available; every data-read capability is Unknown, never Available with no tested scope.
+    $liveCtx = ['account' => 'Connected OSM context', 'sections' => [], 'connected' => true, 'authFresh' => true, 'demo' => false];
+    $liveRun = osmdRunDiscovery($admin, 'extended', null, null, $liveCtx);
+    $liveRes = array_column(array_map(fn($r) => ['k' => $r['capability_key'], 's' => $r['status']], dbAll('SELECT capability_key, status FROM osm_discovery_results WHERE run_id=?', [$liveRun])), 's', 'k');
+    $liveAvailable = array_keys(array_filter($liveRes, fn($s) => $s === 'available'));
+    check('osmd: a live run does not fabricate Available from demo evidence (AC-330/331/335)', $liveAvailable === ['identity_session'] && ($liveRes['programme'] ?? '') === 'unknown' && ($liveRes['badges'] ?? '') === 'unknown');
 }
 
 // Forms part 3: on-behalf completion (recorded, not impersonated) + required file
