@@ -4,6 +4,7 @@ import type { Aircraft } from "./aircraft.js";
 import type { AppConfig } from "./config.js";
 import type { Satellite, SatellitePass } from "./satellite.js";
 import type { Insight } from "./insights.js";
+import type { AcarsMessage } from "./acars.js";
 import type { LookNowPrediction } from "./prediction.js";
 
 export type SourceStatus =
@@ -114,6 +115,17 @@ export interface LookNowMessage {
   predictions: LookNowPrediction[];
 }
 
+/**
+ * A new correlated datalink message arrived for an aircraft (FRD v3.9 §WebSocket).
+ * Broadcast only when ACARS display is enabled; the payload already has the
+ * display policy applied (no raw text unless the deployment + user permit it).
+ */
+export interface AircraftMessageMessage {
+  type: "aircraft.message";
+  aircraftId: string;
+  message: AcarsMessage;
+}
+
 export type ServerMessage =
   | AircraftSnapshotMessage
   | ConfigUpdatedMessage
@@ -127,6 +139,7 @@ export type ServerMessage =
   | InsightUpdatedMessage
   | InsightExpiredMessage
   | RouteUpdatedMessage
-  | LookNowMessage;
+  | LookNowMessage
+  | AircraftMessageMessage;
 
 export const WS_PATH = "/ws";

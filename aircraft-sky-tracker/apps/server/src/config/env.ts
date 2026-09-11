@@ -78,6 +78,11 @@ export interface Env {
   airframesUrl: string;
   airframesEnabled: boolean;
   airframesMode: string;
+  /**
+   * Deployment-level permission to expose raw ACARS payloads (FRD v3.9 §Legal /
+   * Deployment Control). Defaults OFF; a user preference can never override it.
+   */
+  acarsAllowRawDisplay: boolean;
   /** Optional Space-Track.org credentials for the orbital-data backup (§77). */
   spaceTrackUser: string | undefined;
   spaceTrackPassword: string | undefined;
@@ -115,6 +120,7 @@ export const env: Env = {
   airframesUrl: str("AIRFRAMES_URL", "https://api.airframes.io/v1"),
   airframesEnabled: (process.env["AIRFRAMES_ENABLED"] || "").toLowerCase() === "true",
   airframesMode: str("AIRFRAMES_MODE", "rest"),
+  acarsAllowRawDisplay: (process.env["ALLOW_RAW_ACARS_DISPLAY"] || "").toLowerCase() === "true",
   spaceTrackUser: process.env["SPACETRACK_USER"] || undefined,
   spaceTrackPassword: process.env["SPACETRACK_PASSWORD"] || undefined,
   googleClientId: process.env["GOOGLE_CLIENT_ID"] || undefined,

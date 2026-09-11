@@ -217,6 +217,8 @@ export function SettingsPage({ onBack }: Props) {
         showSkyInsights: draft.showSkyInsights,
         showLookNow: draft.showLookNow,
         showAviationContext: draft.showAviationContext,
+        showAcarsMessages: draft.showAcarsMessages,
+        acarsDisplayMode: draft.acarsDisplayMode,
         historyEnabled: draft.historyEnabled,
         historyRetentionDays: draft.historyRetentionDays,
         showSatellites: draft.showSatellites,
@@ -633,6 +635,42 @@ export function SettingsPage({ onBack }: Props) {
         />
         Aviation context (airspace, weather, contrail, military — in aircraft details)
       </label>
+
+      <h2>Flight intelligence</h2>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={draft.showAcarsMessages}
+          onChange={(e) => setToggle("showAcarsMessages", e.target.checked)}
+        />
+        Show live ACARS messages (in aircraft details)
+      </label>
+      {draft.showAcarsMessages && (
+        <div className="field radio-field">
+          <label className="radio">
+            <input
+              type="radio"
+              name="acarsMode"
+              checked={draft.acarsDisplayMode !== "full"}
+              onChange={() => setDraft({ ...draft, acarsDisplayMode: "decoded" })}
+            />
+            Decoded only
+          </label>
+          <label className="radio">
+            <input
+              type="radio"
+              name="acarsMode"
+              checked={draft.acarsDisplayMode === "full"}
+              onChange={() => setDraft({ ...draft, acarsDisplayMode: "full" })}
+            />
+            Decoded + original message
+          </label>
+          <div className="hint">
+            The original message is shown only where the deployment permits raw
+            display; otherwise decoded information is shown regardless.
+          </div>
+        </div>
+      )}
 
       <h2>History</h2>
       <label className="check">

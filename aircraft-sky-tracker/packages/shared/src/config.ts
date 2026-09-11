@@ -1,6 +1,7 @@
 /** Application configuration model (FRD §32-33). */
 
 import type { LocationSource, LocationConfidence } from "./location.js";
+import type { AcarsDisplayMode } from "./acars.js";
 
 export type AircraftSource = "internet" | "local" | "hybrid";
 export type DisplayMode = "minimal" | "informative";
@@ -88,6 +89,14 @@ export interface AppConfig {
   showLookNow: boolean;
   /** Show aviation context: airspace, weather, contrail, military (FRD v4.0 §35-47). */
   showAviationContext: boolean;
+  /** Show live ACARS/VDL2 datalink messages in aircraft details (FRD v3.9). Off by default. */
+  showAcarsMessages: boolean;
+  /**
+   * ACARS message-display mode (FRD v3.9 §Sensitive Message Handling). "decoded"
+   * shows structured info only; "full" additionally requests the raw payload, but
+   * that is honoured only where the deployment permits it (ALLOW_RAW_ACARS_DISPLAY).
+   */
+  acarsDisplayMode: AcarsDisplayMode;
   /** Alert ahead of an upcoming satellite pass (FRD §61-62). */
   satelliteAlertsEnabled: boolean;
   /** Advance-warning lead time in minutes for a satellite pass alert (FRD §62). */
@@ -138,6 +147,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   showSkyInsights: true,
   showLookNow: true,
   showAviationContext: true,
+  showAcarsMessages: false,
+  acarsDisplayMode: "decoded",
   showSatellites: true,
   satelliteMinElevationDeg: 10,
   satelliteShowStations: true,
@@ -182,6 +193,8 @@ export type ConfigUpdate = Partial<
     | "showSkyInsights"
     | "showLookNow"
     | "showAviationContext"
+    | "showAcarsMessages"
+    | "acarsDisplayMode"
     | "showSatellites"
     | "satelliteMinElevationDeg"
     | "satelliteShowStations"

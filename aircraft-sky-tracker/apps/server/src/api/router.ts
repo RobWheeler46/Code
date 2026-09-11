@@ -21,6 +21,8 @@ import type {
   LookNowPrediction,
   AviationContext,
   AircraftAviationContext,
+  AcarsMessage,
+  DatalinkSummary,
 } from "@ast/shared";
 import { basicAuthMiddleware, isAuthEnabled } from "./auth.js";
 
@@ -68,6 +70,10 @@ export interface ApiContext {
   lookNow(): { generatedAt: string; predictions: LookNowPrediction[] };
   aviationContext(): Promise<AviationContext>;
   aircraftAviation(icaoHex: string): Promise<AircraftAviationContext | null>;
+  aircraftMessages(
+    icaoHex: string,
+    query: { since?: string; limit?: number; medium?: string; category?: string; includeAll?: boolean },
+  ): { aircraftId: string; enabled: boolean; datalink: DatalinkSummary; messages: AcarsMessage[] };
   view(postcode: string): Promise<ViewResult>;
   history(date?: string): { date: string; passes: HistoryPass[] };
   historyDates(): HistoryDate[];
@@ -240,6 +246,28 @@ export function createApiRouter(ctx: ApiContext): Router {
   // GET /api/looknow - approaching-aircraft predictions (FRD v4.0 §16-19).
   router.get("/looknow", (_req: Request, res: Response) => {
     res.json(ctx.lookNow());
+  });
+
+  // GET /api/aircraft/:icaoHex/messages - live ACARS/VDL2 datalink messages for one
+  // aircraft (FRD v3.9 §API). Public: part of the open display's detail drawer. The
+  // server applies the display policy - raw payloads never leave here unless permitted.
+  router.get("/aircraft/:icaoHex/messages", (req: Request, res: Response) => {
+    const hex = req.params.icaoHex ?? "";
+    if (!/^[0-9A-Fa-f]{6}$/.test(hex) && !/^[A-Za-z0-9]{3,8}$/.test(hex)) {
+      res.status(400).json({ error: "invalid icaoHex" });
+      return;
+    }
+    const q = req.query;
+    const limit = typeof q.limit === "string" ? Number.parseInt(q.limit, 10) : undefined;
+    res.json(
+      ctx.aircraftMessages(hex.toUpperCase(), {
+        since: typeof q.since === "string" ? q.since : undefined,
+        limit: Number.isFinite(limit) ? limit : undefined,
+        medium: typeof q.medium === "string" ? q.medium : undefined,
+        category: typeof q.category === "string" ? q.category : undefined,
+        includeAll: q.includeAll === "true" || q.includeAll === "1",
+      }),
+    );
   });
 
   // GET /api/aviation-context - observer-level airspace/weather/military (v4.0 §35-47).

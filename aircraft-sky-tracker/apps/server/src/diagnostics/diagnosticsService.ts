@@ -43,6 +43,17 @@ export interface DiagnosticsReport {
   interestingToday: number;
   routeConfidence: { confirmed: number; high: number; medium: number; low: number; unknown: number };
   flightIntelligenceSources: string[];
+  /** Live datalink (ACARS/VDL2) diagnostics (FRD v3.9 §Diagnostics). */
+  acars?: {
+    provider: string;
+    realtime: string;
+    messagesReceived: number;
+    aircraftCorrelated: number;
+    currentVisibleAircraft: number;
+    withAcarsActivity: number;
+    lastMessageMsAgo: number | null;
+    rawMessageDisplay: boolean;
+  };
 }
 
 export class DiagnosticsService {

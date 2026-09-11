@@ -9,6 +9,7 @@ export * from "./insights.js";
 export * from "./routeChange.js";
 export * from "./prediction.js";
 export * from "./aviation.js";
+export * from "./acars.js";
 export * from "./history.js";
 export * from "./satellite.js";
 export * from "./messages.js";

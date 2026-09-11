@@ -68,6 +68,11 @@ import { AviationWeatherProvider } from "./aviation/aviationWeatherProvider.js";
 import { OpenMeteoUpperAirProvider } from "./aviation/openMeteoProvider.js";
 import { CuratedModProvider } from "./aviation/modProvider.js";
 import { AviationContextService } from "./aviation/aviationContextService.js";
+import { AcarsService } from "./messages/acarsService.js";
+import {
+  SimulationAcarsProvider,
+  AirframesAcarsProvider,
+} from "./messages/acarsProviders.js";
 import { AccountRepo } from "./persistence/accountRepo.js";
 import { GoogleAuth } from "./auth/googleAuth.js";
 import { createAuthRouter } from "./auth/authRouter.js";
@@ -233,6 +238,24 @@ async function main(): Promise<void> {
     },
   );
 
+  // Live ACARS/VDL2 datalink messages (FRD v3.9): off by default, decoded-only,
+  // raw payloads gated by the deployment flag. Simulation streams sample messages
+  // without live Airframes; the provider follows the aircraft provider.
+  const acars = new AcarsService(
+    env.aircraftProvider === "simulation"
+      ? new SimulationAcarsProvider()
+      : new AirframesAcarsProvider(env.airframesEnabled, env.airframesApiKey),
+    () => {
+      const c = settings.get();
+      return {
+        showAcarsMessages: c.showAcarsMessages,
+        acarsDisplayMode: c.acarsDisplayMode,
+        deploymentAllowsRaw: env.acarsAllowRawDisplay,
+      };
+    },
+    (message) => ws.broadcast({ type: "aircraft.message", aircraftId: message.aircraftId, message }),
+  );
+
   // Look Now prediction engine (FRD v4.0 §16-19): projects approaching aircraft
   // (in the prediction band, not yet displayed) to their closest point of approach.
   const lookNow = new LookNowService((predictions) =>
@@ -323,6 +346,18 @@ async function main(): Promise<void> {
       void insights.onSnapshot(aircraft, Date.now()).catch((err: unknown) => {
         log.debug("insights update failed", { error: String(err) });
       });
+      // Correlate ACARS datalink messages to eligible (in-radius) aircraft (v3.9).
+      // Airborne only - parked aircraft don't produce meaningful chatter here.
+      try {
+        acars.onSnapshot(
+          aircraft
+            .filter((a) => a.onGround !== true)
+            .map((a) => ({ icaoHex: a.icaoHex, callsign: a.callsign, registration: a.registration })),
+          Date.now(),
+        );
+      } catch (err) {
+        log.debug("acars update failed", { error: String(err) });
+      }
       // Look Now predictions run over the full tracked set (incl. the prediction
       // band that is not displayed), so approaching aircraft can be surfaced.
       lookNow.onSnapshot(
@@ -505,6 +540,12 @@ async function main(): Promise<void> {
         }
         next.displayScale = update.displayScale;
       }
+      if (update.acarsDisplayMode !== undefined) {
+        if (!["off", "decoded", "full"].includes(update.acarsDisplayMode)) {
+          return { ok: false, status: 400, error: "Invalid ACARS display mode" };
+        }
+        next.acarsDisplayMode = update.acarsDisplayMode;
+      }
 
       const booleanKeys = [
         "showRegistration",
@@ -526,6 +567,7 @@ async function main(): Promise<void> {
         "showSkyInsights",
         "showLookNow",
         "showAviationContext",
+        "showAcarsMessages",
         "showSatellites",
         "satelliteShowStations",
         "satelliteShowBright",
@@ -662,7 +704,23 @@ async function main(): Promise<void> {
     }),
 
     health: () => diagnostics.health(),
-    diagnostics: () => diagnostics.report(),
+    diagnostics: () => {
+      const report = diagnostics.report();
+      const a = acars.diagnostics();
+      return {
+        ...report,
+        acars: {
+          provider: a.provider,
+          realtime: a.realtime,
+          messagesReceived: a.messagesReceived,
+          aircraftCorrelated: a.aircraftCorrelated,
+          currentVisibleAircraft: state.snapshot().length,
+          withAcarsActivity: acars.activeAircraftCount(),
+          lastMessageMsAgo: a.lastMessageMsAgo,
+          rawMessageDisplay: a.rawDisplayEnabled,
+        },
+      };
+    },
     photo: (registration, icaoHex) => photos.getPhoto(registration, icaoHex),
     aircraftDetail: async (icaoHex) => {
       const aircraft = state.snapshot().find((a) => a.icaoHex === icaoHex) ?? null;
@@ -696,6 +754,15 @@ async function main(): Promise<void> {
     aircraftAviation: async (icaoHex) => {
       const aircraft = state.snapshot().find((a) => a.icaoHex === icaoHex);
       return aircraft ? aviation.aircraftContext(aircraft) : null;
+    },
+    aircraftMessages: (icaoHex, query) => {
+      const c = settings.get();
+      return {
+        aircraftId: icaoHex,
+        enabled: c.showAcarsMessages && c.acarsDisplayMode !== "off",
+        datalink: acars.datalinkFor(icaoHex),
+        messages: acars.messagesFor(icaoHex, query),
+      };
     },
     view: (postcode) => viewService.getView(postcode),
 

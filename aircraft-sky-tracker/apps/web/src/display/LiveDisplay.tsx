@@ -30,6 +30,7 @@ export function LiveDisplay() {
       satelliteAlert={live.satelliteAlert}
       insights={live.insights}
       lookNow={live.lookNow}
+      aircraftMessage={live.aircraftMessage}
     />
   );
 }

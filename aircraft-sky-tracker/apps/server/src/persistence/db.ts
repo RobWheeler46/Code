@@ -203,6 +203,8 @@ function migrate(db: DatabaseSync): void {
   ensureColumn(db, "settings", "prediction_radius_miles", "INTEGER NOT NULL DEFAULT 40");
   ensureColumn(db, "settings", "show_look_now", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn(db, "settings", "show_aviation_context", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db, "settings", "show_acars_messages", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn(db, "settings", "acars_display_mode", "TEXT NOT NULL DEFAULT 'decoded'");
 
   runValueMigrations(db);
 }

@@ -201,6 +201,7 @@ The browser talks only to the backend (FRD §39):
 | `GET` | `/api/looknow` | Approaching-aircraft closest-approach predictions (v4.0 §16-19) |
 | `GET` | `/api/aviation-context` | Observer airspace + nearest METAR/TAF + military context (v4.0 §35-47) |
 | `GET` | `/api/aircraft/{icaoHex}/aviation` | Airspace membership + contrail estimate for one aircraft |
+| `GET` | `/api/aircraft/{icaoHex}/messages` | Live ACARS/VDL2 datalink messages for one aircraft (v3.9) |
 | `GET` | `/api/view?postcode=` | Per-viewer snapshot for any postcode (read-only) |
 | `GET` | `/api/history?date=` | Aircraft pass history for a date (default today) |
 | `GET` | `/api/history/dates` | Retained dates with pass counts |
@@ -494,6 +495,24 @@ proximity to curated military airspace — it never asserts a specific aircraft 
 an exercise. Each provider fails soft: a missing weather/upper-air fetch just omits
 that part; curated airspace always works. Served at `/api/aviation-context` and
 `/api/aircraft/{hex}/aviation`; toggle `showAviationContext`.
+
+**Live ACARS messages (done, FRD v3.9)** — optional display of decoded ACARS/VDL2
+datalink messages correlated to the tracked aircraft, in the details drawer.
+Governed entirely by policy: **off by default**, **decoded‑only** when enabled, and
+the **original raw payload is gated behind a deployment flag** (`ALLOW_RAW_ACARS_DISPLAY`,
+default off) that a user preference can never override (§Legal / Deployment Control) —
+all enforced **server‑side**. Messages are shown only for a **strongly correlated**
+aircraft (registration/callsign); a conflicting or unmatched identity is never shown.
+Each carries a timestamp, medium (VDL2/ACARS/…), decoded **category** (Position,
+Weather, OOOI, Route, ETA, …) and a plain‑language summary, expandable for detail and
+provenance; technical/operational categories are hidden from the default view.
+New messages stream **live** over the WebSocket (`aircraft.message`) with a REST fallback
+at `/api/aircraft/{hex}/messages`, and raw bodies are **never persisted** (short in‑memory
+buffer only). Airframes is the Tier‑1 source (env‑gated, inert until access); a
+**simulation** provider streams sample messages — including the unmatched and
+conflicting‑identity cases — so the whole feature works without a feeder credential.
+Attribution to Airframes.io is shown wherever messages appear. Toggle `showAcarsMessages`;
+message‑display failure never affects tracking.
 
 **Google account & saved locations (done, FRD v3.6 §12, §26)** — an optional
 **Google Sign-In** (env-gated: `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`) lets the

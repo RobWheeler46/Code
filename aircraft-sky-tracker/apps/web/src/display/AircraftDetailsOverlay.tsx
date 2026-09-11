@@ -6,15 +6,23 @@ import {
   type Insight,
   type AircraftAviationContext,
   type AviationContext,
+  type AcarsMessage,
+  type DatalinkSummary,
   flightStateLabel,
   oooiRows,
+  acarsCategoryLabel,
 } from "@ast/shared";
+import type { AircraftMessageEntry } from "../hooks/useWebSocket.js";
 
 interface Props {
   aircraft: Aircraft;
   onClose: () => void;
   /** Show the aviation-context section (config.showAviationContext, v4.0 §35-47). */
   showAviation?: boolean;
+  /** Show the live ACARS section (config.showAcarsMessages, v3.9). */
+  showAcars?: boolean;
+  /** Latest live datalink message from the WebSocket (v3.9). */
+  aircraftMessage?: AircraftMessageEntry;
 }
 
 interface Photo {
@@ -65,7 +73,13 @@ type Row = [string, string | undefined];
  * route / live / aircraft sections plus collapsible technical + data-quality,
  * and auto-closes after inactivity for kiosk use (FRD §86).
  */
-export function AircraftDetailsOverlay({ aircraft, onClose, showAviation = false }: Props) {
+export function AircraftDetailsOverlay({
+  aircraft,
+  onClose,
+  showAviation = false,
+  showAcars = false,
+  aircraftMessage,
+}: Props) {
   const identifier = aircraft.registration ?? aircraft.callsign ?? aircraft.icaoHex;
   const dest = aircraft.destination;
   const silLabel = aircraft.silhouette ? SILHOUETTE_LABEL[aircraft.silhouette] : undefined;
@@ -78,6 +92,7 @@ export function AircraftDetailsOverlay({ aircraft, onClose, showAviation = false
   const [insights, setInsights] = useState<Insight[]>([]);
   const [aviation, setAviation] = useState<AircraftAviationContext | undefined>();
   const [observerAviation, setObserverAviation] = useState<AviationContext | undefined>();
+  const [acars, setAcars] = useState<{ enabled: boolean; datalink: DatalinkSummary; messages: AcarsMessage[] }>();
   const [showTechnical, setShowTechnical] = useState(false);
   const [showQuality, setShowQuality] = useState(false);
 
@@ -119,10 +134,41 @@ export function AircraftDetailsOverlay({ aircraft, onClose, showAviation = false
         .then((d) => active && setObserverAviation(d))
         .catch(() => undefined);
     }
+    if (showAcars) {
+      setAcars(undefined);
+      void fetch(`/api/aircraft/${encodeURIComponent(aircraft.icaoHex)}/messages`)
+        .then((r) =>
+          r.ok
+            ? (r.json() as Promise<{ enabled: boolean; datalink: DatalinkSummary; messages: AcarsMessage[] }>)
+            : undefined,
+        )
+        .then((d) => active && d && setAcars(d))
+        .catch(() => undefined);
+    }
     return () => {
       active = false;
     };
   }, [aircraft.icaoHex, aircraft.registration]);
+
+  // Append live ACARS messages for this aircraft as they stream in (v3.9).
+  useEffect(() => {
+    if (!showAcars || !aircraftMessage) return;
+    if (aircraftMessage.aircraftId.toUpperCase() !== aircraft.icaoHex.toUpperCase()) return;
+    setAcars((prev) => {
+      const base = prev ?? { enabled: true, datalink: { active: true, messagesThisPass: 0 }, messages: [] };
+      if (base.messages.some((m) => m.id === aircraftMessage.message.id)) return base;
+      return {
+        enabled: true,
+        datalink: {
+          active: true,
+          lastMessageAt: aircraftMessage.message.timestamp,
+          messagesThisPass: base.datalink.messagesThisPass + 1,
+        },
+        messages: [aircraftMessage.message, ...base.messages].slice(0, 40),
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aircraftMessage?.id]);
 
   // Auto-close after inactivity (FRD §86), reset on interaction.
   const closeRef = useRef(onClose);
@@ -279,6 +325,8 @@ export function AircraftDetailsOverlay({ aircraft, onClose, showAviation = false
           <AviationSection aircraft={aviation} observer={observerAviation} />
         )}
 
+        {showAcars && acars?.enabled && <LiveAcarsSection datalink={acars.datalink} messages={acars.messages} />}
+
         {flight && <FlightIntelligenceSection flight={flight} />}
 
         <Section title="Live" rows={liveRows} />
@@ -371,6 +419,84 @@ function FlightIntelligenceSection({ flight }: { flight: FlightIntelligence }) {
       {flight.sources.length > 0 && (
         <div className="route-conf">Sources: {flight.sources.join(" · ")}</div>
       )}
+    </>
+  );
+}
+
+/** Relative "N sec/min ago" for a datalink timestamp. */
+function timeAgo(iso: string | undefined): string {
+  if (!iso) return "—";
+  const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
+  if (s < 60) return `${s} sec ago`;
+  const m = Math.round(s / 60);
+  return `${m} min ago`;
+}
+
+/** Live ACARS/VDL2 datalink messages for this aircraft (FRD v3.9). */
+function LiveAcarsSection({
+  datalink,
+  messages,
+}: {
+  datalink: DatalinkSummary;
+  messages: AcarsMessage[];
+}) {
+  const [expanded, setExpanded] = useState<string | undefined>(undefined);
+  return (
+    <>
+      <h2>Live ACARS</h2>
+      {datalink.active ? (
+        <div className="datalink">
+          <span className="k">ACARS/VDL2 active</span>
+          <span className="v">
+            {datalink.messagesThisPass} msg · {timeAgo(datalink.lastMessageAt)}
+          </span>
+        </div>
+      ) : (
+        <div className="acars-empty">No datalink messages yet for this aircraft.</div>
+      )}
+
+      <div className="acars-list">
+        {messages.map((m) => {
+          const open = expanded === m.id;
+          return (
+            <div key={m.id} className="acars-msg">
+              <button
+                type="button"
+                className="acars-msg-head"
+                onClick={() => setExpanded(open ? undefined : m.id)}
+                aria-expanded={open}
+              >
+                <span className="acars-time">{formatTime(m.timestamp)}</span>
+                <span className="acars-medium">{m.medium}</span>
+                <span className="acars-cat">
+                  {m.label ? `${m.label} · ` : ""}
+                  {acarsCategoryLabel(m.category)}
+                </span>
+              </button>
+              <div className="acars-summary">{m.decoded.summary}</div>
+              {open && (
+                <div className="acars-detail">
+                  {m.decoded.lines?.map((line, i) => (
+                    <div key={i}>{line}</div>
+                  ))}
+                  <div className="acars-provenance">
+                    Source {m.source === "airframes" ? "Airframes" : capitalise(m.source)} ·{" "}
+                    correlation {m.correlationConfidence}
+                    {m.receivingStation ? ` · ${m.receivingStation}` : ""}
+                  </div>
+                  {m.rawTextAvailable && m.raw && (
+                    <pre className="acars-raw">{m.raw}</pre>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="acars-attribution">
+        ACARS/VDL2 data provided by Airframes.io and its community of feeders
+      </div>
     </>
   );
 }

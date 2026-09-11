@@ -9,6 +9,7 @@ import {
   type SatellitePass,
   type Insight,
   type LookNowPrediction,
+  type AcarsMessage,
 } from "@ast/shared";
 
 export interface InterestingEntry {
@@ -41,6 +42,15 @@ export interface LiveState {
   insights: Insight[];
   /** Current Look Now approaching-aircraft predictions (FRD v4.0 §16-19). */
   lookNow: LookNowPrediction[];
+  /** Latest live ACARS message event (FRD v3.9), or undefined. */
+  aircraftMessage: AircraftMessageEntry | undefined;
+}
+
+export interface AircraftMessageEntry {
+  aircraftId: string;
+  message: AcarsMessage;
+  /** Monotonic id so consumers react to each distinct message. */
+  id: number;
 }
 
 const MAX_BACKOFF_MS = 15_000;
@@ -72,11 +82,13 @@ export function useWebSocket(): LiveState {
   const [satelliteAlert, setSatelliteAlert] = useState<SatelliteAlertEntry | undefined>(undefined);
   const [insights, setInsights] = useState<Insight[]>([]);
   const [lookNow, setLookNow] = useState<LookNowPrediction[]>([]);
+  const [aircraftMessage, setAircraftMessage] = useState<AircraftMessageEntry | undefined>(undefined);
 
   const backoffRef = useRef(1000);
   const closedRef = useRef(false);
   const entryIdRef = useRef(0);
   const satAlertIdRef = useRef(0);
+  const messageIdRef = useRef(0);
 
   useEffect(() => {
     closedRef.current = false;
@@ -137,6 +149,14 @@ export function useWebSocket(): LiveState {
             break;
           case "insight.expired":
             setInsights((prev) => prev.filter((i) => i.id !== message.id));
+            break;
+          case "aircraft.message":
+            messageIdRef.current += 1;
+            setAircraftMessage({
+              aircraftId: message.aircraftId,
+              message: message.message,
+              id: messageIdRef.current,
+            });
             break;
           case "looknow.update":
             setLookNow(message.predictions);
@@ -208,5 +228,6 @@ export function useWebSocket(): LiveState {
     satelliteAlert,
     insights,
     lookNow,
+    aircraftMessage,
   };
 }

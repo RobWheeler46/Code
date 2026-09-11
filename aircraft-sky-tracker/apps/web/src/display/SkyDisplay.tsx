@@ -17,7 +17,11 @@ import { InterestingAlert } from "./InterestingAlert.js";
 import { SatelliteAlert } from "./SatelliteAlert.js";
 import { InsightBanner } from "./InsightBanner.js";
 import { LookNowBanner } from "./LookNowBanner.js";
-import type { InterestingEntry, SatelliteAlertEntry } from "../hooks/useWebSocket.js";
+import type {
+  InterestingEntry,
+  SatelliteAlertEntry,
+  AircraftMessageEntry,
+} from "../hooks/useWebSocket.js";
 
 interface Props {
   aircraft: Aircraft[];
@@ -31,6 +35,7 @@ interface Props {
   satelliteAlert?: SatelliteAlertEntry;
   insights?: Insight[];
   lookNow?: LookNowPrediction[];
+  aircraftMessage?: AircraftMessageEntry;
 }
 
 /** The main display: canvas + optional header + status (FRD §47, §56-59). */
@@ -46,6 +51,7 @@ export function SkyDisplay({
   satelliteAlert,
   insights = [],
   lookNow = [],
+  aircraftMessage,
 }: Props) {
   const [selected, setSelected] = useState<Aircraft | null>(null);
   const [selectedSat, setSelectedSat] = useState<string | null>(null);
@@ -135,6 +141,8 @@ export function SkyDisplay({
           aircraft={selected}
           onClose={() => setSelected(null)}
           showAviation={config.showAviationContext}
+          showAcars={config.showAcarsMessages}
+          aircraftMessage={aircraftMessage}
         />
       )}
       {selectedSatellite && (

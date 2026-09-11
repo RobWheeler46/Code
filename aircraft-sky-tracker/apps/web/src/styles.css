@@ -821,6 +821,111 @@ button.danger {
   margin-top: 0.2rem;
 }
 
+/* Live ACARS datalink panel in the drawer (FRD v3.9). */
+.datalink {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.5rem;
+  border-left: 3px solid #8fe3ff;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 6px;
+  margin: 0.3rem 0;
+}
+.datalink .k {
+  color: var(--secondary);
+}
+.datalink .v {
+  color: var(--primary);
+  font-variant-numeric: tabular-nums;
+}
+.acars-empty {
+  color: var(--secondary);
+  font-size: 0.82rem;
+  margin: 0.3rem 0;
+}
+.acars-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0.4rem 0;
+}
+.acars-msg {
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 0.4rem 0.55rem;
+  background: rgba(255, 255, 255, 0.02);
+}
+.acars-msg-head {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.acars-time {
+  color: var(--primary);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+.acars-medium {
+  color: #8fe3ff;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+}
+.acars-cat {
+  color: var(--secondary);
+  font-size: 0.72rem;
+}
+.acars-summary {
+  color: var(--primary);
+  font-size: 0.85rem;
+  margin-top: 0.15rem;
+}
+.acars-detail {
+  margin-top: 0.3rem;
+  color: var(--secondary);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+.acars-provenance {
+  color: var(--secondary);
+  font-size: 0.72rem;
+  margin-top: 0.25rem;
+}
+.acars-raw {
+  margin: 0.3rem 0 0;
+  padding: 0.4rem 0.5rem;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 6px;
+  color: #cbd2da;
+  font-size: 0.72rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.acars-attribution {
+  color: var(--secondary);
+  font-size: 0.7rem;
+  margin-top: 0.4rem;
+  opacity: 0.85;
+}
+.radio-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.radio-field .radio {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+
 /* Look Now banner (FRD v4.0 §16-19): a prominent top-centre "look up" prompt for
    the most imminent approaching aircraft. Cyan by default; amber when the
    approach is interesting (military / watchlist / rare, §19). */
