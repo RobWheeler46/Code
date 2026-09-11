@@ -1349,14 +1349,18 @@ function scenario_logic_osm_discovery(): void
     $gNoProg = osmdLiveGather('t', $startupOk, 'extended', ['members' => fn($t, $s, $tm, $ty) => ['ok' => true, 'count' => 1, 'patrols' => 1], 'events' => fn(...$a) => ['ok' => true, 'count' => 0], 'programme' => fn(...$a) => ['ok' => false], 'badges' => fn(...$a) => ['ok' => false]]);
     check('osmd-live: programme falls back to Partial (term metadata) when no item read', osmdClassifyLive('programme', $startupOk, $gNoProg, 'extended')['status'] === 'partial');
 
-    // A blocked read stops the pass and is Error, never Unavailable; no token is Unknown.
-    $gBlocked = osmdLiveGather('t', $startupOk, 'extended', ['members' => fn(...$a) => ['ok' => false, 'blocked' => true]]);
-    check('osmd-live: a blocked read is Error, not Unavailable, and halts the pass (AC-332)', $gBlocked['blocked'] === true && osmdClassifyLive('members', $startupOk, $gBlocked, 'extended')['status'] === 'error');
+    // A throttle on ONE capability backs that capability off (Error, not Unavailable) but
+    // must NOT halt the others - members blocked, events still lights up.
+    $gIsolate = osmdLiveGather('t', $startupOk, 'extended', ['members' => fn(...$a) => ['ok' => false, 'blocked' => true], 'events' => fn(...$a) => ['ok' => true, 'count' => 2], 'programme' => fn(...$a) => ['ok' => true, 'count' => 1], 'badges' => fn(...$a) => ['ok' => true, 'count' => 1]]);
+    check('osmd-live: a throttled capability is Error and does not halt the others (AC-332)', $gIsolate['members']['blocked'] === true && osmdClassifyLive('members', $startupOk, $gIsolate, 'extended')['status'] === 'error' && osmdClassifyLive('events', $startupOk, $gIsolate, 'extended')['status'] === 'available');
     check('osmd-live: no token yields Unknown across live reads, not Unavailable (AC-332)', osmdClassifyLive('members', $startupOk, osmdLiveGather(null, $startupOk, 'safe', $readers), 'safe')['status'] === 'unknown');
 
-    // Safe mode samples a subset of sections (representative), Extended covers all.
+    // Members samples a subset of sections in Safe mode (representative note); Extended
+    // reads every section. Events/programme/badges confirm on a sample even in Extended.
     $bigStartup = $startupOk; for ($i = 0; $i < 6; $i++) { $bigStartup['sections']["s20$i"] = "Extra $i"; $bigStartup['terms']["s20$i"] = [['termid' => "x$i", 'startdate' => '2000-01-01', 'enddate' => '2100-01-01']]; $bigStartup['sectionTypes']["s20$i"] = 'cubs'; }
-    check('osmd-live: safe mode reads a representative sample of sections', strpos(osmdClassifyLive('members', $bigStartup, osmdLiveGather('t', $bigStartup, 'safe', $readers), 'safe')['evidence']['detail'], 'representative sample') !== false);
+    check('osmd-live: safe mode reads a representative member sample of sections', strpos(osmdClassifyLive('members', $bigStartup, osmdLiveGather('t', $bigStartup, 'safe', $readers), 'safe')['evidence']['detail'], 'representative sample') !== false);
+    $gBig = osmdLiveGather('t', $bigStartup, 'extended', $readers);
+    check('osmd-live: extended reads all sections for members but samples events/badges', count($gBig['members']['covered']) === 8 && count($gBig['events']['covered']) === 3 && count($gBig['badges']['covered']) === 3);
 }
 
 // Forms part 3: on-behalf completion (recorded, not impersonated) + required file

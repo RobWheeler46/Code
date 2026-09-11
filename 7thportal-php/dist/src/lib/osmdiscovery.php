@@ -227,12 +227,12 @@ function osmdReadBadges(?string $token, ?string $type, string $sid, ?string $ter
 function osmdLiveGather(?string $token, array $startup, string $mode = 'safe', array $readers = []): array
 {
     $g = [
-        'ran' => false, 'blocked' => false, 'sampled' => false,
-        'members' => ['covered' => [], 'total' => 0, 'error' => false],
+        'ran' => false,
+        'members' => ['covered' => [], 'total' => 0, 'error' => false, 'blocked' => false, 'errors' => 0],
         'patrols' => ['covered' => [], 'total' => 0],
-        'events' => ['covered' => [], 'total' => 0, 'error' => false],
-        'programme' => ['covered' => [], 'total' => 0, 'error' => false],
-        'badges' => ['covered' => [], 'total' => 0, 'error' => false],
+        'events' => ['covered' => [], 'total' => 0, 'error' => false, 'blocked' => false, 'errors' => 0],
+        'programme' => ['covered' => [], 'total' => 0, 'error' => false, 'blocked' => false, 'errors' => 0],
+        'badges' => ['covered' => [], 'total' => 0, 'error' => false, 'blocked' => false, 'errors' => 0],
     ];
     if (!$token || empty($startup['ok'])) return $g;
     $g['ran'] = true;
@@ -242,27 +242,42 @@ function osmdLiveGather(?string $token, array $startup, string $mode = 'safe', a
         'programme' => $readers['programme'] ?? fn($t, $s, $tm, $ty) => osmdNormItems(osmGetSectionProgramme($t, $s, $tm)),
         'badges' => $readers['badges'] ?? fn($t, $s, $tm, $ty) => osmdReadBadges($t, $ty, $s, $tm),
     ];
-    $limit = $mode === 'extended' ? 100 : 3;
-    $i = 0;
+    // Members reads every section (real per-section counts) in Extended, a sample in Safe.
+    // Events/programme/badges only need to CONFIRM readability, so they stop after a few
+    // successful sections even in Extended - this keeps the total call volume well under
+    // OSM's burst throttle. A capability that gets throttled stops probing on its own,
+    // WITHOUT halting the others (a single throttle must not blank the whole run).
+    $memberLimit = $mode === 'extended' ? 1000 : 3;
+    $sampleTarget = 3;
+    // Stop probing a capability once it is blocked or has failed twice - a dead or
+    // throttled endpoint must not be retried on every section.
+    $errorCap = 2;
+    $settled = fn(string $cap) => $g[$cap]['blocked'] || $g[$cap]['errors'] >= $errorCap;
+    $probe = function (string $cap, $token, $sid, $termId, $type, $name) use (&$g, $R, $settled) {
+        if ($settled($cap)) return;
+        if ($cap !== 'events' && !$termId) return; // members/programme/badges need a term
+        try {
+            $r = $R[$cap]($token, (string) $sid, $termId, $type);
+        } catch (Throwable $e) { $g[$cap]['error'] = true; $g[$cap]['errors']++; return; }
+        if (!empty($r['blocked'])) { $g[$cap]['blocked'] = true; return; } // back off THIS capability only
+        if (!empty($r['ok'])) {
+            $g[$cap]['covered'][] = $name;
+            $g[$cap]['total'] += (int) ($r['count'] ?? 0);
+            if ($cap === 'members' && !empty($r['patrols'])) { $g['patrols']['total'] += (int) $r['patrols']; $g['patrols']['covered'][] = $name; }
+        } else {
+            $g[$cap]['error'] = true;
+            $g[$cap]['errors']++;
+        }
+    };
+    $idx = 0;
     foreach ($startup['sections'] as $sid => $name) {
-        if ($i >= $limit) { $g['sampled'] = true; break; }
-        $i++;
+        $idx++;
         $term = function_exists('osmCurrentTermFromData') ? osmCurrentTermFromData($startup['terms'], (string) $sid) : null;
         $termId = is_array($term) ? ($term['termId'] ?? null) : null;
         $type = $startup['sectionTypes'][(string) $sid] ?? null;
-        foreach (['members', 'events', 'programme', 'badges'] as $cap) {
-            if ($cap !== 'events' && !$termId) continue; // members/programme/badges need a term
-            try {
-                $r = $R[$cap]($token, (string) $sid, $termId, $type);
-            } catch (Throwable $e) { $g[$cap]['error'] = true; continue; }
-            if (!empty($r['blocked'])) { $g['blocked'] = true; break 2; } // stop hammering OSM
-            if (!empty($r['ok'])) {
-                $g[$cap]['covered'][] = $name;
-                $g[$cap]['total'] += (int) ($r['count'] ?? 0);
-                if ($cap === 'members' && !empty($r['patrols'])) { $g['patrols']['total'] += (int) $r['patrols']; $g['patrols']['covered'][] = $name; }
-            } else {
-                $g[$cap]['error'] = true;
-            }
+        if ($idx <= $memberLimit) $probe('members', $token, $sid, $termId, $type, $name);
+        foreach (['events', 'programme', 'badges'] as $cap) {
+            if (count($g[$cap]['covered']) < $sampleTarget) $probe($cap, $token, $sid, $termId, $type, $name);
         }
     }
     return $g;
@@ -278,34 +293,37 @@ function osmdClassifyLive(string $cap, array $startup, array $g, string $mode = 
         if (!empty($startup['error'])) return $ev('error', [], 'error', 'Live read skipped after a failed startup probe');
         return $ev('unknown', [], 'no_evidence', 'Not probed');
     }
-    $note = !empty($g['sampled']) ? ' (representative sample)' : '';
+    $totalSections = count($startup['sections'] ?? []);
     $n = fn($cap2) => count($g[$cap2]['covered']);
+    // A capability is a representative sample when it confirmed on fewer sections than exist.
+    $note = fn($cap2) => ($n($cap2) > 0 && $n($cap2) < $totalSections) ? ' (representative sample)' : '';
     switch ($cap) {
         case 'members':
-            if ($g['members']['covered']) return $ev('available', $g['members']['covered'], 'ok', $g['members']['total'] . ' member reference(s) across ' . $n('members') . ' section(s)' . $note . '; counts only, no names/DOB/contact/medical retained');
-            if ($g['blocked']) return $ev('error', [], 'rate_limited', 'OSM blocked or throttled the member read; capability not confirmed');
+            if ($g['members']['covered']) return $ev('available', $g['members']['covered'], 'ok', $g['members']['total'] . ' member reference(s) across ' . $n('members') . ' section(s)' . $note('members') . '; counts only, no names/DOB/contact/medical retained');
+            if ($g['members']['blocked']) return $ev('error', [], 'rate_limited', 'OSM blocked or throttled the member read; capability not confirmed');
             if ($g['members']['error']) return $ev('error', [], 'error', 'The member read failed; capability not confirmed');
             return $ev('unknown', [], 'no_evidence', 'No section with a current term was available to read members');
         case 'patrols':
             return $g['patrols']['covered']
-                ? $ev('available', $g['patrols']['covered'], 'ok', $g['patrols']['total'] . ' patrol/six grouping(s) across ' . $n('patrols') . ' section(s)' . $note . '; counts only')
+                ? $ev('available', $g['patrols']['covered'], 'ok', $g['patrols']['total'] . ' patrol/six grouping(s) across ' . $n('patrols') . ' section(s)' . $note('patrols') . '; counts only')
                 : $ev('unknown', [], 'no_evidence', 'No patrol/six groupings were present in the member read');
         case 'events':
-            if ($g['events']['covered']) return $ev('available', $g['events']['covered'], 'ok', $g['events']['total'] . ' event(s) readable across ' . $n('events') . ' section(s)' . $note);
-            if ($g['blocked']) return $ev('error', [], 'rate_limited', 'OSM blocked or throttled the events read');
-            if ($g['events']['error']) return $ev('error', [], 'error', 'The events read failed');
+            if ($g['events']['covered']) return $ev('available', $g['events']['covered'], 'ok', $g['events']['total'] . ' event(s) readable across ' . $n('events') . ' section(s)' . $note('events'));
+            if ($g['events']['blocked']) return $ev('error', [], 'rate_limited', 'OSM blocked or throttled the events read');
+            if ($g['events']['error']) return $ev('error', [], 'error', 'The events read failed (endpoint not readable for this connection)');
             return $ev('unknown', [], 'no_evidence', 'Events were not probed');
         case 'programme':
-            if ($g['programme']['covered']) return $ev('available', $g['programme']['covered'], 'ok', $g['programme']['total'] . ' programme item(s) readable across ' . $n('programme') . ' section(s)' . $note);
+            if ($g['programme']['covered']) return $ev('available', $g['programme']['covered'], 'ok', $g['programme']['total'] . ' programme item(s) readable across ' . $n('programme') . ' section(s)' . $note('programme'));
+            if ($g['programme']['blocked']) return $ev('error', [], 'rate_limited', 'OSM blocked or throttled the programme read');
             return osmdClassifyFromStartup($startup, 'programme', $mode); // fall back to term metadata (Partial)
         case 'badges':
-            if ($g['badges']['covered']) return $ev('available', $g['badges']['covered'], 'ok', 'Badge catalogue readable across ' . $n('badges') . ' section(s)' . $note . ' (' . $g['badges']['total'] . ' badge records sampled)');
-            if ($g['blocked']) return $ev('error', [], 'rate_limited', 'OSM blocked or throttled the badge read');
+            if ($g['badges']['covered']) return $ev('available', $g['badges']['covered'], 'ok', 'Badge catalogue readable across ' . $n('badges') . ' section(s)' . $note('badges') . ' (' . $g['badges']['total'] . ' badge records sampled)');
+            if ($g['badges']['blocked']) return $ev('error', [], 'rate_limited', 'OSM blocked or throttled the badge read');
             if ($g['badges']['error']) return $ev('error', [], 'error', 'The badge read failed');
             return $ev('unknown', [], 'no_evidence', 'Badges were not probed');
         case 'census_capacity':
             return $g['members']['covered']
-                ? $ev('partial', $g['members']['covered'], 'ok', 'Aggregate membership counts available (' . $g['members']['total'] . ' across ' . $n('members') . ' section(s))' . $note . '; full census breakdown not read')
+                ? $ev('partial', $g['members']['covered'], 'ok', 'Aggregate membership counts available (' . $g['members']['total'] . ' across ' . $n('members') . ' section(s))' . $note('members') . '; full census breakdown not read')
                 : $ev('unknown', [], 'no_evidence', 'No membership counts available to derive capacity');
     }
     return $ev('unknown', [], 'no_evidence', 'Not probed');
