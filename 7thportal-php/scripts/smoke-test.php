@@ -1324,6 +1324,20 @@ function scenario_logic_osm_discovery(): void
     // A failed startup is Error (not Unavailable); no token is Unknown (not Unavailable).
     check('osmd-live: a failed startup probe is Error, not Unavailable (AC-332)', osmdClassifyFromStartup(['ok' => false, 'error' => 'probe_failed:boom', 'sections' => [], 'terms' => [], 'globals' => []], 'programme')['status'] === 'error');
     check('osmd-live: no live token yields Unknown, not Unavailable (AC-332)', osmdClassifyFromStartup(['ok' => false, 'error' => 'no_live_token', 'sections' => [], 'terms' => [], 'globals' => []], 'members')['status'] === 'unknown');
+
+    // Member probe: a real (injected) contact-grid read lights up Members - counts only,
+    // never names/personal data, scoped to the sections that returned.
+    $memReader = fn($tok, $sid, $termId) => ['ok' => true, 'count' => $sid === 's101' ? 12 : 8, 'members' => [['name' => 'SHOULD NOT BE STORED']]];
+    $mem = osmdProbeMembers('live-token', $startupOk, 'extended', $memReader);
+    check('osmd-live: member probe lights up Members with a count, scoped to sections', $mem['status'] === 'available' && count($mem['scope']) === 2);
+    check('osmd-live: member probe retains counts only, no names/personal data (FR-OSMD-007)', strpos(json_encode($mem), 'SHOULD NOT BE STORED') === false && strpos($mem['evidence']['detail'], '20 member') !== false);
+    // A blocked/throttled read is Error, never Unavailable; no token is Unknown.
+    check('osmd-live: a blocked member read is Error, not Unavailable (AC-332)', osmdProbeMembers('live-token', $startupOk, 'extended', fn($t, $s, $tm) => ['ok' => false, 'blocked' => true])['status'] === 'error');
+    check('osmd-live: member probe with no token is Unknown, not Unavailable (AC-332)', osmdProbeMembers(null, $startupOk, 'safe', $memReader)['status'] === 'unknown');
+    // Safe mode samples a subset; extended covers all - a 2-section fixture returns both either way,
+    // so assert the sample note appears only when sections exceed the safe cap.
+    $bigStartup = $startupOk; for ($i = 0; $i < 6; $i++) { $bigStartup['sections']["s20$i"] = "Extra $i"; $bigStartup['terms']["s20$i"] = [['termid' => "x$i", 'startdate' => '2000-01-01', 'enddate' => '2100-01-01']]; }
+    check('osmd-live: safe mode reads a representative sample of sections', strpos(osmdProbeMembers('t', $bigStartup, 'safe', fn($t, $s, $tm) => ['ok' => true, 'count' => 1])['evidence']['detail'], 'representative sample') !== false);
 }
 
 // Forms part 3: on-behalf completion (recorded, not impersonated) + required file

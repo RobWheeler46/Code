@@ -150,37 +150,79 @@ function osmdDefaultProvider(string $capKey, array $ctx, string $mode): array
     ];
 }
 
-// ── Live probe adapter (startup call) ─────────────────────────────────────────
-// OSM tolerates one read from the server: the startup payload (/ext/generic/startup/,
-// action=getDataPayload). It carries the connected identity, the accessible sections
-// (via roles) and per-section term metadata - enough to genuinely evidence a handful of
-// capabilities. Everything else needs a further /ext read that is blocked from the server
-// IP, so it stays Unknown, never Unavailable (AC-332). Cached once per request so a full
-// run makes a single startup call, not one per capability.
-function osmdFetchStartupOnce(): array
+// ── Live probe adapter (startup call + representative member read) ────────────
+// OSM tolerates reads from the server with a real token: the startup payload
+// (/ext/generic/startup/) carries the connected identity, the accessible sections (via
+// roles) and per-section term metadata; and the contact grid (getMembers, per section +
+// term) returns a roster we count without retaining any personal data. Everything else
+// needs a further /ext read that is blocked, so it stays Unknown, never Unavailable.
+//
+// Which token: 'service' uses the shared service connection (parent-dashboard reader);
+// 'me' uses the acting administrator's OWN OSM sign-in, so members light up for the
+// sections that person is permitted to see. Using their own token broadens nothing -
+// it is exactly the access they already hold in OSM (AC-318/344).
+function osmdResolveToken(?array $actor, string $source): array
 {
-    static $cache = null;
-    if ($cache !== null) return $cache;
-    $cache = ['ok' => false, 'globals' => [], 'sections' => [], 'terms' => [], 'error' => 'no_live_token'];
+    if ($source === 'me') {
+        if (!$actor || !function_exists('osmDataReadTokenFor')) return ['unavailable' => true];
+        return osmDataReadTokenFor($actor);
+    }
+    $svc = function_exists('getServiceAccount') ? getServiceAccount() : null;
+    return ($svc && function_exists('osmDataReadTokenFor')) ? osmDataReadTokenFor($svc) : ['unavailable' => true];
+}
+
+// Fetch + shape the startup payload with a specific token. Returns the same state shape
+// osmdClassifyFromStartup consumes.
+function osmdFetchStartupWith(?string $token): array
+{
+    if (!$token || $token === 'demo') return ['ok' => false, 'globals' => [], 'sections' => [], 'terms' => [], 'error' => 'no_live_token'];
     try {
-        $svc = function_exists('getServiceAccount') ? getServiceAccount() : null;
-        $tok = ($svc && function_exists('osmDataReadTokenFor')) ? osmDataReadTokenFor($svc) : ['unavailable' => true];
-        if (!empty($tok['unavailable']) || empty($tok['token']) || $tok['token'] === 'demo') {
-            $cache['error'] = 'no_live_token';
-            return $cache;
-        }
-        $startup = osmGetStartupData($tok['token']);      // the one tolerated /ext read
-        $g = $startup['data']['globals'] ?? [];
+        $g = osmGetStartupData($token)['data']['globals'] ?? [];
         $sections = [];
         foreach ((is_array($g['roles'] ?? null) ? $g['roles'] : []) as $r) {
             if (!empty($r['sectionid'])) $sections[(string) $r['sectionid']] = $r['sectionname'] ?? ('Section ' . $r['sectionid']);
         }
-        $cache = ['ok' => true, 'globals' => $g, 'sections' => $sections, 'terms' => is_array($g['terms'] ?? null) ? $g['terms'] : [], 'error' => null];
+        return ['ok' => true, 'globals' => $g, 'sections' => $sections, 'terms' => is_array($g['terms'] ?? null) ? $g['terms'] : [], 'error' => null];
     } catch (Throwable $e) {
-        // A token was present but the call failed: a probe Error, distinct from "no connection".
-        $cache = ['ok' => false, 'globals' => [], 'sections' => [], 'terms' => [], 'error' => 'probe_failed:' . osmdRedactMessage($e->getMessage())];
+        return ['ok' => false, 'globals' => [], 'sections' => [], 'terms' => [], 'error' => 'probe_failed:' . osmdRedactMessage($e->getMessage())];
     }
-    return $cache;
+}
+
+// Representative member probe: for each accessible section, resolve the current term and
+// read the contact grid, keeping ONLY a count - never names, DOB, contact or medical data
+// (FR-OSMD-007, data minimisation). Safe mode samples the first few sections; Extended
+// covers all. $reader is injectable for testing (defaults to the live osmGridMembers).
+function osmdProbeMembers(?string $token, array $startup, string $mode = 'safe', ?callable $reader = null): array
+{
+    $ev = fn($status, $scope, $class, $detail) => ['status' => $status, 'scope' => $scope, 'evidence' => ['class' => $class, 'detail' => $detail], 'response_class' => $class, 'duration_ms' => 1];
+    if (!empty($startup['error'])) {
+        if ($startup['error'] === 'no_live_token') return $ev('unknown', [], 'no_evidence', 'No live token available to read members');
+        return $ev('error', [], 'error', 'Member read skipped after a failed startup probe');
+    }
+    if (!$token) return $ev('unknown', [], 'no_evidence', 'No live token available to read members');
+    $reader = $reader ?? 'osmGridMembers';
+    $limit = $mode === 'extended' ? 100 : 3; // representative sample in safe mode
+    $covered = []; $total = 0; $tried = 0; $blocked = false; $errored = false;
+    foreach ($startup['sections'] as $sid => $name) {
+        if ($tried >= $limit) break;
+        $term = function_exists('osmCurrentTermFromData') ? osmCurrentTermFromData($startup['terms'], (string) $sid) : null;
+        $termId = is_array($term) ? ($term['termId'] ?? null) : null;
+        if (!$termId) continue; // cannot read members without a term
+        $tried++;
+        try {
+            $r = $reader($token, (string) $sid, (string) $termId);
+        } catch (Throwable $e) { $errored = true; continue; }
+        if (!empty($r['ok'])) { $covered[] = $name; $total += (int) ($r['count'] ?? 0); }
+        elseif (!empty($r['blocked'])) { $blocked = true; }
+        else { $errored = true; }
+    }
+    if ($covered) {
+        $sampled = ($mode !== 'extended' && count($startup['sections']) > $limit) ? ' (representative sample)' : '';
+        return $ev('available', $covered, 'ok', $total . ' member reference(s) readable across ' . count($covered) . ' section(s)' . $sampled . '; counts only, no names/DOB/contact/medical retained');
+    }
+    if ($blocked) return $ev('error', [], 'rate_limited', 'OSM blocked or throttled the member read; capability not confirmed');
+    if ($errored) return $ev('error', [], 'error', 'The member read failed; capability not confirmed');
+    return $ev('unknown', [], 'no_evidence', 'No section with a current term was available to read members');
 }
 
 // Pure classifier: resolve one capability from an already-fetched startup state. Kept
@@ -225,11 +267,24 @@ function osmdClassifyFromStartup(array $s, string $capKey, string $mode = 'safe'
     }
 }
 
-// The live provider used on a real connection: fetch startup once, then classify.
-function osmdMakeLiveProvider(): callable
+// The live provider used on a real connection. Resolves the chosen token once and fetches
+// the startup payload once (shared across every capability in the run); classifies the
+// metadata-derived capabilities from startup, and routes 'members' to a real (count-only)
+// contact-grid read using the same token.
+function osmdMakeLiveProvider(?array $actor = null, string $tokenSource = 'service'): callable
 {
-    return function (string $capKey, array $ctx, string $mode) {
-        return osmdClassifyFromStartup(osmdFetchStartupOnce(), $capKey, $mode);
+    $state = ['ready' => false, 'token' => null, 'startup' => null];
+    $ensure = function () use (&$state, $actor, $tokenSource) {
+        if ($state['ready']) return;
+        $state['ready'] = true;
+        $tok = osmdResolveToken($actor, $tokenSource);
+        $state['token'] = (empty($tok['unavailable']) && !empty($tok['token']) && $tok['token'] !== 'demo') ? $tok['token'] : null;
+        $state['startup'] = osmdFetchStartupWith($state['token']);
+    };
+    return function (string $capKey, array $ctx, string $mode) use (&$state, $ensure) {
+        $ensure();
+        if ($capKey === 'members') return osmdProbeMembers($state['token'], $state['startup'], $mode);
+        return osmdClassifyFromStartup($state['startup'], $capKey, $mode);
     };
 }
 
@@ -237,17 +292,18 @@ function osmdMakeLiveProvider(): callable
 // failure/outage paths are testable. Returns the run id. Enforces one full run per
 // connection at a time (FR-OSMD-012 / AC-342). Pre-flight failures (no connection /
 // auth) leave the prior registry intact and stale rather than overwriting it (AC-337).
-function osmdRunDiscovery(array $actor, string $mode = 'safe', ?array $onlyKeys = null, ?callable $provider = null, ?array $ctxOverride = null): int
+function osmdRunDiscovery(array $actor, string $mode = 'safe', ?array $onlyKeys = null, ?callable $provider = null, ?array $ctxOverride = null, string $tokenSource = 'service'): int
 {
     $isTargeted = $onlyKeys !== null;
     if (!$isTargeted && dbGet("SELECT 1 FROM osm_discovery_runs WHERE status = 'running'")) {
         throw new RuntimeException('A discovery run is already in progress for this connection.');
     }
     $ctx = $ctxOverride ?? osmdBuildContext();
+    $ctx['readVia'] = $tokenSource; // 'service' | 'me' - recorded on the run for provenance (no token value stored)
     // Choose the default provider from the context: the live startup-based probe on a real
     // connection, the demo/evidence classifier in the demo/UAT context. An explicit
     // provider (tests) always wins.
-    if ($provider === null) $provider = empty($ctx['demo']) ? osmdMakeLiveProvider() : 'osmdDefaultProvider';
+    if ($provider === null) $provider = empty($ctx['demo']) ? osmdMakeLiveProvider($actor, $tokenSource) : 'osmdDefaultProvider';
     $runId = (int) dbRun(
         "INSERT INTO osm_discovery_runs (mode, status, actor_user_id, connector_version, context_json, scope_note, started_at) VALUES (?, 'running', ?, ?, ?, ?, datetime('now'))",
         [$isTargeted ? 'targeted' : $mode, $actor['id'] ?? null, OSMD_CONNECTOR_VERSION, json_encode($ctx), $isTargeted ? implode(',', $onlyKeys) : null]

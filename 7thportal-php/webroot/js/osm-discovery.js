@@ -56,7 +56,10 @@ async function renderSummary() {
     title: 'OSM Discovery',
     crumbs: crumbs(),
     description: 'A read-only check of which OSM data capabilities the connected context exposes. Discovery records evidence; it never enables a feature or changes OSM.',
-    actions: `<button class="btn" id="osmd-run">Run discovery</button> <button class="btn btn-secondary" id="osmd-run-ext">Extended read validation</button>`,
+    actions: `<label class="osmd-tokenlabel">Read as
+      <select id="osmd-token"><option value="service">Service connection</option><option value="me">My OSM sign-in</option></select></label>
+      <button class="btn" id="osmd-run">Run discovery</button>
+      <button class="btn btn-secondary" id="osmd-run-ext">Extended read validation</button>`,
   });
   box().innerHTML = '<p class="muted">Loading&hellip;</p>';
   let d;
@@ -81,7 +84,7 @@ async function renderSummary() {
       <h2>Connection</h2>
       <p>${esc((d.context && d.context.account) || 'OSM context')}${d.context && d.context.demo ? ' <span class="badge" data-status="draft">demo</span>' : ''}
         ${d.context && d.context.connected ? '' : ' <span class="badge" data-status="suspended">not connected</span>'}</p>
-      <p class="muted">Connector ${esc(d.connectorVersion)}${d.lastRun ? ' &middot; last completed ' + fmt(d.lastRun.completedAt) : ''}${d.context && d.context.sections ? ' &middot; ' + d.context.sections.length + ' section(s)' : ''}</p>
+      <p class="muted">Connector ${esc(d.connectorVersion)}${d.lastRun ? ' &middot; last completed ' + fmt(d.lastRun.completedAt) : ''}${d.lastRun && d.lastRun.context && d.lastRun.context.readVia ? ' &middot; read via ' + (d.lastRun.context.readVia === 'me' ? 'an administrator OSM sign-in' : 'the service connection') : ''}</p>
       ${d.lastRun ? `<div class="osmd-summary-tiles">${tiles}</div>` : '<p class="muted">No discovery has been run yet. Use Run discovery to build the capability registry.</p>'}
     </div>
 
@@ -146,8 +149,10 @@ function capLabel(d, key) {
 async function doRun(mode) {
   const btns = document.querySelectorAll('#osmd-run, #osmd-run-ext');
   btns.forEach(b => b.disabled = true);
+  const tokenSel = document.getElementById('osmd-token');
+  const tokenSource = tokenSel ? tokenSel.value : 'service';
   try {
-    await Api.post('/api/osm/discovery/runs', { mode });
+    await Api.post('/api/osm/discovery/runs', { mode, tokenSource });
     renderSummary();
   } catch (e) {
     btns.forEach(b => b.disabled = false);
@@ -232,7 +237,9 @@ async function renderCapability(key) {
     title: d.area,
     crumbs: crumbs([{ label: 'Discovery', href: 'osm-discovery.html' }, { label: d.area }]),
     status: { label: d.statusLabel, tone: d.status === 'available' ? 'ready' : (d.status === 'error' ? 'attention' : 'neutral') },
-    actions: `<button class="btn btn-secondary" id="osmd-retest">Re-test</button>`,
+    actions: `<label class="osmd-tokenlabel">Read as
+      <select id="osmd-cap-token"><option value="service">Service connection</option><option value="me">My OSM sign-in</option></select></label>
+      <button class="btn btn-secondary" id="osmd-retest">Re-test</button>`,
   });
   box().innerHTML = `
     <div class="card">
@@ -268,7 +275,9 @@ async function renderCapability(key) {
 
   document.getElementById('osmd-retest').addEventListener('click', async (e) => {
     e.target.disabled = true;
-    try { await Api.post('/api/osm/discovery/capabilities/' + encodeURIComponent(key) + '/retest', { mode: 'safe' }); renderCapability(key); }
+    const tokenSel = document.getElementById('osmd-cap-token');
+    const tokenSource = tokenSel ? tokenSel.value : 'service';
+    try { await Api.post('/api/osm/discovery/capabilities/' + encodeURIComponent(key) + '/retest', { mode: 'extended', tokenSource }); renderCapability(key); }
     catch (err) { e.target.disabled = false; alert(err.message); }
   });
   document.getElementById('osmd-note-add').addEventListener('click', async () => {

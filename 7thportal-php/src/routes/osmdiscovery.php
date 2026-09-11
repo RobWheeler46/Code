@@ -46,8 +46,9 @@ $router->post('/api/osm/discovery/runs', function ($params) {
     $user = requireDiscoveryRun();
     $b = requestBody();
     $mode = in_array($b['mode'] ?? 'safe', ['safe', 'extended'], true) ? $b['mode'] : 'safe';
+    $tokenSource = in_array($b['tokenSource'] ?? 'service', ['service', 'me'], true) ? $b['tokenSource'] : 'service';
     try {
-        $runId = osmdRunDiscovery($user, $mode);
+        $runId = osmdRunDiscovery($user, $mode, null, null, null, $tokenSource);
     } catch (RuntimeException $e) {
         jsonResponse(['error' => $e->getMessage()], 409);
     }
@@ -133,7 +134,8 @@ $router->post('/api/osm/discovery/capabilities/:key/retest', function ($params) 
     if (!isset($cat[$key])) jsonResponse(['error' => 'Unknown capability.'], 404);
     $b = requestBody();
     $mode = in_array($b['mode'] ?? 'safe', ['safe', 'extended'], true) ? $b['mode'] : 'safe';
-    $runId = osmdRunDiscovery($user, $mode, [$key]);
+    $tokenSource = in_array($b['tokenSource'] ?? 'service', ['service', 'me'], true) ? $b['tokenSource'] : 'service';
+    $runId = osmdRunDiscovery($user, $mode, [$key], null, null, $tokenSource);
     $reg = dbGet('SELECT * FROM osm_capability_registry WHERE capability_key = ?', [$key]);
     jsonResponse(['ok' => true, 'runId' => $runId, 'status' => $reg['status'] ?? 'unknown'], 201);
 });
