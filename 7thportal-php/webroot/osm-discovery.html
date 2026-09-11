@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OSM Discovery - 7thPortal</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  /* Capability status pills - the seven-state result model (OSM Discovery spec s6). */
+  .osmd-pill{display:inline-flex;align-items:center;gap:.35rem;border-radius:999px;padding:.1rem .55rem;
+    font-size:.75rem;font-weight:600;border:1px solid transparent;white-space:nowrap}
+  .osmd-pill::before{content:"";width:.45rem;height:.45rem;border-radius:50%;background:currentColor;opacity:.9}
+  .osmd-available{color:#0f7a52;background:#e3f3ea;border-color:#bfe3cf}
+  .osmd-partial,.osmd-permission_limited{color:#9a5a00;background:#faf0dd;border-color:#ecd6a8}
+  .osmd-unavailable,.osmd-not_tested{color:#5a5266;background:#eceaef;border-color:#d9d3e0}
+  .osmd-unknown{color:#1f5fa8;background:#e4eefb;border-color:#c2d8f3}
+  .osmd-error{color:#b3261e;background:#fbe6e4;border-color:#f0c4c0}
+  @media (prefers-color-scheme: dark){
+    .osmd-available{color:#5cc99a;background:#16281f;border-color:#274b39}
+    .osmd-partial,.osmd-permission_limited{color:#e0aa5a;background:#2a2213;border-color:#4d3d1e}
+    .osmd-unavailable,.osmd-not_tested{color:#b6acc2;background:#26222c;border-color:#3d3346}
+    .osmd-unknown{color:#8fbdf0;background:#152436;border-color:#28405c}
+    .osmd-error{color:#e79992;background:#2c1614;border-color:#542823}
+  }
+  .osmd-summary-tiles{display:flex;flex-wrap:wrap;gap:.6rem;margin:.5rem 0 0}
+  .osmd-tile{flex:1 1 7rem;border:1px solid var(--border,#e4ddea);border-radius:10px;padding:.7rem .9rem}
+  .osmd-tile .n{font-size:1.6rem;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+  .osmd-tile .l{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted,#6b6b6b);margin-top:.25rem}
+  .osmd-changes{display:flex;flex-direction:column;gap:.25rem;margin:.4rem 0}
+  .osmd-changes .chg{font-size:.9rem}
+  .osmd-chg-new{color:#0f7a52}.osmd-chg-lost{color:#b3261e}
+  .osmd-feature{display:inline-block;font-size:.78rem;color:var(--muted,#6b6b6b);background:var(--surface-2,#f2eef7);
+    border-radius:5px;padding:.05rem .4rem;margin:.1rem .2rem .1rem 0}
+  .osmd-filters{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:.5rem 0}
+  .osmd-ev{font-size:.88rem;color:var(--muted,#6b6b6b)}
+  .osmd-table-wrap{overflow-x:auto}
+</style>
+</head>
+<body>
+  <header id="app-nav" class="app-nav"></header>
+  <div class="app-layout">
+  <aside id="app-sidebar" class="app-sidebar"></aside>
+  <main class="app-main">
+  <div class="container">
+    <div id="content"><p class="muted">Loading&hellip;</p></div>
+  </div>
+  </main>
+  </div>
+  <script src="js/api.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/pageheader.js"></script>
+  <script src="js/osm-discovery.js"></script>
+</body>
+</html>

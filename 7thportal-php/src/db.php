@@ -1356,6 +1356,57 @@ CREATE TABLE IF NOT EXISTS access_group_members (
   UNIQUE(group_id, user_id)
 );
 CREATE INDEX IF NOT EXISTS idx_access_group_members ON access_group_members(group_id);
+-- OSM Discovery & Capability Registry (Master FRD v3.4, OSM Discovery spec v1.0,
+-- FR-OSMD-001..018 / AC-329..344). A read-only capability probe: each run is an
+-- immutable record of what the connected OSM context exposed, plus a per-capability
+-- result. No OSM tokens, credentials or personal response bodies are ever stored here.
+CREATE TABLE IF NOT EXISTS osm_discovery_runs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  mode TEXT NOT NULL DEFAULT 'safe',          -- safe | extended | targeted
+  status TEXT NOT NULL DEFAULT 'running',     -- running | complete | incomplete | error | cancelled
+  actor_user_id INTEGER REFERENCES users(id),
+  connector_version TEXT,
+  context_json TEXT,                          -- non-secret account/context id + accessible section ids/names
+  summary_json TEXT,                          -- status counts + sections discovered
+  changes_json TEXT,                          -- diff vs the previous completed run
+  scope_note TEXT,                            -- e.g. targeted capability key, or cancellation reason
+  started_at TEXT NOT NULL DEFAULT (datetime('now')),
+  completed_at TEXT
+);
+CREATE TABLE IF NOT EXISTS osm_discovery_results (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id INTEGER NOT NULL REFERENCES osm_discovery_runs(id) ON DELETE CASCADE,
+  capability_key TEXT NOT NULL,
+  status TEXT NOT NULL,                        -- available | partial | permission_limited | unavailable | unknown | error | not_tested
+  scope_json TEXT,                            -- section ids/names the result covers
+  evidence_json TEXT,                         -- evidence class + redacted diagnostics (NO personal data / secrets)
+  response_class TEXT,                        -- ok | permission_denied | not_exposed | auth_expired | unavailable | rate_limited | parse_error | timeout | excluded
+  duration_ms INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_osmd_results_run ON osm_discovery_results(run_id);
+CREATE INDEX IF NOT EXISTS idx_osmd_results_cap ON osm_discovery_results(capability_key);
+-- Current registry projection: the latest resolved state per capability (updated by a
+-- full run or a targeted re-test). Immutable run history lives in the tables above.
+CREATE TABLE IF NOT EXISTS osm_capability_registry (
+  capability_key TEXT PRIMARY KEY,
+  status TEXT NOT NULL,
+  scope_json TEXT,
+  evidence_json TEXT,
+  last_run_id INTEGER REFERENCES osm_discovery_runs(id),
+  last_tested_at TEXT,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+-- Append-only admin notes on a capability (FR-OSMD-017 / AC-343). A note never edits
+-- or replaces recorded probe evidence.
+CREATE TABLE IF NOT EXISTS osm_capability_notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  capability_key TEXT NOT NULL,
+  actor_user_id INTEGER REFERENCES users(id),
+  note TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_osmd_notes_cap ON osm_capability_notes(capability_key);
 -- Demo/UAT feedback (Test Environment pack DEMO-FB): testers leave feedback from
 -- any page in demo mode - persona, page, device, rating, category and comment.
 CREATE TABLE IF NOT EXISTS demo_feedback (

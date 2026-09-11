@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle', 'logic_forms', 'logic_forms_admin', 'logic_forms_files', 'logic_pp_wizard', 'logic_email', 'logic_finance_accounts', 'logic_pp_access', 'logic_pp_triage', 'logic_pp_presets', 'logic_pp_uat', 'logic_pp_activity_scope', 'logic_pp_groups'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle', 'logic_forms', 'logic_forms_admin', 'logic_forms_files', 'logic_pp_wizard', 'logic_email', 'logic_finance_accounts', 'logic_pp_access', 'logic_pp_triage', 'logic_pp_presets', 'logic_pp_uat', 'logic_pp_activity_scope', 'logic_pp_groups', 'logic_osm_discovery'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -32,7 +32,9 @@ function useDb(string $file): void { putenv('SEVENTHPORTAL_DB=' . $file); }
 function boot(): void { require dirname(__DIR__) . '/src/db.php'; }
 function loadLibs(): void
 {
-    foreach (['helpers', 'notifications', 'finance', 'incidents', 'accessgroups', 'patrolpoints', 'events', 'equipment', 'actions', 'quartermaster', 'prepare', 'features', 'attendance', 'demoseed', 'calendar', 'activity', 'pdf', 'dlv', 'forms'] as $lib) {
+    require_once dirname(__DIR__) . '/src/env.php';  // env() - osm.php depends on it
+    require_once dirname(__DIR__) . '/src/http.php'; // clientIp()/queryParam() - lib logAudit paths use them
+    foreach (['helpers', 'osm', 'notifications', 'finance', 'incidents', 'accessgroups', 'patrolpoints', 'osmdiscovery', 'events', 'equipment', 'actions', 'quartermaster', 'prepare', 'features', 'attendance', 'demoseed', 'calendar', 'activity', 'pdf', 'dlv', 'forms'] as $lib) {
         require_once dirname(__DIR__) . '/src/lib/' . $lib . '.php';
     }
 }
@@ -1210,6 +1212,98 @@ function scenario_logic_pp_groups(): void
 
     dbRun("UPDATE access_groups SET expires_at='2000-01-01 00:00:00' WHERE id=?", [$g]);
     check('pp-groups: an expired group grants nothing (AC-326)', !in_array('approve', ppUserCapabilities($u($glv), $comp())));
+}
+
+// OSM Discovery & Capability Registry (Master FRD v3.4, AC-329..344). Read-only
+// capability probe; evidence recorded, no tokens/personal data, no feature enablement.
+function scenario_logic_osm_discovery(): void
+{
+    useDb(tmpDb('osmd')); boot(); loadLibs();
+    $admin = ['id' => (int) dbRun("INSERT INTO users (auth_type,email,first_name,last_name,portal_role) VALUES ('local','a@x','A','A','admin')")['lastInsertId'], 'portal_role' => 'admin'];
+    $leader = ['id' => 1, 'portal_role' => 'section_leader'];
+
+    // AC-329: only an admin may run/view discovery.
+    check('osmd: admin can run discovery, a leader cannot (AC-329)', osmdCanRun($admin) && !osmdCanRun($leader) && !osmdCanView($leader));
+
+    // A full Safe run against the demo/evidence context.
+    $run1 = osmdRunDiscovery($admin, 'safe');
+    $r1 = dbGet('SELECT * FROM osm_discovery_runs WHERE id=?', [$run1]);
+    // AC-330: run records actor, connector version, context and per-capability results;
+    // stores no token/credential and no personal response body.
+    $results1 = dbAll('SELECT * FROM osm_discovery_results WHERE run_id=?', [$run1]);
+    $blob = strtolower($r1['context_json'] . ' ' . implode(' ', array_map(fn($x) => (string) $x['evidence_json'], $results1)));
+    check('osmd: run stores actor, connector version and context (AC-330)', (int) $r1['actor_user_id'] === $admin['id'] && $r1['connector_version'] === OSMD_CONNECTOR_VERSION && $r1['status'] === 'complete');
+    check('osmd: no token/secret/personal data persisted in run evidence (AC-330)', strpos($blob, 'token') === false && strpos($blob, 'secret') === false && strpos($blob, '@') === false && count($results1) === count(osmdCatalogue()));
+
+    $regStatus = fn($k) => (dbGet('SELECT status FROM osm_capability_registry WHERE capability_key=?', [$k])['status'] ?? null);
+    $regScope = fn($k) => (json_decode(dbGet('SELECT scope_json FROM osm_capability_registry WHERE capability_key=?', [$k])['scope_json'] ?? '[]', true) ?: []);
+    // AC-331: Available only for the tested scope; a non-section capability carries no section scope.
+    check('osmd: Available is scoped to the discovered sections (AC-331)', $regStatus('programme') === 'available' && count($regScope('programme')) === 2);
+    check('osmd: an Unavailable/non-section capability claims no section scope (AC-331)', $regStatus('quartermaster') === 'unavailable' && $regScope('quartermaster') === []);
+
+    // AC-332: permission-limited is distinct from a failure; a probe that throws is Error, never Unavailable.
+    check('osmd: permission-limited capability is classified as such (AC-332)', $regStatus('event_payments') === 'permission_limited');
+    $throwOnBadges = function (string $key, array $ctx, string $mode) {
+        if ($key === 'badges') throw new RuntimeException('token boom for user@example.com'); // must be redacted + classified error
+        return osmdDefaultProvider($key, $ctx, $mode);
+    };
+    $runErr = osmdRunDiscovery($admin, 'safe', null, $throwOnBadges);
+    $badgeRes = dbGet('SELECT * FROM osm_discovery_results WHERE run_id=? AND capability_key=?', [$runErr, 'badges']);
+    check('osmd: a failed probe is Error, not Unavailable, and its message is redacted (AC-332)', $badgeRes['status'] === 'error' && strpos($badgeRes['evidence_json'], '@example.com') === false && strpos(strtolower($badgeRes['evidence_json']), 'token [redacted]') !== false);
+
+    // AC-333: comparing runs highlights new/lost/changed capability.
+    $flip = function (string $key, array $ctx, string $mode) {
+        if ($key === 'attendance') return ['status' => 'available', 'scope' => ['Cubs', 'Scouts'], 'evidence' => ['class' => 'ok', 'detail' => 'now readable'], 'response_class' => 'ok', 'duration_ms' => 1];
+        if ($key === 'programme') return ['status' => 'permission_limited', 'scope' => [], 'evidence' => ['class' => 'permission_denied', 'detail' => 'scope removed'], 'response_class' => 'permission_denied', 'duration_ms' => 1];
+        return osmdDefaultProvider($key, $ctx, $mode);
+    };
+    $run2 = osmdRunDiscovery($admin, 'safe', null, $flip);
+    $changes = json_decode(dbGet('SELECT changes_json FROM osm_discovery_runs WHERE id=?', [$run2])['changes_json'], true);
+    check('osmd: comparison flags a newly available capability (AC-333)', in_array('attendance', $changes['newlyAvailable'] ?? [], true));
+    check('osmd: comparison flags a lost capability (AC-333)', in_array('programme', $changes['lost'] ?? [], true));
+    // AC-338: a lost capability raises an admin-visible audit signal and readiness fails safe.
+    check('osmd: a lost capability is audited and its feature is not ready (AC-338)', dbGet("SELECT 1 FROM audit_log WHERE action='osm_discovery_capability_lost'") !== null && osmdFeatureReadinessFor($regStatus('programme')) !== 'ready');
+
+    // AC-334: targeted re-test updates only that capability's projection + history.
+    $progBefore = $regStatus('programme');
+    $histBefore = (int) dbGet("SELECT COUNT(*) c FROM osm_discovery_results WHERE capability_key='attendance'")['c'];
+    osmdRunDiscovery($admin, 'safe', ['attendance'], function (string $key, array $ctx, string $mode) {
+        return ['status' => 'available', 'scope' => ['Cubs', 'Scouts'], 'evidence' => ['class' => 'ok', 'detail' => 'retested'], 'response_class' => 'ok', 'duration_ms' => 1];
+    });
+    $histAfter = (int) dbGet("SELECT COUNT(*) c FROM osm_discovery_results WHERE capability_key='attendance'")['c'];
+    check('osmd: targeted re-test updates its own projection and history (AC-334)', $regStatus('attendance') === 'available' && $histAfter === $histBefore + 1);
+    check('osmd: targeted re-test leaves unrelated capabilities untouched (AC-334)', $regStatus('programme') === $progBefore);
+
+    // AC-336: export carries evidence/scope/timestamps but no secrets or bulk personal data.
+    $export = osmdExportRun($run1);
+    $exportBlob = strtolower(json_encode($export));
+    check('osmd: export has capability evidence but no secrets/personal data (AC-336)', !empty($export['capabilities']) && isset($export['capabilities'][0]['evidenceClass']) && strpos($exportBlob, 'token') === false && strpos($exportBlob, '@') === false);
+
+    // AC-337: an outage pre-flight ends Incomplete and never overwrites prior Available to Unavailable.
+    $before337 = $regStatus('programme'); // restore programme to available first via a clean run
+    osmdRunDiscovery($admin, 'safe'); // programme back to available
+    check('osmd: clean run restores programme to available', $regStatus('programme') === 'available');
+    $outageRun = osmdRunDiscovery($admin, 'safe', null, null, ['account' => 'x', 'sections' => [], 'connected' => false, 'authFresh' => false, 'demo' => false]);
+    $outage = dbGet('SELECT * FROM osm_discovery_runs WHERE id=?', [$outageRun]);
+    check('osmd: an outage run is Incomplete and writes no results (AC-337)', $outage['status'] === 'incomplete' && (int) dbGet('SELECT COUNT(*) c FROM osm_discovery_results WHERE run_id=?', [$outageRun])['c'] === 0);
+    check('osmd: prior Available survives an outage, not overwritten to Unavailable (AC-337)', $regStatus('programme') === 'available');
+
+    // AC-342: only one full discovery at a time.
+    dbRun("INSERT INTO osm_discovery_runs (mode,status,actor_user_id) VALUES ('safe','running',?)", [$admin['id']]);
+    $concurrentBlocked = false;
+    try { osmdRunDiscovery($admin, 'safe'); } catch (RuntimeException $e) { $concurrentBlocked = true; }
+    check('osmd: a second full run is refused while one is running (AC-342)', $concurrentBlocked);
+    dbRun("UPDATE osm_discovery_runs SET status='cancelled' WHERE status='running'");
+
+    // AC-343: an admin note is append-only and never rewrites probe evidence.
+    $evBefore = dbGet("SELECT evidence_json FROM osm_capability_registry WHERE capability_key='programme'")['evidence_json'];
+    dbRun("INSERT INTO osm_capability_notes (capability_key,actor_user_id,note) VALUES ('programme',?,?)", [$admin['id'], 'OSM support confirmed scope on 2026-09-11']);
+    dbRun("INSERT INTO osm_capability_notes (capability_key,actor_user_id,note) VALUES ('programme',?,?)", [$admin['id'], 'second note']);
+    $evAfter = dbGet("SELECT evidence_json FROM osm_capability_registry WHERE capability_key='programme'")['evidence_json'];
+    check('osmd: admin notes are append-only and do not touch probe evidence (AC-343)', (int) dbGet("SELECT COUNT(*) c FROM osm_capability_notes WHERE capability_key='programme'")['c'] === 2 && $evBefore === $evAfter);
+
+    // AC-341 / AC-318 equivalent: discovery status never enables a feature or grants access.
+    check('osmd: Available does not imply feature enablement (AC-341)', osmdFeatureReadinessFor('available') === 'ready' && osmdFeatureReadinessFor('partial') !== 'ready' && osmdFeatureReadinessFor('permission_limited') !== 'ready');
 }
 
 // Forms part 3: on-behalf completion (recorded, not impersonated) + required file

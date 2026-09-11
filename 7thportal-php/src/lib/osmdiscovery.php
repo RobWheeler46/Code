@@ -1,0 +1,345 @@
+<?php
+// OSM Discovery & Capability Registry (Master FRD v3.4, OSM Discovery spec v1.0).
+// A safe, read-only, repeatable probe of the connected OSM context. It records
+// evidence about which capabilities the connection exposes; it never mutates OSM,
+// never enables a production feature, never broadens a permission ceiling, and never
+// persists tokens or personal response bodies (FR-OSMD-003/007/018, AC-330/335/336).
+
+const OSMD_CONNECTOR_VERSION = 'osm-connector-2026.09';
+
+// The seven-state result model (spec s6). Ordered best-to-worst for change scoring.
+const OSMD_STATUSES = ['available', 'partial', 'permission_limited', 'unavailable', 'unknown', 'error', 'not_tested'];
+
+// Configurable capability catalogue (spec s5 + s11). Each entry: the capability area,
+// the 7thPortal features that depend on it, and - for the demo/evidence provider - a
+// representative classification with an evidence class, so the whole feature is
+// demonstrable and testable without a live OSM token. The real-OSM adapter
+// (osmdRealProbe) fills the same shape from actual read probes.
+function osmdCatalogue(): array
+{
+    return [
+        'identity_session'   => ['area' => 'Identity & session',        'checks' => 'Connected identity, accessible sections, role/permission metadata, token scopes where exposed', 'features' => ['Active context', 'Access ceiling'],                 'demo' => ['status' => 'available',         'evidence' => 'Connected identity and roles resolved from the session context'],
+                                 'sectionScoped' => true],
+        'sections'           => ['area' => 'Sections & organisation',   'checks' => 'Section IDs/names, structure and accessible scope',                                        'features' => ['Section contexts', 'Reporting'],                       'demo' => ['status' => 'available',         'evidence' => 'Stable section IDs mapped for the accessible scope'],
+                                 'sectionScoped' => true],
+        'members'            => ['area' => 'Members',                    'checks' => 'Stable member references and minimal roster capability',                                    'features' => ['People', 'Participant selection', 'Counts'],           'demo' => ['status' => 'available',         'evidence' => 'Representative roster read succeeded (references and counts only)'],
+                                 'sectionScoped' => true],
+        'parents_contacts'   => ['area' => 'Parents / contacts',        'checks' => 'Whether parent/contact relationships and permitted fields can be read',                     'features' => ['Parent linkage', 'Operational contact views'],        'demo' => ['status' => 'partial',           'evidence' => 'Contact relationships visible but not all permitted fields are exposed to this scope'],
+                                 'sectionScoped' => true],
+        'patrols'            => ['area' => 'Patrols / sixes',           'checks' => 'Patrol/six structures and memberships',                                                    'features' => ['People grouping', 'Patrol Points team seed'],         'demo' => ['status' => 'available',         'evidence' => 'Patrol/six groupings present on the roster references'],
+                                 'sectionScoped' => true],
+        'programme'          => ['area' => 'Programme',                 'checks' => 'Meeting/programme items, dates, activity metadata',                                        'features' => ['Leader Today', 'Meeting Mode', 'Calendar'],           'demo' => ['status' => 'available',         'evidence' => 'Representative programme read succeeded; no personal body retained'],
+                                 'sectionScoped' => true],
+        'attendance'         => ['area' => 'Attendance',                'checks' => 'Register availability and permitted attendance data',                                      'features' => ['Meeting readiness', 'Attendance insights'],           'demo' => ['status' => 'unknown',           'evidence' => 'No reliable attendance probe is configured for this connector yet'],
+                                 'sectionScoped' => true],
+        'badges'             => ['area' => 'Badges',                    'checks' => 'Badge catalogue, progress and programme links where available',                             'features' => ['Badge opportunity planning'],                         'demo' => ['status' => 'available',         'evidence' => 'Badge catalogue and progress links resolved for the tested scope', 'extendableFrom' => 'partial'],
+                                 'sectionScoped' => true],
+        'events'             => ['area' => 'Events',                    'checks' => 'Event records and participant/response capability where exposed',                            'features' => ['Events & Camps projection'],                          'demo' => ['status' => 'available',         'evidence' => 'Event records readable; official response remains OSM-owned'],
+                                 'sectionScoped' => true],
+        'event_payments'     => ['area' => 'Event payments',            'checks' => 'Payment/status visibility where exposed',                                                   'features' => ['Parent/leader status projection only'],               'demo' => ['status' => 'permission_limited', 'evidence' => 'Payment capability appears to exist but the connected scope is not permitted to read it'],
+                                 'sectionScoped' => true],
+        'risk_assessments'   => ['area' => 'Risk assessments',         'checks' => 'Risk-assessment references/metadata or linked evidence capability',                         'features' => ['Activity Approval evidence reuse'],                   'demo' => ['status' => 'partial',           'evidence' => 'References/metadata readable but not full linked evidence'],
+                                 'sectionScoped' => true],
+        'custom_flexi'       => ['area' => 'Custom / Flexi data',      'checks' => 'Custom fields available to authorised scope',                                               'features' => ['Controlled operational enrichment'],                  'demo' => ['status' => 'unknown',           'evidence' => 'Custom/Flexi fields not probed in Safe mode'],
+                                 'sectionScoped' => true],
+        'quartermaster'      => ['area' => 'Quartermaster',            'checks' => 'Any OSM equipment/quartermaster capability exposed',                                        'features' => ['Migration/link decisions (avoid duplicate master)'],  'demo' => ['status' => 'unavailable',       'evidence' => 'The connected context exposes no equipment/quartermaster capability'],
+                                 'sectionScoped' => false],
+        'expenses_finance'   => ['area' => 'Expenses / finance',       'checks' => 'Any OSM finance/expense capability exposed',                                                'features' => ['Integration decision (do not assume write support)'], 'demo' => ['status' => 'unavailable',       'evidence' => 'The connected context exposes no finance/expense capability'],
+                                 'sectionScoped' => false],
+        'census_capacity'    => ['area' => 'Census / capacity',        'checks' => 'Census or membership-count capability where exposed',                                       'features' => ['Section health & capacity trends'],                   'demo' => ['status' => 'partial',           'evidence' => 'Aggregate counts available; full census breakdown not exposed to this scope'],
+                                 'sectionScoped' => true],
+        'audit_history'      => ['area' => 'Audit / history',          'checks' => 'Source audit/change metadata where exposed',                                                'features' => ['Sync diagnosis', 'Change attribution'],               'demo' => ['status' => 'unknown',           'evidence' => 'No source audit/history probe is configured for this connector yet'],
+                                 'sectionScoped' => false],
+        'rate_limits'        => ['area' => 'Rate limits / connector constraints', 'checks' => 'Observed/declared throttling, paging, error and version characteristics',                 'features' => ['Connector resilience', 'Scheduling'],                 'demo' => ['status' => 'available',         'evidence' => 'Connector paging and backoff characteristics observed within limits'],
+                                 'sectionScoped' => false],
+    ];
+}
+
+function osmdStatusLabel(string $s): string
+{
+    return [
+        'available' => 'Available', 'partial' => 'Partial', 'permission_limited' => 'Permission limited',
+        'unavailable' => 'Unavailable', 'unknown' => 'Unknown', 'error' => 'Error', 'not_tested' => 'Not tested',
+    ][$s] ?? $s;
+}
+
+// Only Portal Administrators may run or view discovery (least privilege - discovery
+// evidence is data-minimised but still integration-sensitive). FR-OSMD-002.
+function osmdCanRun(array $user): bool { return ($user['portal_role'] ?? '') === 'admin'; }
+function osmdCanView(array $user): bool { return ($user['portal_role'] ?? '') === 'admin'; }
+
+// Build the non-secret discovery context: connection state and accessible sections.
+// Never returns tokens or a bulk roster (spec s7 step 2, AC-330).
+function osmdBuildContext(): array
+{
+    // In this build OSM /ext reads are blocked from the server IP, so live data reads are
+    // sign-in-only. Whenever demo mode is allowed (including a configured-but-read-blocked
+    // deployment with ALLOW_DEMO_MODE), discovery runs against the demo/evidence context:
+    // real section identifiers from the section registry, evidence-based classification,
+    // and no personal data. Only non-secret identifiers are ever returned.
+    if (osmDemoModeAllowed()) {
+        $sections = array_map(fn($s) => ['id' => $s['sectionid'], 'name' => $s['sectionname']], array_values(OSM_DEMO_SECTIONS));
+        return ['account' => 'Demo OSM context (evidence mode)', 'sections' => $sections, 'connected' => true, 'authFresh' => true, 'demo' => true];
+    }
+    // Pure production with live reads: reflect real connection health so a pre-flight
+    // outage/auth problem is detectable (AC-337). Sections would come from a supported
+    // read contract; connection/auth state still drives pre-flight.
+    $health = osmdConnectionHealth();
+    return ['account' => 'Connected OSM context', 'sections' => [], 'connected' => $health['connected'], 'authFresh' => $health['authFresh'], 'demo' => false];
+}
+
+// Non-secret connection health for pre-flight. Demo/evidence mode is always healthy; a
+// live-read connection is healthy only while a usable service read token is available.
+function osmdConnectionHealth(): array
+{
+    if (osmDemoModeAllowed()) return ['connected' => true, 'authFresh' => true];
+    if (function_exists('getServiceAccount') && function_exists('osmDataReadTokenFor')) {
+        $svc = getServiceAccount();
+        if ($svc) {
+            $tok = osmDataReadTokenFor($svc);
+            return ['connected' => empty($tok['unavailable']), 'authFresh' => empty($tok['unavailable'])];
+        }
+    }
+    return ['connected' => osmIsConfigured(), 'authFresh' => true];
+}
+
+// Default probe provider. In the demo/evidence context it classifies each capability
+// from the catalogue's representative evidence; Extended mode can lift a capability
+// flagged with extendableFrom to Available. A real-OSM adapter would replace this with
+// actual read probes while returning the identical shape.
+function osmdDefaultProvider(string $capKey, array $ctx, string $mode): array
+{
+    $cat = osmdCatalogue();
+    $entry = $cat[$capKey] ?? null;
+    if (!$entry) return ['status' => 'unknown', 'scope' => [], 'evidence' => ['class' => 'no_probe', 'detail' => 'Unknown capability'], 'response_class' => 'excluded', 'duration_ms' => 0];
+    $t0 = microtime(true);
+    $status = $entry['demo']['status'];
+    $evidence = $entry['demo']['evidence'];
+    // Extended read validation may resolve a Partial to Available where a representative
+    // read is enough to confirm it (spec s4).
+    if ($mode === 'extended' && ($entry['demo']['extendableFrom'] ?? null) === $status) {
+        $status = 'available';
+        $evidence = $evidence . ' (confirmed under extended read validation)';
+    }
+    $scope = ($entry['sectionScoped'] ?? false) && in_array($status, ['available', 'partial', 'permission_limited'], true)
+        ? array_map(fn($s) => $s['name'], $ctx['sections'] ?? []) : [];
+    $respClass = [
+        'available' => 'ok', 'partial' => 'ok', 'permission_limited' => 'permission_denied',
+        'unavailable' => 'not_exposed', 'unknown' => 'no_evidence', 'error' => 'error', 'not_tested' => 'excluded',
+    ][$status] ?? 'ok';
+    return [
+        'status' => $status,
+        'scope' => $scope,
+        'evidence' => ['class' => $respClass, 'detail' => $evidence],
+        'response_class' => $respClass,
+        'duration_ms' => max(1, (int) round((microtime(true) - $t0) * 1000)),
+    ];
+}
+
+// Run a discovery. $onlyKeys limits to a targeted re-test; $provider is swappable so
+// failure/outage paths are testable. Returns the run id. Enforces one full run per
+// connection at a time (FR-OSMD-012 / AC-342). Pre-flight failures (no connection /
+// auth) leave the prior registry intact and stale rather than overwriting it (AC-337).
+function osmdRunDiscovery(array $actor, string $mode = 'safe', ?array $onlyKeys = null, ?callable $provider = null, ?array $ctxOverride = null): int
+{
+    $provider = $provider ?? 'osmdDefaultProvider';
+    $isTargeted = $onlyKeys !== null;
+    if (!$isTargeted && dbGet("SELECT 1 FROM osm_discovery_runs WHERE status = 'running'")) {
+        throw new RuntimeException('A discovery run is already in progress for this connection.');
+    }
+    $ctx = $ctxOverride ?? osmdBuildContext();
+    $runId = (int) dbRun(
+        "INSERT INTO osm_discovery_runs (mode, status, actor_user_id, connector_version, context_json, scope_note, started_at) VALUES (?, 'running', ?, ?, ?, ?, datetime('now'))",
+        [$isTargeted ? 'targeted' : $mode, $actor['id'] ?? null, OSMD_CONNECTOR_VERSION, json_encode($ctx), $isTargeted ? implode(',', $onlyKeys) : null]
+    )['lastInsertId'];
+
+    // Pre-flight (spec s7 step 1). No usable connection -> incomplete; prior registry is
+    // preserved and marked stale, never overwritten to Unavailable.
+    if (!$ctx['connected'] || !$ctx['authFresh']) {
+        $reason = !$ctx['connected'] ? 'OSM connection unavailable' : 'OSM authentication expired';
+        dbRun("UPDATE osm_discovery_runs SET status = 'incomplete', completed_at = datetime('now'), summary_json = ?, scope_note = ? WHERE id = ?",
+            [json_encode(['incomplete' => true, 'reason' => $reason]), $reason, $runId]);
+        logAudit(['userId' => $actor['id'] ?? null, 'action' => 'osm_discovery_incomplete', 'entityType' => 'osm_discovery_run', 'entityId' => (string) $runId, 'ipAddress' => clientIp(), 'details' => ['reason' => $reason]]);
+        return $runId;
+    }
+
+    $keys = $isTargeted ? array_values(array_intersect($onlyKeys, array_keys(osmdCatalogue()))) : array_keys(osmdCatalogue());
+    $counts = array_fill_keys(OSMD_STATUSES, 0);
+    $hadError = false;
+    foreach ($keys as $key) {
+        try {
+            $r = $provider($key, $ctx, $isTargeted ? 'targeted' : $mode);
+        } catch (Throwable $e) {
+            // A probe that should have worked but failed is Error, never Unavailable (AC-332).
+            $r = ['status' => 'error', 'scope' => [], 'evidence' => ['class' => 'error', 'detail' => 'Probe failed: ' . osmdRedactMessage($e->getMessage())], 'response_class' => 'error', 'duration_ms' => 0];
+        }
+        $status = in_array($r['status'], OSMD_STATUSES, true) ? $r['status'] : 'unknown';
+        if ($status === 'error') $hadError = true;
+        $counts[$status] = ($counts[$status] ?? 0) + 1;
+        dbRun("INSERT INTO osm_discovery_results (run_id, capability_key, status, scope_json, evidence_json, response_class, duration_ms) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [$runId, $key, $status, json_encode($r['scope'] ?? []), json_encode($r['evidence'] ?? []), $r['response_class'] ?? null, $r['duration_ms'] ?? null]);
+    }
+
+    // Compare against the previous completed run before this one is finalised.
+    $prev = dbGet("SELECT id FROM osm_discovery_runs WHERE status IN ('complete') AND id < ? ORDER BY id DESC LIMIT 1", [$runId]);
+    $changes = $prev ? osmdCompareRuns((int) $prev['id'], $runId) : ['baseline' => true];
+
+    // A capability that was Available and is now lost is a material integration change:
+    // surface it as an admin-visible audit signal. Dependent features fail safe because
+    // their readiness is derived from the (now lower) status, never fabricated (AC-338).
+    if (!empty($changes['lost'])) {
+        logAudit(['userId' => $actor['id'] ?? null, 'action' => 'osm_discovery_capability_lost', 'entityType' => 'osm_discovery_run', 'entityId' => (string) $runId, 'ipAddress' => clientIp(), 'details' => ['lost' => $changes['lost']]]);
+    }
+
+    $sectionsCount = count($ctx['sections'] ?? []);
+    $summary = ['counts' => $counts, 'sections' => $sectionsCount, 'mode' => $isTargeted ? 'targeted' : $mode];
+    dbRun("UPDATE osm_discovery_runs SET status = 'complete', completed_at = datetime('now'), summary_json = ?, changes_json = ? WHERE id = ?",
+        [json_encode($summary), json_encode($changes), $runId]);
+
+    // Update the current registry projection for the capabilities this run resolved.
+    // A transient Error result never overwrites a prior definitive status to Unavailable -
+    // it is stored as Error, distinct from Unavailable (AC-332/337).
+    foreach (dbAll('SELECT * FROM osm_discovery_results WHERE run_id = ?', [$runId]) as $res) {
+        dbRun("INSERT INTO osm_capability_registry (capability_key, status, scope_json, evidence_json, last_run_id, last_tested_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+               ON CONFLICT(capability_key) DO UPDATE SET status = excluded.status, scope_json = excluded.scope_json,
+                 evidence_json = excluded.evidence_json, last_run_id = excluded.last_run_id, last_tested_at = excluded.last_tested_at, updated_at = datetime('now')",
+            [$res['capability_key'], $res['status'], $res['scope_json'], $res['evidence_json'], $runId]);
+    }
+
+    logAudit(['userId' => $actor['id'] ?? null, 'action' => $isTargeted ? 'osm_discovery_retest' : 'osm_discovery_run', 'entityType' => 'osm_discovery_run', 'entityId' => (string) $runId, 'ipAddress' => clientIp(), 'details' => ['mode' => $isTargeted ? 'targeted' : $mode, 'capabilities' => count($keys), 'hadError' => $hadError]]);
+    return $runId;
+}
+
+// Redact anything token/secret-shaped or that looks like personal data out of a probe
+// diagnostic message before it is stored (FR-OSMD-007).
+function osmdRedactMessage(string $msg): string
+{
+    $msg = preg_replace('/(token|secret|bearer|password|authorization)[=:\s][^\s]+/i', '$1 [redacted]', $msg);
+    $msg = preg_replace('/[\w.+-]+@[\w.-]+\.\w+/', '[email redacted]', $msg);
+    return mb_substr((string) $msg, 0, 200);
+}
+
+// Diff two completed runs by capability (spec s7 step 6, FR-OSMD-008).
+function osmdCompareRuns(int $prevRunId, int $runId): array
+{
+    $load = fn($id) => array_column(dbAll('SELECT capability_key, status, scope_json FROM osm_discovery_results WHERE run_id = ?', [$id]), null, 'capability_key');
+    $prev = $load($prevRunId);
+    $curr = $load($runId);
+    $newlyAvailable = $lost = $statusChanged = $scopeChanged = [];
+    foreach ($curr as $key => $c) {
+        $p = $prev[$key] ?? null;
+        if (!$p) { if ($c['status'] === 'available') $newlyAvailable[] = $key; continue; }
+        if ($p['status'] !== $c['status']) {
+            if ($c['status'] === 'available' && $p['status'] !== 'available') $newlyAvailable[] = $key;
+            elseif ($p['status'] === 'available' && $c['status'] !== 'available') $lost[] = $key;
+            else $statusChanged[] = ['key' => $key, 'from' => $p['status'], 'to' => $c['status']];
+        } elseif (($p['scope_json'] ?? '') !== ($c['scope_json'] ?? '')) {
+            $scopeChanged[] = $key;
+        }
+    }
+    return ['prevRunId' => $prevRunId, 'newlyAvailable' => $newlyAvailable, 'lost' => $lost, 'statusChanged' => $statusChanged, 'scopeChanged' => $scopeChanged];
+}
+
+// The current capability registry projection with dependent feature mapping and
+// readiness (spec s11, FR-OSMD-009). Feature readiness NEVER enables a feature.
+function osmdRegistry(): array
+{
+    $cat = osmdCatalogue();
+    $reg = array_column(dbAll('SELECT * FROM osm_capability_registry'), null, 'capability_key');
+    $out = [];
+    foreach ($cat as $key => $entry) {
+        $r = $reg[$key] ?? null;
+        $status = $r['status'] ?? 'not_tested';
+        $out[] = [
+            'key' => $key,
+            'area' => $entry['area'],
+            'checks' => $entry['checks'],
+            'status' => $status,
+            'statusLabel' => osmdStatusLabel($status),
+            'scope' => $r ? (json_decode($r['scope_json'] ?? '[]', true) ?: []) : [],
+            'lastTestedAt' => $r['last_tested_at'] ?? null,
+            'features' => $entry['features'],
+            'readiness' => osmdFeatureReadinessFor($status),
+        ];
+    }
+    return $out;
+}
+
+// A feature is Ready only when its capability is Available; otherwise it stays
+// gated/partial/unavailable - discovery never turns it on (AC-341).
+function osmdFeatureReadinessFor(string $status): string
+{
+    return match ($status) {
+        'available' => 'ready',
+        'partial' => 'partial',
+        'permission_limited' => 'permission_gap',
+        default => 'not_ready',
+    };
+}
+
+// Permission-filtered export payload (FR-OSMD-015 / AC-336): capability status, scope,
+// evidence class, timestamps and dependent features - no secrets, no bulk personal data.
+function osmdExportRun(int $runId): ?array
+{
+    $run = dbGet('SELECT * FROM osm_discovery_runs WHERE id = ?', [$runId]);
+    if (!$run) return null;
+    $cat = osmdCatalogue();
+    $results = array_map(function ($res) use ($cat) {
+        $ev = json_decode($res['evidence_json'] ?? '{}', true) ?: [];
+        return [
+            'capability' => $res['capability_key'],
+            'area' => $cat[$res['capability_key']]['area'] ?? $res['capability_key'],
+            'status' => $res['status'],
+            'scope' => json_decode($res['scope_json'] ?? '[]', true) ?: [],
+            'evidenceClass' => $ev['class'] ?? null,
+            'evidence' => $ev['detail'] ?? null,
+            'testedAt' => $res['created_at'],
+            'dependentFeatures' => $cat[$res['capability_key']]['features'] ?? [],
+        ];
+    }, dbAll('SELECT * FROM osm_discovery_results WHERE run_id = ? ORDER BY capability_key', [$runId]));
+    return [
+        'runId' => (int) $run['id'],
+        'connectorVersion' => $run['connector_version'],
+        'mode' => $run['mode'],
+        'status' => $run['status'],
+        'startedAt' => $run['started_at'],
+        'completedAt' => $run['completed_at'],
+        'context' => json_decode($run['context_json'] ?? '{}', true) ?: [],
+        'summary' => json_decode($run['summary_json'] ?? '{}', true) ?: [],
+        'capabilities' => $results,
+        'note' => 'Read-only discovery evidence; no secrets or bulk personal data.',
+    ];
+}
+
+function serializeOsmdRun(array $run): array
+{
+    return [
+        'id' => (int) $run['id'],
+        'mode' => $run['mode'],
+        'status' => $run['status'],
+        'connectorVersion' => $run['connector_version'],
+        'context' => json_decode($run['context_json'] ?? '{}', true) ?: [],
+        'summary' => json_decode($run['summary_json'] ?? '{}', true) ?: [],
+        'changes' => json_decode($run['changes_json'] ?? '{}', true) ?: [],
+        'scopeNote' => $run['scope_note'] ?? null,
+        'startedAt' => $run['started_at'],
+        'completedAt' => $run['completed_at'],
+    ];
+}
+
+function serializeOsmdResult(array $res): array
+{
+    $cat = osmdCatalogue();
+    return [
+        'capability' => $res['capability_key'],
+        'area' => $cat[$res['capability_key']]['area'] ?? $res['capability_key'],
+        'status' => $res['status'],
+        'statusLabel' => osmdStatusLabel($res['status']),
+        'scope' => json_decode($res['scope_json'] ?? '[]', true) ?: [],
+        'evidence' => json_decode($res['evidence_json'] ?? '{}', true) ?: [],
+        'responseClass' => $res['response_class'] ?? null,
+        'durationMs' => $res['duration_ms'] !== null ? (int) $res['duration_ms'] : null,
+        'testedAt' => $res['created_at'],
+    ];
+}

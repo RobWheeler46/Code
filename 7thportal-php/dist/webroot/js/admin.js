@@ -59,8 +59,28 @@ async function renderHealth() {
   const box = document.getElementById('tab-content');
   box.innerHTML = '<p class="muted">Loading&hellip;</p>';
   const params = new URLSearchParams(location.search);
-  const health = await Api.get('/api/admin/integration-health');
+  const [health, disc] = await Promise.all([
+    Api.get('/api/admin/integration-health'),
+    Api.get('/api/osm/discovery').catch(() => null),
+  ]);
+  const discCard = disc ? (() => {
+    const c = (disc.lastRun && disc.lastRun.summary && disc.lastRun.summary.counts) || {};
+    const ch = (disc.lastRun && disc.lastRun.changes) || {};
+    const changeCount = ((ch.newlyAvailable || []).length) + ((ch.lost || []).length) + ((ch.statusChanged || []).length) + ((ch.scopeChanged || []).length);
+    return `
+    <div class="card">
+      <h2>OSM Discovery</h2>
+      <p class="muted">A read-only check of which OSM data capabilities the connected context actually exposes. It records evidence and never enables a feature or changes OSM.</p>
+      ${disc.lastRun ? `
+        <p>Last completed run: <strong>${formatDateTime(disc.lastRun.completedAt)}</strong>${disc.stale ? ' <span class="badge" data-status="suspended">stale</span>' : ''}</p>
+        <p>${['available','partial','permission_limited','unknown','error'].map(k => `${(c[k] || 0)} ${escapeHtml((disc.statuses.find(s => s.key === k) || {}).label || k)}`).join(' &middot; ')}</p>
+        ${changeCount ? `<p class="muted">${changeCount} change${changeCount === 1 ? '' : 's'} since the previous run.</p>` : ''}
+      ` : '<p class="muted">No discovery has been run yet.</p>'}
+      <a class="btn btn-secondary" href="/osm-discovery.html">Open OSM Discovery</a>
+    </div>`;
+  })() : '';
   box.innerHTML = `
+    ${discCard}
     ${params.get('connected') ? '<div class="alert alert-success">OSM service connection updated.</div>' : ''}
     <div class="card">
       <h2>OSM connection</h2>
