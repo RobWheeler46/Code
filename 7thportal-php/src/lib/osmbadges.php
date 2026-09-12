@@ -191,15 +191,28 @@ function osmBadgesDiagnoseAwarded(array $actor): array
     $type = $startup['sectionTypes'][$sid] ?? null;
     $termId = osmCurrentTermIdForSection($token, $sid);
 
+    // Grab one real badge id from the catalogue (which we CAN read) so getBadgeRecords can
+    // be tested for a specific badge - it is the per-member read the app already uses.
+    $badgeId = null;
+    $badgeVer = '0';
+    try {
+        $catResp = osmGet($token, '/ext/badges/records/', ['action' => 'getAvailableBadges', 'section' => $type, 'section_id' => $sid, 'term_id' => $termId, 'type_id' => '1', 'context' => 'none']);
+        $catRows = osmBadgeExtractRows($catResp);
+        if ($catRows) { $badgeId = (string) ($catRows[0]['badge_id'] ?? ''); $badgeVer = (string) ($catRows[0]['badge_version'] ?? '0'); }
+    } catch (Throwable $e) { /* catalogue unreadable here - leave badgeId null */ }
+
     // The per-member/award endpoint is undocumented and inconsistent, so probe several
     // candidates in one pass and report each one's status and shape. Every value shown is
     // either a field NAME or a badge-level scalar - never a member's name (PII).
     $candidates = [
-        ['action' => 'getBadgesByMember',        'path' => '/ext/badges/by-member/',   'params' => ['action' => 'getBadgesByMember', 'section' => $type, 'section_id' => $sid, 'term_id' => $termId]],
         ['action' => 'getBadgesByPerson',        'path' => '/ext/badges/badgesbyperson/', 'params' => ['action' => 'getBadgesByPerson', 'section' => $type, 'section_id' => $sid, 'term_id' => $termId]],
         ['action' => 'getBadgeStructureByPerson','path' => '/ext/badges/records/',      'params' => ['action' => 'getBadgeStructureByPerson', 'section' => $type, 'section_id' => $sid, 'term_id' => $termId]],
         ['action' => 'getSummary',               'path' => '/ext/badges/records/',      'params' => ['action' => 'getSummary', 'section' => $type, 'section_id' => $sid, 'term_id' => $termId, 'type_id' => '1']],
+        ['action' => 'getDueBadges',             'path' => '/ext/badges/due/',         'params' => ['action' => 'getDueBadges', 'section' => $type, 'section_id' => $sid, 'term_id' => $termId]],
     ];
+    if ($badgeId) {
+        $candidates[] = ['action' => 'getBadgeRecords', 'path' => '/ext/badges/records/', 'params' => ['action' => 'getBadgeRecords', 'section' => $type, 'section_id' => $sid, 'term_id' => $termId, 'type_id' => '1', 'badge_id' => $badgeId, 'badge_version' => $badgeVer]];
+    }
     $results = [];
     foreach ($candidates as $c) {
         try {
