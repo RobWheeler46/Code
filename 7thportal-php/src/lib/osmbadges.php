@@ -256,6 +256,30 @@ function osmBadgesDiagnoseAwarded(array $actor, string $tokenSource = 'service')
             'sampleBadge' => $sampleBadge ? array_map(fn($v) => is_scalar($v) ? $v : ('[' . gettype($v) . ']'), $sampleBadge) : null, // badge-level fields, no member PII
         ];
     }
+    // Also try the POST "grid" mechanism the app uses to read members server-side (GET
+    // member reads were limited the same way), in case a badge grid is permitted where the
+    // GET summary actions are 403. osmRawData never throws - it returns the status.
+    $gridCandidates = [
+        ['label' => 'POST records/grid getGrid',       'path' => '/ext/badges/records/grid/',    'query' => ['action' => 'getGrid'],    'body' => ['section_id' => $sid, 'term_id' => $termId, 'type_id' => '1']],
+        ['label' => 'POST records getSummary',         'path' => '/ext/badges/records/',         'query' => ['action' => 'getSummary'], 'body' => ['section_id' => $sid, 'term_id' => $termId, 'type_id' => '1']],
+        ['label' => 'POST records/summary getSummary', 'path' => '/ext/badges/records/summary/', 'query' => ['action' => 'getSummary'], 'body' => ['section_id' => $sid, 'term_id' => $termId, 'type_id' => '1']],
+        ['label' => 'POST summary get',                'path' => '/ext/badges/summary/',         'query' => ['action' => 'get'],        'body' => ['section_id' => $sid, 'term_id' => $termId, 'type_id' => '1']],
+    ];
+    $grid = [];
+    foreach ($gridCandidates as $g) {
+        $r = osmRawData('POST', $token, $g['path'], $g['query'], $g['body']);
+        $payload = $r['payload'] ?? null;
+        $firstItem = is_array($r['items'] ?? null) ? ($r['items'][0] ?? null) : null;
+        $grid[$g['label']] = [
+            'path' => $g['path'],
+            'status' => $r['status'],
+            'itemsFound' => $r['count'],
+            'payloadKeys' => (is_array($payload) && !array_is_list($payload)) ? array_slice(array_keys($payload), 0, 25) : (is_array($payload) ? ['(list)'] : []),
+            'sampleItemKeys' => is_array($firstItem) ? array_slice(array_keys($firstItem), 0, 40) : [], // KEY names only - no values (PII)
+            'error' => $r['error'] ?? null,
+        ];
+    }
+
     if (function_exists('logAudit')) {
         logAudit(['userId' => $actor['id'], 'action' => 'osm_badges_diagnose_awarded', 'entityType' => 'osm_badge_summary', 'entityId' => $sid, 'ipAddress' => function_exists('clientIp') ? clientIp() : null]);
     }
@@ -263,6 +287,7 @@ function osmBadgesDiagnoseAwarded(array $actor, string $tokenSource = 'service')
         'tokenSource' => $tokenSource,
         'section' => $startup['sections'][$sid], 'sectionId' => $sid, 'sectionType' => $type, 'termId' => $termId,
         'candidates' => $results,
+        'gridCandidates' => $grid,
     ];
 }
 
