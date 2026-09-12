@@ -1397,6 +1397,14 @@ function scenario_logic_osm_badges(): void
     check('osmb: summary rolls up per-type totals', ($s['byType']['Activity']['awarded'] ?? 0) === 3 && ($s['byType']['Staged']['awarded'] ?? 0) === 0);
     check('osmb: a synced section is marked ok and not flagged for verification', $s['sections'][0]['status'] === 'ok' && !$s['needsVerification']);
 
+    // Tolerant row extraction: OSM has kept the badge list under different containers over
+    // time, so a container change must never silently zero the summary.
+    check('osmb: extract rows from a bare list', count(osmBadgeExtractRows([['name' => 'A'], ['name' => 'B']])) === 2);
+    check('osmb: extract rows from a data/items container', count(osmBadgeExtractRows(['data' => [['name' => 'A']]])) === 1 && count(osmBadgeExtractRows(['items' => [['name' => 'A'], ['name' => 'B']]])) === 2);
+    check('osmb: extract rows from an object keyed by badge id', count(osmBadgeExtractRows(['details' => ['179_0' => ['name' => 'A', 'badge_id' => '179'], '180_0' => ['name' => 'B', 'badge_id' => '180']]])) === 2);
+    check('osmb: extract rows from a top-level id-keyed object', count(osmBadgeExtractRows(['179_0' => ['name' => 'A', 'badge_id' => '179']])) === 1);
+    check('osmb: an empty or non-array response yields no rows', osmBadgeExtractRows([]) === [] && osmBadgeExtractRows('nope') === []);
+
     // Tolerant field parsing: award counts arrive under several possible names; a genuinely
     // absent field returns null (distinct from a real zero) so the caller can flag it.
     check('osmb: int field reads the first present candidate, else null', osmBadgeIntField(['awarded' => '5'], ['awarded', 'awarded_count']) === 5 && osmBadgeIntField(['completed' => 3], ['awarded', 'completed']) === 3 && osmBadgeIntField(['x' => 1], ['awarded']) === null);

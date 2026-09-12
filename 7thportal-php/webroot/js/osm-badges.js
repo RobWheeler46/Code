@@ -115,8 +115,36 @@ function render() {
   parts.push(`<p class="osb-meta">Last refreshed ${esc(fmt(s.lastSynced))}${src ? ' from ' + esc(src) : ''}.
     Because Online Scout Manager limits how often it can be read, this screen shows the last saved counts rather than reading live on each visit.</p>`);
 
+  if (canRefresh) {
+    parts.push(`<p class="osb-meta"><button class="btn btn-secondary btn-sm" id="osb-diagnose">Inspect the OSM badge response</button>
+      <span class="osb-meta"> shows the shape of one section's live badge response, to map the award counts.</span></p>
+      <pre id="osb-diag" hidden style="overflow:auto;max-height:24rem;background:var(--surface-2,#f2eef7);padding:.8rem;border-radius:8px;font-size:.78rem;white-space:pre-wrap"></pre>`);
+  }
+
   box().innerHTML = parts.join('');
-  if (canRefresh) wireRefresh();
+  if (canRefresh) { wireRefresh(); wireDiagnose(); }
+}
+
+function wireDiagnose() {
+  const btn = document.getElementById('osb-diagnose');
+  const out = document.getElementById('osb-diag');
+  if (!btn || !out) return;
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    const orig = btn.textContent;
+    btn.textContent = 'Reading from OSM…';
+    try {
+      const d = await Api.get('/api/osm/badges/diagnose');
+      out.hidden = false;
+      out.textContent = JSON.stringify(d.diagnostic, null, 2);
+    } catch (e) {
+      out.hidden = false;
+      out.textContent = 'Diagnostic failed: ' + e.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = orig;
+    }
+  });
 }
 
 function wireRefresh() {

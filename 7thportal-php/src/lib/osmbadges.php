@@ -138,6 +138,48 @@ function osmBadgesRefresh(array $actor, array $opts = []): array
     return $out;
 }
 
+// One-section diagnostic: read the real getAvailableBadges response for the first
+// accessible section and report its SHAPE (top-level keys, how many badge rows were
+// found, and one sample row's field names and scalar values) so the aggregate award/
+// completed fields can be mapped from real evidence rather than guessed. Reads only the
+// badge catalogue for a single section (four calls) - no member data, no throttle risk.
+function osmBadgesDiagnose(array $actor): array
+{
+    if (!osmBadgesCanRefresh($actor)) throw new RuntimeException('You do not have permission to run the badge diagnostic.');
+    if (osmDemoModeAllowed()) throw new RuntimeException('This is running in demo mode, so there is no live OSM response to inspect. Deploy to the live server and run it there.');
+    $svc = function_exists('getServiceAccount') ? getServiceAccount() : null;
+    $tok = $svc ? osmDataReadTokenFor($svc) : ['unavailable' => true];
+    if (!empty($tok['unavailable'])) throw new RuntimeException($tok['reason'] ?? 'No OSM service connection is available to read from.');
+    $token = $tok['token'];
+    $startup = osmdFetchStartupWith($token);
+    if (empty($startup['ok']) || empty($startup['sections'])) throw new RuntimeException('Could not read any sections from the OSM startup context.');
+    $sid = (string) array_key_first($startup['sections']);
+    $type = $startup['sectionTypes'][$sid] ?? null;
+    $termId = osmCurrentTermIdForSection($token, $sid);
+    $out = ['section' => $startup['sections'][$sid], 'sectionId' => $sid, 'sectionType' => $type, 'termId' => $termId, 'byType' => []];
+    foreach (OSM_BADGE_TYPE_NAMES as $typeId => $typeName) {
+        try {
+            $resp = osmGet($token, '/ext/badges/records/', ['action' => 'getAvailableBadges', 'section' => $type, 'section_id' => $sid, 'term_id' => $termId, 'type_id' => (string) $typeId, 'context' => 'none']);
+        } catch (Throwable $e) {
+            $out['byType'][$typeName] = ['error' => function_exists('osmdRedactMessage') ? osmdRedactMessage($e->getMessage()) : 'read failed'];
+            continue;
+        }
+        $rows = osmBadgeExtractRows($resp);
+        $sample = $rows[0] ?? null;
+        $out['byType'][$typeName] = [
+            'topLevelType' => array_is_list($resp) ? 'list' : 'object',
+            'topLevelKeys' => array_is_list($resp) ? [] : array_slice(array_keys($resp), 0, 25),
+            'rowsFound' => count($rows),
+            'sampleKeys' => $sample ? array_keys($sample) : [],
+            'sample' => $sample ? array_map(fn($v) => is_scalar($v) ? $v : ('[' . gettype($v) . ']'), $sample) : null,
+        ];
+    }
+    if (function_exists('logAudit')) {
+        logAudit(['userId' => $actor['id'], 'action' => 'osm_badges_diagnose', 'entityType' => 'osm_badge_summary', 'entityId' => $sid, 'ipAddress' => function_exists('clientIp') ? clientIp() : null]);
+    }
+    return $out;
+}
+
 // The mirror, shaped for the screen: per-section rows, group totals, per-type totals,
 // and metadata (when it was last synced, whether any section needs a shape check).
 function osmBadgesSummaryData(): array

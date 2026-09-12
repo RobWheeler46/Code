@@ -22,3 +22,16 @@ $router->post('/api/osm/badges/refresh', function ($params) {
     }
     jsonResponse(['ok' => true, 'result' => $result, 'summary' => osmBadgesSummaryData()], 201);
 });
+
+// Admin-only diagnostic: reports the SHAPE of the live getAvailableBadges response for
+// one section, so the aggregate award/completed fields can be mapped from real evidence
+// when a refresh comes back flagged for verification. Catalogue data only, no members.
+$router->get('/api/osm/badges/diagnose', function ($params) {
+    $user = requireAuth();
+    if (!osmBadgesCanRefresh($user)) jsonResponse(['error' => 'You do not have permission to run the badge diagnostic.'], 403);
+    try {
+        jsonResponse(['ok' => true, 'diagnostic' => osmBadgesDiagnose($user)]);
+    } catch (RuntimeException $e) {
+        jsonResponse(['error' => $e->getMessage()], 409);
+    }
+});

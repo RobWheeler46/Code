@@ -712,6 +712,25 @@ function osmBadgeIntField(array $row, array $keys): ?int
     return null;
 }
 
+// OSM has moved the badge list between response shapes over time (a bare list, or under
+// data / items / badges / details, or an object keyed by "<badgeId>_<version>"). Pull the
+// badge rows out of whichever shape came back, so a container change never silently
+// zeroes the summary. Returns a plain list of associative badge rows.
+function osmBadgeExtractRows($resp): array
+{
+    if (!is_array($resp) || !$resp) return [];
+    if (array_is_list($resp)) return array_values(array_filter($resp, 'is_array'));
+    foreach (['data', 'items', 'badges', 'details', 'structure'] as $k) {
+        if (isset($resp[$k]) && is_array($resp[$k]) && $resp[$k]) {
+            $c = $resp[$k];
+            return array_values(array_filter(array_is_list($c) ? $c : array_values($c), 'is_array'));
+        }
+    }
+    // Last resort: an object keyed by badge id, whose values are the badge rows.
+    $rows = array_values(array_filter($resp, fn($v) => is_array($v) && (isset($v['name']) || isset($v['badge']) || isset($v['badge_id']))));
+    return $rows;
+}
+
 // Section-level badge summary using the aggregate counts on getAvailableBadges (the same
 // tolerated read OSM Discovery confirmed works server-side). This is deliberately the
 // cheap path: four calls per section (one per badge type), NOT one getBadgeRecords call
@@ -736,8 +755,7 @@ function osmGetSectionBadgeSummary(string $accessToken, ?string $sectionType, st
                 'action' => 'getAvailableBadges', 'section' => $sectionType, 'section_id' => $sectionId,
                 'term_id' => $termId, 'type_id' => (string) $typeId, 'context' => 'none',
             ]);
-            $list = $resp['data'] ?? [];
-            if (!is_array($list)) $list = [];
+            $list = osmBadgeExtractRows($resp);
             $awarded = 0;
             $completed = 0;
             $badges = 0;
