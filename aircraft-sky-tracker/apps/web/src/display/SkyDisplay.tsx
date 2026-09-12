@@ -6,6 +6,7 @@ import {
   type Satellite,
   type Insight,
   type LookNowPrediction,
+  type AcarsMessage,
   resolveDisplayScale,
   locationTooApproximateForTrueSky,
 } from "@ast/shared";
@@ -17,6 +18,7 @@ import { InterestingAlert } from "./InterestingAlert.js";
 import { SatelliteAlert } from "./SatelliteAlert.js";
 import { InsightBanner } from "./InsightBanner.js";
 import { LookNowBanner } from "./LookNowBanner.js";
+import { AcarsFeed } from "./AcarsFeed.js";
 import type {
   InterestingEntry,
   SatelliteAlertEntry,
@@ -36,6 +38,7 @@ interface Props {
   insights?: Insight[];
   lookNow?: LookNowPrediction[];
   aircraftMessage?: AircraftMessageEntry;
+  recentMessages?: AcarsMessage[];
 }
 
 /** The main display: canvas + optional header + status (FRD §47, §56-59). */
@@ -52,6 +55,7 @@ export function SkyDisplay({
   insights = [],
   lookNow = [],
   aircraftMessage,
+  recentMessages = [],
 }: Props) {
   const [selected, setSelected] = useState<Aircraft | null>(null);
   const [selectedSat, setSelectedSat] = useState<string | null>(null);
@@ -131,6 +135,8 @@ export function SkyDisplay({
       <LookNowBanner predictions={lookNow} enabled={config.showLookNow} />
 
       <InsightBanner insights={insights} enabled={config.showSkyInsights} />
+
+      <AcarsFeed messages={recentMessages} aircraft={aircraft} enabled={config.showAcarsFeed} />
 
       <InterestingAlert entry={interestingEntry} config={config} />
 

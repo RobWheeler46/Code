@@ -19,10 +19,18 @@ import {
 import type { AcarsMessageProvider, AcarsTracked, ProviderMessage } from "./acarsProviders.js";
 
 export interface AcarsPolicyView {
+  /** Drawer ACARS section enabled (§Aircraft Details Panel). */
   showAcarsMessages: boolean;
+  /** Main-screen ACARS feed enabled (§Kiosk). Either surface activates the pipeline. */
+  showAcarsFeed?: boolean;
   acarsDisplayMode: AcarsDisplayMode;
   /** Deployment-level permission (ALLOW_RAW_ACARS_DISPLAY); never user-overridable. */
   deploymentAllowsRaw: boolean;
+}
+
+/** The datalink pipeline runs when any display surface is enabled and not "off". */
+function acarsActive(policy: AcarsPolicyView): boolean {
+  return (policy.showAcarsMessages || policy.showAcarsFeed === true) && policy.acarsDisplayMode !== "off";
 }
 
 export interface AcarsQuery {
@@ -69,7 +77,7 @@ export class AcarsService {
     const present = new Set(tracked.map((t) => t.icaoHex));
     for (const hex of [...this.buffers.keys()]) if (!present.has(hex)) this.buffers.delete(hex);
 
-    if (!policy.showAcarsMessages || policy.acarsDisplayMode === "off") return;
+    if (!acarsActive(policy)) return;
 
     const byHex = new Map(tracked.map((t) => [t.icaoHex, t]));
     const rawAllowed = rawDisplayAllowed(policy.deploymentAllowsRaw, policy.acarsDisplayMode);

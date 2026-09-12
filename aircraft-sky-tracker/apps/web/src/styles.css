@@ -821,6 +821,62 @@ button.danger {
   margin-top: 0.2rem;
 }
 
+/* Live ACARS feed at the bottom-left of the main screen (FRD v3.9 §Kiosk). Kept
+   in a corner so it is clear of the centre insight banner and top alerts. */
+.acars-feed {
+  position: fixed;
+  left: 1rem;
+  bottom: 1rem;
+  z-index: 20;
+  width: min(340px, 60vw);
+  background: rgba(6, 10, 18, 0.72);
+  border: 1px solid var(--panel-border);
+  border-left: 3px solid #8fe3ff;
+  border-radius: 10px;
+  padding: 0.5rem 0.7rem;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  font-size: calc(0.8rem * var(--ui-scale, 1));
+}
+.acars-feed-title {
+  color: #8fe3ff;
+  font-size: calc(0.68rem * var(--ui-scale, 1));
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 0.3rem;
+}
+.acars-feed-line {
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+  padding: 0.12rem 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.acars-feed-id {
+  color: var(--primary);
+  font-weight: 600;
+  min-width: 4.5em;
+}
+.acars-feed-time {
+  color: var(--secondary);
+  font-variant-numeric: tabular-nums;
+}
+.acars-feed-medium {
+  color: #8fe3ff;
+  font-size: 0.85em;
+}
+.acars-feed-summary {
+  color: var(--secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.acars-feed-attribution {
+  color: var(--secondary);
+  font-size: 0.66rem;
+  opacity: 0.7;
+  margin-top: 0.35rem;
+}
+
 /* Live ACARS datalink panel in the drawer (FRD v3.9). */
 .datalink {
   display: flex;

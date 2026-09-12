@@ -31,6 +31,7 @@ export function LiveDisplay() {
       insights={live.insights}
       lookNow={live.lookNow}
       aircraftMessage={live.aircraftMessage}
+      recentMessages={live.recentMessages}
     />
   );
 }

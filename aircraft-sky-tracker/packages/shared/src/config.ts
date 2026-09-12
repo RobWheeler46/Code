@@ -97,6 +97,11 @@ export interface AppConfig {
    * that is honoured only where the deployment permits it (ALLOW_RAW_ACARS_DISPLAY).
    */
   acarsDisplayMode: AcarsDisplayMode;
+  /**
+   * Show a live ACARS feed at the bottom of the main screen for the currently
+   * visible aircraft (FRD v3.9 §Kiosk). Off by default so the projector stays clean.
+   */
+  showAcarsFeed: boolean;
   /** Alert ahead of an upcoming satellite pass (FRD §61-62). */
   satelliteAlertsEnabled: boolean;
   /** Advance-warning lead time in minutes for a satellite pass alert (FRD §62). */
@@ -149,6 +154,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   showAviationContext: true,
   showAcarsMessages: false,
   acarsDisplayMode: "decoded",
+  showAcarsFeed: false,
   showSatellites: true,
   satelliteMinElevationDeg: 10,
   satelliteShowStations: true,
@@ -195,6 +201,7 @@ export type ConfigUpdate = Partial<
     | "showAviationContext"
     | "showAcarsMessages"
     | "acarsDisplayMode"
+    | "showAcarsFeed"
     | "showSatellites"
     | "satelliteMinElevationDeg"
     | "satelliteShowStations"

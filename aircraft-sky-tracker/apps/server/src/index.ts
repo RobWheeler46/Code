@@ -249,6 +249,7 @@ async function main(): Promise<void> {
       const c = settings.get();
       return {
         showAcarsMessages: c.showAcarsMessages,
+        showAcarsFeed: c.showAcarsFeed,
         acarsDisplayMode: c.acarsDisplayMode,
         deploymentAllowsRaw: env.acarsAllowRawDisplay,
       };
@@ -568,6 +569,7 @@ async function main(): Promise<void> {
         "showLookNow",
         "showAviationContext",
         "showAcarsMessages",
+        "showAcarsFeed",
         "showSatellites",
         "satelliteShowStations",
         "satelliteShowBright",
@@ -759,7 +761,7 @@ async function main(): Promise<void> {
       const c = settings.get();
       return {
         aircraftId: icaoHex,
-        enabled: c.showAcarsMessages && c.acarsDisplayMode !== "off",
+        enabled: (c.showAcarsMessages || c.showAcarsFeed) && c.acarsDisplayMode !== "off",
         datalink: acars.datalinkFor(icaoHex),
         messages: acars.messagesFor(icaoHex, query),
       };

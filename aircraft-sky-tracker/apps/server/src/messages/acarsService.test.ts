@@ -77,6 +77,17 @@ describe("AcarsService policy + correlation", () => {
     assert.equal(service.messagesFor("4008B3").length, 1);
   });
 
+  it("activates the pipeline when only the main-screen feed is enabled (§Kiosk)", () => {
+    const { service, broadcast } = makeService([msg()], {
+      showAcarsMessages: false,
+      showAcarsFeed: true,
+      acarsDisplayMode: "decoded",
+      deploymentAllowsRaw: false,
+    });
+    service.onSnapshot([tracked()], NOW);
+    assert.equal(broadcast.length, 1, "feed-only should still stream messages");
+  });
+
   it("rejects a message whose asserted identity conflicts with the aircraft", () => {
     const { service, broadcast } = makeService([msg({ assertedRegistration: "X-WRONG" })], ON);
     service.onSnapshot([tracked()], NOW);

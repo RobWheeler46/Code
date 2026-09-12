@@ -514,6 +514,12 @@ conflicting‑identity cases — so the whole feature works without a feeder cre
 Attribution to Airframes.io is shown wherever messages appear. Toggle `showAcarsMessages`;
 message‑display failure never affects tracking.
 
+An optional **main‑screen ACARS feed** (§Kiosk) shows the most recent decoded messages
+for the **currently visible** aircraft in a bottom‑left panel (aircraft · time · medium ·
+category · summary), for an enthusiast/kiosk display. It has its own toggle
+(`showAcarsFeed`, off by default) and either toggle activates the datalink pipeline, so
+the feed works independently of the details‑drawer section under the same policy.
+
 **Google account & saved locations (done, FRD v3.6 §12, §26)** — an optional
 **Google Sign-In** (env-gated: `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`) lets the
 owner save named locations (Home, Work…) to their Google account and switch the

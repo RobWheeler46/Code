@@ -219,6 +219,7 @@ export function SettingsPage({ onBack }: Props) {
         showAviationContext: draft.showAviationContext,
         showAcarsMessages: draft.showAcarsMessages,
         acarsDisplayMode: draft.acarsDisplayMode,
+        showAcarsFeed: draft.showAcarsFeed,
         historyEnabled: draft.historyEnabled,
         historyRetentionDays: draft.historyRetentionDays,
         showSatellites: draft.showSatellites,
@@ -671,6 +672,14 @@ export function SettingsPage({ onBack }: Props) {
           </div>
         </div>
       )}
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={draft.showAcarsFeed}
+          onChange={(e) => setToggle("showAcarsFeed", e.target.checked)}
+        />
+        Show live ACARS feed at the bottom of the main screen (visible aircraft)
+      </label>
 
       <h2>History</h2>
       <label className="check">

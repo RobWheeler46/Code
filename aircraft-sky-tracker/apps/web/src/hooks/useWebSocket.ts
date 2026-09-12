@@ -44,6 +44,8 @@ export interface LiveState {
   lookNow: LookNowPrediction[];
   /** Latest live ACARS message event (FRD v3.9), or undefined. */
   aircraftMessage: AircraftMessageEntry | undefined;
+  /** Rolling buffer of recent ACARS messages across aircraft, newest first (v3.9 §Kiosk). */
+  recentMessages: AcarsMessage[];
 }
 
 export interface AircraftMessageEntry {
@@ -83,6 +85,7 @@ export function useWebSocket(): LiveState {
   const [insights, setInsights] = useState<Insight[]>([]);
   const [lookNow, setLookNow] = useState<LookNowPrediction[]>([]);
   const [aircraftMessage, setAircraftMessage] = useState<AircraftMessageEntry | undefined>(undefined);
+  const [recentMessages, setRecentMessages] = useState<AcarsMessage[]>([]);
 
   const backoffRef = useRef(1000);
   const closedRef = useRef(false);
@@ -157,6 +160,7 @@ export function useWebSocket(): LiveState {
               message: message.message,
               id: messageIdRef.current,
             });
+            setRecentMessages((prev) => [message.message, ...prev].slice(0, 50));
             break;
           case "looknow.update":
             setLookNow(message.predictions);
@@ -229,5 +233,6 @@ export function useWebSocket(): LiveState {
     insights,
     lookNow,
     aircraftMessage,
+    recentMessages,
   };
 }
