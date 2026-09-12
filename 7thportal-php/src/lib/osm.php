@@ -778,7 +778,108 @@ function osmGetSectionBadgeSummary(string $accessToken, ?string $sectionType, st
             'badgeCount' => $badgeCount, 'awardFieldSeen' => $awardFieldSeen,
         ];
     } catch (Throwable $e) {
+        if (osmIsThrottleError($e)) throw $e; // let the refresh loop back off, don't mask it
         return ['available' => false, 'reason' => 'error', 'error' => $e->getMessage()];
+    }
+}
+
+// True when an OSM error looks like throttling/backpressure (HTTP 429/503), so a read
+// loop can stop rather than keep hammering. osmGet throws "OSM API error <status> on ...".
+function osmIsThrottleError(Throwable $e): bool
+{
+    return (bool) preg_match('/error (429|503)/', $e->getMessage());
+}
+
+// Truthy test for an OSM flag that may be '1'/'0', 1/0, true/false, an award date string,
+// or empty. Anything present and not a zero/empty marker counts as set.
+function osmBadgeTruthy($v): bool
+{
+    return !($v === null || $v === '' || $v === '0' || $v === 0 || $v === false);
+}
+
+// Pull the per-member rows out of a getBadgesByMember response, tolerant of container shape
+// (a bare list, or under items/data/members/rows).
+function osmBadgeMemberRows($resp): array
+{
+    if (!is_array($resp) || !$resp) return [];
+    if (array_is_list($resp)) return array_values(array_filter($resp, 'is_array'));
+    foreach (['items', 'data', 'members', 'rows'] as $k) {
+        if (isset($resp[$k]) && is_array($resp[$k]) && $resp[$k]) {
+            $c = $resp[$k];
+            return array_values(array_filter(array_is_list($c) ? $c : array_values($c), 'is_array'));
+        }
+    }
+    return [];
+}
+
+// Pull the badge entries out of one member row: a 'badges'/'items' list, or the first
+// list of badge-shaped entries (carrying badge_id/type_id/awarded) found on the row.
+function osmBadgeMemberBadges(array $row): array
+{
+    foreach (['badges', 'items', 'badge_records'] as $k) {
+        if (isset($row[$k]) && is_array($row[$k]) && $row[$k]) {
+            $c = $row[$k];
+            return array_values(array_filter(array_is_list($c) ? $c : array_values($c), 'is_array'));
+        }
+    }
+    foreach ($row as $v) {
+        if (!is_array($v) || !$v) continue;
+        $first = array_values($v)[0] ?? null;
+        if (is_array($first) && (isset($first['badge_id']) || isset($first['type_id']) || array_key_exists('awarded', $first))) {
+            return array_values(array_filter(array_values($v), 'is_array'));
+        }
+    }
+    return [];
+}
+
+// Aggregate awarded/completed counts by badge type from getBadgesByMember member rows.
+// Counts ONLY - no member identifier or name is read into the result (data minimisation:
+// the read is Tier B but the stored mirror stays Tier A - see DECISIONS-osm-integration.md).
+// 'awardFieldSeen' reports whether an 'awarded' field was actually present, so a shape
+// mismatch is flagged for verification rather than shown as a misleading zero.
+function osmBadgesCountAwarded(array $memberRows): array
+{
+    $byType = [];
+    foreach (OSM_BADGE_TYPE_NAMES as $tn) $byType[$tn] = ['awarded' => 0, 'completed' => 0];
+    $awardFieldSeen = false;
+    $members = 0;
+    foreach ($memberRows as $m) {
+        if (!is_array($m)) continue;
+        $members++;
+        foreach (osmBadgeMemberBadges($m) as $b) {
+            $type = OSM_BADGE_TYPE_NAMES[(int) ($b['type_id'] ?? 0)] ?? null;
+            if ($type === null) continue;
+            if (array_key_exists('awarded', $b)) {
+                $awardFieldSeen = true;
+                if (osmBadgeTruthy($b['awarded'])) $byType[$type]['awarded']++;
+            }
+            $co = $b['completed'] ?? ($b['complete'] ?? null);
+            if ($co !== null && osmBadgeTruthy($co)) $byType[$type]['completed']++;
+        }
+    }
+    return [
+        'byType' => $byType,
+        'totalAwarded' => array_sum(array_column($byType, 'awarded')),
+        'totalCompleted' => array_sum(array_column($byType, 'completed')),
+        'awardFieldSeen' => $awardFieldSeen,
+        'members' => $members,
+    ];
+}
+
+// Live read: awarded/completed counts per badge type for a section, from getBadgesByMember
+// (one call - all members' badge progress in the term). Reads Tier B data but returns ONLY
+// aggregate counts. Re-throws throttle errors so the refresh loop can back off.
+function osmGetSectionAwardedCounts(string $accessToken, ?string $sectionType, string $sectionId, ?string $termId): array
+{
+    try {
+        $termId = $termId ?: osmCurrentTermIdForSection($accessToken, $sectionId);
+        if (!$termId) return ['available' => false, 'reason' => 'no_term'];
+        $resp = osmGet($accessToken, '/ext/badges/by-member/', ['action' => 'getBadgesByMember', 'section' => $sectionType, 'section_id' => $sectionId, 'term_id' => $termId]);
+        $agg = osmBadgesCountAwarded(osmBadgeMemberRows($resp));
+        return array_merge(['available' => true, 'termId' => (string) $termId], $agg);
+    } catch (Throwable $e) {
+        if (osmIsThrottleError($e)) throw $e;
+        return ['available' => false, 'reason' => 'error'];
     }
 }
 

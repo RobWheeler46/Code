@@ -35,3 +35,16 @@ $router->get('/api/osm/badges/diagnose', function ($params) {
         jsonResponse(['error' => $e->getMessage()], 409);
     }
 });
+
+// Admin-only diagnostic for the AWARDED read (getBadgesByMember): reports the response
+// shape (member-row key names only, one badge entry's fields, and the aggregate the parser
+// produced) so the award encoding can be mapped without exposing any member's name.
+$router->get('/api/osm/badges/diagnose-awarded', function ($params) {
+    $user = requireAuth();
+    if (!osmBadgesCanRefresh($user)) jsonResponse(['error' => 'You do not have permission to run the badge diagnostic.'], 403);
+    try {
+        jsonResponse(['ok' => true, 'diagnostic' => osmBadgesDiagnoseAwarded($user)]);
+    } catch (RuntimeException $e) {
+        jsonResponse(['error' => $e->getMessage()], 409);
+    }
+});

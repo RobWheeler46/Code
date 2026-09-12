@@ -1409,6 +1409,31 @@ function scenario_logic_osm_badges(): void
     // absent field returns null (distinct from a real zero) so the caller can flag it.
     check('osmb: int field reads the first present candidate, else null', osmBadgeIntField(['awarded' => '5'], ['awarded', 'awarded_count']) === 5 && osmBadgeIntField(['completed' => 3], ['awarded', 'completed']) === 3 && osmBadgeIntField(['x' => 1], ['awarded']) === null);
 
+    // Awarded read (getBadgesByMember): aggregate per-member badge progress to counts by
+    // type, keeping counts ONLY - no member name reaches the result (read is Tier B, store
+    // is Tier A). Members' badges may be a nested 'badges' list or scanned from the row.
+    $memberRows = [
+        ['scoutid' => '1', 'firstname' => 'ZZLEAKZZ', 'lastname' => 'Child', 'badges' => [
+            ['badge_id' => '10', 'type_id' => '1', 'awarded' => '1', 'completed' => '1'],
+            ['badge_id' => '11', 'type_id' => '2', 'awarded' => '0', 'completed' => '1'],
+        ]],
+        ['scoutid' => '2', 'firstname' => 'ZZLEAKZZ', 'lastname' => 'Two', 'badges' => [
+            ['badge_id' => '10', 'type_id' => '1', 'awarded' => '1', 'completed' => '1'],
+            ['badge_id' => '12', 'type_id' => '3', 'awarded' => '1', 'completed' => '1'],
+        ]],
+    ];
+    $agg = osmBadgesCountAwarded($memberRows);
+    check('osmb-awarded: aggregates awarded and completed by badge type', $agg['byType']['Challenge']['awarded'] === 2 && $agg['byType']['Activity']['awarded'] === 0 && $agg['byType']['Activity']['completed'] === 1 && $agg['byType']['Staged']['awarded'] === 1);
+    check('osmb-awarded: totals and awardFieldSeen reflect the read', $agg['totalAwarded'] === 3 && $agg['totalCompleted'] === 4 && $agg['awardFieldSeen'] === true && $agg['members'] === 2);
+    check('osmb-awarded: counts only - no member name reaches the aggregate (Tier A store)', strpos(json_encode($agg), 'ZZLEAKZZ') === false);
+    check('osmb-awarded: member rows extracted from items/data containers', count(osmBadgeMemberRows(['items' => $memberRows])) === 2 && count(osmBadgeMemberRows(['data' => $memberRows])) === 2);
+    check('osmb-awarded: badges scanned from a row when not under a badges key', count(osmBadgeMemberBadges(['scoutid' => '9', 'records' => [['badge_id' => '1', 'type_id' => '1', 'awarded' => '1']]])) === 1);
+    // No 'awarded' field anywhere -> awardFieldSeen false so the section is flagged, not zeroed.
+    $noAward = osmBadgesCountAwarded([['scoutid' => '1', 'badges' => [['badge_id' => '10', 'type_id' => '1', 'completed' => '1']]]]);
+    check('osmb-awarded: a response with no awarded field is flagged, not silently zeroed', $noAward['awardFieldSeen'] === false && $noAward['byType']['Challenge']['completed'] === 1);
+    // Throttle detection re-throws so the refresh loop can back off.
+    check('osmb-awarded: 429/503 are recognised as throttle, other errors are not', osmIsThrottleError(new Exception('OSM API error 429 on /ext/badges/by-member/')) && osmIsThrottleError(new Exception('OSM API error 503 on /x')) && !osmIsThrottleError(new Exception('OSM API error 404 on /x')));
+
     // A section that returns badges but no award-count field is flagged "needs verification"
     // rather than mirrored as a misleading zero.
     $noField = ['readers' => ['summary' => fn($sid, $type, $termId) => ['available' => true, 'termId' => 't', 'byType' => ['Activity' => ['awarded' => 0, 'completed' => 0, 'badges' => 4]], 'totalAwarded' => 0, 'totalCompleted' => 0, 'badgeCount' => 4, 'awardFieldSeen' => false]]];

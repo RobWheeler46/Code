@@ -9,7 +9,7 @@ const box = () => document.getElementById('content');
 const esc = (s) => escapeHtml(s == null ? '' : String(s));
 const fmt = (dt) => (typeof formatDateTime === 'function' && dt) ? formatDateTime(dt) : (dt || 'never');
 
-const STATUS_LABEL = { ok: 'Synced', needs_verification: 'Awarded pending', empty: 'No current term', error: 'Not read' };
+const STATUS_LABEL = { ok: 'Synced', needs_verification: 'Check needed', empty: 'No current term', error: 'Not read' };
 
 (async () => {
   ME = await requireUserNav();
@@ -62,12 +62,11 @@ function render() {
   }
 
   if (s.needsVerification) {
-    parts.push(`<div class="alert alert-warning">OSM's badge catalogue read lists the badges each section
-      offers, but it does not include how many have been awarded. Counting badges actually awarded needs each
-      member's individual badge record, which is Tier B data held back pending the consent and access decisions
-      in the OSM integration readiness doc. Until then the Awarded column stays at zero and the counts below
-      show how many badges each section offers. Sections in this state are marked
-      <span class="osb-status osb-needs_verification">Awarded pending</span>.</div>`);
+    parts.push(`<div class="alert alert-warning">These sections were read for awarded badges, but the response
+      did not contain a recognisable award field, so their awarded totals may read as zero. Use
+      <strong>Inspect the awarded-badge response</strong> below to capture the real shape so the mapping can be
+      corrected. The counts shown are badges offered per section until then. Sections in this state are marked
+      <span class="osb-status osb-needs_verification">Check needed</span>.</div>`);
   }
 
   // Group totals
@@ -118,8 +117,10 @@ function render() {
     Because Online Scout Manager limits how often it can be read, this screen shows the last saved counts rather than reading live on each visit.</p>`);
 
   if (canRefresh) {
-    parts.push(`<p class="osb-meta"><button class="btn btn-secondary btn-sm" id="osb-diagnose">Inspect the OSM badge response</button>
-      <span class="osb-meta"> shows the shape of one section's live badge response, to map the award counts.</span></p>
+    parts.push(`<p class="osb-meta">
+      <button class="btn btn-secondary btn-sm" id="osb-diag-awarded" data-url="/api/osm/badges/diagnose-awarded">Inspect the awarded-badge response</button>
+      <button class="btn btn-secondary btn-sm" id="osb-diag-catalogue" data-url="/api/osm/badges/diagnose">Inspect the catalogue response</button>
+      <span class="osb-meta"> show the shape of one section's live response, to map the counts. No member name is included.</span></p>
       <pre id="osb-diag" hidden style="overflow:auto;max-height:24rem;background:var(--surface-2,#f2eef7);padding:.8rem;border-radius:8px;font-size:.78rem;white-space:pre-wrap"></pre>`);
   }
 
@@ -128,24 +129,26 @@ function render() {
 }
 
 function wireDiagnose() {
-  const btn = document.getElementById('osb-diagnose');
   const out = document.getElementById('osb-diag');
-  if (!btn || !out) return;
-  btn.addEventListener('click', async () => {
-    btn.disabled = true;
-    const orig = btn.textContent;
-    btn.textContent = 'Reading from OSM…';
-    try {
-      const d = await Api.get('/api/osm/badges/diagnose');
-      out.hidden = false;
-      out.textContent = JSON.stringify(d.diagnostic, null, 2);
-    } catch (e) {
-      out.hidden = false;
-      out.textContent = 'Diagnostic failed: ' + e.message;
-    } finally {
-      btn.disabled = false;
-      btn.textContent = orig;
-    }
+  ['osb-diag-awarded', 'osb-diag-catalogue'].forEach((id) => {
+    const btn = document.getElementById(id);
+    if (!btn || !out) return;
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      const orig = btn.textContent;
+      btn.textContent = 'Reading from OSM…';
+      try {
+        const d = await Api.get(btn.dataset.url);
+        out.hidden = false;
+        out.textContent = JSON.stringify(d.diagnostic, null, 2);
+      } catch (e) {
+        out.hidden = false;
+        out.textContent = 'Diagnostic failed: ' + e.message;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = orig;
+      }
+    });
   });
 }
 

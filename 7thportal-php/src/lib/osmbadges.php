@@ -98,7 +98,7 @@ function osmBadgesRefresh(array $actor, array $opts = []): array
     }
 
     $read = $opts['readers']['summary'] ?? function (string $sid, ?string $type, ?string $termId) use ($demo, $token) {
-        return $demo ? osmBadgesDemoSummary($sid) : osmGetSectionBadgeSummary($token, $type, $sid, $termId);
+        return $demo ? osmBadgesDemoSummary($sid) : osmGetSectionBadges($token, $type, $sid, $termId);
     };
 
     $out = ['source' => $source, 'sections' => count($sections), 'synced' => 0, 'errors' => 0, 'blocked' => 0, 'needsVerification' => 0, 'partial' => false];
@@ -136,6 +136,74 @@ function osmBadgesRefresh(array $actor, array $opts = []): array
         logAudit(['userId' => $actor['id'], 'action' => 'osm_badges_refresh', 'entityType' => 'osm_badge_summary', 'entityId' => $source, 'ipAddress' => function_exists('clientIp') ? clientIp() : null]);
     }
     return $out;
+}
+
+// Full per-section read for a live refresh: the badge catalogue (getAvailableBadges, Tier
+// A - how many badges the section offers) merged with the awarded counts (getBadgesByMember,
+// a Tier B read aggregated to Tier A counts). Returns the summary shape osmBadgesUpsert
+// stores. Throttle errors from either read propagate so the refresh loop backs off.
+function osmGetSectionBadges(string $token, ?string $type, string $sid, ?string $termId): array
+{
+    $cat = osmGetSectionBadgeSummary($token, $type, $sid, $termId);
+    if (empty($cat['available'])) return $cat; // no term / error - propagate as-is
+    $awd = osmGetSectionAwardedCounts($token, $type, $sid, $termId);
+    $byType = [];
+    foreach (($cat['byType'] ?? []) as $t => $v) {
+        $byType[$t] = ['badges' => (int) ($v['badges'] ?? 0), 'awarded' => 0, 'completed' => 0];
+    }
+    if (!empty($awd['available'])) {
+        foreach (($awd['byType'] ?? []) as $t => $a) {
+            if (!isset($byType[$t])) $byType[$t] = ['badges' => 0, 'awarded' => 0, 'completed' => 0];
+            $byType[$t]['awarded'] = (int) ($a['awarded'] ?? 0);
+            $byType[$t]['completed'] = (int) ($a['completed'] ?? 0);
+        }
+    }
+    return [
+        'available' => true, 'termId' => $cat['termId'] ?? $termId, 'byType' => $byType,
+        'totalAwarded' => (int) ($awd['totalAwarded'] ?? 0),
+        'totalCompleted' => (int) ($awd['totalCompleted'] ?? 0),
+        'badgeCount' => (int) ($cat['badgeCount'] ?? 0),
+        'awardFieldSeen' => !empty($awd['available']) && !empty($awd['awardFieldSeen']),
+    ];
+}
+
+// One-section diagnostic for the awarded read (getBadgesByMember): reports the SHAPE of
+// the response so the award encoding can be mapped from real evidence. Deliberately shows
+// only member-row KEY names (never their values, which include a child's name) plus one
+// badge entry's fields (badge-level, no member data) and what the aggregator produced.
+function osmBadgesDiagnoseAwarded(array $actor): array
+{
+    if (!osmBadgesCanRefresh($actor)) throw new RuntimeException('You do not have permission to run the badge diagnostic.');
+    if (osmDemoModeAllowed()) throw new RuntimeException('This is running in demo mode, so there is no live OSM response to inspect. Run it on the live server.');
+    $svc = function_exists('getServiceAccount') ? getServiceAccount() : null;
+    $tok = $svc ? osmDataReadTokenFor($svc) : ['unavailable' => true];
+    if (!empty($tok['unavailable'])) throw new RuntimeException($tok['reason'] ?? 'No OSM service connection is available to read from.');
+    $token = $tok['token'];
+    $startup = osmdFetchStartupWith($token);
+    if (empty($startup['ok']) || empty($startup['sections'])) throw new RuntimeException('Could not read any sections from the OSM startup context.');
+    $sid = (string) array_key_first($startup['sections']);
+    $type = $startup['sectionTypes'][$sid] ?? null;
+    $termId = osmCurrentTermIdForSection($token, $sid);
+    $resp = osmGet($token, '/ext/badges/by-member/', ['action' => 'getBadgesByMember', 'section' => $type, 'section_id' => $sid, 'term_id' => $termId]);
+    $rows = osmBadgeMemberRows($resp);
+    $sampleRow = $rows[0] ?? null;
+    $badges = $sampleRow ? osmBadgeMemberBadges($sampleRow) : [];
+    $sampleBadge = $badges[0] ?? null;
+    $agg = osmBadgesCountAwarded($rows);
+    if (function_exists('logAudit')) {
+        logAudit(['userId' => $actor['id'], 'action' => 'osm_badges_diagnose_awarded', 'entityType' => 'osm_badge_summary', 'entityId' => $sid, 'ipAddress' => function_exists('clientIp') ? clientIp() : null]);
+    }
+    return [
+        'section' => $startup['sections'][$sid], 'sectionId' => $sid, 'termId' => $termId,
+        'topLevelType' => array_is_list($resp) ? 'list' : 'object',
+        'topLevelKeys' => array_is_list($resp) ? [] : array_slice(array_keys($resp), 0, 25),
+        'memberRowsFound' => count($rows),
+        'sampleMemberKeys' => $sampleRow ? array_keys($sampleRow) : [], // KEY names only - no member values (PII)
+        'badgesFoundOnSampleMember' => count($badges),
+        'sampleBadgeKeys' => $sampleBadge ? array_keys($sampleBadge) : [],
+        'sampleBadge' => $sampleBadge ? array_map(fn($v) => is_scalar($v) ? $v : ('[' . gettype($v) . ']'), $sampleBadge) : null, // badge-level fields, no member PII
+        'aggregated' => ['byType' => $agg['byType'], 'totalAwarded' => $agg['totalAwarded'], 'awardFieldSeen' => $agg['awardFieldSeen'], 'members' => $agg['members']],
+    ];
 }
 
 // One-section diagnostic: read the real getAvailableBadges response for the first
