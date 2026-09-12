@@ -22,13 +22,26 @@ A note on evidence: everything above is what Discovery actually read on the live
 
 ---
 
+## Decisions log
+
+**2026-09-12 - Badges Awarded summary.** A first feature drove these P0 answers. The goal is
+a per-section count of badges awarded. Evidence: OSM's badge catalogue read
+(`getAvailableBadges`) returns which badges each section offers but carries no award counts,
+so counting awarded badges requires reading each member's badge record (Tier B). The design
+chosen reads Tier B but stores only Tier A aggregate counts - no member name and no per-child
+progress is ever written to the database. On that narrow basis items 1, 2, 4 and 5 are settled
+below; item 3 (consent) is the one open blocker, and no live member read runs until it is
+confirmed.
+
+---
+
 ## P0 - blocks starting any live OSM data work
 
 ### 1. Read model: cached mirror, not live reads
 - **Question:** Should features read a periodically synced, local copy of OSM data (a mirror), rather than calling OSM live on each page load?
 - **Why it matters:** The server is rate limited. Discovery saw OSM begin throttling after roughly two dozen rapid calls. Reading OSM live on every page view would be slow and would trip the throttle. A scheduled or manual sync into the local database, paced and rate-limit aware, is the only workable pattern, and it also means features keep working when OSM is briefly unavailable. This is a real architecture decision because it introduces a second copy of member data that has to be kept fresh, secured and eventually removed.
 - **Recommended:** Yes, mirror into the local database on a schedule, with a manual "Sync now" for admins. Features read the mirror. Never read OSM live in a request path.
-- **Decision:**
+- **Decision:** Decided (2026-09-12): Yes. Features read a locally cached mirror, refreshed by a paced, admin-triggered "Refresh from OSM"; OSM is never read in a page-load path. This is already how the Badges Awarded summary works.
 
 ### 2. Which data classes may be stored, by sensitivity
 - **Question:** Which of these three tiers is 7thPortal allowed to hold in its own database?
@@ -37,25 +50,25 @@ A note on evidence: everything above is what Discovery actually read on the live
   - Tier C - contact, emergency and medical fields from the member contact grid.
 - **Why it matters:** This is the core privacy decision the whole design hangs on. Tier A is low risk and unlocks the capacity and structure features on its own. Tier B is what most roster and linking features need, and it is real personal data of children, so it brings retention and access rules with it. Tier C is safeguarding-sensitive and is exactly the territory the master FRD keeps behind a controlled decision; the contact grid can technically be read, but "can" is not "should."
 - **Recommended:** Approve Tier A now. Approve Tier B only with items 3, 4 and 5 answered. Keep Tier C out of scope entirely until a separate, explicit safeguarding decision with trustee sign-off.
-- **Decision:**
+- **Decision:** Decided (2026-09-12): Tier A approved. For the Badges Awarded summary, the sync may READ Tier B member badge records but STORES only Tier A aggregate counts per section - no member name and no per-child progress is written to the database. This does NOT approve storing Tier B itself (rosters, member references, parent matching); that remains a separate future decision, still gated on items 3, 4 and 5 for the storing case. Tier C stays out of scope (see Hard line).
 
 ### 3. Consent and lawful basis for holding member data
 - **Question:** On what basis does 7thPortal hold the member data in the approved tier, and does that basis already exist through OSM and the group's existing privacy notice, or is a new notice or consent step needed?
 - **Why it matters:** OSM is the system of record and families have already consented to the group holding their data there. Copying a subset into 7thPortal needs a clear basis, especially for children's data. This is a question for whoever owns data protection for the group, not a technical default.
 - **Recommended:** Confirm with the group's data controller that the existing OSM consent and privacy notice cover an internal operational copy; update the privacy notice to name 7thPortal as a processor of the specific fields if needed, before Tier B data is synced.
-- **Decision:**
+- **Decision:** PENDING (2026-09-12) - the one open blocker. To be confirmed by the group's data controller. The ask here is narrow: a transient read of members' badge completion to produce per-section counts, with nothing personal stored. No live member read will run until this is confirmed. Recommended basis to confirm: the existing OSM consent and privacy notice cover an internal operational read that stores only aggregate counts; update the privacy notice to note 7thPortal reads (does not store) this field if the controller judges it needed.
 
 ### 4. Access rules: who can see synced member data
 - **Question:** Who may see the synced roster and member details, at what scope? For example: a section leader sees only their own sections; group leadership and admins see all; treasurers and trustees see counts and structure but not individual member detail; parents see only their own children.
 - **Why it matters:** The moment real member data is in the app, wrong-role visibility is the main risk, the same way it was for finance claims. The rule must be section-scoped and enforced on the server, not just hidden in the interface.
 - **Recommended:** Section leaders see their own sections' rosters; group leadership and admin see all; treasurer, chair and trustee roles see Tier A counts and structure only; parents see only their linked children. Enforce server side, reusing the capability and section-scoping model already built for Patrol Points.
-- **Decision:**
+- **Decision:** Decided (2026-09-12) for the aggregate case: because the Badges Awarded summary stores only counts, viewing follows the Tier A rules already built - any leader or trustee role sees the per-section counts; parents do not. Enforced server side (osmBadgesCanView); the refresh that spends OSM budget is admin only. If any Tier B data is ever STORED, the fuller section-scoped rule in the recommendation must be built and this line revisited.
 
 ### 5. Retention and removal
 - **Question:** How long is synced member data kept, and what happens when a member leaves a section or is removed in OSM, or when the group stops using 7thPortal?
 - **Why it matters:** A mirror that only ever adds data quietly becomes a stale, uncontrolled second copy. Removal has to be part of the design from the start, not added later. A member who leaves OSM should disappear from the mirror on the next sync, and there needs to be a defined maximum age for anything the sync stops seeing.
 - **Recommended:** The sync is authoritative and destructive in one direction: anything no longer returned by OSM is removed from the mirror on the next successful sync (mirroring how an expired access group drops access in Patrol Points). Set a hard maximum age for orphaned records, and document a full-wipe path for decommissioning. Align the maximum age with the retention already agreed for the finance module.
-- **Decision:**
+- **Decision:** Decided (2026-09-12) for the aggregate case: trivial, because only per-section counts are stored and each successful sync overwrites them - there is no per-child record to retain or remove. A section no longer returned by OSM keeps its last row until the next successful sync replaces it (a prune-on-missing step is a later refinement). If any Tier B data is ever STORED, the destructive-sync, maximum-age and full-wipe rules in the recommendation must be built and this line revisited.
 
 ---
 
