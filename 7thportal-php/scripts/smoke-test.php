@@ -1377,7 +1377,13 @@ function scenario_logic_osm_badges(): void
 
     // Access: any leader/trustee may view (Tier A aggregate); only an admin may refresh.
     check('osmb: leaders and trustees can view, parents cannot', osmBadgesCanView($leader) && osmBadgesCanView($trustee) && !osmBadgesCanView($parent));
-    check('osmb: only an admin may refresh (spends OSM rate-limit budget)', osmBadgesCanRefresh($admin) && !osmBadgesCanRefresh($leader) && !osmBadgesCanRefresh($trustee));
+    check('osmb: only an admin may run the service refresh (all sections)', osmBadgesCanRefresh($admin) && !osmBadgesCanRefresh($leader) && !osmBadgesCanRefresh($trustee));
+    check('osmb: any leader may refresh their OWN sections (read as me), parents cannot', osmBadgesCanRefreshMine($admin) && osmBadgesCanRefreshMine($leader) && osmBadgesCanRefreshMine($trustee) && !osmBadgesCanRefreshMine($parent));
+    // A leader is refused the service refresh but may refresh as themselves.
+    $leaderRefused = false;
+    try { osmBadgesRefresh($leader, ['tokenSource' => 'service']); } catch (RuntimeException $e) { $leaderRefused = true; }
+    $leaderMe = osmBadgesRefresh($leader, ['tokenSource' => 'me']);
+    check('osmb: a leader is refused the service refresh but may refresh as themselves', $leaderRefused && $leaderMe['tokenSource'] === 'me');
 
     // Pure per-section aggregation from the demo fixtures: two Activity badges awarded in
     // Cubs (Outdoor Adventurer, Chef), one in Scouts (Navigator); the incomplete Staged

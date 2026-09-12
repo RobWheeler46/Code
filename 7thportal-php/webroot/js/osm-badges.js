@@ -41,23 +41,32 @@ async function load() {
 
 function render() {
   const s = DATA.summary;
-  const canRefresh = DATA.canRefresh;
+  const canRefresh = DATA.canRefresh;         // service connection, all sections
+  const canRefreshMine = DATA.canRefreshMine; // own OSM sign-in, own sections
+  const mineBtn = canRefreshMine ? `<button class="btn" id="osb-refresh-mine" data-source="me">Refresh my sections</button>` : '';
+  const svcBtn = canRefresh ? `<button class="btn ${canRefreshMine ? 'btn-secondary' : ''}" id="osb-refresh" data-source="service">Refresh all sections</button>` : '';
   renderPageHeader({
     title: 'Badges Awarded',
     crumbs: crumbs(),
     description: 'How many badges each section has awarded, counted from Online Scout Manager. Counts only, no individual members.',
-    actions: canRefresh ? `<button class="btn" id="osb-refresh">Refresh from OSM</button>` : '',
+    actions: mineBtn + ' ' + svcBtn,
   });
 
   const parts = [];
   const src = s.source === 'demo' ? 'demonstration data' : (s.source === 'live' ? 'the live OSM connection' : null);
 
+  if (canRefreshMine) {
+    parts.push(`<div class="alert alert-info"><strong>Refresh my sections</strong> reads awarded badge counts through
+      your own OSM sign-in, for the sections you lead. Awarded counts need badge access the shared connection does
+      not have, so each leader refreshes their own sections.${canRefresh ? ' <strong>Refresh all sections</strong> uses the shared connection and fills in badges offered for every section.' : ''}</div>`);
+  }
+
   if (!s.sections.length) {
     parts.push(`<div class="alert alert-info">No badge summary has been read yet.
-      ${canRefresh ? 'Use <strong>Refresh from OSM</strong> above to read the current counts for each section.'
-        : 'Ask a Portal Administrator to run the first refresh.'}</div>`);
+      ${(canRefreshMine || canRefresh) ? 'Use a <strong>Refresh</strong> button above to read the current counts.'
+        : 'Ask a leader or Portal Administrator to run the first refresh.'}</div>`);
     box().innerHTML = parts.join('');
-    if (canRefresh) wireRefresh();
+    if (canRefreshMine || canRefresh) wireRefresh();
     return;
   }
 
@@ -116,23 +125,26 @@ function render() {
   parts.push(`<p class="osb-meta">Last refreshed ${esc(fmt(s.lastSynced))}${src ? ' from ' + esc(src) : ''}.
     Because Online Scout Manager limits how often it can be read, this screen shows the last saved counts rather than reading live on each visit.</p>`);
 
-  if (canRefresh) {
-    parts.push(`<p class="osb-meta">
-      <button class="btn btn-secondary btn-sm" id="osb-diag-awarded" data-url="/api/osm/badges/diagnose-awarded">Inspect the awarded-badge response</button>
-      <button class="btn btn-secondary btn-sm" id="osb-diag-catalogue" data-url="/api/osm/badges/diagnose">Inspect the catalogue response</button>
+  if (canRefreshMine || canRefresh) {
+    const diagBtns = [];
+    if (canRefreshMine) diagBtns.push(`<button class="btn btn-secondary btn-sm" data-url="/api/osm/badges/diagnose-awarded?tokenSource=me">Inspect awarded (my OSM login)</button>`);
+    if (canRefresh) {
+      diagBtns.push(`<button class="btn btn-secondary btn-sm" data-url="/api/osm/badges/diagnose-awarded">Inspect awarded (service)</button>`);
+      diagBtns.push(`<button class="btn btn-secondary btn-sm" data-url="/api/osm/badges/diagnose">Inspect catalogue</button>`);
+    }
+    parts.push(`<p class="osb-meta osb-diag-btns">${diagBtns.join(' ')}
       <span class="osb-meta"> show the shape of one section's live response, to map the counts. No member name is included.</span></p>
       <pre id="osb-diag" hidden style="overflow:auto;max-height:24rem;background:var(--surface-2,#f2eef7);padding:.8rem;border-radius:8px;font-size:.78rem;white-space:pre-wrap"></pre>`);
   }
 
   box().innerHTML = parts.join('');
-  if (canRefresh) { wireRefresh(); wireDiagnose(); }
+  if (canRefreshMine || canRefresh) { wireRefresh(); wireDiagnose(); }
 }
 
 function wireDiagnose() {
   const out = document.getElementById('osb-diag');
-  ['osb-diag-awarded', 'osb-diag-catalogue'].forEach((id) => {
-    const btn = document.getElementById(id);
-    if (!btn || !out) return;
+  if (!out) return;
+  document.querySelectorAll('.osb-diag-btns button[data-url]').forEach((btn) => {
     btn.addEventListener('click', async () => {
       btn.disabled = true;
       const orig = btn.textContent;
@@ -153,31 +165,38 @@ function wireDiagnose() {
 }
 
 function wireRefresh() {
-  const btn = document.getElementById('osb-refresh');
-  if (!btn) return;
-  btn.addEventListener('click', async () => {
-    btn.disabled = true;
-    const orig = btn.textContent;
-    btn.textContent = 'Reading from OSM…';
-    try {
-      const r = await Api.post('/api/osm/badges/refresh', {});
-      DATA.summary = r.summary;
-      render();
-      const res = r.result || {};
-      let msg = `Refreshed ${res.synced || 0} of ${res.sections || 0} sections`;
-      if (res.blocked) msg += ' (stopped early because OSM began throttling; previous counts kept for the rest)';
-      else if (res.errors) msg += ` (${res.errors} could not be read; their previous counts were kept)`;
-      const banner = document.createElement('div');
-      banner.className = 'alert ' + (res.blocked ? 'alert-warning' : 'alert-success');
-      banner.textContent = msg + '.';
-      box().prepend(banner);
-    } catch (e) {
-      const banner = document.createElement('div');
-      banner.className = 'alert alert-error';
-      banner.textContent = e.message;
-      box().prepend(banner);
-      btn.disabled = false;
-      btn.textContent = orig;
-    }
+  ['osb-refresh-mine', 'osb-refresh'].forEach((id) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      const orig = btn.textContent;
+      btn.textContent = 'Reading from OSM…';
+      try {
+        const r = await Api.post('/api/osm/badges/refresh', { tokenSource: btn.dataset.source || 'service' });
+        DATA.summary = r.summary;
+        render();
+        const res = r.result || {};
+        const isMe = res.tokenSource === 'me';
+        const n = res.sections || 0;
+        let msg;
+        if (isMe && n === 0) msg = 'Your OSM sign-in returned no sections to read';
+        else if (isMe) msg = `Refreshed ${res.synced || 0} of your ${n} section${n === 1 ? '' : 's'}`;
+        else msg = `Refreshed ${res.synced || 0} of ${n} section${n === 1 ? '' : 's'}`;
+        if (res.blocked) msg += ' (stopped early because OSM began throttling; previous counts kept for the rest)';
+        else if (res.errors) msg += ` (${res.errors} could not be read; their previous counts were kept)`;
+        const banner = document.createElement('div');
+        banner.className = 'alert ' + (res.blocked ? 'alert-warning' : 'alert-success');
+        banner.textContent = msg + '.';
+        box().prepend(banner);
+      } catch (e) {
+        const banner = document.createElement('div');
+        banner.className = 'alert alert-error';
+        banner.textContent = e.message;
+        box().prepend(banner);
+        btn.disabled = false;
+        btn.textContent = orig;
+      }
+    });
   });
 }

@@ -7,16 +7,19 @@ $router->get('/api/osm/badges', function ($params) {
     $user = requireAuth();
     if (!osmBadgesCanView($user)) jsonResponse(['error' => 'You do not have permission to view the badges summary.'], 403);
     jsonResponse([
-        'canRefresh' => osmBadgesCanRefresh($user),
+        'canRefresh' => osmBadgesCanRefresh($user),        // service connection, all sections
+        'canRefreshMine' => osmBadgesCanRefreshMine($user), // own OSM sign-in, own sections
         'summary' => osmBadgesSummaryData(),
     ]);
 });
 
 $router->post('/api/osm/badges/refresh', function ($params) {
     $user = requireAuth();
-    if (!osmBadgesCanRefresh($user)) jsonResponse(['error' => 'You do not have permission to refresh the badges summary.'], 403);
+    $tokenSource = in_array(requestBody()['tokenSource'] ?? 'service', ['service', 'me'], true) ? requestBody()['tokenSource'] : 'service';
+    $allowed = $tokenSource === 'me' ? osmBadgesCanRefreshMine($user) : osmBadgesCanRefresh($user);
+    if (!$allowed) jsonResponse(['error' => 'You do not have permission to refresh the badges summary.'], 403);
     try {
-        $result = osmBadgesRefresh($user);
+        $result = osmBadgesRefresh($user, ['tokenSource' => $tokenSource]);
     } catch (RuntimeException $e) {
         jsonResponse(['error' => $e->getMessage()], 409);
     }
@@ -41,9 +44,11 @@ $router->get('/api/osm/badges/diagnose', function ($params) {
 // produced) so the award encoding can be mapped without exposing any member's name.
 $router->get('/api/osm/badges/diagnose-awarded', function ($params) {
     $user = requireAuth();
-    if (!osmBadgesCanRefresh($user)) jsonResponse(['error' => 'You do not have permission to run the badge diagnostic.'], 403);
+    $tokenSource = in_array(queryParam('tokenSource') ?: 'service', ['service', 'me'], true) ? (queryParam('tokenSource') ?: 'service') : 'service';
+    $allowed = $tokenSource === 'me' ? osmBadgesCanRefreshMine($user) : osmBadgesCanRefresh($user);
+    if (!$allowed) jsonResponse(['error' => 'You do not have permission to run the badge diagnostic.'], 403);
     try {
-        jsonResponse(['ok' => true, 'diagnostic' => osmBadgesDiagnoseAwarded($user)]);
+        jsonResponse(['ok' => true, 'diagnostic' => osmBadgesDiagnoseAwarded($user, $tokenSource)]);
     } catch (RuntimeException $e) {
         jsonResponse(['error' => $e->getMessage()], 409);
     }

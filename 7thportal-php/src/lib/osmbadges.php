@@ -7,11 +7,15 @@
 // the mirror, so a page load never calls OSM (the rate-limit-safe pattern from item 1).
 
 // Any leader/leadership/trustee role may VIEW the summary - it is aggregate structure
-// data, useful across the leadership team and safe for trustees (Tier A). Only a Portal
-// Administrator may trigger a REFRESH, since a refresh spends OSM rate-limit budget
-// (mirrors who may run OSM Discovery).
+// data, useful across the leadership team and safe for trustees (Tier A).
 function osmBadgesCanView(array $user): bool { return userHasLeaderAccess($user); }
+// Only a Portal Administrator may run the SERVICE refresh (all sections, offered counts;
+// it spends the shared service connection's rate-limit budget - mirrors OSM Discovery).
 function osmBadgesCanRefresh(array $user): bool { return isAdminRole($user['portal_role'] ?? ''); }
+// Any leader may refresh THEIR OWN sections through their own OSM sign-in ("read as me").
+// Awarded counts need badge-record access the shared service account does not have, but a
+// section leader's own login usually does - for their own sections only.
+function osmBadgesCanRefreshMine(array $user): bool { return userHasLeaderAccess($user); }
 
 // Deterministic per-section demo summary, computed from the same demo fixtures the rest
 // of the app uses, so the screen is fully populated and clickable without a live OSM
@@ -73,21 +77,30 @@ function osmBadgesUpsert(array $sec, ?string $termId, ?string $termName, array $
 // $opts['readers']['summary'] is injectable so the pass can be unit-tested offline.
 function osmBadgesRefresh(array $actor, array $opts = []): array
 {
-    if (!osmBadgesCanRefresh($actor)) throw new RuntimeException('You do not have permission to refresh the badges summary.');
+    $tokenSource = in_array($opts['tokenSource'] ?? 'service', ['service', 'me'], true) ? $opts['tokenSource'] : 'service';
+    if ($tokenSource === 'me' ? !osmBadgesCanRefreshMine($actor) : !osmBadgesCanRefresh($actor)) {
+        throw new RuntimeException('You do not have permission to refresh the badges summary.');
+    }
     $demo = osmDemoModeAllowed();
     $source = $demo ? 'demo' : 'live';
     $sections = [];
     $termsBy = [];
-    $token = 'demo'; // real service token resolved below on a live connection
+    $token = 'demo'; // real token resolved below on a live connection
 
     if ($demo) {
         foreach (OSM_DEMO_SECTIONS as $sid => $s) {
             $sections[] = ['id' => (string) $sid, 'name' => $s['sectionname'], 'type' => $s['section']];
         }
     } else {
-        $svc = function_exists('getServiceAccount') ? getServiceAccount() : null;
-        $tok = $svc ? osmDataReadTokenFor($svc) : ['unavailable' => true];
-        if (!empty($tok['unavailable'])) throw new RuntimeException($tok['reason'] ?? 'No OSM service connection is available to read from.');
+        // 'me' reads through the acting leader's own OSM sign-in (their sections, their
+        // permissions); 'service' reads through the shared service connection (all sections).
+        if ($tokenSource === 'me') {
+            $tok = osmDataReadTokenFor($actor);
+        } else {
+            $svc = function_exists('getServiceAccount') ? getServiceAccount() : null;
+            $tok = $svc ? osmDataReadTokenFor($svc) : ['unavailable' => true];
+        }
+        if (!empty($tok['unavailable'])) throw new RuntimeException($tok['reason'] ?? 'No usable OSM connection to read from.');
         $token = $tok['token'];
         $startup = osmdFetchStartupWith($token);
         if (empty($startup['ok'])) throw new RuntimeException('Could not read the OSM startup context to list sections.');
@@ -101,7 +114,7 @@ function osmBadgesRefresh(array $actor, array $opts = []): array
         return $demo ? osmBadgesDemoSummary($sid) : osmGetSectionBadges($token, $type, $sid, $termId);
     };
 
-    $out = ['source' => $source, 'sections' => count($sections), 'synced' => 0, 'errors' => 0, 'blocked' => 0, 'needsVerification' => 0, 'partial' => false];
+    $out = ['source' => $source, 'tokenSource' => $tokenSource, 'sections' => count($sections), 'synced' => 0, 'errors' => 0, 'blocked' => 0, 'needsVerification' => 0, 'partial' => false];
     $n = count($sections);
     foreach ($sections as $i => $sec) {
         if ($demo) { $termId = OSM_DEMO_TERM['termid']; $termName = OSM_DEMO_TERM['name']; }
@@ -171,13 +184,20 @@ function osmGetSectionBadges(string $token, ?string $type, string $sid, ?string 
 // the response so the award encoding can be mapped from real evidence. Deliberately shows
 // only member-row KEY names (never their values, which include a child's name) plus one
 // badge entry's fields (badge-level, no member data) and what the aggregator produced.
-function osmBadgesDiagnoseAwarded(array $actor): array
+function osmBadgesDiagnoseAwarded(array $actor, string $tokenSource = 'service'): array
 {
-    if (!osmBadgesCanRefresh($actor)) throw new RuntimeException('You do not have permission to run the badge diagnostic.');
+    $tokenSource = in_array($tokenSource, ['service', 'me'], true) ? $tokenSource : 'service';
+    if ($tokenSource === 'me' ? !osmBadgesCanRefreshMine($actor) : !osmBadgesCanRefresh($actor)) {
+        throw new RuntimeException('You do not have permission to run the badge diagnostic.');
+    }
     if (osmDemoModeAllowed()) throw new RuntimeException('This is running in demo mode, so there is no live OSM response to inspect. Run it on the live server.');
-    $svc = function_exists('getServiceAccount') ? getServiceAccount() : null;
-    $tok = $svc ? osmDataReadTokenFor($svc) : ['unavailable' => true];
-    if (!empty($tok['unavailable'])) throw new RuntimeException($tok['reason'] ?? 'No OSM service connection is available to read from.');
+    if ($tokenSource === 'me') {
+        $tok = osmDataReadTokenFor($actor);
+    } else {
+        $svc = function_exists('getServiceAccount') ? getServiceAccount() : null;
+        $tok = $svc ? osmDataReadTokenFor($svc) : ['unavailable' => true];
+    }
+    if (!empty($tok['unavailable'])) throw new RuntimeException($tok['reason'] ?? 'No usable OSM connection to read from.');
     $token = $tok['token'];
     $startup = osmdFetchStartupWith($token);
     if (empty($startup['ok']) || empty($startup['sections'])) throw new RuntimeException('Could not read any sections from the OSM startup context.');
@@ -240,6 +260,7 @@ function osmBadgesDiagnoseAwarded(array $actor): array
         logAudit(['userId' => $actor['id'], 'action' => 'osm_badges_diagnose_awarded', 'entityType' => 'osm_badge_summary', 'entityId' => $sid, 'ipAddress' => function_exists('clientIp') ? clientIp() : null]);
     }
     return [
+        'tokenSource' => $tokenSource,
         'section' => $startup['sections'][$sid], 'sectionId' => $sid, 'sectionType' => $type, 'termId' => $termId,
         'candidates' => $results,
     ];
