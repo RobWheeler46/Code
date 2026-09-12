@@ -9,7 +9,7 @@ const box = () => document.getElementById('content');
 const esc = (s) => escapeHtml(s == null ? '' : String(s));
 const fmt = (dt) => (typeof formatDateTime === 'function' && dt) ? formatDateTime(dt) : (dt || 'never');
 
-const STATUS_LABEL = { ok: 'Synced', needs_verification: 'Check needed', empty: 'No current term', error: 'Not read' };
+const STATUS_LABEL = { ok: 'Synced', needs_verification: 'Awarded pending', empty: 'No current term', error: 'Not read' };
 
 (async () => {
   ME = await requireUserNav();
@@ -62,10 +62,12 @@ function render() {
   }
 
   if (s.needsVerification) {
-    parts.push(`<div class="alert alert-warning">One or more sections returned badges but no award-count field,
-      so their totals may read as zero. This usually means the badge response uses a different field name than
-      expected and needs a quick check against a real OSM response. The sections affected are marked
-      <span class="osb-status osb-needs_verification">Check needed</span> below.</div>`);
+    parts.push(`<div class="alert alert-warning">OSM's badge catalogue read lists the badges each section
+      offers, but it does not include how many have been awarded. Counting badges actually awarded needs each
+      member's individual badge record, which is Tier B data held back pending the consent and access decisions
+      in the OSM integration readiness doc. Until then the Awarded column stays at zero and the counts below
+      show how many badges each section offers. Sections in this state are marked
+      <span class="osb-status osb-needs_verification">Awarded pending</span>.</div>`);
   }
 
   // Group totals
