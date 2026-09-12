@@ -32,16 +32,16 @@ const PRIORITY_BADGE = { High: 'deleted', Medium: 'suspended', Low: 'draft' };
   const today = renderToday(me, actions) + tonightCard(tonight) + '<h2 style="margin:1.5rem 0 .75rem;">Your sections</h2>';
 
   if (data._error) {
-    content.innerHTML = today + `<div class="alert alert-error">${escapeHtml(data._error)}</div>`;
+    content.innerHTML = today + `<div class="alert alert-error">${escapeHtml(data._error)}</div>` + insightsCard();
     noticesBox.innerHTML = '<p class="muted">Notices are unavailable right now.</p>';
     return;
   }
   if (data.osmUnavailable) {
-    content.innerHTML = today + osmUnavailableAlert(data.reason) + sectionsBlock(data.sections, false);
+    content.innerHTML = today + osmUnavailableAlert(data.reason) + sectionsBlock(data.sections, false) + insightsCard();
     noticesBox.innerHTML = '<p class="muted">Notices are unavailable right now.</p>';
     return;
   }
-  content.innerHTML = today + sectionsBlock(data.sections, true);
+  content.innerHTML = today + sectionsBlock(data.sections, true) + insightsCard();
   noticesBox.innerHTML = renderNotices(data.notices);
 })();
 
@@ -127,6 +127,16 @@ function renderToday(me, actions) {
   return `
     <h2 style="margin:0 0 .75rem;">Needs you now</h2>
     ${needsYou}`;
+}
+
+// Quick links to leader-wide insight screens (aggregate, cross-section). Kept separate
+// from a single section's card because these span every section the leader can see.
+function insightsCard() {
+  return `
+    <h2 style="margin:1.5rem 0 .75rem;">Insights</h2>
+    <div class="cap-actions">
+      <a class="btn btn-secondary btn-sm" href="osm-badges.html">Badges awarded</a>
+    </div>`;
 }
 
 function sectionsBlock(sections, clickable) {
