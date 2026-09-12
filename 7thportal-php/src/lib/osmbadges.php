@@ -181,28 +181,54 @@ function osmBadgesDiagnoseAwarded(array $actor): array
     $token = $tok['token'];
     $startup = osmdFetchStartupWith($token);
     if (empty($startup['ok']) || empty($startup['sections'])) throw new RuntimeException('Could not read any sections from the OSM startup context.');
-    $sid = (string) array_key_first($startup['sections']);
+    // Prefer a youth section (Adults rarely has badge progress); fall back to the first.
+    $sid = null;
+    foreach ($startup['sections'] as $id => $name) {
+        $t = $startup['sectionTypes'][$id] ?? '';
+        if ($t && $t !== 'adults' && $t !== 'waiting') { $sid = (string) $id; break; }
+    }
+    if ($sid === null) $sid = (string) array_key_first($startup['sections']);
     $type = $startup['sectionTypes'][$sid] ?? null;
     $termId = osmCurrentTermIdForSection($token, $sid);
-    $resp = osmGet($token, '/ext/badges/by-member/', ['action' => 'getBadgesByMember', 'section' => $type, 'section_id' => $sid, 'term_id' => $termId]);
-    $rows = osmBadgeMemberRows($resp);
-    $sampleRow = $rows[0] ?? null;
-    $badges = $sampleRow ? osmBadgeMemberBadges($sampleRow) : [];
-    $sampleBadge = $badges[0] ?? null;
-    $agg = osmBadgesCountAwarded($rows);
+
+    // The per-member/award endpoint is undocumented and inconsistent, so probe several
+    // candidates in one pass and report each one's status and shape. Every value shown is
+    // either a field NAME or a badge-level scalar - never a member's name (PII).
+    $candidates = [
+        ['action' => 'getBadgesByMember',        'path' => '/ext/badges/by-member/',   'params' => ['action' => 'getBadgesByMember', 'section' => $type, 'section_id' => $sid, 'term_id' => $termId]],
+        ['action' => 'getBadgesByPerson',        'path' => '/ext/badges/badgesbyperson/', 'params' => ['action' => 'getBadgesByPerson', 'section' => $type, 'section_id' => $sid, 'term_id' => $termId]],
+        ['action' => 'getBadgeStructureByPerson','path' => '/ext/badges/records/',      'params' => ['action' => 'getBadgeStructureByPerson', 'section' => $type, 'section_id' => $sid, 'term_id' => $termId]],
+        ['action' => 'getSummary',               'path' => '/ext/badges/records/',      'params' => ['action' => 'getSummary', 'section' => $type, 'section_id' => $sid, 'term_id' => $termId, 'type_id' => '1']],
+    ];
+    $results = [];
+    foreach ($candidates as $c) {
+        try {
+            $resp = osmGet($token, $c['path'], $c['params']);
+        } catch (Throwable $e) {
+            $results[$c['action']] = ['path' => $c['path'], 'error' => function_exists('osmdRedactMessage') ? osmdRedactMessage($e->getMessage()) : 'read failed'];
+            continue;
+        }
+        $rows = osmBadgeMemberRows($resp);
+        $sampleRow = $rows[0] ?? null;
+        $badges = $sampleRow ? osmBadgeMemberBadges($sampleRow) : [];
+        $sampleBadge = $badges[0] ?? null;
+        $results[$c['action']] = [
+            'path' => $c['path'],
+            'topLevelType' => array_is_list($resp) ? 'list' : 'object',
+            'topLevelKeys' => array_is_list($resp) ? ['(list of ' . count($resp) . ')'] : array_slice(array_keys($resp), 0, 25),
+            'memberRowsFound' => count($rows),
+            'sampleMemberKeys' => $sampleRow ? array_slice(array_keys($sampleRow), 0, 40) : [], // KEY names only - no member values (PII)
+            'badgesFoundOnSampleMember' => count($badges),
+            'sampleBadgeKeys' => $sampleBadge ? array_keys($sampleBadge) : [],
+            'sampleBadge' => $sampleBadge ? array_map(fn($v) => is_scalar($v) ? $v : ('[' . gettype($v) . ']'), $sampleBadge) : null, // badge-level fields, no member PII
+        ];
+    }
     if (function_exists('logAudit')) {
         logAudit(['userId' => $actor['id'], 'action' => 'osm_badges_diagnose_awarded', 'entityType' => 'osm_badge_summary', 'entityId' => $sid, 'ipAddress' => function_exists('clientIp') ? clientIp() : null]);
     }
     return [
-        'section' => $startup['sections'][$sid], 'sectionId' => $sid, 'termId' => $termId,
-        'topLevelType' => array_is_list($resp) ? 'list' : 'object',
-        'topLevelKeys' => array_is_list($resp) ? [] : array_slice(array_keys($resp), 0, 25),
-        'memberRowsFound' => count($rows),
-        'sampleMemberKeys' => $sampleRow ? array_keys($sampleRow) : [], // KEY names only - no member values (PII)
-        'badgesFoundOnSampleMember' => count($badges),
-        'sampleBadgeKeys' => $sampleBadge ? array_keys($sampleBadge) : [],
-        'sampleBadge' => $sampleBadge ? array_map(fn($v) => is_scalar($v) ? $v : ('[' . gettype($v) . ']'), $sampleBadge) : null, // badge-level fields, no member PII
-        'aggregated' => ['byType' => $agg['byType'], 'totalAwarded' => $agg['totalAwarded'], 'awardFieldSeen' => $agg['awardFieldSeen'], 'members' => $agg['members']],
+        'section' => $startup['sections'][$sid], 'sectionId' => $sid, 'sectionType' => $type, 'termId' => $termId,
+        'candidates' => $results,
     ];
 }
 
