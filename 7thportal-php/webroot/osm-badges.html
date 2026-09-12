@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Badges Awarded - 7thPortal</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .osb-tiles{display:flex;flex-wrap:wrap;gap:.6rem;margin:.4rem 0 1rem}
+  .osb-tile{flex:1 1 8rem;border:1px solid var(--border,#e4ddea);border-radius:10px;padding:.75rem .9rem}
+  .osb-tile .n{font-size:1.8rem;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+  .osb-tile .l{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted,#6b6b6b);margin-top:.3rem}
+  .osb-type-row{display:flex;flex-wrap:wrap;gap:.5rem;margin:.2rem 0 1rem}
+  .osb-type{border:1px solid var(--border,#e4ddea);border-radius:8px;padding:.5rem .8rem;min-width:7rem}
+  .osb-type .t{font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted,#6b6b6b)}
+  .osb-type .v{font-size:1.25rem;font-weight:700;font-variant-numeric:tabular-nums}
+  .osb-table-wrap{overflow-x:auto}
+  table.osb-table{width:100%;border-collapse:collapse}
+  table.osb-table th,table.osb-table td{padding:.45rem .6rem;text-align:left;border-bottom:1px solid var(--border,#eee)}
+  table.osb-table td.num,table.osb-table th.num{text-align:right;font-variant-numeric:tabular-nums}
+  table.osb-table tfoot td{font-weight:700;border-top:2px solid var(--border,#ddd)}
+  .osb-status{display:inline-block;font-size:.72rem;font-weight:600;border-radius:999px;padding:.05rem .5rem}
+  .osb-ok{color:#0f7a52;background:#e3f3ea}
+  .osb-needs_verification{color:#9a5a00;background:#faf0dd}
+  .osb-empty,.osb-error{color:#5a5266;background:#eceaef}
+  .osb-meta{font-size:.85rem;color:var(--muted,#6b6b6b);margin-top:.6rem}
+  @media (prefers-color-scheme: dark){
+    .osb-ok{color:#5cc99a;background:#16281f}
+    .osb-needs_verification{color:#e0aa5a;background:#2a2213}
+    .osb-empty,.osb-error{color:#b6acc2;background:#26222c}
+  }
+</style>
+</head>
+<body>
+  <header id="app-nav" class="app-nav"></header>
+  <div class="app-layout">
+  <aside id="app-sidebar" class="app-sidebar"></aside>
+  <main class="app-main">
+  <div class="container">
+    <div id="content"><p class="muted">Loading&hellip;</p></div>
+  </div>
+  </main>
+  </div>
+  <script src="js/api.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/pageheader.js"></script>
+  <script src="js/osm-badges.js"></script>
+</body>
+</html>

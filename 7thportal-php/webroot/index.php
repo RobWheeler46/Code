@@ -75,6 +75,7 @@ try {
     require_once __DIR__ . '/../src/lib/osm.php';
     require_once __DIR__ . '/../src/lib/osmData.php';
     require_once __DIR__ . '/../src/lib/osmdiscovery.php';
+    require_once __DIR__ . '/../src/lib/osmbadges.php';
     require_once __DIR__ . '/../src/lib/mailer.php';
     require_once __DIR__ . '/../src/lib/gallery.php';
     require_once __DIR__ . '/../src/lib/finance.php';
@@ -189,6 +190,7 @@ require_once __DIR__ . '/../src/routes/dlv.php';
 require_once __DIR__ . '/../src/routes/forms.php';
 require_once __DIR__ . '/../src/routes/accessgroups.php';
 require_once __DIR__ . '/../src/routes/osmdiscovery.php';
+require_once __DIR__ . '/../src/routes/osmbadges.php';
 require_once __DIR__ . '/../src/routes/patrolpoints.php';
 require_once __DIR__ . '/../src/routes/feedback.php';
 require_once __DIR__ . '/../src/routes/search.php';

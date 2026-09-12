@@ -14,7 +14,7 @@
 $root = dirname(__DIR__);
 chdir($root);
 
-const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle', 'logic_forms', 'logic_forms_admin', 'logic_forms_files', 'logic_pp_wizard', 'logic_email', 'logic_finance_accounts', 'logic_pp_access', 'logic_pp_triage', 'logic_pp_presets', 'logic_pp_uat', 'logic_pp_activity_scope', 'logic_pp_groups', 'logic_osm_discovery'];
+const SCENARIOS = ['migrate_fresh', 'migrate_drift', 'logic_finance', 'logic_mileage', 'logic_incident', 'logic_events', 'logic_equipment', 'logic_qm_restricted', 'logic_qm_edit_guard', 'logic_sections', 'logic_command_centre', 'logic_camp_versions', 'logic_exception_scan', 'logic_prepare_tonight', 'logic_camp_finance', 'logic_camp_attendance_safety', 'logic_feature_matrix', 'logic_demo_scenarios', 'logic_ical_feed', 'logic_parent_search', 'logic_equipment_disposal', 'logic_digest_exceptions', 'logic_qm_instance_alloc', 'logic_dlv_approval', 'logic_kit', 'logic_stock_ledger', 'logic_serialised', 'logic_stocktake', 'logic_import_review', 'logic_bundle', 'logic_forms', 'logic_forms_admin', 'logic_forms_files', 'logic_pp_wizard', 'logic_email', 'logic_finance_accounts', 'logic_pp_access', 'logic_pp_triage', 'logic_pp_presets', 'logic_pp_uat', 'logic_pp_activity_scope', 'logic_pp_groups', 'logic_osm_discovery', 'logic_osm_badges'];
 
 // ── assertion helper (per child process) ─────────────────────────────────────
 $GLOBALS['__checks'] = [];
@@ -34,7 +34,7 @@ function loadLibs(): void
 {
     require_once dirname(__DIR__) . '/src/env.php';  // env() - osm.php depends on it
     require_once dirname(__DIR__) . '/src/http.php'; // clientIp()/queryParam() - lib logAudit paths use them
-    foreach (['helpers', 'osm', 'notifications', 'finance', 'incidents', 'accessgroups', 'patrolpoints', 'osmdiscovery', 'events', 'equipment', 'actions', 'quartermaster', 'prepare', 'features', 'attendance', 'demoseed', 'calendar', 'activity', 'pdf', 'dlv', 'forms'] as $lib) {
+    foreach (['helpers', 'osm', 'osmData', 'notifications', 'finance', 'incidents', 'accessgroups', 'patrolpoints', 'osmdiscovery', 'osmbadges', 'events', 'equipment', 'actions', 'quartermaster', 'prepare', 'features', 'attendance', 'demoseed', 'calendar', 'activity', 'pdf', 'dlv', 'forms'] as $lib) {
         require_once dirname(__DIR__) . '/src/lib/' . $lib . '.php';
     }
 }
@@ -1361,6 +1361,67 @@ function scenario_logic_osm_discovery(): void
     check('osmd-live: safe mode reads a representative member sample of sections', strpos(osmdClassifyLive('members', $bigStartup, osmdLiveGather('t', $bigStartup, 'safe', $readers), 'safe')['evidence']['detail'], 'representative sample') !== false);
     $gBig = osmdLiveGather('t', $bigStartup, 'extended', $readers);
     check('osmd-live: extended reads all sections for members but samples events/badges', count($gBig['members']['covered']) === 8 && count($gBig['events']['covered']) === 3 && count($gBig['badges']['covered']) === 3);
+}
+
+// Badges Awarded summary (Tier A). Aggregate counts per section only - never a member
+// name or per-person progress. Refresh is admin-only, throttle-safe (a 429 stops the
+// pass and keeps prior rows), and a section returning no award-count field is flagged
+// for verification rather than shown as a misleading zero.
+function scenario_logic_osm_badges(): void
+{
+    useDb(tmpDb('osmb')); boot(); loadLibs();
+    $admin = ['id' => (int) dbRun("INSERT INTO users (auth_type,email,first_name,last_name,portal_role) VALUES ('local','a@x','A','A','admin')")['lastInsertId'], 'portal_role' => 'admin'];
+    $leader = ['id' => (int) dbRun("INSERT INTO users (auth_type,email,first_name,last_name,portal_role) VALUES ('local','l@x','L','L','section_leader')")['lastInsertId'], 'portal_role' => 'section_leader'];
+    $trustee = ['id' => 0, 'portal_role' => 'trustee_viewer'];
+    $parent = ['id' => 0, 'portal_role' => 'parent'];
+
+    // Access: any leader/trustee may view (Tier A aggregate); only an admin may refresh.
+    check('osmb: leaders and trustees can view, parents cannot', osmBadgesCanView($leader) && osmBadgesCanView($trustee) && !osmBadgesCanView($parent));
+    check('osmb: only an admin may refresh (spends OSM rate-limit budget)', osmBadgesCanRefresh($admin) && !osmBadgesCanRefresh($leader) && !osmBadgesCanRefresh($trustee));
+
+    // Pure per-section aggregation from the demo fixtures: two Activity badges awarded in
+    // Cubs (Outdoor Adventurer, Chef), one in Scouts (Navigator); the incomplete Staged
+    // badges count towards badges-tracked but not awarded.
+    $cubs = osmBadgesDemoSummary('s101');
+    $scouts = osmBadgesDemoSummary('s102');
+    check('osmb: demo aggregation counts awarded per section by type', $cubs['totalAwarded'] === 2 && $cubs['byType']['Activity']['awarded'] === 2 && $cubs['byType']['Staged']['awarded'] === 0 && $scouts['totalAwarded'] === 1);
+    check('osmb: badges-tracked counts distinct badges seen, awarded or not', $cubs['badgeCount'] === 3 && $scouts['badgeCount'] === 2);
+    // Tier A guarantee: the summary carries only counts, never a member name.
+    check('osmb: no member name appears anywhere in a section summary (Tier A)', strpos(json_encode([$cubs, $scouts]), 'Amelia') === false && strpos(json_encode([$cubs, $scouts]), 'Freddie') === false);
+
+    // Full refresh in demo mode mirrors both sections; the read shows group + per-type totals.
+    $r = osmBadgesRefresh($admin);
+    check('osmb: refresh mirrors every section and reports source', $r['source'] === 'demo' && $r['sections'] === 2 && $r['synced'] === 2 && !$r['partial']);
+    $s = osmBadgesSummaryData();
+    check('osmb: summary rolls up group totals across sections', $s['totals']['awarded'] === 3 && $s['totals']['badges'] === 5 && count($s['sections']) === 2);
+    check('osmb: summary rolls up per-type totals', ($s['byType']['Activity']['awarded'] ?? 0) === 3 && ($s['byType']['Staged']['awarded'] ?? 0) === 0);
+    check('osmb: a synced section is marked ok and not flagged for verification', $s['sections'][0]['status'] === 'ok' && !$s['needsVerification']);
+
+    // Tolerant field parsing: award counts arrive under several possible names; a genuinely
+    // absent field returns null (distinct from a real zero) so the caller can flag it.
+    check('osmb: int field reads the first present candidate, else null', osmBadgeIntField(['awarded' => '5'], ['awarded', 'awarded_count']) === 5 && osmBadgeIntField(['completed' => 3], ['awarded', 'completed']) === 3 && osmBadgeIntField(['x' => 1], ['awarded']) === null);
+
+    // A section that returns badges but no award-count field is flagged "needs verification"
+    // rather than mirrored as a misleading zero.
+    $noField = ['readers' => ['summary' => fn($sid, $type, $termId) => ['available' => true, 'termId' => 't', 'byType' => ['Activity' => ['awarded' => 0, 'completed' => 0, 'badges' => 4]], 'totalAwarded' => 0, 'totalCompleted' => 0, 'badgeCount' => 4, 'awardFieldSeen' => false]]];
+    osmBadgesRefresh($admin, $noField);
+    $s2 = osmBadgesSummaryData();
+    check('osmb: a section with no award field is flagged for verification, not silently zeroed', $s2['needsVerification'] && $s2['sections'][0]['status'] === 'needs_verification');
+
+    // Throttle safety: a 429 mid-pass stops immediately and leaves already-synced and
+    // untouched sections' previous rows intact - the mirror is never half-wiped.
+    osmBadgesRefresh($admin); // restore both sections to a good demo state
+    $before = osmBadgesSummaryData();
+    $throttle = ['readers' => ['summary' => function ($sid, $type, $termId) {
+        if ($sid === 's102') throw new Exception('OSM API error 429 on /ext/badges/records/');
+        return osmBadgesDemoSummary($sid);
+    }]];
+    $rt = osmBadgesRefresh($admin, $throttle);
+    $after = osmBadgesSummaryData();
+    $s102Before = array_values(array_filter($before['sections'], fn($x) => $x['sectionId'] === 's102'))[0];
+    $s102After = array_values(array_filter($after['sections'], fn($x) => $x['sectionId'] === 's102'))[0];
+    check('osmb: a 429 stops the pass and is reported as partial/blocked', $rt['blocked'] === 1 && $rt['partial'] === true && $rt['synced'] === 1);
+    check('osmb: a throttled section keeps its previous row (mirror never half-wiped)', count($after['sections']) === 2 && $s102After['totalAwarded'] === $s102Before['totalAwarded']);
 }
 
 // Forms part 3: on-behalf completion (recorded, not impersonated) + required file

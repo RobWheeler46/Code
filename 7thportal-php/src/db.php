@@ -1407,6 +1407,25 @@ CREATE TABLE IF NOT EXISTS osm_capability_notes (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_osmd_notes_cap ON osm_capability_notes(capability_key);
+-- Per-section badge-award summary mirror (Tier A - aggregate counts only, no member
+-- rows; see DECISIONS-osm-integration.md). Populated by an admin-triggered, paced
+-- refresh that reads OSM's tolerated getAvailableBadges aggregate counts. A throttled or
+-- failed section keeps its previous row rather than being wiped, so the screen always
+-- shows the last good picture.
+CREATE TABLE IF NOT EXISTS osm_badge_summary (
+  section_id TEXT PRIMARY KEY,
+  section_name TEXT,
+  term_id TEXT,
+  term_name TEXT,
+  total_awarded INTEGER NOT NULL DEFAULT 0,
+  total_completed INTEGER NOT NULL DEFAULT 0,
+  by_type_json TEXT,
+  badge_count INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'ok',
+  source TEXT,
+  synced_at TEXT NOT NULL DEFAULT (datetime('now')),
+  synced_by INTEGER REFERENCES users(id)
+);
 -- Demo/UAT feedback (Test Environment pack DEMO-FB): testers leave feedback from
 -- any page in demo mode - persona, page, device, rating, category and comment.
 CREATE TABLE IF NOT EXISTS demo_feedback (

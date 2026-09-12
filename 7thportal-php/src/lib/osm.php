@@ -700,6 +700,70 @@ function osmGetMemberBadgeProgress(string $accessToken, ?string $sectionType, st
     }
 }
 
+// First present of $keys read as an int, else null. OSM is inconsistent about the exact
+// field name for section-level aggregate counts, so we look under several candidates
+// rather than assume one - and null (not 0) means "field absent", which the caller uses
+// to tell "genuinely zero awarded" apart from "this response carries no award counts".
+function osmBadgeIntField(array $row, array $keys): ?int
+{
+    foreach ($keys as $k) {
+        if (array_key_exists($k, $row) && $row[$k] !== null && $row[$k] !== '') return (int) $row[$k];
+    }
+    return null;
+}
+
+// Section-level badge summary using the aggregate counts on getAvailableBadges (the same
+// tolerated read OSM Discovery confirmed works server-side). This is deliberately the
+// cheap path: four calls per section (one per badge type), NOT one getBadgeRecords call
+// per badge - reading every badge's per-member records across nine sections would be
+// hundreds of calls and trip OSM's throttle. Returns only aggregate counts; no member
+// rows are read or retained (Tier A - see DECISIONS-osm-integration.md).
+// 'awardFieldSeen' tells the caller whether the response actually carried award counts,
+// so a section that returns badges-but-no-award-field is flagged for verification instead
+// of being shown as a misleading zero.
+function osmGetSectionBadgeSummary(string $accessToken, ?string $sectionType, string $sectionId, ?string $termId): array
+{
+    try {
+        $termId = $termId ?: osmCurrentTermIdForSection($accessToken, $sectionId);
+        if (!$termId) return ['available' => false, 'reason' => 'no_term'];
+        $byType = [];
+        $totalAwarded = 0;
+        $totalCompleted = 0;
+        $badgeCount = 0;
+        $awardFieldSeen = false;
+        foreach (OSM_BADGE_TYPE_NAMES as $typeId => $typeName) {
+            $resp = osmGet($accessToken, '/ext/badges/records/', [
+                'action' => 'getAvailableBadges', 'section' => $sectionType, 'section_id' => $sectionId,
+                'term_id' => $termId, 'type_id' => (string) $typeId, 'context' => 'none',
+            ]);
+            $list = $resp['data'] ?? [];
+            if (!is_array($list)) $list = [];
+            $awarded = 0;
+            $completed = 0;
+            $badges = 0;
+            foreach ($list as $b) {
+                if (!is_array($b)) continue;
+                $badges++;
+                $aw = osmBadgeIntField($b, ['awarded', 'awarded_count', 'totalawarded', 'awardedcount']);
+                $co = osmBadgeIntField($b, ['completed', 'completed_count', 'totalcompleted', 'completedcount']);
+                if ($aw !== null) { $awarded += $aw; $awardFieldSeen = true; }
+                if ($co !== null) { $completed += $co; }
+            }
+            $byType[$typeName] = ['awarded' => $awarded, 'completed' => $completed, 'badges' => $badges];
+            $totalAwarded += $awarded;
+            $totalCompleted += $completed;
+            $badgeCount += $badges;
+        }
+        return [
+            'available' => true, 'termId' => (string) $termId, 'byType' => $byType,
+            'totalAwarded' => $totalAwarded, 'totalCompleted' => $totalCompleted,
+            'badgeCount' => $badgeCount, 'awardFieldSeen' => $awardFieldSeen,
+        ];
+    } catch (Throwable $e) {
+        return ['available' => false, 'reason' => 'error', 'error' => $e->getMessage()];
+    }
+}
+
 // ── Demo mode - deterministic fake OSM data so the app is fully clickable
 // without live credentials. Never used once a real osm_access_token is set.
 const OSM_DEMO_TERM = ['termid' => 'demo-term', 'name' => 'Autumn Term', 'startdate' => '2026-09-01', 'enddate' => '2026-12-15'];

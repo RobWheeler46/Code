@@ -81,6 +81,11 @@ async function renderHealth() {
   })() : '';
   box.innerHTML = `
     ${discCard}
+    <div class="card">
+      <h2>Badges Awarded</h2>
+      <p class="muted">A per-section summary of badges awarded, counted from OSM. Aggregate counts only, no individual members. Any leader can view it; the refresh reads from OSM, so it is paced and saved rather than read live.</p>
+      <a class="btn btn-secondary" href="/osm-badges.html">Open Badges Awarded</a>
+    </div>
     ${params.get('connected') ? '<div class="alert alert-success">OSM service connection updated.</div>' : ''}
     <div class="card">
       <h2>OSM connection</h2>
