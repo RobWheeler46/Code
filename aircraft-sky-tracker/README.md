@@ -508,9 +508,14 @@ Weather, OOOI, Route, ETA, …) and a plain‑language summary, expandable for d
 provenance; technical/operational categories are hidden from the default view.
 New messages stream **live** over the WebSocket (`aircraft.message`) with a REST fallback
 at `/api/aircraft/{hex}/messages`, and raw bodies are **never persisted** (short in‑memory
-buffer only). Airframes is the Tier‑1 source (env‑gated, inert until access); a
+buffer only). The live source is **Airframes' keyless public `/v1/messages` feed**
+(60 req/min): a background provider round‑robins the tracked aircraft, filtering by ICAO
+hex (`?icao=`), one fetch per ~2 s with a per‑aircraft cooldown so it stays well within the
+rate limit and never blocks the poll loop; only messages with decodable content are surfaced
+and each is categorised from its content (labels are unreliable). An optional
+`AIRFRAMES_API_KEY` raises the limit; `ACARS_LIVE_ENABLED=false` disables live fetch. A
 **simulation** provider streams sample messages — including the unmatched and
-conflicting‑identity cases — so the whole feature works without a feeder credential.
+conflicting‑identity cases — so the feature also works fully offline in simulation.
 Attribution to Airframes.io is shown wherever messages appear. Toggle `showAcarsMessages`;
 message‑display failure never affects tracking.
 

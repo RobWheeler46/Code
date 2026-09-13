@@ -72,6 +72,7 @@ import { AcarsService } from "./messages/acarsService.js";
 import {
   SimulationAcarsProvider,
   AirframesAcarsProvider,
+  type AcarsMessageProvider,
 } from "./messages/acarsProviders.js";
 import { AccountRepo } from "./persistence/accountRepo.js";
 import { GoogleAuth } from "./auth/googleAuth.js";
@@ -241,10 +242,12 @@ async function main(): Promise<void> {
   // Live ACARS/VDL2 datalink messages (FRD v3.9): off by default, decoded-only,
   // raw payloads gated by the deployment flag. Simulation streams sample messages
   // without live Airframes; the provider follows the aircraft provider.
-  const acars = new AcarsService(
+  const acarsProvider: AcarsMessageProvider =
     env.aircraftProvider === "simulation"
       ? new SimulationAcarsProvider()
-      : new AirframesAcarsProvider(env.airframesEnabled, env.airframesApiKey),
+      : new AirframesAcarsProvider(env.acarsLiveEnabled, env.airframesApiKey);
+  const acars = new AcarsService(
+    acarsProvider,
     () => {
       const c = settings.get();
       return {
@@ -846,6 +849,7 @@ async function main(): Promise<void> {
       void satellites.start(); // FRD §36 - independent of aircraft; never blocks
       satellitePasses.start();
       satelliteAlerts.start();
+      acarsProvider.start?.(); // live ACARS fetch loop (idles unless ACARS is enabled)
     } else {
       log.warn("aircraft polling not started - settings screen available for diagnosis (FRD §85)");
     }
@@ -865,6 +869,7 @@ async function main(): Promise<void> {
     satellites.stop();
     satellitePasses.stop();
     satelliteAlerts.stop();
+    acarsProvider.stop?.();
     polling.stop();
     ws.close();
     server.close();

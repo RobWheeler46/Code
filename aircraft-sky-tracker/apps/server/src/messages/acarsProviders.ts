@@ -32,6 +32,9 @@ export interface AcarsMessageProvider {
   readonly enabled: boolean;
   /** New messages since the previous poll for the given tracked aircraft. */
   poll(tracked: AcarsTracked[], nowMs: number): ProviderMessage[];
+  /** Optional background lifecycle (the live provider fetches on a timer). */
+  start?(): void;
+  stop?(): void;
 }
 
 interface SimState {
@@ -197,23 +200,278 @@ export class SimulationAcarsProvider implements AcarsMessageProvider {
   }
 }
 
+// --- Live Airframes integration (§REST Fallback / §Live Updates) --------------
+
+/** The subset of the Airframes /v1/messages record we consume. */
+export interface AirframesRaw {
+  id: number | string;
+  sourceType?: string;
+  source?: string;
+  label?: string | null;
+  text?: string | null;
+  timestamp?: string;
+  airframe?: { tail?: string | null; icao?: string | null } | null;
+  flight?:
+    | string
+    | {
+        flight?: string | null;
+        flightIcao?: string | null;
+        flightIata?: string | null;
+        latitude?: number | null;
+        longitude?: number | null;
+        altitude?: number | null;
+        departingAirport?: string | null;
+        destinationAirport?: string | null;
+      }
+    | null;
+  flightNumber?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  altitude?: number | null;
+  departingAirport?: string | null;
+  destinationAirport?: string | null;
+}
+
+function mediumFrom(raw: AirframesRaw): AcarsMedium {
+  const s = (raw.sourceType || raw.source || "").toLowerCase();
+  if (s.includes("vdl")) return "VDL2";
+  if (s.includes("hfdl")) return "HFDL";
+  if (s.includes("satcom") || s.includes("iridium") || s.includes("inmarsat") || s.includes("aero")) {
+    return "SATCOM";
+  }
+  return "ACARS";
+}
+
+/** Collapse control characters/whitespace in decoded ACARS text. */
+function cleanText(text: string): string {
+  return text.replace(/[\r\n\t]+/g, " ").replace(/\s{2,}/g, " ").trim();
+}
+
+function positionOf(raw: AirframesRaw): { lat?: number; lon?: number; alt?: number } {
+  const f = typeof raw.flight === "object" && raw.flight ? raw.flight : undefined;
+  const lat = raw.latitude ?? f?.latitude ?? undefined;
+  const lon = raw.longitude ?? f?.longitude ?? undefined;
+  const alt = raw.altitude ?? f?.altitude ?? undefined;
+  return {
+    lat: typeof lat === "number" ? lat : undefined,
+    lon: typeof lon === "number" ? lon : undefined,
+    alt: typeof alt === "number" ? alt : undefined,
+  };
+}
+
+function routeOf(raw: AirframesRaw): { dep?: string; dest?: string } {
+  const f = typeof raw.flight === "object" && raw.flight ? raw.flight : undefined;
+  return {
+    dep: raw.departingAirport ?? f?.departingAirport ?? undefined,
+    dest: raw.destinationAirport ?? f?.destinationAirport ?? undefined,
+  };
+}
+
+/** Best-effort category from content (§Message Categories); labels are unreliable. */
+export function categoriseAirframes(raw: AirframesRaw): AcarsCategory | undefined {
+  const text = (raw.text ?? "").toUpperCase();
+  const clean = cleanText(raw.text ?? "");
+  const pos = positionOf(raw);
+  const route = routeOf(raw);
+  const hasContent = clean.length > 0 || pos.lat !== undefined || route.dep || route.dest;
+  if (!hasContent) return undefined; // bare link frame - nothing to show
+
+  if (/\bMETAR\b|\bTAF\b|\bATIS\b|\bWX\b|\bQNH\b|VISIBILITY|\bWIND\b|\bRWY\b.*\bILS\b/.test(text)) {
+    return "weather";
+  }
+  if (/\bOOOI\b|OUT\/OFF|OFF\/ON|\bAIRBORNE\b|TAKEOFF|\bLANDED\b|\bLANDING\b|\bDOORS\b/.test(text)) {
+    return "oooi";
+  }
+  if (/\bETA\b|ESTIMAT/.test(text)) return "eta";
+  if (pos.lat !== undefined && pos.lon !== undefined) return "position";
+  if (text.startsWith("POS") || /\bPOSN?\b/.test(text)) return "position";
+  if (route.dep || route.dest || /\bRTE\b|FPLAN|FLIGHT PLAN|\bROUTE\b|CLEARED|\bWPT\b/.test(text)) {
+    return "route";
+  }
+  if (/\bFMC\b|PROGRESS|\bPERF\b|\bFUEL\b/.test(text)) return "flight_management";
+  return clean.length > 0 ? "operational" : undefined;
+}
+
+function summarise(raw: AirframesRaw, category: AcarsCategory): { summary: string; lines: string[] } {
+  const clean = cleanText(raw.text ?? "");
+  const snippet = clean.length > 90 ? `${clean.slice(0, 90)}…` : clean;
+  const pos = positionOf(raw);
+  const lines: string[] = [];
+  if (pos.lat !== undefined && pos.lon !== undefined) {
+    lines.push(`${pos.lat.toFixed(3)}, ${pos.lon.toFixed(3)}${pos.alt !== undefined ? ` · ${pos.alt.toLocaleString()} ft` : ""}`);
+  }
+  const route = routeOf(raw);
+  if (route.dep || route.dest) lines.push(`${route.dep ?? "?"} → ${route.dest ?? "?"}`);
+  if (snippet) lines.push(snippet);
+
+  const summaryByCat: Record<AcarsCategory, string> = {
+    position: "Position report",
+    weather: "Weather / ATIS",
+    oooi: "OOOI / flight state",
+    eta: "ETA update",
+    route: "Route / flight plan",
+    flight_management: "Flight management",
+    operational: snippet || "Operational message",
+    technical: "Technical",
+    other: "Message",
+  };
+  return { summary: summaryByCat[category], lines: lines.slice(0, 3) };
+}
+
 /**
- * Airframes ACARS provider (§REST Fallback / §Live Updates). Env-gated and inert
- * until confirmed realtime/REST access; the architecture, policy and simulation
- * exercise the feature meanwhile.
+ * Map one Airframes record to a provider message correlated to `queriedHex` (the
+ * aircraft we asked about). Returns undefined for bare frames with no content.
+ * Correlation is by the ICAO-filtered query; registration is asserted (reliable)
+ * but callsign is not (ICAO/IATA format differences would cause false conflicts).
+ */
+export function mapAirframesMessage(raw: AirframesRaw, queriedHex: string): ProviderMessage | undefined {
+  const category = categoriseAirframes(raw);
+  if (!category) return undefined;
+  const { summary, lines } = summarise(raw, category);
+  const tail = raw.airframe?.tail ?? undefined;
+  return {
+    id: `af-${raw.id}`,
+    aircraftId: queriedHex.toUpperCase(),
+    timestamp: raw.timestamp ?? new Date().toISOString(),
+    medium: mediumFrom(raw),
+    label: raw.label ?? undefined,
+    category,
+    decoded: { summary, lines: lines.length ? lines : undefined },
+    rawTextAvailable: false, // set by the service where policy permits
+    raw: raw.text ?? undefined,
+    correlationConfidence: "confirmed", // ICAO-filtered query = strong correlation
+    source: "airframes",
+    receivingStation: "Airframes feeder network",
+    assertedRegistration: tail ?? undefined,
+    // Callsign intentionally not asserted (format mismatch would falsely conflict).
+  };
+}
+
+const AF_BASE = "https://api.airframes.io/v1/messages";
+const AF_TIMEOUT_MS = 8000;
+const AF_TICK_MS = 2000; // one aircraft fetched per tick -> <= 30 req/min (limit 60)
+const AF_PER_HEX_COOLDOWN_MS = 25_000;
+const AF_TRACKED_STALE_MS = 15_000; // stop fetching if the app stopped polling us
+const AF_SEEN_CAP = 2000;
+
+/**
+ * Live Airframes ACARS provider. Airframes exposes a keyless public
+ * `/v1/messages` endpoint (60 req/min) that supports `?icao=` filtering, so this
+ * round-robins the tracked aircraft on a background timer - one fetch per tick,
+ * per-aircraft cooldown - staying well within the rate limit and never blocking
+ * the poll loop. Only messages with decodable content are surfaced (§Default
+ * Filtering); the display policy (raw gating) is applied later by the service.
  */
 export class AirframesAcarsProvider implements AcarsMessageProvider {
   readonly name = "airframes";
   readonly enabled: boolean;
 
-  constructor(enabledFlag: boolean, apiKey: string | undefined) {
-    this.enabled = enabledFlag && typeof apiKey === "string" && apiKey.length > 0;
+  private tracked: AcarsTracked[] = [];
+  private lastTrackedAtMs = 0;
+  private readonly perHex = new Map<string, { lastFetchMs: number; lastTs?: string }>();
+  private readonly seen = new Set<string>();
+  private readonly queue: ProviderMessage[] = [];
+  private cursor = 0;
+  private rateLimitedUntilMs = 0;
+  private timer: NodeJS.Timeout | undefined;
+
+  constructor(
+    enabledFlag: boolean,
+    private readonly apiKey: string | undefined,
+  ) {
+    this.enabled = enabledFlag;
   }
 
-  poll(_tracked: AcarsTracked[], _nowMs: number): ProviderMessage[] {
-    if (this.enabled) {
-      log.debug("airframes ACARS poll skipped (live mapping pending API access)");
+  start(): void {
+    if (this.timer || !this.enabled) return;
+    this.timer = setInterval(() => void this.tick().catch(() => undefined), AF_TICK_MS);
+    this.timer.unref();
+    log.info("airframes live ACARS provider started", { keyless: !this.apiKey });
+  }
+
+  stop(): void {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = undefined;
+  }
+
+  poll(tracked: AcarsTracked[], nowMs: number): ProviderMessage[] {
+    this.tracked = tracked;
+    this.lastTrackedAtMs = nowMs;
+    if (this.queue.length === 0) return [];
+    return this.queue.splice(0, this.queue.length);
+  }
+
+  /** One background step: fetch the next due aircraft's recent messages. */
+  private async tick(): Promise<void> {
+    const now = Date.now();
+    if (!this.enabled) return;
+    if (now - this.lastTrackedAtMs > AF_TRACKED_STALE_MS) return; // app not displaying ACARS
+    if (now < this.rateLimitedUntilMs) return;
+    const hex = this.nextDueHex(now);
+    if (!hex) return;
+    this.perHex.set(hex, { ...this.perHex.get(hex), lastFetchMs: now });
+    await this.fetchHex(hex);
+  }
+
+  private nextDueHex(now: number): string | undefined {
+    const hexes = this.tracked.map((t) => t.icaoHex.toUpperCase());
+    for (let i = 0; i < hexes.length; i++) {
+      const hex = hexes[(this.cursor + i) % hexes.length] as string;
+      const state = this.perHex.get(hex);
+      if (!state || now - state.lastFetchMs >= AF_PER_HEX_COOLDOWN_MS) {
+        this.cursor = (this.cursor + i + 1) % hexes.length;
+        return hex;
+      }
     }
-    return [];
+    return undefined;
+  }
+
+  private async fetchHex(hex: string): Promise<void> {
+    const state = this.perHex.get(hex);
+    const params = new URLSearchParams({ icao: hex, limit: "15" });
+    if (state?.lastTs) params.set("since", state.lastTs);
+    const headers: Record<string, string> = { Accept: "application/json" };
+    if (this.apiKey) headers["Authorization"] = `Bearer ${this.apiKey}`;
+
+    let res: Response;
+    try {
+      res = await fetch(`${AF_BASE}?${params.toString()}`, {
+        headers,
+        signal: AbortSignal.timeout(AF_TIMEOUT_MS),
+      });
+    } catch {
+      return; // network hiccup; try again next cooldown
+    }
+    if (res.status === 429) {
+      const retry = Number(res.headers.get("retry-after")) || 60;
+      this.rateLimitedUntilMs = Date.now() + retry * 1000;
+      return;
+    }
+    if (!res.ok) return;
+
+    let list: AirframesRaw[];
+    try {
+      list = (await res.json()) as AirframesRaw[];
+    } catch {
+      return;
+    }
+    if (!Array.isArray(list)) return;
+
+    let newestTs = state?.lastTs;
+    for (const raw of list) {
+      const id = `af-${raw.id}`;
+      if (this.seen.has(id)) continue;
+      const mapped = mapAirframesMessage(raw, hex);
+      if (mapped) {
+        this.seen.add(id);
+        this.queue.push(mapped);
+      }
+      if (raw.timestamp && (!newestTs || raw.timestamp > newestTs)) newestTs = raw.timestamp;
+    }
+    this.perHex.set(hex, { lastFetchMs: Date.now(), lastTs: newestTs });
+    if (this.seen.size > AF_SEEN_CAP) {
+      // Trim the dedupe set so it can't grow unbounded.
+      for (const v of [...this.seen].slice(0, this.seen.size - AF_SEEN_CAP)) this.seen.delete(v);
+    }
   }
 }

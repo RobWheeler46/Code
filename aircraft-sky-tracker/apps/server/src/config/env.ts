@@ -83,6 +83,12 @@ export interface Env {
    * Deployment Control). Defaults OFF; a user preference can never override it.
    */
   acarsAllowRawDisplay: boolean;
+  /**
+   * Use the keyless live Airframes /v1/messages feed for ACARS display (FRD v3.9).
+   * Defaults ON: it only fetches when a user has enabled ACARS display, and an
+   * optional AIRFRAMES_API_KEY raises the rate limit. Set false to disable live fetch.
+   */
+  acarsLiveEnabled: boolean;
   /** Optional Space-Track.org credentials for the orbital-data backup (§77). */
   spaceTrackUser: string | undefined;
   spaceTrackPassword: string | undefined;
@@ -121,6 +127,7 @@ export const env: Env = {
   airframesEnabled: (process.env["AIRFRAMES_ENABLED"] || "").toLowerCase() === "true",
   airframesMode: str("AIRFRAMES_MODE", "rest"),
   acarsAllowRawDisplay: (process.env["ALLOW_RAW_ACARS_DISPLAY"] || "").toLowerCase() === "true",
+  acarsLiveEnabled: (process.env["ACARS_LIVE_ENABLED"] || "true").toLowerCase() !== "false",
   spaceTrackUser: process.env["SPACETRACK_USER"] || undefined,
   spaceTrackPassword: process.env["SPACETRACK_PASSWORD"] || undefined,
   googleClientId: process.env["GOOGLE_CLIENT_ID"] || undefined,
