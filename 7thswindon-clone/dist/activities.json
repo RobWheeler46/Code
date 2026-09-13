@@ -1,0 +1,18 @@
+{
+  "meta": {
+    "title": "What you'll get up to",
+    "intro": "From the top of a climbing wall to the middle of a wood at midnight, here's a taste of the adventures on offer at 7th Swindon. Every young person tries things they never expected to."
+  },
+  "activities": [
+    { "id": "camping", "icon": "🏕️", "title": "Camps and sleepovers", "blurb": "Nights under canvas, campfire songs and the pride of a first night away from home.", "accent": "#2e7d32" },
+    { "id": "hiking", "icon": "🧭", "title": "Hikes and navigation", "blurb": "Map, compass and big skies, finding the way across the countryside as a team.", "accent": "#00897b" },
+    { "id": "climbing", "icon": "🧗", "title": "Climbing and heights", "blurb": "Harness on, nerves aside, climbing, abseiling and conquering the wobble at the top.", "accent": "#c62828" },
+    { "id": "water", "icon": "🛶", "title": "On the water", "blurb": "Kayaking, canoeing and paddle-sports, plus the odd deliberate splash.", "accent": "#1e88e5" },
+    { "id": "cooking", "icon": "🔥", "title": "Fire and cooking", "blurb": "Lighting fires safely and cooking a meal outdoors that somehow always tastes better.", "accent": "#e65100" },
+    { "id": "making", "icon": "🎨", "title": "Making and creating", "blurb": "Crafts, building and problem-solving, hands busy, imaginations busier.", "accent": "#6d28d9" },
+    { "id": "stem", "icon": "🔬", "title": "Science and tech", "blurb": "Experiments, coding and gadgets, discovering how the world actually works.", "accent": "#0277bd" },
+    { "id": "firstaid", "icon": "🩹", "title": "Skills for life", "blurb": "First aid, teamwork and confidence, the quiet skills that matter for years.", "accent": "#ad1457" },
+    { "id": "community", "icon": "🤝", "title": "Helping others", "blurb": "Community projects and good turns that make a real difference close to home.", "accent": "#00796b" },
+    { "id": "global", "icon": "🌍", "title": "A global family", "blurb": "Meeting Scouts from around the world and exploring other cultures and causes.", "accent": "#5e35b1" }
+  ]
+}

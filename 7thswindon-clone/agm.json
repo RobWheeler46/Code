@@ -1,0 +1,36 @@
+{
+  "meta": {
+    "contactEmail": "GSL@7thswindon.org.uk",
+    "transparencyNote": "AGM documents are published to keep our community informed."
+  },
+  "years": [
+    {
+      "year": 2026,
+      "heldOn": "Thursday 2nd July 2026",
+      "minutes": {
+        "label": "Annual General Meeting Minutes 2026",
+        "file": "agm-minutes-2026.pdf"
+      },
+      "documents": [
+        {
+          "label": "Trustees' Annual Report 2026",
+          "file": "agm-annual-report-2026-public.pdf"
+        }
+      ]
+    },
+    {
+      "year": 2025,
+      "heldOn": "Saturday 14th June 2025",
+      "minutes": {
+        "label": "Annual General Meeting Minutes 2025",
+        "file": "agm-minutes-2025.pdf"
+      },
+      "documents": [
+        {
+          "label": "Trustee Report 2025",
+          "file": "trustee-report-2025.pdf"
+        }
+      ]
+    }
+  ]
+}

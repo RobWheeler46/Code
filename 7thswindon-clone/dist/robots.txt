@@ -1,0 +1,11 @@
+# robots.txt for 7th Swindon Scout Group — https://www.7thswindon.org.uk
+# Public "shop window" site: everything here is meant to be found.
+
+User-agent: *
+Allow: /
+
+# Server-side form handlers have nothing to index.
+Disallow: /contact.php
+Disallow: /volunteer.php
+
+Sitemap: https://www.7thswindon.org.uk/sitemap.xml

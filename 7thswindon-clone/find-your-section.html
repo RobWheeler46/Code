@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="assets/7thswindon-logo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Find the right Scout section for your child at 7th Swindon Scouts. Enter your child's age to see age-appropriate Beavers, Cubs, Scouts and Explorer meeting options in North Swindon." />
+    <title>Find Your Section · 7th Swindon Scout Group</title>
+    <link rel="canonical" href="https://www.7thswindon.org.uk/find-your-section.html" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="7th Swindon Scout Group" />
+    <meta property="og:title" content="Find Your Section · 7th Swindon Scout Group" />
+    <meta property="og:description" content="Find the right Scout section for your child at 7th Swindon Scouts. Enter your child's age to see age-appropriate Beavers, Cubs, Scouts and Explorer meeting options in North Swindon." />
+    <meta property="og:url" content="https://www.7thswindon.org.uk/find-your-section.html" />
+    <meta property="og:image" content="https://www.7thswindon.org.uk/assets/7thswindon-logo.png" />
+    <meta property="og:image:alt" content="7th Swindon Scout Group logo" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Find Your Section · 7th Swindon Scout Group" />
+    <meta name="twitter:description" content="Find the right Scout section for your child at 7th Swindon Scouts. Enter your child's age to see age-appropriate Beavers, Cubs, Scouts and Explorer meeting options in North Swindon." />
+    <meta name="twitter:image" content="https://www.7thswindon.org.uk/assets/7thswindon-logo.png" />
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"NGO","name":"7th Swindon Scout Group","url":"https://www.7thswindon.org.uk/","logo":"https://www.7thswindon.org.uk/assets/7thswindon-logo.png","image":"https://www.7thswindon.org.uk/assets/7thswindon-logo.png","description":"One of North Swindon's largest Scout Groups, helping over 300 young people aged 6 to 18 develop skills for life through Beavers, Cubs, Scouts and Explorers.","email":"info@7thswindon.org.uk","areaServed":{"@type":"Place","name":"North Swindon, Wiltshire"},"address":{"@type":"PostalAddress","addressLocality":"Swindon","addressRegion":"Wiltshire","addressCountry":"GB"},"parentOrganization":{"@type":"Organization","name":"The Scout Association"},"identifier":{"@type":"PropertyValue","propertyID":"charityNumber","value":"306101"},"sameAs":["https://www.youtube.com/@7thSwindonScouts","https://www.instagram.com/7thswindonscouts"]}</script>
+    <link rel="stylesheet" href="assets/style.css?v=20260912b" />
+    <link rel="stylesheet" href="assets/theme.css?v=20260912c" />
+    <style>
+      html { scroll-behavior: smooth; }
+      section[id], footer[id] { scroll-margin-top: 90px; }
+      @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+      /* Accent follows the active theme (portal purple or Scout teal), with a fallback. */
+      :root { --fx: var(--pp-purple, var(--st-teal, #6d28d9)); --fx-dark: var(--pp-purple-dark, var(--st-teal-dark, #4c1d95)); --fx-soft: #efeafc; }
+      #finder { padding-top: 7.5rem; padding-bottom: 5rem; min-height: 70vh; }
+      .finder-wrap { max-width: 56rem; margin: 0 auto; padding: 0 1.5rem; }
+      .finder-intro { text-align: center; margin-bottom: 2.5rem; }
+      .finder-intro p { color: #4b5563; font-size: 1.125rem; max-width: 40rem; margin: 1.25rem auto 0; }
+
+      .finder-card { background: #fff; border: 1px solid #e3ddf0; border-left: 4px solid var(--fx); border-radius: 16px; padding: 1.75rem; box-shadow: 0 1px 2px rgba(27,21,51,.05), 0 12px 34px rgba(27,21,51,.07); }
+      @media (min-width: 640px) { .finder-card { padding: 2.25rem; } }
+      .f-step-label { display: block; font-weight: 700; font-size: 1.15rem; margin: 0 0 .35rem; }
+      .f-step-hint { color: #6b6478; font-size: .9rem; margin: 0 0 1rem; }
+      .f-age-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 1rem 1.25rem; }
+      .f-field { display: flex; flex-direction: column; }
+      .f-field label { font-weight: 600; font-size: .9rem; margin-bottom: .35rem; }
+      .f-field input { padding: .7rem .9rem; border: 1px solid #d7d2e3; border-radius: 10px; font: inherit; font-size: 1rem; background: #fff; color: #221c2e; transition: border-color .15s, box-shadow .15s; }
+      .f-field input:focus { outline: none; border-color: var(--fx); box-shadow: 0 0 0 3px color-mix(in srgb, var(--fx) 22%, transparent); }
+      #f-age { width: 8rem; }
+      .f-or { color: #9089a3; font-size: .85rem; font-weight: 600; padding-bottom: .8rem; }
+
+      .f-optional { margin-top: 1.75rem; padding-top: 1.5rem; border-top: 1px solid #eee6f7; }
+      .f-fieldset { border: 0; margin: 0 0 1.25rem; padding: 0; }
+      .f-legend { font-weight: 600; font-size: .95rem; padding: 0; margin-bottom: .6rem; }
+      .f-chips { display: flex; flex-wrap: wrap; gap: .5rem; }
+      .f-chip { position: relative; }
+      .f-chip input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
+      .f-chip span { display: inline-block; padding: .45rem .9rem; border: 1px solid #d7d2e3; border-radius: 999px; font-size: .9rem; font-weight: 600; color: #3f3a52; background: #fff; transition: all .12s; }
+      .f-chip input:hover + span { border-color: var(--fx); }
+      .f-chip input:checked + span { background: var(--fx); border-color: var(--fx); color: #fff; }
+      .f-chip input:focus-visible + span { outline: 2px solid var(--fx); outline-offset: 2px; }
+      .f-select { padding: .7rem .9rem; border: 1px solid #d7d2e3; border-radius: 10px; font: inherit; font-size: 1rem; background: #fff; color: #221c2e; min-width: 14rem; }
+      .f-select:focus { outline: none; border-color: var(--fx); box-shadow: 0 0 0 3px color-mix(in srgb, var(--fx) 22%, transparent); }
+
+      .f-error { color: #b3261e; font-weight: 600; font-size: .95rem; margin: 1rem 0 0; min-height: 1px; }
+      .f-error:empty { display: none; }
+      .f-buttons { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.5rem; }
+      .f-btn { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; padding: .75rem 1.5rem; border-radius: 999px; font: inherit; font-weight: 700; font-size: 1rem; cursor: pointer; text-decoration: none; border: 2px solid transparent; transition: background .15s, color .15s; }
+      .f-btn-primary { background: var(--fx); color: #fff; }
+      .f-btn-primary:hover { background: var(--fx-dark); }
+      .f-btn-ghost { background: #fff; color: var(--fx); border-color: var(--fx); }
+      .f-btn-ghost:hover { background: var(--fx-soft); }
+      .f-btn:focus-visible { outline: 2px solid var(--fx-dark); outline-offset: 2px; }
+
+      .f-privacy { display: flex; gap: .5rem; align-items: flex-start; color: #6b6478; font-size: .85rem; margin: 1.5rem auto 0; max-width: 56rem; padding: 0 1.5rem; }
+
+      /* Results */
+      #finderResults { max-width: 56rem; margin: 2.5rem auto 0; padding: 0 1.5rem; }
+      .f-results-head { font-size: 1.9rem; font-weight: 700; margin: 0 0 .75rem; outline: none; }
+      .f-lead { font-size: 1.1rem; color: #374151; margin: 0 0 1rem; }
+      .f-note { background: var(--fx-soft); border: 1px solid color-mix(in srgb, var(--fx) 25%, transparent); border-radius: 12px; padding: .9rem 1.1rem; color: #3f3a52; margin: 0 0 1.25rem; }
+      .f-note-warn { background: #fdf2e2; border-color: #f6ddb0; color: #8a5606; }
+      .f-caveat { font-size: .9rem; color: #6b6478; margin: 0 0 1.5rem; }
+      .f-clearrow, .f-cta-row { margin: 0 0 1.5rem; display: flex; gap: .75rem; flex-wrap: wrap; }
+
+      .f-grid { display: grid; gap: 1.25rem; grid-template-columns: 1fr; }
+      @media (min-width: 640px) { .f-grid { grid-template-columns: 1fr 1fr; } }
+      .f-card { background: #fff; border: 1px solid #e3ddf0; border-left: 4px solid #6d28d9; border-radius: 14px; padding: 1.5rem; box-shadow: 0 1px 2px rgba(27,21,51,.05), 0 8px 22px rgba(27,21,51,.06); }
+      .f-card.f-beavers { border-left-color: #2a5fb0; }
+      .f-card.f-cubs { border-left-color: #0f9d78; }
+      .f-card.f-scouts { border-left-color: #1b1533; }
+      .f-card.f-explorers { border-left-color: #6d28d9; }
+      .f-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; flex-wrap: wrap; }
+      .f-card-head h3 { font-size: 1.4rem; font-weight: 700; margin: 0; }
+      .f-tag { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--fx); background: var(--fx-soft); padding: .2rem .55rem; border-radius: 999px; white-space: nowrap; }
+      .f-meta { margin: .5rem 0 1rem; display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+      .f-age { display: inline-block; background: #f0eef6; color: #3f3a52; font-size: .8rem; font-weight: 600; padding: .25rem .6rem; border-radius: 999px; }
+      .f-avail { display: inline-block; background: #e2ebf7; color: #1e4684; font-size: .8rem; font-weight: 600; padding: .25rem .6rem; border-radius: 999px; }
+      .f-detail { display: grid; grid-template-columns: auto 1fr; gap: .35rem 1rem; margin: 0 0 1rem; font-size: .95rem; }
+      .f-detail div { display: contents; }
+      .f-detail dt { font-weight: 700; color: #4b5563; }
+      .f-detail dd { margin: 0; color: #374151; }
+      .f-summary { color: #4b5563; font-size: .95rem; line-height: 1.55; margin: 0 0 1.25rem; }
+      .f-actions { display: flex; gap: .6rem; flex-wrap: wrap; }
+      .f-actions .f-btn { padding: .55rem 1.1rem; font-size: .9rem; }
+
+      /* ---- Wizard: progress + steps ---- */
+      .wiz-progress { list-style: none; display: flex; align-items: flex-start; justify-content: center; max-width: 40rem; margin: 0 auto 1.75rem; padding: 0; }
+      .wiz-progress li { flex: 1; display: flex; flex-direction: column; align-items: center; text-align: center; position: relative; color: #9089a3; font-size: .8rem; font-weight: 600; }
+      .wiz-progress li::before { content: ""; position: absolute; top: 16px; right: 50%; width: 100%; height: 2px; background: #e3ddf0; z-index: 0; }
+      .wiz-progress li:first-child::before { display: none; }
+      .wiz-progress li.is-done::before { background: var(--fx); }
+      .wiz-num { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #fff; border: 2px solid #e3ddf0; color: #9089a3; font-weight: 700; position: relative; z-index: 1; margin-bottom: .4rem; }
+      .wiz-progress li.is-active { color: var(--fx); }
+      .wiz-progress li.is-active .wiz-num { border-color: var(--fx); color: var(--fx); box-shadow: 0 0 0 4px color-mix(in srgb, var(--fx) 15%, transparent); }
+      .wiz-progress li.is-done .wiz-num { background: var(--fx); border-color: var(--fx); color: #fff; }
+      .wiz-label { max-width: 9ch; line-height: 1.2; }
+      @media (max-width: 560px) { .wiz-label { display: none; } .wiz-progress { max-width: 18rem; } }
+
+      .f-step-h { font-size: 1.5rem; font-weight: 700; margin: 0 0 .35rem; outline: none; }
+      .wiz-actions { display: flex; justify-content: space-between; align-items: center; gap: .75rem; margin-top: 1.75rem; }
+      .wiz-actions .f-btn { min-width: 7rem; }
+      .wiz-nav { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #eee6f7; }
+
+      /* Locality options list */
+      .f-opts { display: flex; flex-direction: column; gap: .5rem; }
+      .f-opt { position: relative; display: block; }
+      .f-opt input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
+      .f-opt span { display: block; padding: .7rem .9rem; border: 1px solid #d7d2e3; border-radius: 10px; font-weight: 600; color: #3f3a52; background: #fff; transition: all .12s; }
+      .f-opt input:hover + span { border-color: var(--fx); }
+      .f-opt input:checked + span { background: var(--fx-soft); border-color: var(--fx); color: var(--fx-dark); }
+      .f-opt input:focus-visible + span { outline: 2px solid var(--fx); outline-offset: 2px; }
+      .f-chip-any span { border-style: dashed; }
+
+      /* ---- Responsive finder: live one-screen (desktop) vs wizard (mobile) ---- */
+      .finder-layout { display: block; }
+      .wiz-actions { display: flex; justify-content: space-between; align-items: center; gap: .75rem; margin-top: 1.5rem; }
+      .wiz-actions[hidden] { display: none; }
+      .fgrp[hidden] { display: none; }
+      .f-placeholder { background: #fff; border: 1px dashed #cbc0e8; border-radius: 14px; padding: 2.5rem 1.5rem; text-align: center; color: #6b6478; }
+      .f-placeholder p { margin: 0; font-size: 1.05rem; line-height: 1.5; }
+      .f-placeholder .f-placeholder-emoji { font-size: 2rem; display: block; margin-bottom: .5rem; }
+
+      @media (min-width: 900px) {
+        #finder.is-live .wiz-progress { display: none; }
+        #finder.is-live .finder-layout { display: grid; grid-template-columns: 23rem minmax(0, 1fr); gap: 2rem; align-items: start; }
+        #finder.is-live .finder-controls { position: sticky; top: 6.5rem; }
+        #finder.is-live .finder-controls .fgrp:not(:last-of-type) { border-bottom: 1px solid #eee6f7; padding-bottom: 1.25rem; margin-bottom: 1.25rem; }
+        #finder.is-live .finder-controls .f-step-h { font-size: 1.2rem; }
+        #finder.is-live #finderResults { max-width: none; margin: 0; padding: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"><div class="font-sans"><nav class="fixed top-0 left-0 right-0 z-50 bg-white transition-shadow duration-300 shadow-md"><div class="max-w-7xl mx-auto px-6 py-4"><div class="flex justify-between items-center"><a href="index.html" class="flex items-center gap-4 group"><div class="w-14 h-14 rounded-full overflow-hidden transition-transform group-hover:scale-105"><img src="assets/7thswindon-logo.png" alt="7th Swindon Scouts" class="w-full h-full object-cover"></div><span class="text-xl font-bold text-purple-600">7th Swindon Scouts</span></a><button id="mobileMenuBtn" aria-label="Menu" class="lg:hidden text-3xl">☰</button><ul class="hidden lg:flex items-center gap-6 mainnav"><li><a href="index.html" data-nav="home" class="font-semibold hover:text-purple-600 transition-colors">Home</a></li><li class="has-menu"><a href="find-your-section.html" data-nav="join" class="font-semibold hover:text-purple-600 transition-colors">Join</a><ul class="submenu"><li><a href="find-your-section.html">Find Your Section</a></li><li><a href="how-joining-works.html">How Joining Works</a></li><li><a href="inclusion.html">Inclusion and Support</a></li><li><a href="index.html#faq">Parent FAQs</a></li></ul></li><li class="has-menu"><a href="index.html#sections" data-nav="what" class="font-semibold hover:text-purple-600 transition-colors">What We Do</a><ul class="submenu"><li><a href="beavers.html">Beavers</a></li><li><a href="cubs.html">Cubs</a></li><li><a href="scouts.html">Scouts</a></li><li><a href="explorers.html">Explorers</a></li><li><a href="index.html#activityShowcase">Activities and Adventures</a></li></ul></li><li><a href="volunteer.html" data-nav="volunteer" class="font-semibold hover:text-purple-600 transition-colors">Volunteer</a></li><li class="has-menu"><a href="about.html" data-nav="about" class="font-semibold hover:text-purple-600 transition-colors">About</a><ul class="submenu"><li><a href="about.html">About 7th Swindon</a></li><li><a href="safeguarding.html">Safeguarding</a></li><li><a href="support.html">Support Us</a></li><li><a href="agm.html">Governance and AGM</a></li></ul></li><li><a href="contact.html" data-nav="contact" class="font-semibold hover:text-purple-600 transition-colors">Contact</a></li><li><span class="portal-util" role="link" aria-disabled="true" title="7thPortal is coming soon" style="opacity:.45;pointer-events:none;cursor:not-allowed">Open 7thPortal</span></li></ul></div><ul id="mobileMenu" class="hidden lg:hidden flex-col gap-1 pt-4"><li><a href="index.html" class="mobile-link block font-semibold py-2 hover:text-purple-600 transition-colors">Home</a></li><li class="m-group">Join</li><li><a href="find-your-section.html" class="mobile-link m-child">Find Your Section</a></li><li><a href="how-joining-works.html" class="mobile-link m-child">How Joining Works</a></li><li><a href="inclusion.html" class="mobile-link m-child">Inclusion and Support</a></li><li><a href="index.html#faq" class="mobile-link m-child">Parent FAQs</a></li><li class="m-group">What We Do</li><li><a href="beavers.html" class="mobile-link m-child">Beavers</a></li><li><a href="cubs.html" class="mobile-link m-child">Cubs</a></li><li><a href="scouts.html" class="mobile-link m-child">Scouts</a></li><li><a href="explorers.html" class="mobile-link m-child">Explorers</a></li><li><a href="index.html#activityShowcase" class="mobile-link m-child">Activities and Adventures</a></li><li><a href="volunteer.html" class="mobile-link block font-semibold py-2 hover:text-purple-600 transition-colors">Volunteer</a></li><li class="m-group">About</li><li><a href="about.html" class="mobile-link m-child">About 7th Swindon</a></li><li><a href="safeguarding.html" class="mobile-link m-child">Safeguarding</a></li><li><a href="support.html" class="mobile-link m-child">Support Us</a></li><li><a href="agm.html" class="mobile-link m-child">Governance and AGM</a></li><li><a href="contact.html" class="mobile-link block font-semibold py-2 hover:text-purple-600 transition-colors">Contact</a></li><li><span class="mobile-link block font-semibold py-2" role="link" aria-disabled="true" style="opacity:.45;pointer-events:none;cursor:not-allowed">Open 7thPortal</span></li></ul></div></nav>
+
+    <section id="finder">
+      <div class="finder-wrap">
+        <div class="finder-intro">
+          <a href="index.html" class="inline-flex items-center gap-2 text-purple-600 font-semibold hover:gap-3 transition-all" style="margin-bottom:1.25rem">← Back to home</a>
+          <h1 class="text-5xl font-bold relative inline-block" style="display:block">Find Your Section<div class="absolute -bottom-3 left-1/2 -translate-x-1/2 w-20 h-1 bg-gradient-to-r from-purple-600 to-green-500 rounded-full"></div></h1>
+          <p>Tell us your child's age and we'll show the sections and meeting times that fit. You don't need to know how Scouts is organised, we'll do that bit.</p>
+        </div>
+
+        <ol class="wiz-progress" aria-label="Progress"><li data-step="1"><span class="wiz-num">1</span><span class="wiz-label">About your child</span></li><li data-step="2"><span class="wiz-num">2</span><span class="wiz-label">When</span></li><li data-step="3"><span class="wiz-num">3</span><span class="wiz-label">Whereabouts</span></li></ol>
+        <div class="finder-layout">
+          <form id="finderForm" class="finder-controls finder-card" novalidate>
+            <div class="fgrp" data-step="1"><h2 class="f-step-h" tabindex="-1">About your child</h2><p class="f-step-hint">Enter their date of birth, or their age in years, whichever is easier.</p><div class="f-age-row" role="group" aria-label="Childs date of birth or age"><div class="f-field"><label for="f-dob">Date of birth</label><input id="f-dob" name="dob" type="date"></div><span class="f-or">or</span><div class="f-field"><label for="f-age">Age (years)</label><input id="f-age" name="age" type="number" inputmode="numeric" min="0" max="25" step="1" placeholder="for example 8"></div></div><p class="f-error" id="f-error" role="alert" aria-live="assertive"></p></div>
+            <div class="fgrp" data-step="2" hidden><h2 class="f-step-h" tabindex="-1">When works best?</h2><p class="f-step-hint">Pick any days that suit, or leave it as Any day. This is optional.</p><div class="f-chips" id="f-days" role="group" aria-label="Preferred days"></div></div>
+            <div class="fgrp" data-step="3" hidden><h2 class="f-step-h" tabindex="-1">Whereabouts?</h2><p class="f-step-hint">Choose a general area if you have a preference, or leave it as Any area. We only show broad areas, never exact venues. This is optional.</p><div class="f-opts" id="f-locality" role="group" aria-label="Preferred area"></div></div>
+            <div class="wiz-actions"><button type="button" class="f-btn f-btn-ghost" id="wiz-back" hidden>Back</button><button type="button" class="f-btn f-btn-primary" id="wiz-next">Next</button></div>
+          </form>
+          <div id="finderResults" class="finder-results" aria-live="polite"></div>
+        </div>
+
+        <p class="f-privacy"><span aria-hidden="true">🔒</span><span>We use your child's date of birth or age only to show the right section on this page right now. It isn't saved, shared, or added to any analytics.</span></p>
+
+        <p id="contact-cta" class="f-privacy" style="margin-top:2.5rem"><span aria-hidden="true">💬</span><span>Prefer to talk it through? <a href="contact.html" style="color:var(--fx);font-weight:600">Contact us</a> and we'll help you find the right section and meeting.</span></p>
+      </div>
+    </section>
+
+    <footer id="footer" class="bg-gray-900 text-white py-12"><div class="max-w-7xl mx-auto px-6"><div class="grid md:grid-cols-3 gap-12 mb-8"><div><div class="w-24 h-24 mb-6"><img src="assets/7thswindon-logo.png" alt="7th Swindon" class="w-full h-full"></div><h3 class="text-xl font-bold text-yellow-400 mb-4">7th Swindon Scout Group</h3><p class="text-gray-300 mb-4 leading-relaxed">Part of Swindon North Scout District, we're one of the largest Scout Groups in North Swindon, helping over 300 young people develop skills for life every week.</p><p class="text-sm text-gray-400">Charity Number: 306101<br>The Scout Association</p></div><div><h3 class="text-xl font-bold text-yellow-400 mb-4">Quick Links</h3><ul class="space-y-3"><li><a href="find-your-section.html" class="text-gray-300 hover:text-white hover:pl-2 transition-all block">Find Your Section</a></li><li><a href="volunteer.html" class="text-gray-300 hover:text-white hover:pl-2 transition-all block">Volunteer With Us</a></li><li><a href="index.html#sections" class="text-gray-300 hover:text-white hover:pl-2 transition-all block">Our sections</a></li><li><a href="agm.html" class="text-gray-300 hover:text-white hover:pl-2 transition-all block">AGM Documents</a></li><li><a href="https://www.onlinescoutmanager.co.uk/waiting-list/7th-swindon-scout-group-waiting-list/5de49db3-0644-4573-827b-22782ccd1291/apply" target="_blank" rel="noopener noreferrer" class="text-gray-300 hover:text-white hover:pl-2 transition-all block">Join Waiting List</a></li><li><a href="https://www.scouts.org.uk" target="_blank" rel="noopener noreferrer" class="text-gray-300 hover:text-white hover:pl-2 transition-all block">Scouts UK</a></li></ul></div><div><h3 class="text-xl font-bold text-yellow-400 mb-4">Get in Touch</h3><div class="space-y-4"><div class="flex items-start gap-3"><span class="text-xl mt-1">📧</span><div><div class="font-semibold">General Enquiries:</div><a href="mailto:info@7thswindon.org.uk" class="text-gray-300 hover:text-white">info@7thswindon.org.uk</a></div></div><div class="flex items-start gap-3"><span class="text-xl mt-1">👥</span><div><div class="font-semibold">Volunteering:</div><a href="mailto:glv@7thswindon.org.uk" class="text-gray-300 hover:text-white">glv@7thswindon.org.uk</a></div></div></div></div></div><div class="border-t border-gray-700 pt-8"><div class="text-center text-gray-400 text-sm"><p>© 2026 7th Swindon Scout Group. All rights reserved.</p></div></div></div></footer></div></div>
+    <script src="app.js?v=20260912b"></script>
+    <script src="find.js?v=20260912b"></script>
+  </body>
+</html>

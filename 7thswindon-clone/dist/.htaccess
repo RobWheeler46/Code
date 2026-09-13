@@ -1,0 +1,38 @@
+# 7th Swindon Scout Group — server config (Apache / LiteSpeed)
+
+# Friendly 404
+ErrorDocument 404 /404.html
+
+# ----------------------------------------------------------------------
+# Security headers
+# ----------------------------------------------------------------------
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Permissions-Policy "geolocation=(), microphone=(), camera=(), interest-cohort=()"
+
+  # Content Security Policy.
+  # This site loads everything from itself: self-hosted fonts, one hero video,
+  # the logo image, plus inline <style> and inline <script> (no external JS or
+  # analytics). All fetches (registries + PHP form handlers) are same-origin.
+  # 'unsafe-inline' is required because styles/scripts are inline; it can be
+  # tightened with nonces later if the inline blocks are consolidated.
+  # If anything on the live site breaks, comment out this one line first.
+  Header always set Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; img-src 'self' data:; media-src 'self'; font-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'self'; form-action 'self'"
+</IfModule>
+
+# ----------------------------------------------------------------------
+# Caching. HTML is revalidated; static assets are cache-busted with ?v= so
+# they can be cached hard.
+# ----------------------------------------------------------------------
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/css "access plus 1 year"
+  ExpiresByType application/javascript "access plus 1 year"
+  ExpiresByType image/png "access plus 6 months"
+  ExpiresByType image/jpeg "access plus 6 months"
+  ExpiresByType font/woff2 "access plus 1 year"
+  ExpiresByType video/mp4 "access plus 6 months"
+  ExpiresByType text/html "access plus 0 seconds"
+</IfModule>

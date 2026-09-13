@@ -1,0 +1,180 @@
+/* ============================================================================
+   7thPortal brand theme overlay — matches test.7thswindon.org.uk
+   ----------------------------------------------------------------------------
+   Re-skins the marketing site to the live 7thPortal branding. Loaded AFTER the
+   compiled Tailwind stylesheet, so it overrides the utility classes by source
+   order — remove this one <link> to revert to the original look, or swap it for
+   assets/theme-teal.css for the Scout Teal palette.
+
+   Palette keyed to the Scouts navy group logo (#014493):
+   primary navy #014493 / dark #013163 / deep navy #041f3d, green #0f9d78,
+   yellow #f5b800, blue #2a5fb0, warm bg #f6f4f0, border #d9e1ee. Nunito Sans.
+   Signatures: solid navy top bar, yellow primary buttons (deep-navy text),
+   navy hero gradient, navy footer with yellow headings. Navy plus yellow is
+   the classic Scouts pairing, so the yellow accents are retained.
+   ========================================================================== */
+
+/* Nunito Sans — self-hosted woff2 (same files the portal serves) */
+@font-face {
+  font-family: "Nunito Sans"; font-style: normal; font-weight: 400 800;
+  font-stretch: 100%; font-display: swap;
+  src: url("fonts/nunito-sans-latin.woff2") format("woff2");
+  unicode-range: U+0-FF, U+131, U+152-153, U+2BB-2BC, U+2C6, U+2DA, U+2DC,
+    U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Nunito Sans"; font-style: normal; font-weight: 400 800;
+  font-stretch: 100%; font-display: swap;
+  src: url("fonts/nunito-sans-latin-ext.woff2") format("woff2");
+  unicode-range: U+100-2BA, U+2BD-2C5, U+2C7-2CC, U+2CE-2D7, U+2DD-2FF, U+304,
+    U+308, U+329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB,
+    U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+:root {
+  /* Scouts navy palette, keyed to the group logo (#014493). Navy + yellow is
+     the classic Scouts pairing, so the yellow accents are kept. */
+  --pp-purple: #014493;
+  --pp-purple-dark: #013163;
+  --pp-navy: #041f3d;
+  --pp-green: #0f9d78;
+  --pp-green-dark: #0c7d60;
+  --pp-yellow: #f5b800;
+  --pp-yellow-dark: #e0a900;
+  --pp-yellow-hi: #ffd84d;
+  --pp-blue: #2a5fb0;
+  --pp-bg: #f6f4f0;
+  --pp-border: #d9e1ee;
+  --pp-text: #1c2431;
+  --pp-muted: #5c6470;
+}
+
+/* Warm page background + Nunito Sans (portal typeface) */
+body { background: var(--pp-bg); color: var(--pp-text);
+  font-family: "Nunito Sans", -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+.font-sans { font-family: "Nunito Sans", -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+/* Headings on the portal use Nunito Sans too (original site declared Outfit) */
+h1, h2, h3, h4, h5, h6 { font-family: "Nunito Sans", -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+
+/* ── Solid-colour remaps ─────────────────────────────────────────────── */
+.text-purple-600 { color: var(--pp-purple); }
+.hover\:text-purple-600:hover { color: var(--pp-purple); }
+.bg-purple-600 { background-color: var(--pp-purple); }
+.hover\:bg-purple-700:hover { background-color: var(--pp-purple-dark); }
+.text-purple-700 { color: var(--pp-purple-dark); }
+.text-purple-900 { color: var(--pp-purple-dark); }
+.border-purple-600 { border-color: var(--pp-purple); }
+.border-purple-200 { border-color: var(--pp-border); }
+.bg-purple-50 { background-color: #f3eefc; }
+.bg-purple-100 { background-color: #ece3fb; }
+.hover\:bg-purple-50:hover { background-color: #f3eefc; }
+
+.bg-green-600 { background-color: var(--pp-green); }
+.hover\:bg-green-700:hover { background-color: var(--pp-green-dark); }
+
+.text-yellow-400 { color: var(--pp-yellow); }
+.hover\:text-yellow-300:hover { color: var(--pp-yellow-hi); }
+
+.text-blue-900 { color: var(--pp-navy); }
+.text-blue-600 { color: var(--pp-blue); }
+.hover\:text-blue-700:hover { color: var(--pp-blue); }
+.border-blue-500 { border-color: var(--pp-blue); }
+.bg-blue-50 { background-color: #eef1fb; }
+.bg-blue-100 { background-color: #dde5f6; }
+
+.bg-gray-900 { background-color: var(--pp-navy); }
+.bg-gray-800 { background-color: #241a3f; }
+.border-gray-700 { border-color: #3a2f55; }
+
+/* ── Gradient remaps (Tailwind from-/to- custom-property pattern) ─────── */
+.from-blue-900 { --tw-gradient-from: var(--pp-navy) var(--tw-gradient-from-position); --tw-gradient-to: rgb(27 21 51 / 0) var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.from-purple-600 { --tw-gradient-from: var(--pp-purple) var(--tw-gradient-from-position); --tw-gradient-to: rgb(109 40 217 / 0) var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.from-green-500 { --tw-gradient-from: var(--pp-green) var(--tw-gradient-from-position); --tw-gradient-to: rgb(15 157 120 / 0) var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.from-blue-400 { --tw-gradient-from: var(--pp-blue) var(--tw-gradient-from-position); --tw-gradient-to: rgb(42 95 176 / 0) var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.from-gray-50 { --tw-gradient-from: var(--pp-bg) var(--tw-gradient-from-position); --tw-gradient-to: rgb(246 244 240 / 0) var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+
+.to-purple-600 { --tw-gradient-to: var(--pp-purple) var(--tw-gradient-to-position); }
+.to-purple-700 { --tw-gradient-to: var(--pp-purple-dark) var(--tw-gradient-to-position); }
+.to-green-500 { --tw-gradient-to: var(--pp-green) var(--tw-gradient-to-position); }
+.to-green-600 { --tw-gradient-to: var(--pp-green-dark) var(--tw-gradient-to-position); }
+.to-blue-600 { --tw-gradient-to: var(--pp-blue) var(--tw-gradient-to-position); }
+.to-blue-700 { --tw-gradient-to: var(--pp-purple-dark) var(--tw-gradient-to-position); }
+.to-blue-500 { --tw-gradient-to: var(--pp-blue) var(--tw-gradient-to-position); }
+.to-cyan-400 { --tw-gradient-to: var(--pp-green) var(--tw-gradient-to-position); }
+
+/* ── Cards: portal left-accent pattern ───────────────────────────────── */
+/* Softer border + portal card radius, with a 4px coloured left accent. */
+.bg-white.rounded-3xl {
+  border: 1px solid var(--pp-border);
+  border-left: 4px solid var(--pp-purple);
+  border-radius: 14px;
+}
+/* Drop the original top gradient bar — the left accent replaces it. */
+.bg-white.rounded-3xl > .h-1\.5 { display: none; }
+/* Take each card's accent colour from its (now hidden) top-bar gradient. */
+.bg-white.rounded-3xl:has(> .from-blue-400)  { border-left-color: var(--pp-blue); }
+.bg-white.rounded-3xl:has(> .from-green-500) { border-left-color: var(--pp-green); }
+.bg-white.rounded-3xl:has(> .from-blue-900)  { border-left-color: var(--pp-navy); }
+.bg-white.rounded-3xl:has(> .from-purple-600){ border-left-color: var(--pp-purple); }
+/* Meeting-slot rows: colour their existing left rule to match the section. */
+.border-l-4.from-blue-400  { border-left-color: var(--pp-blue); }
+.border-l-4.from-green-500 { border-left-color: var(--pp-green); }
+.border-l-4.from-blue-900  { border-left-color: var(--pp-navy); }
+.border-l-4.from-purple-600{ border-left-color: var(--pp-purple); }
+
+/* ── Top nav: solid purple portal bar ────────────────────────────────── */
+nav.fixed { background: var(--pp-purple) !important; box-shadow: 0 2px 10px rgba(27, 21, 51, 0.2) !important; }
+nav.fixed .text-purple-600 { color: #fff; }                 /* brand wordmark */
+nav.fixed a.font-semibold { color: #fff; }                  /* nav links */
+nav.fixed a.font-semibold:hover { color: var(--pp-yellow); }
+nav.fixed .lg\:hidden { color: #fff; }                      /* hamburger */
+.nav-active { color: var(--pp-yellow) !important; }         /* current page */
+
+/* Login -> white "role pill" (desktop) */
+nav.fixed ul.lg\:flex a[href*="portal.7thswindon"] {
+  background: #fff; color: var(--pp-purple); padding: 0.45rem 1.1rem;
+  border-radius: 999px; font-weight: 700;
+}
+nav.fixed ul.lg\:flex a[href*="portal.7thswindon"]:hover { color: var(--pp-purple-dark); }
+
+/* Join Waiting List -> yellow primary pill (desktop + mobile) */
+nav.fixed ul.lg\:flex a.bg-purple-600,
+#mobileMenu a.bg-purple-600 {
+  background: var(--pp-yellow) !important; color: var(--pp-navy) !important;
+  box-shadow: 0 2px 8px rgba(27, 21, 51, 0.18) !important;
+}
+nav.fixed ul.lg\:flex a.bg-purple-600:hover,
+#mobileMenu a.bg-purple-600:hover { background: var(--pp-yellow-dark) !important; }
+
+/* Mobile menu on the purple bar */
+#mobileMenu { border-top: 1px solid rgba(255, 255, 255, 0.2); }
+#mobileMenu a.mobile-link { color: #fff; }
+#mobileMenu a.mobile-link:hover { color: var(--pp-yellow); }
+
+/* ── Restructured primary nav: desktop dropdowns + grouped mobile menu ── */
+.mainnav > li { position: relative; }
+.mainnav .has-menu > a::after { content: " ▾"; font-size: 0.8em; opacity: 0.85; }
+.mainnav .submenu { position: absolute; top: 100%; left: 0; min-width: 13rem; list-style: none; margin: 0; padding: 0.4rem; background: #fff; border: 1px solid var(--pp-border); border-radius: 12px; box-shadow: 0 12px 34px rgba(4, 31, 61, 0.18); opacity: 0; visibility: hidden; transform: translateY(-4px); transition: opacity 0.12s, transform 0.12s, visibility 0.12s; z-index: 60; }
+.mainnav .has-menu:hover > .submenu, .mainnav .has-menu:focus-within > .submenu { opacity: 1; visibility: visible; transform: translateY(0); }
+.mainnav .submenu a { display: block; padding: 0.55rem 0.8rem; border-radius: 8px; color: #221c2e !important; font-weight: 600; white-space: nowrap; }
+.mainnav .submenu a:hover { background: #f1eef9; color: var(--pp-purple, var(--st-teal, #6d28d9)) !important; }
+.portal-util { border: 1.5px solid rgba(255, 255, 255, 0.6); color: #fff !important; padding: 0.4rem 1rem; border-radius: 999px; font-weight: 600; font-size: 0.9rem; }
+.portal-util:hover { background: rgba(255, 255, 255, 0.15); }
+#mobileMenu .m-group { text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.72rem; font-weight: 700; color: rgba(255, 255, 255, 0.55); margin-top: 0.7rem; }
+#mobileMenu a.m-child { display: block; color: #fff; padding: 0.4rem 0 0.4rem 0.9rem; font-weight: 500; }
+#mobileMenu a.m-child:hover { color: var(--pp-yellow, var(--st-yellow, #f5b800)); }
+
+/* ── Hero primary CTA -> yellow (portal btn-primary) ─────────────────── */
+#home a.bg-white.text-purple-600 { background: var(--pp-yellow); color: var(--pp-navy); }
+
+/* ---- Contextual mobile sticky CTA (UX Spec v2.4) ---- */
+.sticky-cta { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; display: none; gap: .6rem; padding: .7rem 1rem calc(.7rem + env(safe-area-inset-bottom)); background: rgba(255,255,255,.97); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); border-top: 1px solid var(--pp-border); box-shadow: 0 -6px 20px rgba(4,31,61,.08); }
+.sticky-cta a { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; gap: .4rem; padding: .85rem 1rem; border-radius: 999px; font-weight: 700; text-decoration: none; font-size: 1rem; line-height: 1.1; }
+.sticky-cta .sc-primary { background: var(--pp-purple, var(--st-teal, #6d28d9)); color: #fff; }
+.sticky-cta .sc-alt { background: #fff; color: var(--pp-purple, var(--st-teal, #6d28d9)); border: 2px solid var(--pp-purple, var(--st-teal, #6d28d9)); }
+.sticky-cta a:focus-visible { outline: 2px solid var(--pp-purple-dark, var(--st-teal-dark, #4c1d95)); outline-offset: 2px; }
+@media (max-width: 899px) {
+  .sticky-cta { display: flex; }
+  body:has(.sticky-cta) { padding-bottom: 5rem; }
+}

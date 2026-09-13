@@ -1,0 +1,118 @@
+{
+  "meta": {
+    "description": "Public section registry, the single source of truth for the homepage cards, Find Your Section and section pages. Public fields only: no exact venues, capacities, member or leader data. Edit here to change meeting patterns or section content, then redeploy.",
+    "joinAgeMin": 5,
+    "waitingListUrl": "https://www.onlinescoutmanager.co.uk/waiting-list/7th-swindon-scout-group-waiting-list/5de49db3-0644-4573-827b-22782ccd1291/apply",
+    "updated": "2026-08-31"
+  },
+  "sectionTypes": {
+    "Beavers": {
+      "ageLabel": "6 to 8",
+      "tagline": "For young people aged 6 to 8",
+      "intro": "Beavers is where the adventure begins. Our youngest members make friends, play games, try new things and get their first taste of the outdoors, all in a safe, welcoming and fun environment.",
+      "benefits": [
+        { "icon": "friends", "label": "Make friends" },
+        { "icon": "star", "label": "Try new things" },
+        { "icon": "compass", "label": "Get outdoors" },
+        { "icon": "target", "label": "Build confidence" }
+      ],
+      "activities": ["Games and teamwork", "Crafts and making", "Outdoor firsts and nature", "Simple challenges and badges", "Helping in the community", "And much more!"],
+      "details": {
+        "Uniform": "Beavers wear a turquoise sweatshirt and a Group scarf (necker). No uniform is needed for the first few sessions, so there's no rush. We can point you to new and second-hand options.",
+        "Costs": "Subscriptions are typically £3 to 5 per week, covering weekly meetings, activities and insurance. Camps and special events cost extra. We never want cost to be a barrier, please talk to us if you need support.",
+        "Camps and sleepovers": "Beavers enjoy day trips and their first sleepovers as they get older. Everything is fully risk-assessed and led by trained, DBS-checked volunteers.",
+        "Inclusion and additional needs": "Every child is welcome. Tell us about any additional needs or support that would help and we'll talk it through confidentially, there's no need to share medical detail up front."
+      },
+      "faqs": [
+        { "q": "What happens at the first meeting?", "a": "Your child is warmly welcomed and paired with existing Beavers. Expect games, meeting the leaders, and getting to know everyone. No uniform needed for the first session." },
+        { "q": "Do I need to stay?", "a": "Not usually, but you're welcome to settle your child in. Leaders will let you know the drop-off and pick-up routine for your colony." }
+      ]
+    },
+    "Cubs": {
+      "ageLabel": "8 to 10½",
+      "tagline": "For young people aged 8 to 10½",
+      "intro": "Cubs is all about fun, friends and new experiences. We help young people build confidence, learn new skills and take on bigger adventures, indoors and out.",
+      "benefits": [
+        { "icon": "friends", "label": "Make friends" },
+        { "icon": "skills", "label": "Learn new skills" },
+        { "icon": "compass", "label": "Have adventures" },
+        { "icon": "target", "label": "Be challenged" }
+      ],
+      "activities": ["Games and teamwork", "Camping and the outdoors", "Creative activities", "Learning life skills", "Community projects", "And much more!"],
+      "details": {
+        "Uniform": "Cubs wear a green sweatshirt and a Group scarf (necker). Uniform can be bought new or second-hand, we're happy to advise on what's essential to start.",
+        "Costs": "Subscriptions are typically £3 to 5 per week, covering weekly meetings, activities and insurance. Camps and trips cost extra. Support is available, just ask, in confidence.",
+        "Camps and sleepovers": "Cubs enjoy indoor and outdoor camps and district events through the year, plus an annual summer camp. All camps are risk-assessed and led by qualified leaders.",
+        "Inclusion and additional needs": "We welcome every young person. Let us know what support would help and we'll have a confidential chat, you don't need to share diagnoses or medical detail to get started."
+      },
+      "faqs": [
+        { "q": "Can my child join mid-year?", "a": "Yes, Cubs can join at any time through our waiting list. When a space comes up in your local pack, we'll be in touch." },
+        { "q": "Do you go camping?", "a": "Yes! Camping is a core part of Cubs, from indoor sleepovers to outdoor and summer camps, all fully risk-assessed." }
+      ]
+    },
+    "Scouts": {
+      "ageLabel": "10½ to 14",
+      "tagline": "For young people aged 10½ to 14",
+      "intro": "Scouts take on real expeditions, camps and challenges that build skills, teamwork and independence. It's where young people lead, problem-solve and push themselves, with plenty of adventure along the way.",
+      "benefits": [
+        { "icon": "compass", "label": "Adventure" },
+        { "icon": "target", "label": "Leadership" },
+        { "icon": "skills", "label": "New skills" },
+        { "icon": "friends", "label": "Friendship" }
+      ],
+      "activities": ["Expeditions and hikes", "Camping and nights away", "Cooking outdoors", "First aid and life skills", "Teamwork and leadership", "And much more!"],
+      "details": {
+        "Uniform": "Scouts wear a teal Scout shirt and a Group scarf (necker). We can advise on where to buy new or second-hand and what's needed to start.",
+        "Costs": "Subscriptions are typically £3 to 5 per week, covering weekly meetings, activities and insurance. Camps, expeditions and events cost extra. Confidential financial support is available.",
+        "Camps and sleepovers": "Scouts camp regularly outdoors and take part in district camps, expeditions and an annual summer camp. All activities are risk-assessed and appropriately led.",
+        "Inclusion and additional needs": "Everyone is welcome. Tell us what would help your young person take part fully and we'll talk it through confidentially."
+      },
+      "faqs": [
+        { "q": "What will my child learn?", "a": "Teamwork, leadership, resilience, outdoor and first-aid skills, cooking and much more, while working towards badges and awards and having fun with friends." },
+        { "q": "Is Scouting safe?", "a": "Safety is our top priority. All adult volunteers are DBS checked and safeguarding-trained, and every activity is risk-assessed." }
+      ]
+    },
+    "Explorers": {
+      "ageLabel": "14 to 18",
+      "tagline": "For young people aged 14 to 18",
+      "intro": "Explorers is delivered through our district partnership units. Young people take on their biggest adventures yet, expeditions, Duke of Edinburgh's Award, Young Leader roles and more, with growing independence.",
+      "partnership": true,
+      "units": [
+        { "name": "Medusa Explorer Scout Unit", "detail": "Tuesday 7:30pm to 9:30pm · Redhouse" },
+        { "name": "Hydra Explorer Scout Unit", "detail": "Meeting details confirmed on contact" }
+      ],
+      "benefits": [
+        { "icon": "compass", "label": "Bigger adventures" },
+        { "icon": "target", "label": "Independence" },
+        { "icon": "skills", "label": "Young Leader roles" },
+        { "icon": "star", "label": "DofE and awards" }
+      ],
+      "activities": ["Expeditions and nights away", "Duke of Edinburgh's Award", "Young Leader placements", "Community and international opportunities", "Leadership and life skills", "And much more!"],
+      "details": {
+        "How Explorers works here": "7th Swindon has formal partnerships with Explorer units in the district, giving our Scouts a natural next step. The units are delivered in partnership rather than run directly by the Group.",
+        "Costs": "Costs vary by unit and activity. The partnership units will explain subscriptions and any activity costs, support is available and cost should never be a barrier.",
+        "Young Leaders": "Explorers can take on Young Leader roles, helping to run Beavers, Cubs or Scouts while developing their own leadership skills and awards.",
+        "Inclusion and additional needs": "Explorer units welcome everyone. Let us or the unit know what support would help and it can be discussed confidentially."
+      },
+      "faqs": [
+        { "q": "How do Scouts move up to Explorers?", "a": "As young people reach around 14, we help them move on to one of our partner Explorer units. We'll support the transition and introduce the right contacts." },
+        { "q": "Which unit should we choose?", "a": "Both Medusa and Hydra offer great programmes. Get in touch and we'll help you find the unit that best fits, including meeting details shared privately." }
+      ]
+    }
+  },
+  "sections": [
+    { "id": "beavers-mon-tawhill", "type": "Beavers", "publicName": "Beavers", "ageMin": 6, "ageMax": 8, "displayAge": "6 to 8", "meetingDay": "Monday", "startTime": "18:00", "endTime": "19:00", "locality": "Taw Hill", "summary": "Games, crafts, outdoor firsts and lots of fun for our youngest adventurers.", "availabilityStatus": null, "displayOrder": 1, "active": true },
+    { "id": "beavers-tue-tadpole", "type": "Beavers", "publicName": "Beavers", "ageMin": 6, "ageMax": 8, "displayAge": "6 to 8", "meetingDay": "Tuesday", "startTime": "18:15", "endTime": "19:15", "locality": "Tadpole Garden Village", "summary": "Games, crafts, outdoor firsts and lots of fun for our youngest adventurers.", "availabilityStatus": null, "displayOrder": 2, "active": true },
+    { "id": "beavers-wed-abbeymeads", "type": "Beavers", "publicName": "Beavers", "ageMin": 6, "ageMax": 8, "displayAge": "6 to 8", "meetingDay": "Wednesday", "startTime": "18:30", "endTime": "19:30", "locality": "Abbey Meads", "summary": "Games, crafts, outdoor firsts and lots of fun for our youngest adventurers.", "availabilityStatus": null, "displayOrder": 3, "active": true },
+
+    { "id": "cubs-mon-tawhill", "type": "Cubs", "publicName": "Cubs", "ageMin": 8, "ageMax": 10.5, "displayAge": "8 to 10½", "meetingDay": "Monday", "startTime": "19:15", "endTime": "20:45", "locality": "Taw Hill", "summary": "Bigger adventures, hikes, badges, teamwork and first nights away.", "availabilityStatus": null, "displayOrder": 4, "active": true },
+    { "id": "cubs-tue-tadpole", "type": "Cubs", "publicName": "Cubs", "ageMin": 8, "ageMax": 10.5, "displayAge": "8 to 10½", "meetingDay": "Tuesday", "startTime": "18:30", "endTime": "20:00", "locality": "Tadpole Garden Village", "summary": "Bigger adventures, hikes, badges, teamwork and first nights away.", "availabilityStatus": null, "displayOrder": 5, "active": true },
+    { "id": "cubs-wed-abbeymeads", "type": "Cubs", "publicName": "Cubs", "ageMin": 8, "ageMax": 10.5, "displayAge": "8 to 10½", "meetingDay": "Wednesday", "startTime": "18:15", "endTime": "19:45", "locality": "Abbey Meads", "summary": "Bigger adventures, hikes, badges, teamwork and first nights away.", "availabilityStatus": null, "displayOrder": 6, "active": true },
+
+    { "id": "scouts-mon-tadpole", "type": "Scouts", "publicName": "Scouts", "ageMin": 10.5, "ageMax": 14, "displayAge": "10½ to 14", "meetingDay": "Monday", "startTime": "19:15", "endTime": "21:00", "locality": "Tadpole Garden Village", "summary": "Real expeditions, camps and challenges that build skills and independence.", "availabilityStatus": null, "displayOrder": 7, "active": true },
+    { "id": "scouts-wed-oakhurst", "type": "Scouts", "publicName": "Scouts", "ageMin": 10.5, "ageMax": 14, "displayAge": "10½ to 14", "meetingDay": "Wednesday", "startTime": "19:15", "endTime": "21:00", "locality": "Oakhurst", "summary": "Real expeditions, camps and challenges that build skills and independence.", "availabilityStatus": null, "displayOrder": 8, "active": true },
+
+    { "id": "explorers-medusa", "type": "Explorers", "publicName": "Medusa Explorer Scout Unit", "partnership": true, "ageMin": 14, "ageMax": 18.99, "displayAge": "14 to 18", "meetingDay": "Tuesday", "startTime": "19:30", "endTime": "21:30", "locality": "Redhouse", "summary": "Explorers is delivered through our district partnership units. Medusa offers a full programme with Young Leader opportunities.", "availabilityStatus": null, "displayOrder": 9, "active": true },
+    { "id": "explorers-hydra", "type": "Explorers", "publicName": "Hydra Explorer Scout Unit", "partnership": true, "ageMin": 14, "ageMax": 18.99, "displayAge": "14 to 18", "meetingDay": null, "startTime": null, "endTime": null, "locality": null, "summary": "A partner Explorer unit supporting moving-on links and Young Leader placements. Meeting details are confirmed on contact.", "availabilityStatus": "Contact us", "displayOrder": 10, "active": true }
+  ]
+}

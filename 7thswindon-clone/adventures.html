@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="assets/7thswindon-logo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <meta name="description" content="Latest Adventures at 7th Swindon Scout Group, trips, camps, challenges and community projects from our Beavers, Cubs, Scouts and Explorers across North Swindon." />
+    <link rel="canonical" href="https://www.7thswindon.org.uk/adventures.html" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="7th Swindon Scout Group" />
+    <meta property="og:title" content="Latest Adventures · 7th Swindon Scout Group" />
+    <meta property="og:description" content="Latest Adventures at 7th Swindon Scout Group, trips, camps, challenges and community projects from our Beavers, Cubs, Scouts and Explorers across North Swindon." />
+    <meta property="og:url" content="https://www.7thswindon.org.uk/adventures.html" />
+    <meta property="og:image" content="https://www.7thswindon.org.uk/assets/7thswindon-logo.png" />
+    <meta property="og:image:alt" content="7th Swindon Scout Group logo" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Latest Adventures · 7th Swindon Scout Group" />
+    <meta name="twitter:description" content="Latest Adventures at 7th Swindon Scout Group, trips, camps, challenges and community projects from our Beavers, Cubs, Scouts and Explorers across North Swindon." />
+    <meta name="twitter:image" content="https://www.7thswindon.org.uk/assets/7thswindon-logo.png" />
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"NGO","name":"7th Swindon Scout Group","url":"https://www.7thswindon.org.uk/","logo":"https://www.7thswindon.org.uk/assets/7thswindon-logo.png","image":"https://www.7thswindon.org.uk/assets/7thswindon-logo.png","description":"One of North Swindon's largest Scout Groups, helping over 300 young people aged 6 to 18 develop skills for life through Beavers, Cubs, Scouts and Explorers.","email":"info@7thswindon.org.uk","areaServed":{"@type":"Place","name":"North Swindon, Wiltshire"},"address":{"@type":"PostalAddress","addressLocality":"Swindon","addressRegion":"Wiltshire","addressCountry":"GB"},"parentOrganization":{"@type":"Organization","name":"The Scout Association"},"identifier":{"@type":"PropertyValue","propertyID":"charityNumber","value":"306101"},"sameAs":["https://www.youtube.com/@7thSwindonScouts","https://www.instagram.com/7thswindonscouts"]}</script>
+    <title>Latest Adventures · 7th Swindon Scout Group</title>
+    <link rel="stylesheet" href="assets/style.css?v=20260912b" />
+    <link rel="stylesheet" href="assets/theme.css?v=20260912c" />
+    <style>
+      html { scroll-behavior: smooth; }
+      @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+      :root { --fx: var(--pp-purple, var(--st-teal, #6d28d9)); --fx-dark: var(--pp-purple-dark, var(--st-teal-dark, #4c1d95)); }
+      .adv { padding: 7.5rem 1.5rem 4rem; }
+      .adv-wrap { max-width: 66rem; margin: 0 auto; }
+      .adv-crumb { font-size: .85rem; color: #6b6478; margin-bottom: 1.25rem; }
+      .adv-crumb a { color: var(--fx); text-decoration: none; } .adv-crumb a:hover { text-decoration: underline; }
+      .adv-wrap > h1 { font-size: clamp(2.4rem, 6vw, 3.4rem); font-weight: 800; line-height: 1.05; margin: 0 0 .5rem; }
+      .adv-lead { font-size: 1.15rem; color: #374151; line-height: 1.6; margin: 0 0 2rem; max-width: 42rem; }
+
+      /* Filter */
+      .adv-filters { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0 0 2rem; }
+      .adv-filter { font: inherit; font-weight: 600; font-size: .9rem; color: #4b4560; background: #fff; border: 1px solid #e3ddf0; border-radius: 999px; padding: .45rem 1.1rem; cursor: pointer; transition: all .15s; }
+      .adv-filter:hover { border-color: var(--fx); color: var(--fx); }
+      .adv-filter.is-active { background: var(--fx); border-color: var(--fx); color: #fff; }
+      .adv-filter:focus-visible { outline: 2px solid var(--fx-dark); outline-offset: 2px; }
+
+      /* Grid + cards */
+      .adv-grid { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
+      @media (min-width: 560px) { .adv-grid { grid-template-columns: 1fr 1fr; } }
+      @media (min-width: 900px) { .adv-grid { grid-template-columns: 1fr 1fr 1fr; } }
+      .adv-card { display: flex; flex-direction: column; background: #fff; border: 1px solid #e3ddf0; border-radius: 16px; overflow: hidden; text-decoration: none; color: inherit; transition: transform .15s, box-shadow .15s; }
+      .adv-card:hover { transform: translateY(-4px); box-shadow: 0 14px 30px rgba(27,23,48,.12); }
+      .adv-card:focus-visible { outline: 2px solid var(--fx-dark); outline-offset: 2px; }
+      .adv-ban, .adv-img { display: block; width: 100%; height: 140px; object-fit: cover; }
+      .adv-ban { display: flex; align-items: center; justify-content: center; }
+      .adv-ban.tall, .adv-img.tall { height: 260px; border-radius: 16px; margin: 0 0 1.75rem; }
+      .adv-ban-emoji { font-size: 2.6rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,.25)); }
+      .adv-card-body { padding: 1.1rem 1.2rem 1.4rem; display: flex; flex-direction: column; flex: 1; }
+      .adv-meta { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .6rem; }
+      .adv-sec { font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #fff; background: var(--fx); border-radius: 999px; padding: .2rem .6rem; }
+      .adv-sec-beavers { background: #1e88e5; } .adv-sec-cubs { background: #2e7d32; }
+      .adv-sec-scouts { background: #00897b; } .adv-sec-explorers { background: #c62828; }
+      .adv-tag { font-size: .72rem; font-weight: 600; color: #6b6478; background: #f3f0fa; border-radius: 999px; padding: .2rem .6rem; }
+      .adv-card-body h3 { font-size: 1.15rem; font-weight: 800; line-height: 1.25; margin: 0 0 .3rem; }
+      .adv-date { font-size: .82rem; color: #857f95; margin: 0 0 .6rem; }
+      .adv-sum { color: #374151; line-height: 1.55; margin: 0 0 1rem; flex: 1; }
+      .adv-more { font-weight: 700; color: var(--fx); font-size: .92rem; }
+
+      .adv-empty { color: #4b4560; background: #f3f0fa; border: 1px solid #e3ddf0; border-radius: 12px; padding: 1.5rem; text-align: center; }
+      .adv-empty a { color: var(--fx); font-weight: 600; }
+
+      /* Article (detail) */
+      #storyArticle .adv-back { display: inline-block; color: var(--fx); font-weight: 700; text-decoration: none; margin-bottom: 1.25rem; }
+      #storyArticle .adv-back:hover { text-decoration: underline; }
+      .adv-article-head h1 { font-size: clamp(1.9rem, 5vw, 2.8rem); font-weight: 800; line-height: 1.08; margin: .3rem 0 .3rem; }
+      .adv-article-body { max-width: 44rem; }
+      .adv-article-body p { color: #2f2a3d; line-height: 1.75; font-size: 1.08rem; margin: 0 0 1.2rem; }
+      .adv-article-foot { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between; margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid #e3ddf0; }
+      .adv-cta { display: inline-flex; align-items: center; gap: .4rem; background: var(--fx); color: #fff; font-weight: 700; padding: .7rem 1.4rem; border-radius: 999px; text-decoration: none; transition: background .15s; }
+      .adv-cta:hover { background: var(--fx-dark); }
+      .adv-cta:focus-visible { outline: 2px solid var(--fx-dark); outline-offset: 3px; }
+    </style>
+  </head>
+  <body>
+    <div id="root"><div class="font-sans"><nav class="fixed top-0 left-0 right-0 z-50 bg-white transition-shadow duration-300 shadow-md"><div class="max-w-7xl mx-auto px-6 py-4"><div class="flex justify-between items-center"><a href="index.html" class="flex items-center gap-4 group"><div class="w-14 h-14 rounded-full overflow-hidden transition-transform group-hover:scale-105"><img src="assets/7thswindon-logo.png" alt="7th Swindon Scouts" class="w-full h-full object-cover"></div><span class="text-xl font-bold text-purple-600">7th Swindon Scouts</span></a><button id="mobileMenuBtn" aria-label="Menu" class="lg:hidden text-3xl">☰</button><ul class="hidden lg:flex items-center gap-6 mainnav"><li><a href="index.html" data-nav="home" class="font-semibold hover:text-purple-600 transition-colors">Home</a></li><li class="has-menu"><a href="find-your-section.html" data-nav="join" class="font-semibold hover:text-purple-600 transition-colors">Join</a><ul class="submenu"><li><a href="find-your-section.html">Find Your Section</a></li><li><a href="how-joining-works.html">How Joining Works</a></li><li><a href="inclusion.html">Inclusion and Support</a></li><li><a href="index.html#faq">Parent FAQs</a></li></ul></li><li class="has-menu"><a href="index.html#sections" data-nav="what" class="font-semibold hover:text-purple-600 transition-colors">What We Do</a><ul class="submenu"><li><a href="beavers.html">Beavers</a></li><li><a href="cubs.html">Cubs</a></li><li><a href="scouts.html">Scouts</a></li><li><a href="explorers.html">Explorers</a></li><li><a href="index.html#activityShowcase">Activities and Adventures</a></li></ul></li><li><a href="volunteer.html" data-nav="volunteer" class="font-semibold hover:text-purple-600 transition-colors">Volunteer</a></li><li class="has-menu"><a href="about.html" data-nav="about" class="font-semibold hover:text-purple-600 transition-colors">About</a><ul class="submenu"><li><a href="about.html">About 7th Swindon</a></li><li><a href="safeguarding.html">Safeguarding</a></li><li><a href="support.html">Support Us</a></li><li><a href="agm.html">Governance and AGM</a></li></ul></li><li><a href="contact.html" data-nav="contact" class="font-semibold hover:text-purple-600 transition-colors">Contact</a></li><li><span class="portal-util" role="link" aria-disabled="true" title="7thPortal is coming soon" style="opacity:.45;pointer-events:none;cursor:not-allowed">Open 7thPortal</span></li></ul></div><ul id="mobileMenu" class="hidden lg:hidden flex-col gap-1 pt-4"><li><a href="index.html" class="mobile-link block font-semibold py-2 hover:text-purple-600 transition-colors">Home</a></li><li class="m-group">Join</li><li><a href="find-your-section.html" class="mobile-link m-child">Find Your Section</a></li><li><a href="how-joining-works.html" class="mobile-link m-child">How Joining Works</a></li><li><a href="inclusion.html" class="mobile-link m-child">Inclusion and Support</a></li><li><a href="index.html#faq" class="mobile-link m-child">Parent FAQs</a></li><li class="m-group">What We Do</li><li><a href="beavers.html" class="mobile-link m-child">Beavers</a></li><li><a href="cubs.html" class="mobile-link m-child">Cubs</a></li><li><a href="scouts.html" class="mobile-link m-child">Scouts</a></li><li><a href="explorers.html" class="mobile-link m-child">Explorers</a></li><li><a href="index.html#activityShowcase" class="mobile-link m-child">Activities and Adventures</a></li><li><a href="volunteer.html" class="mobile-link block font-semibold py-2 hover:text-purple-600 transition-colors">Volunteer</a></li><li class="m-group">About</li><li><a href="about.html" class="mobile-link m-child">About 7th Swindon</a></li><li><a href="safeguarding.html" class="mobile-link m-child">Safeguarding</a></li><li><a href="support.html" class="mobile-link m-child">Support Us</a></li><li><a href="agm.html" class="mobile-link m-child">Governance and AGM</a></li><li><a href="contact.html" class="mobile-link block font-semibold py-2 hover:text-purple-600 transition-colors">Contact</a></li><li><span class="mobile-link block font-semibold py-2" role="link" aria-disabled="true" style="opacity:.45;pointer-events:none;cursor:not-allowed">Open 7thPortal</span></li></ul></div></nav>
+
+    <main class="adv">
+      <div class="adv-wrap">
+        <p class="adv-crumb"><a href="index.html">Home</a> › Latest Adventures</p>
+        <h1>Latest Adventures</h1>
+        <p class="adv-lead">A window into a typical few weeks at 7th Swindon, the trips, challenges and small firsts that make Scouting what it is.</p>
+
+        <div id="storyList">
+          <div id="storyFilter" class="adv-filters" role="group" aria-label="Filter adventures by section"></div>
+          <div id="storyGrid" class="adv-grid"><p class="adv-empty">Loading adventures…</p></div>
+        </div>
+        <article id="storyArticle" hidden></article>
+      </div>
+    </main>
+
+    <footer id="footer" class="bg-gray-900 text-white py-12"><div class="max-w-7xl mx-auto px-6"><div class="grid md:grid-cols-3 gap-12 mb-8"><div><div class="w-24 h-24 mb-6"><img src="assets/7thswindon-logo.png" alt="7th Swindon" class="w-full h-full"></div><h3 class="text-xl font-bold text-yellow-400 mb-4">7th Swindon Scout Group</h3><p class="text-gray-300 mb-4 leading-relaxed">Part of Swindon North Scout District, we're one of the largest Scout Groups in North Swindon, helping over 300 young people develop skills for life every week.</p><p class="text-sm text-gray-400">Charity Number: 306101<br>The Scout Association</p></div><div><h3 class="text-xl font-bold text-yellow-400 mb-4">Quick Links</h3><ul class="space-y-3"><li><a href="find-your-section.html" class="text-gray-300 hover:text-white hover:pl-2 transition-all block">Find Your Section</a></li><li><a href="volunteer.html" class="text-gray-300 hover:text-white hover:pl-2 transition-all block">Volunteer With Us</a></li><li><a href="safeguarding.html" class="text-gray-300 hover:text-white hover:pl-2 transition-all block">Safeguarding</a></li><li><a href="agm.html" class="text-gray-300 hover:text-white hover:pl-2 transition-all block">AGM Documents</a></li></ul></div><div><h3 class="text-xl font-bold text-yellow-400 mb-4">Get in Touch</h3><div class="space-y-4"><div class="flex items-start gap-3"><span class="text-xl mt-1">📧</span><div><div class="font-semibold">General Enquiries:</div><a href="mailto:info@7thswindon.org.uk" class="text-gray-300 hover:text-white">info@7thswindon.org.uk</a></div></div><div class="flex items-start gap-3"><span class="text-xl mt-1">👥</span><div><div class="font-semibold">Volunteering:</div><a href="mailto:glv@7thswindon.org.uk" class="text-gray-300 hover:text-white">glv@7thswindon.org.uk</a></div></div></div></div></div><div class="border-t border-gray-700 pt-8"><div class="text-center text-gray-400 text-sm"><p>© 2026 7th Swindon Scout Group. All rights reserved.</p></div></div></div></footer></div></div>
+    <script src="stories.js?v=20260912b"></script>
+    <script src="app.js?v=20260912b"></script>
+  </body>
+</html>

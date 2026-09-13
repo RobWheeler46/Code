@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="assets/7thswindon-logo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <meta name="description" content="Brand and assets for 7th Swindon Scout Group. Download our approved logos, the Nunito Sans font, see our colours, and find the official Scouts brand guidelines." />
+    <link rel="canonical" href="https://www.7thswindon.org.uk/branding.html" />
+    <title>Brand and Assets · 7th Swindon Scout Group</title>
+    <link rel="stylesheet" href="assets/style.css?v=20260912b" />
+    <link rel="stylesheet" href="assets/theme.css?v=20260912c" />
+    <style>
+      html { scroll-behavior: smooth; }
+      section[id], footer[id] { scroll-margin-top: 90px; }
+      @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+      :root { --fx: var(--pp-purple, var(--st-teal, #6d28d9)); --fx-dark: var(--pp-purple-dark, var(--st-teal-dark, #4c1d95)); --fx-soft: #efeafc; }
+      .br { padding: 7.5rem 1.5rem 4rem; }
+      .br-wrap { max-width: 68rem; margin: 0 auto; }
+      .br-crumb { font-size: .85rem; color: #6b6478; margin-bottom: 1.25rem; }
+      .br-crumb a { color: var(--fx); text-decoration: none; } .br-crumb a:hover { text-decoration: underline; }
+      .br-eyebrow { font-size: .78rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--fx); margin: 0 0 .6rem; }
+      .br h1 { font-size: clamp(2.6rem, 7vw, 4rem); font-weight: 800; line-height: 1.03; margin: 0 0 .6rem; }
+      .br-lead { font-size: 1.2rem; color: #374151; line-height: 1.6; margin: 0 0 2.5rem; max-width: 42rem; }
+
+      /* Section heading */
+      .br-sec { margin: 3.5rem 0 1.5rem; display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; border-bottom: 1px solid #e3ddf0; padding-bottom: .75rem; }
+      .br-sec h2 { font-size: 1.7rem; font-weight: 800; margin: 0; }
+      .br-sec span { font-size: .72rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #9089a3; }
+      .br p.br-intro { color: #4b5563; line-height: 1.6; margin: 0 0 1.5rem; max-width: 44rem; }
+
+      /* Logo grid */
+      .logo-grid { display: grid; grid-template-columns: 1fr; gap: 1.25rem; }
+      @media (min-width: 560px) { .logo-grid { grid-template-columns: 1fr 1fr; } }
+      @media (min-width: 860px) { .logo-grid { grid-template-columns: repeat(3, 1fr); } }
+      .logo-card { background: #fff; border: 1px solid #e3ddf0; border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; }
+      .logo-preview { background: #f6f4f0; display: flex; align-items: center; justify-content: center; padding: 2rem; min-height: 12rem; }
+      .logo-preview img { max-width: 70%; max-height: 9rem; width: auto; height: auto; }
+      .logo-cap { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: 1rem 1.2rem; border-top: 1px solid #eee6f7; flex-wrap: wrap; }
+      .logo-cap h3 { font-size: 1rem; font-weight: 800; margin: 0; }
+      .logo-cap a { color: var(--fx); font-weight: 700; text-decoration: none; font-size: .9rem; white-space: nowrap; }
+      .logo-cap a:hover { text-decoration: underline; }
+
+      /* Colours */
+      .swatches { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+      @media (min-width: 620px) { .swatches { grid-template-columns: repeat(3, 1fr); } }
+      @media (min-width: 900px) { .swatches { grid-template-columns: repeat(6, 1fr); } }
+      .swatch { border: 1px solid #e3ddf0; border-radius: 14px; overflow: hidden; background: #fff; }
+      .swatch .chip { height: 5.5rem; }
+      .swatch .info { padding: .7rem .8rem; }
+      .swatch .info strong { display: block; font-size: .9rem; }
+      .swatch .info code { font-size: .78rem; color: #6b6478; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+      /* Typography specimen */
+      .type-card { background: #fff; border: 1px solid #e3ddf0; border-radius: 16px; padding: 1.75rem; }
+      .type-big { font-size: clamp(2.2rem, 7vw, 3.6rem); font-weight: 800; line-height: 1.05; margin: 0 0 .5rem; letter-spacing: -.01em; }
+      .type-alpha { color: #4b5563; font-size: 1.1rem; line-height: 1.5; margin: 0 0 1.5rem; word-spacing: .1em; }
+      .type-weights { display: grid; gap: .4rem; margin: 0 0 1.5rem; }
+      .type-weights div { font-size: 1.15rem; }
+      .type-weights .w4 { font-weight: 400; } .type-weights .w6 { font-weight: 600; } .type-weights .w7 { font-weight: 700; } .type-weights .w8 { font-weight: 800; }
+      .type-weights span { display: inline-block; width: 8.5rem; font-size: .8rem; font-weight: 600; color: #9089a3; }
+
+      /* Tone / essentials cards */
+      .ess-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+      @media (min-width: 640px) { .ess-grid { grid-template-columns: 1fr 1fr; } }
+      .ess { background: #fff; border: 1px solid #e3ddf0; border-left: 4px solid var(--fx); border-radius: 14px; padding: 1.3rem 1.4rem; }
+      .ess .n { font-size: .8rem; font-weight: 800; color: var(--fx); letter-spacing: .05em; }
+      .ess h3 { font-size: 1.15rem; font-weight: 800; margin: .3rem 0 .4rem; }
+      .ess p { color: #4b5563; line-height: 1.55; margin: 0; font-size: .95rem; }
+
+      /* Resource rows + download buttons */
+      .res { display: flex; align-items: center; gap: 1rem; background: #fff; border: 1px solid #e3ddf0; border-radius: 14px; padding: 1.1rem 1.3rem; margin-bottom: .9rem; text-decoration: none; color: inherit; flex-wrap: wrap; }
+      .res:hover { border-color: var(--fx); }
+      .res .badge { flex: 0 0 auto; font-size: .7rem; font-weight: 800; letter-spacing: .06em; color: var(--fx-dark); background: var(--fx-soft); border-radius: 8px; padding: .4rem .6rem; }
+      .res .res-body { flex: 1 1 16rem; min-width: 0; }
+      .res .res-body h3 { font-size: 1.05rem; font-weight: 800; margin: 0 0 .2rem; }
+      .res .res-body p { color: #4b5563; margin: 0; font-size: .92rem; line-height: 1.45; }
+      .res .res-body a { color: var(--fx); font-weight: 600; }
+      .res .go { color: var(--fx); font-weight: 700; white-space: nowrap; font-size: .92rem; }
+
+      .dl-btn { display: inline-flex; align-items: center; gap: .4rem; background: var(--fx); color: #fff; font-weight: 700; padding: .8rem 1.6rem; border-radius: 999px; text-decoration: none; transition: background .15s; }
+      .dl-btn:hover { background: var(--fx-dark); }
+      .dl-btn:focus-visible { outline: 2px solid var(--fx-dark); outline-offset: 3px; }
+
+      .br-note { background: var(--fx-soft); border: 1px solid color-mix(in srgb, var(--fx) 25%, transparent); border-radius: 14px; padding: 1.3rem 1.5rem; margin: 3rem 0 0; }
+      .br-note h2 { font-size: 1.2rem; font-weight: 800; margin: 0 0 .4rem; }
+      .br-note p { color: #3f3a52; margin: 0 0 .5rem; line-height: 1.55; }
+      .br-note a { color: var(--fx-dark); font-weight: 700; }
+    </style>
+  </head>
+  <body>
+    <div id="root"><div class="font-sans"><nav class="fixed top-0 left-0 right-0 z-50 bg-white transition-shadow duration-300 shadow-md"><div class="max-w-7xl mx-auto px-6 py-4"><div class="flex justify-between items-center"><a href="index.html" class="flex items-center gap-4 group"><div class="w-14 h-14 rounded-full overflow-hidden transition-transform group-hover:scale-105"><img src="assets/7thswindon-logo.png" alt="7th Swindon Scouts" class="w-full h-full object-cover"></div><span class="text-xl font-bold text-purple-600">7th Swindon Scouts</span></a><button id="mobileMenuBtn" aria-label="Menu" class="lg:hidden text-3xl">☰</button><ul class="hidden lg:flex items-center gap-6 mainnav"><li><a href="index.html" data-nav="home" class="font-semibold hover:text-purple-600 transition-colors">Home</a></li><li class="has-menu"><a href="find-your-section.html" data-nav="join" class="font-semibold hover:text-purple-600 transition-colors">Join</a><ul class="submenu"><li><a href="find-your-section.html">Find Your Section</a></li><li><a href="how-joining-works.html">How Joining Works</a></li><li><a href="inclusion.html">Inclusion and Support</a></li><li><a href="index.html#faq">Parent FAQs</a></li></ul></li><li class="has-menu"><a href="index.html#sections" data-nav="what" class="font-semibold hover:text-purple-600 transition-colors">What We Do</a><ul class="submenu"><li><a href="beavers.html">Beavers</a></li><li><a href="cubs.html">Cubs</a></li><li><a href="scouts.html">Scouts</a></li><li><a href="explorers.html">Explorers</a></li><li><a href="index.html#activityShowcase">Activities and Adventures</a></li></ul></li><li><a href="volunteer.html" data-nav="volunteer" class="font-semibold hover:text-purple-600 transition-colors">Volunteer</a></li><li class="has-menu"><a href="about.html" data-nav="about" class="font-semibold hover:text-purple-600 transition-colors">About</a><ul class="submenu"><li><a href="about.html">About 7th Swindon</a></li><li><a href="safeguarding.html">Safeguarding</a></li><li><a href="support.html">Support Us</a></li><li><a href="agm.html">Governance and AGM</a></li></ul></li><li><a href="contact.html" data-nav="contact" class="font-semibold hover:text-purple-600 transition-colors">Contact</a></li><li><span class="portal-util" role="link" aria-disabled="true" title="7thPortal is coming soon" style="opacity:.45;pointer-events:none;cursor:not-allowed">Open 7thPortal</span></li></ul></div><ul id="mobileMenu" class="hidden lg:hidden flex-col gap-1 pt-4"><li><a href="index.html" class="mobile-link block font-semibold py-2 hover:text-purple-600 transition-colors">Home</a></li><li class="m-group">Join</li><li><a href="find-your-section.html" class="mobile-link m-child">Find Your Section</a></li><li><a href="how-joining-works.html" class="mobile-link m-child">How Joining Works</a></li><li><a href="inclusion.html" class="mobile-link m-child">Inclusion and Support</a></li><li><a href="index.html#faq" class="mobile-link m-child">Parent FAQs</a></li><li class="m-group">What We Do</li><li><a href="beavers.html" class="mobile-link m-child">Beavers</a></li><li><a href="cubs.html" class="mobile-link m-child">Cubs</a></li><li><a href="scouts.html" class="mobile-link m-child">Scouts</a></li><li><a href="explorers.html" class="mobile-link m-child">Explorers</a></li><li><a href="index.html#activityShowcase" class="mobile-link m-child">Activities and Adventures</a></li><li><a href="volunteer.html" class="mobile-link block font-semibold py-2 hover:text-purple-600 transition-colors">Volunteer</a></li><li class="m-group">About</li><li><a href="about.html" class="mobile-link m-child">About 7th Swindon</a></li><li><a href="safeguarding.html" class="mobile-link m-child">Safeguarding</a></li><li><a href="support.html" class="mobile-link m-child">Support Us</a></li><li><a href="agm.html" class="mobile-link m-child">Governance and AGM</a></li><li><a href="contact.html" class="mobile-link block font-semibold py-2 hover:text-purple-600 transition-colors">Contact</a></li><li><span class="mobile-link block font-semibold py-2" role="link" aria-disabled="true" style="opacity:.45;pointer-events:none;cursor:not-allowed">Open 7thPortal</span></li></ul></div></nav>
+
+    <main class="br">
+      <div class="br-wrap">
+        <p class="br-crumb"><a href="index.html">Home</a> › Brand and Assets</p>
+        <p class="br-eyebrow">Brand and assets</p>
+        <h1>Make it feel like Scouts.</h1>
+        <p class="br-lead">Everything you need to keep 7th Swindon looking consistent: our approved logos, colours and the Scouts font, with the official national guidance close at hand.</p>
+
+        <div class="res" style="border-left:4px solid var(--fx)">
+          <span class="badge">PDF</span>
+          <div class="res-body"><h3>Scouts brand guidelines</h3><p>The complete national guide, linked from the official UK Scouts brand page. Around 20 MB.</p></div>
+          <a class="dl-btn" href="https://prod-cms.scouts.org.uk/media/x2vhpnnc/scouts_brand_guidelines_august_2026.pdf" target="_blank" rel="noopener noreferrer">Open the PDF ↓</a>
+        </div>
+
+        <div class="br-sec"><h2>Our logos</h2><span>01 — Group logos</span></div>
+        <p class="br-intro">Six approved logos for 7th Swindon, ready to download as original PNG files. Use the circular badge where a compact mark works best, and the stacked version where there is room for the full wordmark.</p>
+        <div class="logo-grid">
+          <article class="logo-card"><div class="logo-preview"><img src="assets/branding/logos/7th-swindon-circle-navy.png" alt="7th Swindon Scouts logo, circular, navy" loading="lazy"></div><div class="logo-cap"><h3>Circular · Navy</h3><a href="assets/branding/logos/7th-swindon-circle-navy.png" download>Download PNG ↓</a></div></article>
+          <article class="logo-card"><div class="logo-preview"><img src="assets/branding/logos/7th-swindon-circle-purple.png" alt="7th Swindon Scouts logo, circular, purple" loading="lazy"></div><div class="logo-cap"><h3>Circular · Purple</h3><a href="assets/branding/logos/7th-swindon-circle-purple.png" download>Download PNG ↓</a></div></article>
+          <article class="logo-card"><div class="logo-preview"><img src="assets/branding/logos/7th-swindon-circle-black.png" alt="7th Swindon Scouts logo, circular, black" loading="lazy"></div><div class="logo-cap"><h3>Circular · Black</h3><a href="assets/branding/logos/7th-swindon-circle-black.png" download>Download PNG ↓</a></div></article>
+          <article class="logo-card"><div class="logo-preview"><img src="assets/branding/logos/7th-swindon-stacked-navy.png" alt="7th Swindon Scouts logo, stacked wordmark, navy" loading="lazy"></div><div class="logo-cap"><h3>Stacked · Navy</h3><a href="assets/branding/logos/7th-swindon-stacked-navy.png" download>Download PNG ↓</a></div></article>
+          <article class="logo-card"><div class="logo-preview"><img src="assets/branding/logos/7th-swindon-stacked-purple.png" alt="7th Swindon Scouts logo, stacked wordmark, purple" loading="lazy"></div><div class="logo-cap"><h3>Stacked · Purple</h3><a href="assets/branding/logos/7th-swindon-stacked-purple.png" download>Download PNG ↓</a></div></article>
+          <article class="logo-card"><div class="logo-preview"><img src="assets/branding/logos/7th-swindon-stacked-black.png" alt="7th Swindon Scouts logo, stacked wordmark, black" loading="lazy"></div><div class="logo-cap"><h3>Stacked · Black</h3><a href="assets/branding/logos/7th-swindon-stacked-black.png" download>Download PNG ↓</a></div></article>
+        </div>
+
+        <div class="br-sec"><h2>Our colours</h2><span>02 — Palette</span></div>
+        <p class="br-intro">The palette used across our website and 7thPortal. For print and national materials, always defer to the official brand guidelines above.</p>
+        <div class="swatches">
+          <div class="swatch"><div class="chip" style="background:#6d28d9"></div><div class="info"><strong>Purple</strong><code>#6D28D9</code></div></div>
+          <div class="swatch"><div class="chip" style="background:#4c1d95"></div><div class="info"><strong>Purple dark</strong><code>#4C1D95</code></div></div>
+          <div class="swatch"><div class="chip" style="background:#1b1533"></div><div class="info"><strong>Navy</strong><code>#1B1533</code></div></div>
+          <div class="swatch"><div class="chip" style="background:#0f9d78"></div><div class="info"><strong>Green</strong><code>#0F9D78</code></div></div>
+          <div class="swatch"><div class="chip" style="background:#f5b800"></div><div class="info"><strong>Yellow</strong><code>#F5B800</code></div></div>
+          <div class="swatch"><div class="chip" style="background:#f6f4f0;border-bottom:1px solid #e3ddf0"></div><div class="info"><strong>Warm</strong><code>#F6F4F0</code></div></div>
+        </div>
+
+        <div class="br-sec"><h2>Our font</h2><span>03 — Typography</span></div>
+        <p class="br-intro">Nunito Sans is the official Scouts typeface, and the one used everywhere on our website. Download the pack below, then unzip it to find the fonts and the included licence.</p>
+        <div class="type-card">
+          <p class="type-big">Skills for life.</p>
+          <p class="type-alpha">ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz 0123456789</p>
+          <div class="type-weights">
+            <div class="w4"><span>Regular 400</span>Adventure starts here</div>
+            <div class="w6"><span>Semibold 600</span>Adventure starts here</div>
+            <div class="w7"><span>Bold 700</span>Adventure starts here</div>
+            <div class="w8"><span>Extrabold 800</span>Adventure starts here</div>
+          </div>
+          <a class="dl-btn" href="assets/branding/Nunito_Sans.zip" download="Nunito_Sans.zip">Download font ZIP ↓</a>
+        </div>
+
+        <div class="br-sec"><h2>Sound like us</h2><span>04 — Tone of voice</span></div>
+        <div class="ess-grid">
+          <div class="ess"><span class="n">01</span><h3>Purpose and personality</h3><p>Help young people find a place to belong and develop skills for life. Let that purpose guide every message.</p></div>
+          <div class="ess"><span class="n">02</span><h3>Logo and identity</h3><p>Use the approved logos above. For adaptable artwork and templates, the Scouts Brand Centre has more.</p></div>
+          <div class="ess"><span class="n">03</span><h3>Colour and type</h3><p>Keep to the palette and to Nunito Sans. When in doubt, the official guide is the reference.</p></div>
+          <div class="ess"><span class="n">04</span><h3>Words and tone</h3><p>Sound friendly and conversational. Use everyday language, and check the style guide for spelling and terms.</p></div>
+        </div>
+
+        <div class="br-sec"><h2>Keep these close</h2><span>05 — Official resources</span></div>
+        <div class="res-body-list">
+          <a class="res" href="https://scoutsbrand.org.uk/catalogue/item/nunito-sans" target="_blank" rel="noopener noreferrer"><span class="badge">FONT</span><div class="res-body"><h3>Nunito Sans on the Brand Centre</h3><p>The font is also available from the Scouts Brand Centre, sign in required.</p></div><span class="go">Visit ↗</span></a>
+          <a class="res" href="https://cms.scouts.org.uk/media/13411/how-we-talk.pdf" target="_blank" rel="noopener noreferrer"><span class="badge">PDF</span><div class="res-body"><h3>How we talk</h3><p>A practical writing toolkit: headlines, everyday messages and bringing skills for life to life.</p></div><span class="go">Open ↓</span></a>
+          <a class="res" href="https://www.scouts.org.uk/volunteers/running-things-locally/local-media-and-member-communications/our-brand/scouts-style-guide/" target="_blank" rel="noopener noreferrer"><span class="badge">WEB</span><div class="res-body"><h3>Scouts style guide</h3><p>Look up spelling, punctuation, capitalisation and Scout terminology.</p></div><span class="go">Read ↗</span></a>
+          <a class="res" href="https://scoutsbrand.org.uk/" target="_blank" rel="noopener noreferrer"><span class="badge">HUB</span><div class="res-body"><h3>Scouts Brand Centre</h3><p>Templates and resources for posters, stationery, signage and social media.</p></div><span class="go">Visit ↗</span></a>
+        </div>
+
+        <div class="br-note">
+          <h2>Always check the official source</h2>
+          <p>This page is a quick reference for 7th Swindon. The national documents take precedence, so check the Scouts brand page for future updates.</p>
+          <p><a href="https://www.scouts.org.uk/volunteers/running-things-locally/local-media-and-member-communications/our-brand/" target="_blank" rel="noopener noreferrer">Official Scouts brand page ↗</a></p>
+        </div>
+      </div>
+    </main>
+
+    <footer id="footer" class="bg-gray-900 text-white py-12"><div class="max-w-7xl mx-auto px-6"><div class="grid md:grid-cols-3 gap-12 mb-8"><div><div class="w-24 h-24 mb-6"><img src="assets/7thswindon-logo.png" alt="7th Swindon" class="w-full h-full"></div><h3 class="text-xl font-bold text-yellow-400 mb-4">7th Swindon Scout Group</h3><p class="text-gray-300 mb-4 leading-relaxed">Part of Swindon North Scout District, we're one of the largest Scout Groups in North Swindon, helping over 300 young people develop skills for life every week.</p><p class="text-sm text-gray-400">Charity Number: 306101<br>The Scout Association</p></div><div><h3 class="text-xl font-bold text-yellow-400 mb-4">Quick Links</h3><ul class="space-y-3"><li><a href="find-your-section.html" class="text-gray-300 hover:text-white hover:pl-2 transition-all block">Find Your Section</a></li><li><a href="how-joining-works.html" class="text-gray-300 hover:text-white hover:pl-2 transition-all block">How Joining Works</a></li><li><a href="volunteer.html" class="text-gray-300 hover:text-white hover:pl-2 transition-all block">Volunteer With Us</a></li><li><a href="support.html" class="text-gray-300 hover:text-white hover:pl-2 transition-all block">Support Us</a></li><li><a href="contact.html" class="text-gray-300 hover:text-white hover:pl-2 transition-all block">Contact</a></li></ul></div><div><h3 class="text-xl font-bold text-yellow-400 mb-4">Get in Touch</h3><div class="space-y-4"><div class="flex items-start gap-3"><span class="text-xl mt-1">📧</span><div><div class="font-semibold">General Enquiries:</div><a href="mailto:info@7thswindon.org.uk" class="text-gray-300 hover:text-white">info@7thswindon.org.uk</a></div></div><div class="flex items-start gap-3"><span class="text-xl mt-1">👥</span><div><div class="font-semibold">Volunteering:</div><a href="mailto:glv@7thswindon.org.uk" class="text-gray-300 hover:text-white">glv@7thswindon.org.uk</a></div></div></div></div></div><div class="border-t border-gray-700 pt-8"><div class="text-center text-gray-400 text-sm"><p>© 2026 7th Swindon Scout Group. All rights reserved.</p></div></div></div></footer></div></div>
+    <script src="app.js?v=20260912b"></script>
+  </body>
+</html>

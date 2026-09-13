@@ -1,0 +1,81 @@
+{
+  "meta": {
+    "title": "Latest Adventures",
+    "intro": "A window into a typical few weeks at 7th Swindon, the trips, challenges and small firsts that make Scouting what it is.",
+    "editorNote": "SAMPLE CONTENT. These placeholder stories are here to show the layout, replace them with real write-ups before launch, and delete any you don't need. Publishing rules: a story appears only when \"published\": true, and a photo appears only when its \"approved\": true (image consent granted). Never add a photo of a young person without the approval recorded elsewhere."
+  },
+  "stories": [
+    {
+      "id": "beavers-minibeast-safari",
+      "slug": "beavers-minibeast-safari",
+      "title": "Beavers go on a mini-beast safari",
+      "date": "2026-07-03",
+      "section": "Beavers",
+      "summary": "Magnifying glasses at the ready, our youngest members turned a patch of woodland into a wildlife expedition.",
+      "body": [
+        "Armed with bug pots and a healthy dose of curiosity, the Beavers spent an evening finding out just how much life is hiding under a single log. Woodlice, worms and the occasional very fast spider were all carefully studied and, just as carefully, put back where they belonged.",
+        "Along the way the Colony talked about why every mini-beast matters, from the tiniest ant to the busiest bee, and how looking after small habitats is something everyone can do. It's the kind of hands-on discovery that sticks, and it counts towards their Naturalist Activity Badge, too.",
+        "Evenings like this are a great first taste of the outdoors: close to home, full of wonder, and finished with slightly muddy knees and a lot of stories to tell at bedtime."
+      ],
+      "hero": { "image": null, "alt": "", "approved": false, "credit": "" },
+      "tags": ["Outdoors", "Nature"],
+      "published": true,
+      "featured": true,
+      "sample": true
+    },
+    {
+      "id": "cubs-first-sleepover",
+      "slug": "cubs-first-sleepover",
+      "title": "A first night away for the Cubs",
+      "date": "2026-06-14",
+      "section": "Cubs",
+      "summary": "For many of the Pack it was their very first night sleeping away from home, and by breakfast they were already asking when the next one is.",
+      "body": [
+        "There's a special kind of excitement to a first sleepover: the rolled-up sleeping bags, the midnight torch-light giggling, the enormous pride of managing a night away. Our Cubs took it all in their stride, pitching in with everything from setting up to the all-important hot-chocolate round.",
+        "Between the campfire songs and a wide game after dark, there was plenty of quiet learning going on too, packing a bag, looking after your kit, and looking out for the friend next to you. Those are the skills that turn a fun night into a genuine step towards independence.",
+        "By the morning, tired but triumphant, the message from the Pack was unanimous: can we do it again?"
+      ],
+      "hero": { "image": null, "alt": "", "approved": false, "credit": "" },
+      "tags": ["Camp", "Teamwork"],
+      "published": true,
+      "featured": true,
+      "sample": true
+    },
+    {
+      "id": "scouts-ridgeway-hike",
+      "slug": "scouts-ridgeway-hike",
+      "title": "Scouts take on the Ridgeway",
+      "date": "2026-05-24",
+      "section": "Scouts",
+      "summary": "Map, compass and a good pair of boots, the Troop tackled a stretch of Britain's oldest road under their own steam.",
+      "body": [
+        "Navigation is a lot more real when the only thing between you and the next checkpoint is your own map-reading. Out on the Ridgeway, the Scouts planned and walked their route in small teams, taking turns to lead, check the map and keep the pace sensible.",
+        "There were big skies, bigger hills, and the satisfying moment when a bearing taken from a hedgerow turns out to be exactly right. Lunch was earned, blisters were compared, and everyone came back a little more confident in the outdoors.",
+        "Challenges like this are the heart of the Scout section: real responsibility, real distance, and the quiet pride of finishing something you weren't sure you could."
+      ],
+      "hero": { "image": null, "alt": "", "approved": false, "credit": "" },
+      "tags": ["Hiking", "Navigation"],
+      "published": true,
+      "featured": true,
+      "sample": true
+    },
+    {
+      "id": "explorers-community-project",
+      "slug": "explorers-community-project",
+      "title": "Explorers give a community garden a spring makeover",
+      "date": "2026-04-19",
+      "section": "Explorers",
+      "summary": "Spades, wheelbarrows and a Saturday well spent, our Explorers rolled up their sleeves for a local good cause.",
+      "body": [
+        "Scouting isn't only about what you gain, it's about what you give back. Our Explorers spent a Saturday clearing, planting and tidying a community garden, turning a tired corner into somewhere the whole neighbourhood can enjoy.",
+        "It's practical, sometimes muddy work, but it's also where a lot of the best conversations happen. Projects like this feed straight into the top awards in Scouting, and give young people real experience of leading, organising and seeing something through.",
+        "Small actions, repeated by lots of people, add up. That's a lesson worth planting."
+      ],
+      "hero": { "image": null, "alt": "", "approved": false, "credit": "" },
+      "tags": ["Community", "Volunteering"],
+      "published": true,
+      "featured": false,
+      "sample": true
+    }
+  ]
+}
