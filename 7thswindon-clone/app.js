@@ -6,9 +6,15 @@
 const menuBtn = document.getElementById('mobileMenuBtn');
 const mobileMenu = document.getElementById('mobileMenu');
 if (menuBtn && mobileMenu) {
-  menuBtn.addEventListener('click', () => mobileMenu.classList.toggle('hidden'));
+  menuBtn.addEventListener('click', () => {
+    const open = !mobileMenu.classList.toggle('hidden');
+    menuBtn.setAttribute('aria-expanded', String(open));
+  });
   document.querySelectorAll('.mobile-link').forEach((a) =>
-    a.addEventListener('click', () => mobileMenu.classList.add('hidden'))
+    a.addEventListener('click', () => {
+      mobileMenu.classList.add('hidden');
+      menuBtn.setAttribute('aria-expanded', 'false');
+    })
   );
 }
 

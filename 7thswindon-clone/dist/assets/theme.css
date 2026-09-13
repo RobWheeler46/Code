@@ -70,8 +70,10 @@ h1, h2, h3, h4, h5, h6 { font-family: "Nunito Sans", -apple-system, "Segoe UI", 
 .bg-purple-100 { background-color: #ece3fb; }
 .hover\:bg-purple-50:hover { background-color: #f3eefc; }
 
-.bg-green-600 { background-color: var(--pp-green); }
-.hover\:bg-green-700:hover { background-color: var(--pp-green-dark); }
+/* Solid green buttons carry white text, so use the darker green (5.1:1) to meet
+   WCAG AA; the brighter --pp-green is kept for gradients and accents below. */
+.bg-green-600 { background-color: var(--pp-green-dark); }
+.hover\:bg-green-700:hover { background-color: #0a6650; }
 
 .text-yellow-400 { color: var(--pp-yellow); }
 .hover\:text-yellow-300:hover { color: var(--pp-yellow-hi); }
@@ -178,3 +180,12 @@ nav.fixed ul.lg\:flex a.bg-purple-600:hover,
   .sticky-cta { display: flex; }
   body:has(.sticky-cta) { padding-bottom: 5rem; }
 }
+
+/* ── Accessibility helpers ───────────────────────────────────────────── */
+/* Skip link: off-screen until focused, so keyboard users can jump the nav. */
+.skip-link { position: absolute; left: -9999px; top: 0; z-index: 100; background: var(--pp-purple); color: #fff; padding: .65rem 1.1rem; border-radius: 0 0 8px 0; font-weight: 700; text-decoration: none; }
+.skip-link:focus { left: 0; }
+#main { scroll-margin-top: 90px; }
+#main:focus { outline: none; }
+/* Inline links inside footer paragraphs need a non-colour cue (WCAG 1.4.1). */
+footer p a { text-decoration: underline; }
