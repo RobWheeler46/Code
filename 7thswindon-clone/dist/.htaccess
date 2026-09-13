@@ -4,6 +4,19 @@
 ErrorDocument 404 /404.html
 
 # ----------------------------------------------------------------------
+# Clean URLs. Serve /page from /page.html when that file exists, so links
+# like /vacancies work without the extension. Real files and directories
+# (assets, PHP form handlers) are left untouched.
+# ----------------------------------------------------------------------
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{DOCUMENT_ROOT}/$1.html -f
+  RewriteRule ^(.+?)/?$ $1.html [L]
+</IfModule>
+
+# ----------------------------------------------------------------------
 # Security headers
 # ----------------------------------------------------------------------
 <IfModule mod_headers.c>
