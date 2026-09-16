@@ -189,3 +189,13 @@ nav.fixed ul.lg\:flex a.bg-purple-600:hover,
 #main:focus { outline: none; }
 /* Inline links inside footer paragraphs need a non-colour cue (WCAG 1.4.1). */
 footer p a { text-decoration: underline; }
+
+/* Unified keyboard focus ring for links/buttons that lack a custom one.
+   Component :focus-visible rules sit in each page's inline <style>, which loads
+   after this file, so they keep their own rings at equal specificity. */
+a:focus-visible, button:focus-visible, summary:focus-visible, [role="link"]:focus-visible {
+  outline: 3px solid var(--pp-purple-dark); outline-offset: 2px; border-radius: 3px;
+}
+/* On the navy nav bar and footer, a yellow ring is what reads against dark. */
+nav.fixed a:focus-visible, nav.fixed button:focus-visible, nav.fixed [role="link"]:focus-visible,
+footer a:focus-visible { outline-color: var(--pp-yellow); }
