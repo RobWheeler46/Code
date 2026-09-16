@@ -129,3 +129,35 @@ Events, attendance, risk assessments, event payments, custom or flexi fields, qu
 ## Hard line
 
 Tier C contact, emergency and medical data is not synced or displayed under any of the decisions above. Enabling it is a separate decision with its own trustee sign-off and acceptance evidence, consistent with the master FRD's controlled open decisions on safeguarding data. The fact that the contact grid can be read does not authorise reading it.
+
+---
+
+## Prioritised OSM data roadmap (what to ask OSM to unlock)
+
+This is the forward view: if the OSM member-data permission barrier is cleared, what is worth reading, in priority order. It exists so that the conversation with whoever administers OSM asks for the whole useful set at once, not just badges.
+
+**How access actually works (context).** 7thPortal connects to OSM as a standard OAuth application. What it can read is limited by the connecting account's own OSM permissions, area by area. During the badges work we confirmed this is a real wall: section-level badge award reads return HTTP 403 for both the shared service connection and a section leader's own login, because neither account holds the badge-record permission. Commercial products such as Scout Websites read more only because they hold an official OSM partnership with full API access, a different tier we cannot reach by building an OAuth app; notably, even that partner integration surfaces only waiting list, events and programme, and does not display badges. So each data area below is its own separate permission request in OSM, and granting one (for example Badges) does not grant the others.
+
+**Sensitivity tiers** are as defined in item 2: Tier A is counts and structure only (no individual people); Tier B is member references (name, OSM id, section); Tier C is contact, emergency and medical data, which stays behind the Hard line above.
+
+### Biggest wins
+1. **Attendance registers.** Per member, per meeting. Unlocks section attendance-trend dashboards, a retention early-warning signal (declining attendance is the strongest flight-risk indicator at our scale), and "who has been missing" prompts for leaders. The aggregate form (attendance rate per section) is Tier A; the per-member form is Tier B.
+2. **Parent-to-child auto-linking by OSM member id** (see item 8). Removes most manual account linking by matching on the member id from the roster. Tier B.
+3. **Badge progress and awards.** Per-section award summaries, plus a "badge opportunity" view (who is close to completing what) so leaders can plan a meeting to get a cohort over the line. Aggregate counts are Tier A; per-member progress is Tier B.
+
+### Strong value
+4. **Events, attendees and payment status.** OSM's newer /v3 events API gives event detail, summaries and attendee lists, enabling a real events and camps view with participant lists, headcounts and a read-only payment-status projection (OSM stays the system of record for money). Tier B.
+5. **Risk-assessment reuse.** /v3/risk_assessments lets the Activity Approval flow link to an existing OSM risk assessment instead of re-capturing it. Reference and metadata are lower sensitivity; the linked evidence is not.
+
+### Situational or lower effort
+6. **Programme detail.** Richer Leader Today, Meeting Mode and calendar (meeting notes, activity metadata) beyond the summary already read. Mostly Tier A / operational.
+7. **Waiting-list metrics.** How many are waiting per section, to pair with the public site's join flow. Tier A.
+8. **Census and capacity trends.** Membership over time and section movement. Tier A.
+
+### High value but safeguarding-gated
+9. **Emergency contacts, medical and dietary needs, consents (photo, Gift Aid).** Operationally valuable for camp preparation and meeting safety, but this is Tier C and stays behind the Hard line: a separate trustee-level safeguarding decision, never bundled with the items above.
+
+### Out of scope for read (7thPortal owns these)
+Quartermaster and finance are not read from OSM; 7thPortal has its own modules and OSM does not expose these to the connection anyway. OSM kit lists (/v3/kit) would duplicate the local quartermaster module, so any use is a deliberate migration decision, not a sync.
+
+**Caveat on validation.** Reads split across OSM's older /ext API (members, patrols, badges, attendance, events list) and its newer /v3 API (event detail, programme, risk assessments, kit, access users). The /ext reads are broadly validated; several /v3 reads and their scopes still need confirming against a live connection before any feature relies on them.
