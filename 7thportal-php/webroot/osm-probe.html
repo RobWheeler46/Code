@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OSM Read Probe - 7thPortal</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .osp-wrap{max-width:60rem;margin:2rem auto;padding:0 1rem}
+  .osp-btns{display:flex;flex-wrap:wrap;gap:.5rem;margin:1rem 0}
+  pre#osp-out{overflow:auto;max-height:32rem;background:var(--surface-2,#f2eef7);padding:.8rem;border-radius:8px;font-size:.78rem;white-space:pre-wrap}
+  .osp-muted{color:var(--muted,#6b6b6b);font-size:.9rem}
+</style>
+</head>
+<body>
+  <div class="osp-wrap">
+    <h1>OSM Read Probe: Programme and Events</h1>
+    <p class="osp-muted">Reads programme and event summaries for one section from the live OSM connection and reports what each endpoint returns, so we can confirm what is readable before wiring a sync. Programme and event summaries are not personal data.</p>
+    <div class="osp-btns">
+      <button class="btn" data-src="service">Probe as service connection</button>
+      <button class="btn btn-secondary" data-src="me">Probe as my OSM login</button>
+    </div>
+    <pre id="osp-out" hidden></pre>
+  </div>
+  <script src="js/api.js"></script>
+  <script>
+    const out = document.getElementById('osp-out');
+    document.querySelectorAll('.osp-btns button').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        const orig = btn.textContent;
+        btn.textContent = 'Reading from OSM…';
+        try {
+          const d = await Api.get('/api/osm/probe/programme-events?tokenSource=' + encodeURIComponent(btn.dataset.src));
+          out.hidden = false;
+          out.textContent = JSON.stringify(d.probe, null, 2);
+        } catch (e) {
+          out.hidden = false;
+          out.textContent = 'Probe failed: ' + (e && e.message ? e.message : e);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = orig;
+        }
+      });
+    });
+  </script>
+</body>
+</html>
