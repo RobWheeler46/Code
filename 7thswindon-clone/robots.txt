@@ -8,4 +8,14 @@ Allow: /
 Disallow: /contact.php
 Disallow: /volunteer.php
 
+# AI answer-engine crawlers are welcome: this is a public shop-window site and
+# we want to be found in AI answers as well as search. (Covered by * above;
+# listed explicitly so the intent is clear.)
+User-agent: GPTBot
+User-agent: OAI-SearchBot
+User-agent: ClaudeBot
+User-agent: PerplexityBot
+User-agent: Google-Extended
+Allow: /
+
 Sitemap: https://www.7thswindon.org.uk/sitemap.xml
