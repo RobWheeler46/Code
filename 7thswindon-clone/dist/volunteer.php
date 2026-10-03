@@ -73,4 +73,4 @@ if ($sent) {
     respond(true, "Thanks {$name}! We've got your interest and we'll be in touch to have an informal chat.");
 }
 
-respond(false, "Sorry, we couldn't send your interest. Please email glv@7thswindon.org.uk instead.", 500);
+respond(false, "Sorry, we couldn't send your interest. Please try again in a moment.", 500);

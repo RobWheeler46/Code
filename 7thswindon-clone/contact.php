@@ -49,6 +49,47 @@ if (trim($_POST['website'] ?? '') !== '') {
     respond(true, 'Thanks! Your message has been sent.');
 }
 
+// Time-trap: app.js reports how long the form took to fill. A real person takes
+// more than a few seconds; a submission faster than 3s is a bot. Pretend success
+// so the bot doesn't learn it was blocked. A no-JS submit sends no "elapsed"
+// field and is let through — the honeypot above still applies to it.
+$elapsed = isset($_POST['elapsed']) ? (int) $_POST['elapsed'] : -1;
+if ($elapsed >= 0 && $elapsed < 3000) {
+    respond(true, 'Thanks! Your message has been sent.');
+}
+
+// Cloudflare Turnstile. The secret is read from the environment so it never
+// lives in the repo — set TURNSTILE_SECRET on the server to activate. When no
+// secret is configured (local/dev, or not set yet) verification is skipped and
+// the honeypot + time-trap above still apply. If Cloudflare is unreachable we
+// fail open, so a Cloudflare outage never blocks genuine enquiries.
+$secret = getenv('TURNSTILE_SECRET') ?: '';
+if ($secret !== '') {
+    $token = $_POST['cf-turnstile-response'] ?? '';
+    $ok = false;
+    if ($token !== '') {
+        $resp = @file_get_contents(
+            'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+            false,
+            stream_context_create(['http' => [
+                'method'  => 'POST',
+                'header'  => "Content-Type: application/x-www-form-urlencoded\r\n",
+                'content' => http_build_query(['secret' => $secret, 'response' => $token, 'remoteip' => $_SERVER['REMOTE_ADDR'] ?? '']),
+                'timeout' => 5,
+            ]])
+        );
+        if ($resp === false) {
+            $ok = true; // siteverify unreachable: fail open
+        } else {
+            $data = json_decode($resp, true);
+            $ok = !empty($data['success']);
+        }
+    }
+    if (!$ok) {
+        respond(false, 'Please complete the anti-spam check and try again.', 422);
+    }
+}
+
 $name    = trim($_POST['name'] ?? '');
 $email   = trim($_POST['email'] ?? '');
 $type    = trim($_POST['enquiryType'] ?? '');
@@ -97,4 +138,4 @@ if ($sent) {
     respond(true, "Thanks {$name}! Your message has been sent — we'll be in touch soon.");
 }
 
-respond(false, "Sorry, we couldn't send your message. Please email info@7thswindon.org.uk instead.", 500);
+respond(false, "Sorry, we couldn't send your message. Please try again in a moment.", 500);

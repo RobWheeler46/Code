@@ -71,9 +71,12 @@ if (contactForm) {
   const typeSel = document.getElementById('cf-type');
   const deflect = document.getElementById('cf-deflect');
   if (typeSel && deflect) typeSel.addEventListener('change', () => { deflect.hidden = typeSel.value !== 'Existing member'; });
+  // Time-trap: record when the form loaded so the server can reject bot-speed submits.
+  const cfStart = Date.now();
   contactForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const data = new FormData(contactForm);
+    data.append('elapsed', Date.now() - cfStart);
     // Honeypot: real users can't see this field, so if it's filled, drop silently.
     if ((data.get('website') || '').trim()) { setStatus('ok', 'Thanks! Your message has been sent.'); contactForm.reset(); return; }
     const name = (data.get('name') || '').trim();
