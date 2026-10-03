@@ -2,11 +2,6 @@
 // (FAQ accordion, mobile nav.) Shared by index.html and agm.html, so every
 // block is guarded to no-op on pages that don't contain its markup.
 
-/* ---------- Email links (assembled at runtime so no address sits in the page source) ---------- */
-document.querySelectorAll('a[data-eml]').forEach(function (a) {
-  a.setAttribute('href', 'mailto:' + a.dataset.eml + '@7thswindon.org.uk');
-});
-
 /* ---------- Mobile navigation ---------- */
 const menuBtn = document.getElementById('mobileMenuBtn');
 const mobileMenu = document.getElementById('mobileMenu');

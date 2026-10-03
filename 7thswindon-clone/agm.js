@@ -40,7 +40,7 @@
   };
 
   const noteBlock = (email, note) =>
-    `<div class="gov-note"><p><strong>Transparency.</strong> ${esc(note)} For questions about our governance, <a href="mailto:${esc(email)}">contact the trustees</a>.</p></div>`;
+    `<div class="gov-note"><p><strong>Transparency.</strong> ${esc(note)} For questions about our governance, <a href="contact.html">contact us</a>.</p></div>`;
 
   fetch('agm.json', { cache: 'no-store' })
     .then((r) => { if (!r.ok) throw new Error('registry'); return r.json(); })
@@ -53,6 +53,6 @@
       mount.innerHTML = years.map(yearBlock).join('') + noteBlock(email, note);
     })
     .catch(() => {
-      mount.innerHTML = '<div class="gov-note"><p>Our AGM documents are available on request. Please <a href="mailto:trustees@7thswindon.org.uk">contact the trustees</a>.</p></div>';
+      mount.innerHTML = '<div class="gov-note"><p>Our AGM documents are available on request. Please <a href="contact.html">contact us</a>.</p></div>';
     });
 })();
