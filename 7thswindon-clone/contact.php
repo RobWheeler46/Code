@@ -58,35 +58,46 @@ if ($elapsed >= 0 && $elapsed < 3000) {
     respond(true, 'Thanks! Your message has been sent.');
 }
 
-// Cloudflare Turnstile. The secret is read from the environment so it never
-// lives in the repo — set TURNSTILE_SECRET on the server to activate. When no
-// secret is configured (local/dev, or not set yet) verification is skipped and
-// the honeypot + time-trap above still apply. If Cloudflare is unreachable we
-// fail open, so a Cloudflare outage never blocks genuine enquiries.
-$secret = getenv('TURNSTILE_SECRET') ?: '';
+// Cloudflare Turnstile. The secret never lives in the repo — it is read from,
+// in order: the TURNSTILE_SECRET environment variable (getenv), the $_SERVER
+// copy that Apache "SetEnv TURNSTILE_SECRET …" populates (getenv often can't
+// see SetEnv vars), or a git-ignored turnstile-secret.php next to this file
+// that returns the key. Set it by any one of those to activate.
+// When no secret is configured, verification is skipped and the honeypot +
+// time-trap above still apply.
+$secret = getenv('TURNSTILE_SECRET') ?: ($_SERVER['TURNSTILE_SECRET'] ?? '');
+if ($secret === '' && is_file(__DIR__ . '/turnstile-secret.php')) {
+    $secret = trim((string) (include __DIR__ . '/turnstile-secret.php'));
+}
 if ($secret !== '') {
     $token = $_POST['cf-turnstile-response'] ?? '';
-    $ok = false;
-    if ($token !== '') {
-        $resp = @file_get_contents(
-            'https://challenges.cloudflare.com/turnstile/v0/siteverify',
-            false,
-            stream_context_create(['http' => [
-                'method'  => 'POST',
-                'header'  => "Content-Type: application/x-www-form-urlencoded\r\n",
-                'content' => http_build_query(['secret' => $secret, 'response' => $token, 'remoteip' => $_SERVER['REMOTE_ADDR'] ?? '']),
-                'timeout' => 5,
-            ]])
-        );
-        if ($resp === false) {
-            $ok = true; // siteverify unreachable: fail open
-        } else {
-            $data = json_decode($resp, true);
-            $ok = !empty($data['success']);
-        }
-    }
-    if (!$ok) {
+    // No token means the challenge wasn't completed — reject.
+    if ($token === '') {
         respond(false, 'Please complete the anti-spam check and try again.', 422);
+    }
+    $postData  = http_build_query(['secret' => $secret, 'response' => $token, 'remoteip' => $_SERVER['REMOTE_ADDR'] ?? '']);
+    $verifyUrl = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
+    $resp = null;
+    if (function_exists('curl_init')) {
+        $ch = curl_init($verifyUrl);
+        curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => $postData, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 5]);
+        $resp = curl_exec($ch);
+        curl_close($ch);
+    } else {
+        $resp = @file_get_contents($verifyUrl, false, stream_context_create(['http' => [
+            'method'  => 'POST',
+            'header'  => "Content-Type: application/x-www-form-urlencoded\r\n",
+            'content' => $postData,
+            'timeout' => 5,
+        ]]));
+    }
+    // Reject on a definite failure. If Cloudflare was genuinely unreachable
+    // (empty/false response), fail open so an outage never blocks enquiries.
+    if ($resp !== false && $resp !== null && $resp !== '') {
+        $data = json_decode($resp, true);
+        if (empty($data['success'])) {
+            respond(false, 'Please complete the anti-spam check and try again.', 422);
+        }
     }
 }
 
