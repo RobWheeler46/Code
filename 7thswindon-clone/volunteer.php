@@ -32,6 +32,43 @@ if (trim($_POST['website'] ?? '') !== '') {
     respond(true, 'Thanks! Your interest has been sent.');
 }
 
+// Cloudflare Turnstile — same as contact.php. Secret from getenv, the $_SERVER
+// copy that Apache "SetEnv" populates, or a git-ignored turnstile-secret.php in
+// this directory. When no secret is configured, verification is skipped and the
+// honeypot above still applies.
+$secret = getenv('TURNSTILE_SECRET') ?: ($_SERVER['TURNSTILE_SECRET'] ?? '');
+if ($secret === '' && is_file(__DIR__ . '/turnstile-secret.php')) {
+    $secret = trim((string) (include __DIR__ . '/turnstile-secret.php'));
+}
+if ($secret !== '') {
+    $token = $_POST['cf-turnstile-response'] ?? '';
+    if ($token === '') {
+        respond(false, 'Please complete the anti-spam check and try again.', 422);
+    }
+    $postData  = http_build_query(['secret' => $secret, 'response' => $token, 'remoteip' => $_SERVER['REMOTE_ADDR'] ?? '']);
+    $verifyUrl = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
+    $resp = null;
+    if (function_exists('curl_init')) {
+        $ch = curl_init($verifyUrl);
+        curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => $postData, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 5]);
+        $resp = curl_exec($ch);
+        curl_close($ch);
+    } else {
+        $resp = @file_get_contents($verifyUrl, false, stream_context_create(['http' => [
+            'method'  => 'POST',
+            'header'  => "Content-Type: application/x-www-form-urlencoded\r\n",
+            'content' => $postData,
+            'timeout' => 5,
+        ]]));
+    }
+    if ($resp !== false && $resp !== null && $resp !== '') {
+        $data = json_decode($resp, true);
+        if (empty($data['success'])) {
+            respond(false, 'Please complete the anti-spam check and try again.', 422);
+        }
+    }
+}
+
 $name     = trim($_POST['name'] ?? '');
 $email    = trim($_POST['email'] ?? '');
 $phone    = trim($_POST['phone'] ?? '');

@@ -78,10 +78,22 @@
     showEoi();
   }
 
+  // Render Turnstile only when the (initially hidden) form is shown — Turnstile
+  // can fail to size a widget inside a display:none container at load. Retries
+  // until the Cloudflare script has loaded, and renders once.
+  function renderTurnstile() {
+    const el = document.getElementById('v-turnstile');
+    if (!el || el.dataset.rendered === '1') return;
+    if (!window.turnstile) { setTimeout(renderTurnstile, 200); return; }
+    window.turnstile.render(el, { sitekey: '0x4AAAAAAFMxidFYKrI0nPMi' });
+    el.dataset.rendered = '1';
+  }
+
   function showEoi() {
     chosen = true;
     els.opps.hidden = true;
     els.eoi.hidden = false;
+    renderTurnstile();
     if (!LIVE) { els.controls.hidden = true; els.results.hidden = false; markProgress(4); }
     const h = els.eoi.querySelector('.f-step-h'); if (h) h.focus({ preventScroll: false });
   }

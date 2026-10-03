@@ -21,6 +21,7 @@
     <title>Volunteer With Us · 7th Swindon Scout Group</title>
     <link rel="stylesheet" href="assets/style.css?v=20260912b" />
     <link rel="stylesheet" href="assets/theme.css?v=20260913a" />
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <style>
       html { scroll-behavior: smooth; }
       section[id], footer[id] { scroll-margin-top: 90px; }
@@ -178,6 +179,7 @@
                 <div class="v-field"><label for="v-message">Anything you would like to add? (optional)</label><textarea id="v-message" name="message" rows="4"></textarea></div>
                 <div class="v-hp" aria-hidden="true"><label>Leave this field empty<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
                 <div class="v-next"><strong>What happens next:</strong> an informal, no-pressure chat, then we explore the role together, then if it is a fit, the official joining steps (including the checks and training every volunteer completes). No commitment at this stage.</div>
+                <div id="v-turnstile" style="margin:.25rem 0 .75rem"></div>
                 <div class="wiz-actions" style="justify-content:flex-start"><button type="submit" class="f-btn f-btn-primary">I'm interested</button></div>
                 <div id="v-status" class="contact-status" role="status" aria-live="polite"></div>
                 <p style="font-size:.85rem;color:#6b6478;margin-top:1rem"><span aria-hidden="true">🔒</span> We will only use your details to talk to you about volunteering.</p>
@@ -191,6 +193,6 @@
     </main>
     <footer id="footer" class="bg-gray-900 text-white py-12"><div class="max-w-7xl mx-auto px-6"><div class="grid md:grid-cols-3 gap-12 mb-8"><div><div class="w-24 h-24 mb-6"><img src="assets/7thswindon-logo.png" alt="7th Swindon" class="w-full h-full"></div><h3 class="text-xl font-bold text-yellow-400 mb-4">7th Swindon Scout Group</h3><p class="text-gray-300 mb-4 leading-relaxed">Part of Swindon North Scout District, we're one of the largest Scout Groups in North Swindon, helping over 300 young people develop skills for life every week.</p><p class="text-sm text-gray-400">Charity Number: 306101<br>The Scout Association</p></div><div><h3 class="text-xl font-bold text-yellow-400 mb-4">Quick Links</h3><ul class="space-y-3"><li><a href="find-your-section.html" class="text-gray-300 hover:text-white hover:pl-2 transition-all block">Find Your Section</a></li><li><a href="volunteer.html" class="text-gray-300 hover:text-white hover:pl-2 transition-all block">Volunteer With Us</a></li><li><a href="index.html#sections" class="text-gray-300 hover:text-white hover:pl-2 transition-all block">Our sections</a></li><li><a href="agm.html" class="text-gray-300 hover:text-white hover:pl-2 transition-all block">AGM Documents</a></li><li><a href="https://www.scouts.org.uk" target="_blank" rel="noopener noreferrer" class="text-gray-300 hover:text-white hover:pl-2 transition-all block">Scouts UK</a></li></ul></div><div><h3 class="text-xl font-bold text-yellow-400 mb-4">Get in Touch</h3><div class="space-y-4"><div class="flex items-start gap-3"><span class="text-xl mt-1">📧</span><div><div class="font-semibold">General Enquiries:</div><a href="#" data-eml="info" class="text-gray-300 hover:text-white">Email us</a></div></div><div class="flex items-start gap-3"><span class="text-xl mt-1">👥</span><div><div class="font-semibold">Volunteering:</div><a href="#" data-eml="glv" class="text-gray-300 hover:text-white">Email us</a></div></div></div></div></div><div class="border-t border-gray-700 pt-8"><div class="text-center text-gray-400 text-sm"><p>© 2026 7th Swindon Scout Group. All rights reserved.</p></div></div></div></footer></div></div>
     <script src="app.js?v=20261003b"></script>
-    <script src="volunteer.js?v=20261003"></script>
+    <script src="volunteer.js?v=20261003c"></script>
   </body>
 </html>
