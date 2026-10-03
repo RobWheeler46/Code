@@ -183,9 +183,9 @@
         const res = await fetch(enquiryUrl, { method: 'POST', headers: { Accept: 'application/json' }, body: data });
         const json = await res.json().catch(() => ({}));
         if (res.ok && json.ok) { els.form.reset(); setStatus('ok', json.message || "Thanks! We will be in touch to have an informal chat."); }
-        else { setStatus('err', json.message || 'Sorry, something went wrong. Please email glv@7thswindon.org.uk instead.'); }
+        else { setStatus('err', json.message || 'Sorry, something went wrong. Please try again in a moment.'); }
       } catch (err) {
-        setStatus('err', "Sorry, we could not send that. Please email glv@7thswindon.org.uk instead.");
+        setStatus('err', "Sorry, we could not send that. Please try again in a moment.");
       } finally { btn.disabled = false; btn.textContent = label; }
     });
   }

@@ -2,6 +2,11 @@
 // (FAQ accordion, mobile nav.) Shared by index.html and agm.html, so every
 // block is guarded to no-op on pages that don't contain its markup.
 
+/* ---------- Email links (assembled at runtime so no address sits in the page source) ---------- */
+document.querySelectorAll('a[data-eml]').forEach(function (a) {
+  a.setAttribute('href', 'mailto:' + a.dataset.eml + '@7thswindon.org.uk');
+});
+
 /* ---------- Mobile navigation ---------- */
 const menuBtn = document.getElementById('mobileMenuBtn');
 const mobileMenu = document.getElementById('mobileMenu');
@@ -88,10 +93,10 @@ if (contactForm) {
         contactForm.reset();
         setStatus('ok', json.message || "Thanks! Your message has been sent, we'll be in touch soon.");
       } else {
-        setStatus('err', json.message || 'Sorry, something went wrong. Please email info@7thswindon.org.uk instead.');
+        setStatus('err', json.message || 'Sorry, something went wrong. Please try again in a moment.');
       }
     } catch (err) {
-      setStatus('err', "Sorry, we couldn't send that. Please email info@7thswindon.org.uk instead.");
+      setStatus('err', "Sorry, we couldn't send that. Please try again in a moment.");
     } finally {
       btn.disabled = false; btn.textContent = label;
     }
@@ -105,7 +110,7 @@ const faqs = [
   { q: 'Can my child join mid-year?', a: "Yes! Scouts can join at any time during the year. We operate on a rolling admissions basis through our waiting list. Once a space becomes available in your local section, we'll be in touch." },
   { q: 'What happens at the first meeting?', a: 'New members are warmly welcomed and paired with existing scouts. The first meeting usually involves games, getting to know the leaders and other young people, and an introduction to what Scouts is all about. No uniform needed for the first session!' },
   { q: 'Do you go camping?', a: 'Yes! Camping is a core part of Scouting. Beavers do sleepovers, Cubs do indoor and outdoor camps, and Scouts regularly camp outdoors. We also run district camps and annual summer camps. All camps are fully risk-assessed and led by qualified leaders.' },
-  { q: 'How can I volunteer?', a: "We're always looking for volunteers! You don't need Scouting experience - full training is provided. Roles range from helping at weekly meetings to supporting camps and activities. Time commitments are flexible. Contact glv@7thswindon.org.uk to learn more." },
+  { q: 'How can I volunteer?', a: "We're always looking for volunteers! You don't need Scouting experience - full training is provided. Roles range from helping at weekly meetings to supporting camps and activities. Time commitments are flexible. Get in touch through our contact page to learn more." },
   { q: 'Is Scouting safe?', a: 'Safety is our top priority. All adult volunteers are DBS checked, complete safeguarding training, and follow Scout Association policies. We have comprehensive risk assessments for all activities and maintain high adult-to-young person ratios.' },
   { q: 'What will my child learn?', a: 'Scouts develop skills for life including teamwork, leadership, resilience, outdoor skills, first aid, cooking, and much more. They work towards badges and awards while having fun with friends. Each section has an age-appropriate program focused on personal development.' },
   { q: 'How is 7th Swindon run?', a: "We're governed by a volunteer Trustee Board. The board includes our Group Lead Volunteer, Chair, Treasurer, Secretary, section leaders, and parent representatives. We meet regularly to ensure the group runs safely and effectively. All trustees are DBS checked and complete safeguarding training. We operate as part of The Scout Association (Registered Charity 306101)." },
