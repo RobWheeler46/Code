@@ -44,10 +44,16 @@ function osmProbeProgrammeEvents(array $actor, string $tokenSource = 'service'):
         ['label' => 'events /ext get',                    'method' => 'GET', 'path' => '/ext/events/summary/',    'query' => ['action' => 'get', 'section_id' => $sid, 'term_id' => $termId]],
         ['label' => 'events /ext getEvents',              'method' => 'GET', 'path' => '/ext/events/summary/',    'query' => ['action' => 'getEvents', 'section_id' => $sid, 'term_id' => $termId]],
         ['label' => 'events /v3 list',                    'method' => 'GET', 'path' => '/v3/events/',             'query' => ['section_id' => $sid, 'term_id' => $termId]],
+        // Waiting list = prospective members, so PII: these report field NAMES only, never
+        // values (pii flag below suppresses sampleItem). Endpoint names are unconfirmed
+        // guesses - the probe exists to find which, if any, the connection will serve.
+        ['label' => 'waitinglist /ext settings get', 'method' => 'GET',  'path' => '/ext/settings/waitinglist/',    'query' => ['action' => 'getWaitingList', 'section_id' => $sid, 'term_id' => $termId], 'pii' => true],
+        ['label' => 'waitinglist /ext members get',   'method' => 'GET',  'path' => '/ext/members/waitinglist/',      'query' => ['action' => 'get', 'section_id' => $sid, 'term_id' => $termId], 'pii' => true],
+        ['label' => 'waitinglist /ext grid POST',     'method' => 'POST', 'path' => '/ext/members/waitinglist/grid/', 'query' => ['action' => 'getMembers'], 'body' => ['section_id' => $sid, 'term_id' => $termId], 'pii' => true],
     ];
     $results = [];
     foreach ($candidates as $c) {
-        $r = osmRawData($c['method'], $token, $c['path'], $c['query'], []);
+        $r = osmRawData($c['method'], $token, $c['path'], $c['query'], $c['body'] ?? []);
         $payload = $r['payload'] ?? null;
         $firstItem = is_array($r['items'] ?? null) ? ($r['items'][0] ?? null) : null;
         $results[$c['label']] = [
@@ -56,7 +62,8 @@ function osmProbeProgrammeEvents(array $actor, string $tokenSource = 'service'):
             'itemsFound' => $r['count'],
             'payloadKeys' => (is_array($payload) && !array_is_list($payload)) ? array_slice(array_keys($payload), 0, 25) : (is_array($payload) ? ['(list)'] : []),
             'sampleItemKeys' => is_array($firstItem) ? array_slice(array_keys($firstItem), 0, 40) : [],
-            'sampleItem' => is_array($firstItem) ? array_map(fn($v) => is_scalar($v) ? $v : ('[' . gettype($v) . ']'), $firstItem) : null,
+            // PII candidates: key names only, never values (a waiting-list row is a child + parent).
+            'sampleItem' => (!empty($c['pii']) || !is_array($firstItem)) ? null : array_map(fn($v) => is_scalar($v) ? $v : ('[' . gettype($v) . ']'), $firstItem),
             'error' => $r['error'] ?? null,
         ];
     }
