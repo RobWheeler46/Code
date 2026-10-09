@@ -1,0 +1,55 @@
+:root{--purple:#7413dc;--navy:#003982;--teal:#00a794;--bg:#faf8ff;--ink:#1c1230;--line:#e3ddf0}
+*{box-sizing:border-box}
+body{margin:0;font:1rem/1.55 "Nunito Sans",system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+header{display:flex;flex-wrap:wrap;gap:.5rem 1.5rem;align-items:center;justify-content:space-between;padding:.9rem 1rem;background:var(--purple);color:#fff}
+header a,header .link{color:#fff;font-weight:700;text-decoration:none}
+.brand span{font-weight:400;opacity:.85}
+nav{display:flex;flex-wrap:wrap;gap:1rem;align-items:center}
+main{max-width:60rem;margin:0 auto;padding:1.5rem 1rem 3rem}
+footer{text-align:center;color:#5c5470;font-size:.85rem;padding:2rem 1rem}
+h1{font-size:clamp(1.8rem,5vw,2.6rem);line-height:1.1;margin:.2em 0 .5em}
+a{color:var(--purple)}
+:focus-visible{outline:3px solid var(--teal);outline-offset:2px}
+.skip{position:absolute;left:-999px}.skip:focus{left:1rem;top:1rem;background:#fff;padding:.5rem;z-index:9}
+.sr{position:absolute;left:-999px}
+.hero{background:linear-gradient(135deg,var(--purple),var(--navy));color:#fff;border-radius:16px;padding:2rem 1.5rem;margin-bottom:2rem}
+.hero a{color:#fff}
+.btn{display:inline-block;background:var(--purple);color:#fff;border:2px solid var(--purple);border-radius:999px;padding:.6rem 1.3rem;font:inherit;font-weight:800;text-decoration:none;cursor:pointer}
+.hero .btn{background:#fff;color:var(--purple);border-color:#fff}
+.btn.alt{background:#fff;color:var(--purple)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));gap:1rem}
+.tile{display:block;background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;text-decoration:none;color:var(--ink);font-weight:700}
+.tile span{display:block;padding:.7rem .9rem}
+.tile:hover,.tile:focus-visible{border-color:var(--purple)}
+.art{display:block;width:100%;height:auto}
+.stack{display:grid;gap:1rem;max-width:36rem}
+label{display:grid;gap:.3rem;font-weight:700}
+input,textarea,select{font:inherit;padding:.55rem .7rem;border:1px solid #9a90b3;border-radius:8px;width:100%}
+input[type=radio]{width:auto}
+.opt{display:flex;gap:.5rem;align-items:center;font-weight:400}
+.opt input[type=number]{width:7rem}
+fieldset{border:1px solid var(--line);border-radius:12px;padding:1rem}
+.row{display:flex;flex-wrap:wrap;gap:.6rem;align-items:end}
+.row input{width:auto}
+.two{display:grid;gap:1.5rem;grid-template-columns:1fr}
+@media(min-width:760px){.two{grid-template-columns:1fr 1.2fr}}
+.flash{padding:.7rem 1rem;border-radius:10px;background:#e7f7f4;border:1px solid var(--teal)}
+.flash.err{background:#fdecec;border-color:#b3261e}.flash.warn{background:#fff6e0;border-color:#d97706}
+table{width:100%;border-collapse:collapse;background:#fff;margin:1rem 0}
+th,td{text-align:left;padding:.5rem .6rem;border-bottom:1px solid var(--line);vertical-align:top}
+.pill{display:inline-block;padding:.1rem .6rem;border-radius:999px;background:#eee;font-size:.85rem;font-weight:700}
+.pill.viewed{background:#d9f5e3}.pill.failed{background:#fdecec}.pill.delivered{background:#e3efff}
+.inline{display:inline}
+button.link{background:none;border:0;padding:0;font:inherit;font-weight:700;color:var(--purple);cursor:pointer;text-decoration:underline}
+header button.link{color:#fff}
+.note,small{color:#5c5470}
+.center{text-align:center}
+.card{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;max-width:34rem;margin:1rem auto;box-shadow:0 8px 24px rgba(60,20,110,.15)}
+.card .inner{padding:1.2rem 1.5rem}.card h2{margin:.2em 0}.card .msg{font-size:1.1rem}.card .from{text-align:right}
+.envelope-wrap{text-align:center;padding:1rem 0}
+.envelope{position:relative;width:min(22rem,90%);height:13rem;margin:1rem auto;background:var(--purple);border-radius:8px;box-shadow:0 8px 24px rgba(60,20,110,.25)}
+.envelope .flap{position:absolute;inset:0 0 auto 0;height:7rem;background:#5a0fb0;clip-path:polygon(0 0,100% 0,50% 100%);border-radius:8px 8px 0 0}
+.envelope .to{position:absolute;bottom:1.2rem;left:0;right:0;color:#fff;font-weight:800;font-size:1.2rem}
+.reveal .card{animation:rise .9s ease-out}
+@keyframes rise{from{opacity:0;transform:translateY(40px) scale(.96)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.reveal .card{animation:none}}
