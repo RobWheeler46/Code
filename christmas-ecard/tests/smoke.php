@@ -89,5 +89,47 @@ ok((int)one('select user_id from sends where id=?', [$anon])['user_id'] === 2, '
 $_SESSION['uid'] = 2; q("update users set roles='finance,complaints' where id=2");
 ok(can('finance') && !can('delivery'), 'role check');
 
+
+// ---- v1.2
+[$rows, $errs] = parse_recipients("Gran, gran@example.com | Love you lots
+Bob, bob@example.com");
+ok($rows[0][2] === 'Love you lots' && $rows[1][2] === '' && !$errs, 'FR-058 per-recipient override parsed');
+$ov = mk_send(1, 'draft', 0, [['P', 'p@x.com'], ['Q', 'q@x.com']]); q("update recipients set own_msg='Just for P' where send_id=? and name='P'", [$ov]);
+$sv = one('select * from sends where id=?', [$ov]); $rv = all('select * from recipients where send_id=? order by id', [$ov]);
+ok(resolved_msg($rv[0], $sv) === 'Just for P' && resolved_msg($rv[1], $sv) === 'Merry!', 'override wins; shared message used otherwise');
+q("update sends set message='Changed shared' where id=?", [$ov]); $sv = one('select * from sends where id=?', [$ov]);
+ok(resolved_msg($rv[0], $sv) === 'Just for P' && resolved_msg($rv[1], $sv) === 'Changed shared', 'editing the shared greeting never replaces overrides');
+
+ok(abuse_check('See www.evil.com now') !== null && abuse_check('Visit http://x.y') !== null && abuse_check('Happy Christmas, Gran!') === null, 'FR-066 URLs rejected by default');
+set_setting('abuse_terms', 'badword, rude'); ok(abuse_check('so RUDE') !== null, 'configurable blocked terms'); set_setting('abuse_terms', '');
+ok(h('<script>alert(1)</script>') === '&lt;script&gt;alert(1)&lt;/script&gt;', 'HTML escaped');
+
+// FR-059 copy
+$sent = mk_send(1, 'draft', 0, [['K', 'k@x.com'], ['L', 'l@x.com']]); queue_send($sent); q("update sends set donation=500 where id=?", [$sent]);
+$rid = (int)one('select id from recipients where send_id=? and name=?', [$sent, 'K'])['id'];
+$cp = copy_send($sent, 1, [$rid]); $cs = one('select * from sends where id=?', [$cp]); $cr = all('select * from recipients where send_id=?', [$cp]);
+ok($cs['status'] === 'draft' && $cs['donation'] == 0 && $cs['message'] === 'Merry!' && count($cr) === 1 && $cr[0]['status'] === 'draft' && !$cr[0]['sent_at'], 'copy: unsent draft, only chosen recipient, no donation/status');
+ok($cr[0]['token'] !== one('select token from recipients where id=?', [$rid])['token'], 'copy: fresh token');
+ok(copy_send($sent, 2, [$rid]) === 0, 'copy refuses another user card');
+
+// FR-061 donation note
+$dn = mk_send(1, 'awaiting_payment', 300, [['M', 'm@x.com']]); q("update sends set donation_note=1 where id=?", [$dn]);
+ok(card_note(one('select * from sends where id=?', [$dn])) === '', 'no donation line before verified payment');
+confirm_payment($dn, 'cs_note', 300); $note = card_note(one('select * from sends where id=?', [$dn]));
+ok($note !== '' && !str_contains($note, '3') && !str_contains($note, '£'), 'donation line only after payment, no amount');
+$fr = mk_send(1, 'draft', 0, [['N', 'n@x.com']]); q("update sends set donation_note=1 where id=?", [$fr]);
+ok(card_note(one('select * from sends where id=?', [$fr])) === '', 'free card never claims a donation');
+
+// FR-060 email
+$log = file_get_contents(ROOT . '/data/outbox.log');
+ok(str_contains($log, 'via 7th Swindon Scouts') && str_contains($log, '"html":true') && !str_contains($log, '"from":"sam@'), 'branded From name on our own address, with HTML part');
+$rr = one('select * from recipients where id=?', [$rid]); ok(!str_contains(email_html($rr, $sv), 'k@x.com') && !str_contains(email_html($rr, $sv), 'l@x.com'), 'email exposes no recipient addresses');
+
+// FR-065 notifications
+q("update users set notify='viewed' where id=1"); $before = mails();
+$vr = one('select * from recipients where id=?', [$rid]); notify_view($vr, one('select * from sends where id=?', [$sent]));
+ok(mails() === $before + 1, 'viewed notification only when opted in'); q("update users set notify='off' where id=1"); notify_view($vr, one('select * from sends where id=?', [$sent]));
+ok(mails() === $before + 1, 'default off sends nothing');
+
 @unlink(env('DB_PATH'));
 exit($GLOBALS['bad'] ?? 0);

@@ -37,7 +37,7 @@ function db(): PDO {
     $p = new PDO('sqlite:' . $f, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
     $p->exec('pragma busy_timeout=5000');
     $p->exec(SCHEMA);
-    foreach (['users' => "roles text default ''", 'sends' => 'stripe_session text', 'recipients' => 'withdrawn int default 0'] as $t => $def) {
+    foreach ([['users', "roles text default ''"], ['users', "notify text default 'off'"], ['sends', 'stripe_session text'], ['sends', 'donation_note int default 0'], ['sends', 'ref text'], ['recipients', 'withdrawn int default 0'], ['recipients', 'own_msg text']] as [$t, $def]) {
         if (!in_array(explode(' ', $def)[0], array_column($p->query("pragma table_info($t)")->fetchAll(), 'name'))) $p->exec("alter table $t add column $def");
     }
     return $p;
@@ -122,16 +122,17 @@ function totp_ok(string $secret, string $code): bool {
 }
 
 // ---- email (Postmark, or data/outbox.log when no token is set)
-function mail_send(string $to, string $subject, string $text, array $meta = []): ?string {
-    $from = env('MAIL_FROM', 'cards@7thswindon.org.uk');
+function mail_send(string $to, string $subject, string $text, array $meta = [], ?string $html = null, ?string $fromName = null): ?string {
+    $from = env('MAIL_FROM', 'cards@7thswindon.org.uk'); // always our own verified address, never the sender's
+    if ($fromName) $from = '"' . trim(preg_replace('/[^\p{L}\p{N} .,\'&-]/u', '', $fromName)) . ' via 7th Swindon Scouts" <' . $from . '>';
     if (!env('POSTMARK_TOKEN')) {
-        file_put_contents(ROOT . '/data/outbox.log', json_encode(['t' => date('c'), 'to' => $to, 'subject' => $subject, 'text' => $text]) . "\n", FILE_APPEND);
+        file_put_contents(ROOT . '/data/outbox.log', json_encode(['t' => date('c'), 'to' => $to, 'from' => $from, 'subject' => $subject, 'text' => $text, 'html' => $html !== null]) . "\n", FILE_APPEND);
         return null;
     }
     $ch = curl_init('https://api.postmarkapp.com/email');
     curl_setopt_array($ch, [CURLOPT_POST => 1, CURLOPT_RETURNTRANSFER => 1, CURLOPT_TIMEOUT => 20,
         CURLOPT_HTTPHEADER => ['Accept: application/json', 'Content-Type: application/json', 'X-Postmark-Server-Token: ' . env('POSTMARK_TOKEN')],
-        CURLOPT_POSTFIELDS => json_encode(['From' => $from, 'To' => $to, 'Subject' => $subject, 'TextBody' => $text, 'MessageStream' => env('POSTMARK_STREAM', 'outbound'), 'TrackOpens' => false, 'Metadata' => $meta])]);
+        CURLOPT_POSTFIELDS => json_encode(array_filter(['From' => $from, 'To' => $to, 'Subject' => $subject, 'TextBody' => $text, 'HtmlBody' => $html, 'MessageStream' => env('POSTMARK_STREAM', 'outbound'), 'TrackOpens' => false, 'Metadata' => $meta ?: null], fn($v) => $v !== null))]);
     $r = json_decode((string)curl_exec($ch), true);
     return (($r['ErrorCode'] ?? 1) === 0) ? null : ($r['Message'] ?? 'Mail provider unreachable');
 }

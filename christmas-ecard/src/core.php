@@ -6,20 +6,47 @@ function msg_max(): int { return (int)setting('msg_max', '500'); }   // launch c
 function name_max(): int { return (int)setting('name_max', '60'); }
 function expiry_days(): int { return (int)setting('expiry_days', '60'); }
 
-/** "Name, email" or "Name <email>" per line. Returns [valid rows, error strings]. */
+/** "Name, email" or "Name <email>" per line, optionally followed by " | personal message". Returns [rows of [name, email, override], error strings]. */
 function parse_recipients(string $text): array {
     $rows = []; $errs = []; $seen = [];
     foreach (preg_split('/\R/', $text) as $line) {
-        $line = trim($line);
+        [$line, $own] = array_map('trim', explode('|', $line, 2) + [1 => '']);
         if ($line === '') continue;
         if (!preg_match('/^(.+?)\s*(?:,|<)\s*([^\s<>,]+)\s*>?$/u', $line, $m)) { $errs[] = "Could not read: $line"; continue; }
         $name = trim($m[1]); $email = strtolower($m[2]);
         if (mb_strlen($name) > 60 || !filter_var($email, FILTER_VALIDATE_EMAIL)) { $errs[] = "Invalid name or email: $line"; continue; }
         if (isset($seen[$email])) { $errs[] = "$email appears more than once in this card"; continue; }
         $seen[$email] = 1;
-        $rows[] = [$name, $email];
+        if (mb_strlen($own) > msg_max()) { $errs[] = "Personal message for $name is over " . msg_max() . ' characters'; continue; }
+        if ($own !== '' && ($bad = abuse_check($own))) { $errs[] = "Personal message for $name: $bad"; continue; }
+        $rows[] = [$name, $email, $own];
     }
     return [$rows, $errs];
+}
+
+/** Per-recipient override wins; a shared edit never touches overrides. */
+function resolved_msg(array $r, array $s): string { return trim((string)($r['own_msg'] ?? '')) !== '' ? $r['own_msg'] : $s['message']; }
+
+/** Configurable abuse rules. Text is always rendered as escaped plain text; links are never made clickable. */
+function abuse_check(string $text): ?string {
+    if (setting('allow_urls') !== '1' && preg_match('~(https?:|www\.|[a-z0-9-]+\.(com|net|org|info|xyz|ru|top)\b)~i', $text)) return 'web addresses cannot be included in a card message.';
+    foreach (array_filter(array_map('trim', explode(',', strtolower(setting('abuse_terms'))))) as $t)
+        if (str_contains(strtolower($text), $t)) return 'that wording is not allowed in a card message. Please change it and try again.';
+    return null;
+}
+
+const STARTERS = [
+    'Wishing you a very merry Christmas and a happy, healthy New Year.',
+    'Merry Christmas! Thinking of you and sending lots of love this festive season.',
+    'Have an in-tents Christmas! Hope it is full of warmth, fun and good company.',
+    'Be prepared for lots of mince pies. Merry Christmas from our family to yours!',
+    'Thank you for a wonderful year. Wishing you peace and joy at Christmas.',
+    'Even Santa needs a Scout! Hope your Christmas is full of adventure.',
+];
+
+/** Optional line on the card, only when the sender chose it and a verified payment exists. Never an amount. */
+function card_note(array $s): string {
+    return ($s['donation_note'] && one('select 1 from donations where send_id=?', [$s['id']])) ? 'This card came with a donation to 7th Swindon Scouts.' : '';
 }
 
 function rstatus(array $r): string {
@@ -91,6 +118,15 @@ function confirm_payment(int $sid, string $cs, int $amt, string $acct = ''): boo
     return true;
 }
 
+function email_html(array $r, array $s): string {
+    $e = fn($x) => htmlspecialchars((string)$x, ENT_QUOTES);
+    $btn = 'display:inline-block;background:#7413dc;color:#ffffff;font-weight:bold;text-decoration:none;padding:12px 24px;border-radius:24px';
+    return '<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#1c1230"><div style="background:#7413dc;color:#fff;padding:16px 20px;font-size:18px;font-weight:bold">7th Swindon Scouts Christmas Cards</div><div style="padding:20px">'
+        . '<p>Dear ' . $e($r['name']) . ',</p><p><strong>' . $e($s['sender_name']) . '</strong> has sent you a Christmas card.</p>'
+        . '<p><a href="' . $e(card_link($r)) . '" style="' . $btn . '">Open your card</a></p><p style="font-size:13px;color:#5c5470">Button not working? Copy this link: ' . $e(card_link($r)) . '<br>This private link works for ' . expiry_days() . ' days.</p>'
+        . '<p style="font-size:13px;color:#5c5470"><a href="' . $e(base_url() . '/optout/' . $r['token']) . '">Stop cards from this sender or from the service</a></p></div></div>';
+}
+
 function email_body(array $r, array $s): string {
     return "Dear {$r['name']},\n\n{$s['sender_name']} has sent you a Christmas card from 7th Swindon Scouts.\n\nOpen your card here:\n" . card_link($r)
         . "\n\nThis private link works for " . expiry_days() . " days.\n\nDo not want these? Stop cards from this sender or from the service:\n" . base_url() . '/optout/' . $r['token']
@@ -107,9 +143,36 @@ function process_queue(int $limit = 50): int {
         $r = one('select * from recipients where id=?', [$row['id']]);
         $s = one('select * from sends where id=?', [$r['send_id']]);
         if (opted_out($r['email'], (int)$s['user_id'])) { q("update recipients set status='cancelled', error='Recipient opted out' where id=?", [$r['id']]); continue; }
-        $err = mail_send($r['email'], "{$s['sender_name']} sent you a Christmas card", email_body($r, $s), ['rid' => (string)$r['id']]);
+        $err = mail_send($r['email'], "{$s['sender_name']} sent you a Christmas card", email_body($r, $s), ['rid' => (string)$r['id']], email_html($r, $s), $s['sender_name']);
         if ($err === null) { q("update recipients set status='sent', sent_at=?, error=null where id=?", [time(), $r['id']]); $n++; }
         else q('update recipients set status=?, error=? where id=?', [$r['tries'] >= 3 ? 'failed' : 'queued', $err, $r['id']]);
+    }
+    return $n;
+}
+
+/** FR-059: copy design, greeting and From name into a new unsent draft. Only explicitly chosen recipients come along (fresh tokens, no status). */
+function copy_send(int $fromId, int $uid, array $recipientIds): int {
+    $s = one('select * from sends where id=? and user_id=?', [$fromId, $uid]);
+    if (!$s) return 0;
+    q('insert into sends(user_id,card,sender_name,message,created,updated) values(?,?,?,?,?,?)', [$uid, $s['card'], $s['sender_name'], $s['message'], time(), time()]);
+    $new = (int)db()->lastInsertId();
+    foreach ($recipientIds as $rid) if ($r = one('select * from recipients where id=? and send_id=?', [(int)$rid, $fromId]))
+        q('insert into recipients(send_id,name,email,own_msg,token) values(?,?,?,?,?)', [$new, $r['name'], $r['email'], $r['own_msg'], token()]);
+    return $new;
+}
+
+/** FR-065: optional, off by default. Only the first qualifying view of each card notifies, and the wording does not overclaim. */
+function notify_view(array $r, array $s): void {
+    $u = one('select * from users where id=?', [$s['user_id']]);
+    if ($u && $u['notify'] === 'viewed') mail_send($u['email'], 'A card you sent was opened', "{$r['name']} opened the card from you ({$s['sender_name']}). That is a good sign it was seen, but we cannot be certain who opened it.\n\nSee all your cards, or change these emails: " . base_url() . "/dashboard\n");
+}
+/** Daily summary for users who chose it; sends nothing if nothing changed. Run from cron. */
+function send_digests(): int {
+    $n = 0;
+    foreach (all("select * from users where notify='summary'") as $u) {
+        $lines = [];
+        foreach (all('select r.* from recipients r join sends s on s.id=r.send_id where s.user_id=? and (r.sent_at>? or r.viewed_at>?)', [$u['id'], time() - 86400, time() - 86400]) as $r) $lines[] = "{$r['name']}: " . rstatus($r);
+        if ($lines) { mail_send($u['email'], 'Your Christmas card summary', "In the last day:\n" . implode("\n", $lines) . "\n\nSee details or change these emails: " . base_url() . "/dashboard\n"); $n++; }
     }
     return $n;
 }
