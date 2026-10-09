@@ -131,5 +131,13 @@ $vr = one('select * from recipients where id=?', [$rid]); notify_view($vr, one('
 ok(mails() === $before + 1, 'viewed notification only when opted in'); q("update users set notify='off' where id=1"); notify_view($vr, one('select * from sends where id=?', [$sent]));
 ok(mails() === $before + 1, 'default off sends nothing');
 
+// ---- v1.3: recovery rules
+$pc = mk_send(1, 'awaiting_payment', 500, [['R', 'r@x.com']]); $sp = one('select * from sends where id=?', [$pc]);
+ok(pay_cancel($sp) === 'cancelled' && one('select status from sends where id=?', [$pc])['status'] === 'draft', 'cancelled attempt returns to draft, nothing dispatched');
+ok(one('select status from recipients where send_id=?', [$pc])['status'] === 'draft', 'cancelled checkout is not permission to send: recipients still draft');
+back_to_draft($pc); ok(one('select status from sends where id=?', [$pc])['status'] === 'draft', 'back_to_draft is a no-op unless awaiting payment');
+confirm_payment($pc, 'cs_after_cancel', 500);
+ok(one('select status from sends where id=?', [$pc])['status'] === 'draft' && (int)one('select count(*) c from donations where stripe_session=?', ['cs_after_cancel'])['c'] === 1, 'payment landing after cancellation is recorded but never auto-sends');
+
 @unlink(env('DB_PATH'));
 exit($GLOBALS['bad'] ?? 0);

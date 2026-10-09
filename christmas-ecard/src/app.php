@@ -183,13 +183,14 @@ function r_compose(): void {
     foreach (cards() as $id => $c) if ($c['on']) $opts .= '<option value="' . h($id) . '"' . ($id === $card ? ' selected' : '') . '>' . h($c['title']) . '</option>';
     $f = true;
     $saved = $s ? '<p class="note" role="status">Draft saved at ' . date('H:i', (int)$s['updated']) . '.</p>' : '<p class="note">Not saved yet. Use Save draft to keep your work' . ($u ? '.' : ' (you will register before sending).') . '</p>';
-    page('Write your card', '<h1>Write your card</h1><div class="two"><div>' . card_art($card) . '</div><form method="post" class="stack" data-dirty-warn>' . csrf()
+    page('Write your card', steps(2) . '<h1>Write your card</h1>' . ($u ? '' : '<p class="note">You can prepare your card now. Before it is sent you will create a free account and verify your email, and your card will wait for you.</p>')
+        . '<div class="two"><div class="card preview" aria-label="Live preview">' . card_art($card) . '<div class="inner"><p class="msg" data-preview-msg>' . nl2br(h($msg)) . '</p><p class="from">With love from<br><strong data-preview-from>' . h($from) . '</strong></p></div></div><form method="post" class="stack" data-dirty-warn>' . csrf()
         . '<label>Design<select name="card">' . $opts . '</select></label>'
         . '<label>From (your name or family name)<input name="sender_name" maxlength="' . (name_max() + 20) . '" data-max="' . name_max() . '" value="' . h($from) . '"' . fa($errs, 'sender_name', $f) . '><small class="count">Up to ' . name_max() . ' characters</small>' . fe($errs, 'sender_name') . '</label>'
         . '<label>Your message<textarea name="message" rows="5" data-max="' . msg_max() . '"' . fa($errs, 'message', $f) . '>' . h($msg) . '</textarea><small class="count">Up to ' . msg_max() . ' characters</small>' . fe($errs, 'message') . '</label>'
         . '<details><summary>Need ideas? Greeting examples</summary><p class="note">Examples only. Choosing one adds it to your message, which you can then edit.</p><ul class="starters">' . implode('', array_map(fn($t) => '<li>' . h($t) . ' <button type="button" class="link" data-starter="' . h($t) . '">Use this</button></li>', STARTERS)) . '</ul></details>'
         . ($back ? '<p class="note">Sending a card back to ' . h($back['sender_name']) . ': add their email address below.</p>' : '')
-        . '<label>Recipients: one per line as <em>Name, email</em> (maximum ' . MAX_RECIPIENTS . '). To give one person a different message, add <em>| their message</em> after the email.<textarea name="recipients" rows="6" placeholder="Gran, gran@example.com&#10;Uncle Bob, bob@example.com | Hope the knee is better!"' . fa($errs, 'recipients', $f) . '>' . h($rt) . '</textarea>' . fe($errs, 'recipients') . '</label>'
+        . '<label>Recipients: one per line as <em>Name, email</em> (maximum ' . MAX_RECIPIENTS . '). To give one person a different message, add <em>| their message</em> after the email.<textarea name="recipients" rows="6" data-count-recipients placeholder="Gran, gran@example.com&#10;Uncle Bob, bob@example.com | Hope the knee is better!"' . fa($errs, 'recipients', $f) . '>' . h($rt) . '</textarea><small class="count" data-recipient-count>Up to ' . MAX_RECIPIENTS . ' recipients</small>' . fe($errs, 'recipients') . '</label>'
         . $saved . '<div class="row"><button class="btn" name="act" value="continue">Continue</button><button class="btn alt" name="act" value="preview">Preview</button><button class="btn alt" name="act" value="save">Save draft</button><button class="btn alt" name="act" value="test">Email me a test</button></div></form></div>');
 }
 
@@ -206,7 +207,31 @@ function pay_check(array $s): string {
     if (($r['payment_status'] ?? '') === 'paid') { confirm_payment((int)$s['id'], $s['stripe_session'], (int)$r['amount_total'], env('STRIPE_ACCOUNT')); return 'paid'; }
     return ($r['status'] ?? '') === 'expired' ? 'expired' : 'pending';
 }
-function pay_expire(array $s): void { if (env('STRIPE_SECRET') && $s['stripe_session']) stripe('POST', '/checkout/sessions/' . $s['stripe_session'] . '/expire'); }
+function back_to_draft(int $id): void { q("update sends set status='draft', stripe_session=null, updated=? where id=? and status='awaiting_payment'", [time(), $id]); }
+
+/** Safely ends a pending attempt. 'cancelled' only when we know no charge can complete; 'unknown' keeps everything locked. */
+function pay_cancel(array $s): string {
+    if (!env('STRIPE_SECRET') || !$s['stripe_session']) { back_to_draft((int)$s['id']); return 'cancelled'; }
+    $r = stripe('POST', '/checkout/sessions/' . $s['stripe_session'] . '/expire');
+    $now = ($r['status'] ?? '') === 'expired' ? 'expired' : pay_check($s);
+    if ($now === 'expired') { back_to_draft((int)$s['id']); return 'cancelled'; }
+    return $now === 'paid' ? 'paid' : 'unknown';
+}
+
+function steps(int $n): string {
+    $l = ['Choose a card', 'Message and recipients', 'Review and send'];
+    return '<ol class="steps" aria-label="Progress">' . implode('', array_map(fn($t, $i) => '<li' . ($i + 1 === $n ? ' aria-current="step"' : '') . '>' . ($i + 1) . '. ' . h($t) . '</li>', $l, array_keys($l))) . '</ol>';
+}
+
+/** Recovery states S08/S09: cancelled or failed checkout vs unknown (pending). */
+function r_pay_cancelled(): void { // Stripe cancel_url lands here
+    $s = own_send((int)($_GET['id'] ?? 0));
+    if ($s['status'] === 'awaiting_payment') {
+        $r = pay_cancel($s);
+        redirect($r === 'paid' ? '/send?id=' . $s['id'] . '&done=1' : '/review?id=' . $s['id'] . ($r === 'cancelled' ? '&recover=cancelled' : ''));
+    }
+    redirect('/review?id=' . $s['id']);
+}
 
 function r_review(): void {
     $u = need_login(); $s = own_send((int)($_GET['id'] ?? $_POST['id'] ?? 0));
@@ -216,57 +241,61 @@ function r_review(): void {
     $pending = $s['status'] === 'awaiting_payment';
     if (post()) {
         $do = $_POST['do'] ?? '';
-        if ($do === 'check') {
+        if ($do === 'check' && $pending) {
             $r = pay_check($s);
-            if ($r === 'expired') { q("update sends set status='draft', stripe_session=null where id=?", [$id]); flash('That payment attempt expired. Nothing was charged. You can try again or send for free.'); }
-            else flash($r === 'paid' ? 'Payment confirmed. Your cards are queued for sending.' : 'Your payment is still being confirmed. Please do not pay again yet.', $r === 'paid' ? 'ok' : 'warn');
-            redirect($r === 'paid' ? "/send?id=$id" : "/review?id=$id");
+            if ($r === 'expired') { back_to_draft($id); redirect("/review?id=$id&recover=failed"); }
+            if ($r === 'paid') { flash('Payment confirmed.'); redirect("/send?id=$id&done=1"); }
+            flash('Your payment is still being confirmed. Please do not pay again yet.', 'warn'); redirect("/review?id=$id");
         }
-        if ($do === 'cancel_pay') {
-            if ($pending && pay_check($s) === 'paid') { flash('Your payment had actually gone through. Your cards are queued.'); redirect("/send?id=$id"); }
-            pay_expire($s);
-            q("update sends set status='draft', stripe_session=null where id=? and status='awaiting_payment'", [$id]); flash('Payment attempt cancelled. Nothing was charged.'); redirect("/review?id=$id");
+        if ($do === 'cancel_pay' && $pending) {
+            $r = pay_cancel($s);
+            if ($r === 'paid') { flash('Your payment had in fact gone through.'); redirect("/send?id=$id&done=1"); }
+            if ($r === 'unknown') { flash('We could not safely cancel that payment yet, so nothing has changed. Please check again in a few minutes.', 'warn'); redirect("/review?id=$id"); }
+            redirect("/review?id=$id&recover=cancelled");
         }
         if (!$u['verified']) { flash('Please verify your email before sending.', 'warn'); redirect("/review?id=$id"); }
         if (campaign_state() !== 'open') { flash('Card sending is not open right now, so your card cannot be submitted. Your draft is saved.', 'warn'); redirect("/review?id=$id"); }
         if (!$rs || count($rs) > MAX_RECIPIENTS || $s['message'] === '') { flash('Your card needs a message and 1 to ' . MAX_RECIPIENTS . ' recipients.', 'err'); redirect("/compose?id=$id"); }
+        if ($pending) { flash('You have a payment waiting. Check its status or cancel it first. Cards are not sent until that is resolved.', 'warn'); redirect("/review?id=$id"); }
         if (repeats_for($s) && empty($_POST['repeat_ok'])) { flash('Some recipients already have a card from you. Tick the box to send again on purpose.', 'err'); redirect("/review?id=$id"); }
-        if ($do === 'free') { pay_expire($s); queue_send($id); flash('Cards are queued for sending. Their status will update below as they go out.'); redirect("/send?id=$id"); }
-        if ($pending) { flash('You already have a payment waiting. Check its status or cancel it first.', 'warn'); redirect("/review?id=$id"); }
+        if ($do === 'free') { queue_send($id); flash('Cards are queued for sending.'); redirect("/send?id=$id&done=1"); }
         $pick = (string)($_POST['amount'] ?? '');
         $pence = $pick === 'custom' ? (int)round((float)($_POST['custom'] ?? 0) * 100) : (int)$pick;
-        if ($pence < 100 || $pence > 50000) { flash('Donations are between £1 and £500. Or choose "Continue without donating".', 'err'); redirect("/review?id=$id"); }
-        q("update sends set donation=?, donation_note=?, status='awaiting_payment', updated=? where id=? and status='draft'", [$pence, empty($_POST['donation_note']) ? 0 : 1, time(), $id]);
+        if ($pence < 100 || $pence > 50000) { flash('Choose a donation amount between £1 and £500, or choose "Send cards for free".', 'err'); redirect("/review?id=$id"); }
+        // one submission intent: only the request that wins this update may start a checkout
+        if (!q("update sends set donation=?, donation_note=?, status='awaiting_payment', updated=? where id=? and status='draft'", [$pence, empty($_POST['donation_note']) ? 0 : 1, time(), $id])->rowCount()) redirect("/review?id=$id");
         if (!env('STRIPE_SECRET')) redirect('/dev/pay?id=' . $id);
         $r = stripe('POST', '/checkout/sessions', [
             'mode' => 'payment', 'client_reference_id' => $id, 'metadata' => ['send_id' => $id],
-            'success_url' => base_url() . '/return?id=' . $id . '&cs={CHECKOUT_SESSION_ID}', 'cancel_url' => base_url() . '/review?id=' . $id,
+            'success_url' => base_url() . '/return?id=' . $id . '&cs={CHECKOUT_SESSION_ID}', 'cancel_url' => base_url() . '/pay-cancelled?id=' . $id,
             'line_items' => [['quantity' => 1, 'price_data' => ['currency' => 'gbp', 'unit_amount' => $pence, 'product_data' => ['name' => 'Donation to 7th Swindon Scouts']]]],
         ], "ecard-$id-$pence-" . intdiv(time(), 300));
-        if (empty($r['url'])) { q("update sends set status='draft' where id=?", [$id]); flash('Payment could not be started. Nothing was charged. You can try again or continue without donating.', 'err'); redirect("/review?id=$id"); }
+        if (empty($r['url'])) { back_to_draft($id); redirect("/review?id=$id&recover=failed"); }
         q('update sends set stripe_session=? where id=?', [$r['id'], $id]);
         redirect($r['url']);
     }
-    $list = implode('', array_map(fn($r) => '<li>' . h($r['name']) . ' (' . h($r['email']) . ')' . (trim((string)$r['own_msg']) !== '' ? ' <span class="pill">Personal message</span>: ' . h($r['own_msg']) : '') . '</li>', $rs));
+    $list = implode('', array_map(fn($r) => '<li><strong>' . h($r['name']) . '</strong> (' . h($r['email']) . ')' . (trim((string)$r['own_msg']) !== '' ? ' <span class="pill">Personal message</span>' : '') . '<blockquote>' . nl2br(h(resolved_msg($r, $s))) . '</blockquote></li>', $rs));
     $state = campaign_state();
-    $b = '<h1>Review and send</h1>';
+    $b = steps(3) . '<h1>Review and send</h1>';
     if (!$u['verified']) $b .= '<p class="flash warn">Verify your email (see the link we sent) before you can send. <form method="post" action="/resend-verification" class="inline">' . csrf() . '<button class="link">Send it again</button></form></p>';
     if ($state !== 'open') $b .= '<p class="flash warn">Card sending is ' . ($state === 'before' ? 'not open yet' : 'closed') . ', so you cannot submit this card. Your draft is saved.</p>';
     if (setting('paused') === '1') $b .= '<p class="note">Sending is briefly paused. Cards you submit will be queued and go out when it resumes.</p>';
-    $b .= card_view($s['card'], $rs[0]['name'] ?? 'Friend', $rs ? resolved_msg($rs[0], $s) : $s['message'], $s['sender_name']) . '<h2>Sending to ' . count($rs) . ' ' . (count($rs) === 1 ? 'person' : 'people') . '</h2><p class="note">The card above shows the first recipient. Anyone with a personal message is marked below; everyone else gets the shared message.</p><ul>' . $list . '</ul><p><a href="/compose?id=' . $id . '">Edit card or recipients</a></p>';
+    $b .= card_view($s['card'], $rs[0]['name'] ?? 'Friend', $rs ? resolved_msg($rs[0], $s) : $s['message'], $s['sender_name']) . '<h2>Sending to ' . count($rs) . ' ' . (count($rs) === 1 ? 'person' : 'people') . '</h2><p class="note">From: ' . h($s['sender_name']) . '. Each person sees the greeting shown here for them.</p><ul class="rlist">' . $list . '</ul><p><a href="/compose?id=' . $id . '">Edit card, message or recipients</a></p>';
     $rep = repeats_for($s);
     $form = '<form method="post" class="stack">' . csrf() . '<input type="hidden" name="id" value="' . $id . '">';
     if ($rep) $form .= '<p class="flash warn">You have already sent a card to: ' . h(implode(', ', $rep)) . '.</p><label class="opt"><input type="checkbox" name="repeat_ok" value="1"> Send to them again on purpose</label>';
-    if ($pending) {
-        $form .= '<p class="flash warn" role="status"><strong>Your donation of ' . gbp((int)$s['donation']) . ' is waiting for payment confirmation.</strong> Your cards are not sent yet and you have not been charged twice. If you closed the payment page, check the status or cancel it before trying again.</p>'
-            . ($s['stripe_session'] || env('STRIPE_SECRET') ? '' : '<p><a href="/dev/pay?id=' . $id . '">Go to the test payment page</a></p>')
-            . '<div class="row"><button class="btn alt" name="do" value="check">Check payment status</button><button class="btn alt" name="do" value="cancel_pay">Cancel this payment and choose again</button><button class="btn" name="do" value="free">Continue without donating</button></div>';
+    if ($pending) { // S09: outcome unknown, so no second charge and no free bypass until this attempt is resolved
+        $form .= '<p class="flash warn" role="status"><strong>Your donation of ' . gbp((int)$s['donation']) . ' is waiting for payment confirmation.</strong> We do not yet know whether it went through, so your cards are not sent and you cannot pay again or switch to free until this is resolved.</p>'
+            . (env('STRIPE_SECRET') ? '' : '<p><a href="/dev/pay?id=' . $id . '">Go to the test payment page</a></p>')
+            . '<div class="row"><button class="btn" name="do" value="check">Check payment status</button><button class="btn alt" name="do" value="cancel_pay">Cancel this payment attempt</button></div><p class="note">Need help? <a href="/help">Help and FAQ</a> or email ' . h(support_email()) . ' with reference C-' . $id . '.</p>';
     } else {
-        $form .= '<fieldset><legend>Optional donation to 7th Swindon Scouts</legend><p>' . h(setting('donation_purpose', 'Donations support 7th Swindon Scouts.')) . ' One donation covers all ' . count($rs) . ' of your cards.</p>';
-        $form .= '<label class="opt"><input type="checkbox" name="donation_note" value="1"> Add a line to the cards saying they came with a donation to 7th Swindon Scouts (no amount is shown; only after payment is confirmed)</label>';
-        foreach ([200, 500, 1000] as $i => $a) $form .= '<label class="opt"><input type="radio" name="amount" value="' . $a . '"' . ($a === 500 ? ' checked' : '') . '> ' . gbp($a) . '</label>';
-        $form .= '<label class="opt"><input type="radio" name="amount" value="custom"> Other amount (£) <input type="number" name="custom" min="1" max="500" step="0.01" aria-label="Custom amount in pounds"></label></fieldset>'
-            . '<div class="row"><button class="btn" name="do" value="donate">Donate and send</button><button class="btn" name="do" value="free">Continue without donating</button></div>';
+        $rec = $_GET['recover'] ?? '';
+        if ($rec === 'cancelled' || $rec === 'failed') $form .= '<p class="flash warn" role="status"><strong>' . ($rec === 'cancelled' ? 'Payment was cancelled.' : 'Payment did not go through.') . '</strong> Nothing was charged and your card and recipients are safe. You can try again, or choose to send for free. Cards are only sent when you press a send button below.</p>';
+        $form .= '<fieldset><legend>Optional donation to 7th Swindon Scouts</legend><p>' . h(setting('donation_purpose', 'Donations support 7th Swindon Scouts.')) . ' One donation covers all ' . count($rs) . ' of your cards. Sending is free either way.</p>';
+        foreach ([200, 500, 1000] as $a) $form .= '<label class="opt"><input type="radio" name="amount" value="' . $a . '"> ' . gbp($a) . '</label>';
+        $form .= '<label class="opt"><input type="radio" name="amount" value="custom"> Other amount (£) <input type="number" name="custom" min="1" max="500" step="0.01" aria-label="Custom amount in pounds"></label>'
+            . '<label class="opt"><input type="checkbox" name="donation_note" value="1"> Add a line to the cards saying they came with a donation to 7th Swindon Scouts (no amount is shown; only after payment is confirmed)</label></fieldset>'
+            . '<div class="row"><button class="btn" name="do" value="donate">Donate and send cards</button><button class="btn" name="do" value="free">Send cards for free</button></div>';
     }
     page('Review and send', $b . $form . '</form>');
 }
@@ -280,7 +309,7 @@ function r_return(): void {
             confirm_payment((int)$s['id'], $cs, (int)$r['amount_total'], env('STRIPE_ACCOUNT'));
     }
     flash('Thank you. If your payment is confirmed your cards are queued; otherwise we will keep checking.');
-    redirect(one('select status from sends where id=?', [$s['id']])['status'] === 'awaiting_payment' ? '/review?id=' . $s['id'] : '/send?id=' . $s['id']);
+    redirect(one('select status from sends where id=?', [$s['id']])['status'] === 'awaiting_payment' ? '/review?id=' . $s['id'] : '/send?id=' . $s['id'] . '&done=1');
 }
 
 function r_dev_pay(): void { // local stand-in for Stripe when STRIPE_SECRET is unset
@@ -289,8 +318,8 @@ function r_dev_pay(): void { // local stand-in for Stripe when STRIPE_SECRET is 
     if (post()) {
         $r = $_POST['result'] ?? '';
         if ($r === 'pay') confirm_payment((int)$s['id'], 'dev_' . token(), (int)$s['donation']);
-        elseif ($r === 'fail') q("update sends set status='draft' where id=? and status='awaiting_payment'", [$s['id']]);
-        redirect($r === 'pay' ? '/send?id=' . $s['id'] : '/review?id=' . $s['id']); // 'later' leaves it pending
+        elseif ($r === 'fail') back_to_draft((int)$s['id']);
+        redirect($r === 'pay' ? '/send?id=' . $s['id'] . '&done=1' : '/review?id=' . $s['id'] . ($r === 'fail' ? '&recover=failed' : '')); // 'later' leaves it pending
     }
     page('Test payment', '<h1>Test payment ' . gbp((int)$s['donation']) . '</h1><p>Stripe is not configured, so this simulates the payment page.</p><form method="post" class="row">' . csrf() . '<input type="hidden" name="id" value="' . $s['id'] . '"><button class="btn" name="result" value="pay">Simulate successful payment</button><button class="btn alt" name="result" value="fail">Simulate failure</button><button class="btn alt" name="result" value="later">Close the window (stays pending)</button></form>');
 }
@@ -321,7 +350,7 @@ function r_postmark_hook(): void {
 // ---------- sender dashboard
 function r_dashboard(): void {
     $u = need_login();
-    $b = '<h1>My cards</h1>' . ($u['verified'] ? '' : '<p class="flash warn">Please verify your email: click the link we sent to ' . h($u['email']) . '. You need this before sending. <form method="post" action="/resend-verification" class="inline">' . csrf() . '<button class="link">Send it again</button></form></p>') . '<p><a class="btn" href="/">Create a new card</a></p>'
+    $b = '<h1>My cards</h1>' . ($u['verified'] ? '' : '<p class="flash warn">Please verify your email: click the link we sent to ' . h($u['email']) . '. You need this before sending. <form method="post" action="/resend-verification" class="inline">' . csrf() . '<button class="link">Send it again</button></form><details><summary>Wrong email address?</summary><form method="post" action="/change-email" class="row">' . csrf() . '<label>Correct email<input type="email" name="email" required></label><button class="btn alt">Change and resend</button></form></details></p>') . '<p><a class="btn" href="/">Create a new card</a></p>'
         . '<form method="post" action="/prefs" class="row">' . csrf() . '<label>Optional status emails<select name="notify">' . implode('', array_map(fn($k, $l) => '<option value="' . $k . '"' . ($u['notify'] === $k ? ' selected' : '') . '>' . $l . '</option>', ['off', 'viewed', 'summary'], ['Off (default)', 'Email me when a card is opened', 'One daily summary'])) . '</select></label><button class="btn alt">Save</button></form>';
     $rows = '';
     foreach (all('select * from sends where user_id=? order by id desc', [$u['id']]) as $s) {
@@ -329,7 +358,7 @@ function r_dashboard(): void {
         foreach (all('select * from recipients where send_id=?', [$s['id']]) as $r) { $k = rstatus($r); $c[$k] = ($c[$k] ?? 0) + 1; }
         $sum = implode(', ', array_map(fn($k, $v) => "$v $k", array_keys($c), $c));
         $link = $s['status'] === 'draft' ? "/compose?id={$s['id']}" : ($s['status'] === 'awaiting_payment' ? "/review?id={$s['id']}" : "/send?id={$s['id']}");
-        $rows .= '<tr><td>' . date('j M Y', (int)$s['created']) . '</td><td><a href="' . $link . '">' . h(cards()[$s['card']]['title'] ?? $s['card']) . '</a>' . ($s['status'] === 'draft' ? '' : ' <a href="/copy?id=' . $s['id'] . '">Copy as new draft</a>') . '</td><td>' . h(ucfirst(str_replace('_', ' ', $s['status']))) . '</td><td>' . h($sum) . '</td><td>' . h(donation_state($s) === 'No donation' ? '' : donation_state($s)) . '</td></tr>';
+        $rows .= '<tr><td>' . date('j M Y', (int)$s['created']) . '</td><td><a href="' . $link . '">' . h(cards()[$s['card']]['title'] ?? $s['card']) . '</a>' . ($s['status'] === 'draft' ? ' <form method="post" action="/discard" class="inline">' . csrf() . '<input type="hidden" name="id" value="' . $s['id'] . '"><button class="link">Discard draft</button></form>' : ' <a href="/copy?id=' . $s['id'] . '">Copy as new draft</a>') . '</td><td>' . h(ucfirst(str_replace('_', ' ', $s['status']))) . '</td><td>' . h($sum) . '</td><td>' . h(donation_state($s) === 'No donation' ? '' : donation_state($s)) . '</td></tr>';
     }
     $b .= $rows ? '<table><caption class="sr">Your cards</caption><tr><th>Date</th><th>Card</th><th>State</th><th>Recipients</th><th>Donation</th></tr>' . $rows . '</table>' : '<p>No cards yet.</p>';
     $d = all('select * from donations where user_id=? order by id desc', [$u['id']]);
@@ -368,7 +397,8 @@ function r_send(): void {
         $rows .= '<tr><td>' . h($r['name']) . '</td><td>' . h($r['email']) . '</td><td><span class="pill ' . strtolower(str_replace(' ', '-', $st)) . '">' . $st . '</span></td><td>' . $act . '</td></tr>';
     }
     $legend = '<details><summary>What do the statuses mean?</summary><ul>' . implode('', array_map(fn($k, $v) => '<li><strong>' . h($k) . ':</strong> ' . h($v) . '</li>', array_keys(STATUS_HELP), STATUS_HELP)) . '</ul></details>';
-    page('Card status', '<h1>' . h(cards()[$s['card']]['title']) . '</h1><p><strong>Cards:</strong> ' . h(ucfirst(str_replace('_', ' ', $s['status']))) . '. <strong>Donation:</strong> ' . h(donation_state($s)) . '.</p>'
+    $done = empty($_GET['done']) ? '' : '<section class="flash" role="status"><h2>Your cards are queued for sending</h2><p>Queued means accepted and waiting to go out. It does not mean delivered. Each status updates below as cards go out.</p><p><strong>Donation:</strong> ' . h(donation_state($s)) . ($s['donation'] && !one('select 1 from donations where send_id=?', [$s['id']]) ? ' (we will show it here once payment is confirmed)' : '') . '</p><p><a href="/dashboard">Go to my cards</a></p></section>';
+    page('Card status', $done . '<h1>' . h(cards()[$s['card']]['title']) . '</h1><p><strong>Cards:</strong> ' . h(ucfirst(str_replace('_', ' ', $s['status']))) . '. <strong>Donation:</strong> ' . h(donation_state($s)) . '.</p>'
         . ($queued ? '<form method="post">' . csrf() . '<input type="hidden" name="id" value="' . $sid . '"><button class="btn alt" name="do" value="cancel_all">Cancel unsent cards</button></form>' : '')
         . '<table><tr><th>Name</th><th>Email</th><th>Status</th><th></th></tr>' . $rows . '</table>' . $legend . '<p class="note">"Viewed" means the recipient opened the card themselves. Cancelled and withdrawn cards do not refund a donation.</p>');
 }
@@ -431,12 +461,28 @@ function adminbtn(string $do, int $id, string $label): string {
 }
 function set_int(string $k, string $v, int $min, int $max): void { if (ctype_digit($v) && (int)$v >= $min && (int)$v <= $max) set_setting($k, $v); }
 
+/** FR-080: high-impact changes name the records they affect and need a second, deliberate click. */
+function confirm_page(string $a, int $i): never {
+    $rep = in_array($a, ['block', 'withdraw']) ? one('select r.id, x.email from reports r join recipients x on x.id=r.recipient_id where r.id=?', [$i]) : null;
+    $what = match ($a) {
+        'pause' => setting('paused') === '1' ? 'Resume all card sending. Queued cards will start going out.' : 'Pause all card dispatch. Nothing new will be sent until you resume. Queued cards stay queued.',
+        'block' => 'Stop every future card to ' . ($rep['email'] ?? 'this recipient') . ' from every sender (report #' . $i . '). Cards already sent stay viewable.',
+        'withdraw' => 'Withdraw the card sent to ' . ($rep['email'] ?? 'this recipient') . ' (report #' . $i . '). Their link will stop working. This does not refund any donation.',
+        'roles' => 'Change roles for ' . strtolower(trim((string)($_POST['email'] ?? ''))) . ' to: ' . (implode(', ', array_map(fn($r) => ROLES[$r] ?? $r, (array)($_POST['roles'] ?? []))) ?: 'no roles (removes admin access)') . '.',
+        default => 'Confirm this change.',
+    };
+    $hid = '';
+    foreach ($_POST as $k => $v) if ($k !== '_c' && $k !== 'confirmed') foreach ((array)$v as $x) $hid .= '<input type="hidden" name="' . h($k) . (is_array($v) ? '[]' : '') . '" value="' . h((string)$x) . '">';
+    page('Confirm change', '<h1>Please confirm</h1><p>' . h($what) . '</p><p>This will be recorded in the audit trail.</p><form method="post" class="row">' . csrf() . $hid . '<input type="hidden" name="confirmed" value="1"><button class="btn">Yes, do it</button><a class="btn alt" href="/admin">Cancel</a></form>');
+}
+
 function admin_post(array $u): void {
     $a = (string)($_POST['do'] ?? ''); $i = (int)($_POST['id'] ?? 0); $uid = (int)$u['id'];
     $need = ['pause' => 'delivery', 'resend' => 'delivery', 'money' => 'finance', 'target' => 'campaign', 'design' => 'campaign', 'settings' => 'campaign',
              'dismiss' => 'complaints', 'block' => 'complaints', 'withdraw' => 'complaints', 'roles' => 'rolesadmin'];
     if (!isset($need[$a])) fail(400, 'Unknown action.');
     if (!can($need[$a]) && !($a === 'pause' && can('campaign'))) fail(403, 'You do not have permission for that.');
+    if (in_array($a, ['pause', 'block', 'withdraw', 'roles']) && empty($_POST['confirmed'])) confirm_page($a, $i);
     switch ($a) {
         case 'pause': set_setting('paused', setting('paused') === '1' ? '0' : '1'); audit($uid, 'pause_toggle', setting('paused')); break;
         case 'resend':
@@ -492,13 +538,13 @@ function r_admin(): void {
             . '<form method="post" class="inline">' . csrf() . '<input type="hidden" name="do" value="pause"><button class="link">' . (setting('paused') === '1' ? 'Resume' : 'Pause') . '</button></form>. Cron: <code>php src/cli.php queue</code> every 5 minutes.</p><table><tr><th>Recipient</th><th>Status</th><th>Error</th><th></th></tr>';
         foreach (all("select * from recipients where status in ('failed','bounced','sending') order by id desc limit 50") as $r)
             $b .= '<tr><td>' . h($r['email']) . '</td><td>' . rstatus($r) . '</td><td>' . h($r['error']) . '</td><td>' . adminbtn('resend', (int)$r['id'], 'Resend') . '</td></tr>';
-        $b .= '</table>';
+        $b .= '</table>' . (str_ends_with($b, '</th></tr>') ? '<p class="note">No delivery exceptions. Nothing needs attention.</p>' : '');
     }
     if (can('finance')) {
         $b .= '<h2>Payments</h2><p><a href="/admin/export">Export finance CSV</a></p><table><tr><th>Date</th><th>Amount</th><th>Reference</th><th>Fee / refunded (£)</th></tr>';
         foreach (all('select * from donations order by id desc limit 100') as $x)
             $b .= '<tr><td>' . date('j M Y', (int)$x['created']) . '</td><td>' . gbp((int)$x['pence']) . '</td><td>' . h($x['stripe_session']) . '</td><td><form method="post" class="row">' . csrf() . '<input type="hidden" name="do" value="money"><input type="hidden" name="id" value="' . $x['id'] . '"><input name="fee" size="5" value="' . number_format($x['fee'] / 100, 2, '.', '') . '" aria-label="Fee"><input name="refunded" size="5" value="' . number_format($x['refunded'] / 100, 2, '.', '') . '" aria-label="Refunded"><button class="btn alt">Save</button></form></td></tr>';
-        $b .= '</table><p>Unpaid or mismatched:</p><ul>';
+        $b .= '</table>' . (str_ends_with($b, '</th></tr>') ? '<p class="note">No confirmed donations yet.</p>' : ''); $b .= '<p>Unpaid or mismatched:</p><ul>';
         foreach (all("select id, donation, updated from sends where status='awaiting_payment' and updated<? order by id desc", [time() - 3600]) as $x) $b .= '<li>Card #' . $x['id'] . ' awaiting payment of ' . gbp((int)$x['donation']) . ' since ' . when((int)$x['updated']) . '</li>';
         foreach (all("select * from audit where action='payment_mismatch' order by id desc limit 10") as $x) $b .= '<li>Mismatch: ' . h($x['detail']) . '</li>';
         $b .= '</ul>';
@@ -507,7 +553,7 @@ function r_admin(): void {
         $b .= '<h2>Reports</h2><table><tr><th>Recipient</th><th>Reason</th><th>Status</th><th></th></tr>';
         foreach (all('select r.*, x.email from reports r join recipients x on x.id=r.recipient_id order by r.id desc limit 50') as $x)
             $b .= '<tr><td>' . h($x['email']) . '</td><td>' . h($x['reason']) . '</td><td>' . h($x['status'] === 'open' ? 'Open' : $x['decision']) . '</td><td><a href="/admin/message?report=' . $x['id'] . '">View card</a> ' . ($x['status'] === 'open' ? adminbtn('dismiss', (int)$x['id'], 'Dismiss') . adminbtn('block', (int)$x['id'], 'Block recipient') . adminbtn('withdraw', (int)$x['id'], 'Withdraw card') : '') . '</td></tr>';
-        $b .= '</table>';
+        $b .= '</table>' . (str_ends_with($b, '</th></tr>') ? '<p class="note">No reports. Nothing needs a decision.</p>' : '');
     }
     if (can('campaign')) {
         $tgt = (int)setting('target_pence'); $pub = base_url() . '/';
@@ -551,6 +597,7 @@ function r_export(): void {
     if (!isset($_GET['go'])) page('Export finance CSV', '<h1>Export finance CSV</h1><form method="get" class="stack"><input type="hidden" name="go" value="1"><label>From<input type="date" name="from"></label><label>To<input type="date" name="to"></label><label class="opt"><input type="checkbox" name="donors" value="1"> Include donor name and email (only if needed)</label><button class="btn">Download</button></form>');
     $donors = !empty($_GET['donors']);
     $rows = all('select d.*, u.name, u.email from donations d left join users u on u.id=d.user_id where d.created>=? and d.created<? order by d.id', [strtotime($from), strtotime($to) + 86400]);
+    if (!$rows) page('No records', '<h1>No finance records in that range</h1><p>There are no confirmed donations between those dates. Try a wider range.</p><p><a class="btn" href="/admin/export">Choose dates again</a></p>');
     audit((int)$u['id'], 'finance_export', "$from to $to, " . count($rows) . ' rows' . ($donors ? ', with donors' : ''));
     header('Content-Type: text/csv; charset=utf-8'); header('Content-Disposition: attachment; filename="donations-' . date('Ymd') . '.csv"');
     $o = fopen('php://output', 'w');
@@ -594,9 +641,31 @@ function r_copy(): void {
     page('Copy card', '<h1>Copy this card</h1><p>The design, message and From name are copied to a new draft. Nothing is sent until you review and submit it. Tick anyone you want to send to again.</p><form method="post" class="stack">' . csrf() . '<input type="hidden" name="id" value="' . $s['id'] . '"><fieldset><legend>Recipients to copy</legend>' . ($rows ?: '<p>None.</p>') . '</fieldset><button class="btn">Create draft</button></form>');
 }
 
+function r_discard(): void {
+    $u = need_login();
+    if (post()) {
+        $s = own_send((int)($_POST['id'] ?? 0));
+        if ($s['status'] === 'draft') { q('delete from recipients where send_id=?', [$s['id']]); q('delete from sends where id=?', [$s['id']]); audit((int)$u['id'], 'draft_discard', 'send ' . $s['id']); flash('Draft discarded.'); }
+    }
+    redirect('/dashboard');
+}
+
+function r_change_email(): void { // wrong-address correction before verification
+    $u = need_login();
+    if (post() && !$u['verified']) {
+        limit('chgmail', 5, 3600);
+        $e = strtolower(field('email'));
+        if (!filter_var($e, FILTER_VALIDATE_EMAIL) || one('select 1 from users where email=? and id<>?', [$e, $u['id']])) { flash('That email cannot be used. Check it and try again.', 'err'); redirect('/dashboard'); }
+        $t = token(); q('update users set email=?, verify_token=? where id=?', [$e, $t, $u['id']]);
+        mail_send($e, 'Confirm your email', "Please confirm your email address. We will take you back to your saved card.\n" . base_url() . "/verify?t=$t\n");
+        flash('Email changed to ' . $e . '. We have sent a new verification link there.');
+    }
+    redirect('/dashboard');
+}
+
 function dispatch(string $path): void {
     $routes = ['/' => 'r_home', '/help' => 'r_help', '/register' => 'r_register', '/verify' => 'r_verify', '/resend-verification' => 'r_resend_verify', '/login' => 'r_login', '/logout' => 'r_logout', '/forgot' => 'r_forgot', '/reset' => 'r_reset',
-        '/compose' => 'r_compose', '/preview' => 'r_preview', '/review' => 'r_review', '/return' => 'r_return', '/dev/pay' => 'r_dev_pay', '/dashboard' => 'r_dashboard', '/send' => 'r_send', '/prefs' => 'r_prefs', '/copy' => 'r_copy',
+        '/compose' => 'r_compose', '/preview' => 'r_preview', '/review' => 'r_review', '/pay-cancelled' => 'r_pay_cancelled', '/return' => 'r_return', '/dev/pay' => 'r_dev_pay', '/dashboard' => 'r_dashboard', '/send' => 'r_send', '/prefs' => 'r_prefs', '/discard' => 'r_discard', '/change-email' => 'r_change_email', '/copy' => 'r_copy',
         '/mfa' => 'r_mfa', '/admin' => 'r_admin', '/admin/export' => 'r_export', '/admin/message' => 'r_message', '/hooks/stripe' => 'r_stripe_hook', '/hooks/postmark' => 'r_postmark_hook'];
     if (post() && !str_starts_with($path, '/hooks/')) check_csrf();
     if (preg_match('#^/c/([a-f0-9]+)(?:/(open|report))?$#', $path, $m)) r_card($m[1], $m[2] ?? '');

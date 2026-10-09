@@ -1,6 +1,6 @@
 # 7th Swindon Christmas E-Cards
 
-MVP of the Christmas E-Card FRD v1.2 (launch items) (9 Oct 2026). PHP 8.2+, SQLite, no dependencies.
+MVP of the Christmas E-Card FRD v1.3 (launch items) (9 Oct 2026). PHP 8.2+, SQLite, no dependencies.
 
     php -S localhost:8060 -t public public/index.php    # run locally
     php tests/smoke.php                                  # core-logic checks
@@ -16,6 +16,9 @@ With no keys in `.env` (copy `.env.example`): emails go to `data/outbox.log` and
 - Stripe webhook: `/hooks/stripe` (`checkout.session.completed`; Connect webhook if using a connected account).
 - Postmark webhook: `/hooks/postmark?k=<POSTMARK_HOOK_KEY>` (Delivery, Bounce, SpamComplaint, Open).
 - Point the web root at `public/`; keep `data/` and `.env` outside `public_html` on cPanel.
+
+## Payment recovery rules (FR-077 to FR-079)
+One submission intent: "Send cards for free" queues once; "Donate and send cards" parks the same card as awaiting payment and verified payment resolves it, with no second send step. Cancelled or failed checkout returns to a recovery panel (retry or deliberate free send). An unknown outcome shows a pending panel that blocks both a second charge and the free bypass until Check status or Cancel attempt resolves it safely. A payment that lands after cancellation is recorded but never dispatches cards.
 
 ## Roles and launch decisions
 Roles: finance, delivery, campaign, complaints, role administrator (assigned in Admin > Roles, audited). Launch values the FRD says must be agreed, not guessed (campaign dates, queue handling at closure, expiry, retention, message limits, donation purpose wording) are in Admin > Campaign settings; current defaults are placeholders. Set `SUPPORT_EMAIL` for the Help page.

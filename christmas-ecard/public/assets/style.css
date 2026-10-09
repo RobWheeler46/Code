@@ -58,3 +58,8 @@ header button.link{color:#fff}
 .pill.cancelled,.pill.delivery-unconfirmed{background:#fff6e0}
 details{margin:.6rem 0}summary{cursor:pointer;font-weight:700}
 .progress{font-size:1.1rem}
+.steps{display:flex;flex-wrap:wrap;gap:.5rem 1rem;list-style:none;padding:0;margin:0 0 1rem;font-weight:700;color:#5c5470}
+.steps [aria-current=step]{color:var(--purple);border-bottom:3px solid var(--purple)}
+blockquote{margin:.3rem 0 .8rem;padding:.4rem .8rem;border-left:4px solid var(--line);background:#fff}
+.rlist{padding-left:1.1rem}
+.preview{margin:0}.preview .inner{padding:1rem 1.2rem}
