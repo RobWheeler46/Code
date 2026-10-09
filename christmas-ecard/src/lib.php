@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 const ROOT = __DIR__ . '/..';
+date_default_timezone_set('Europe/London'); // campaign dates and displayed times are UK local
 
 function env(string $k, string $d = ''): string {
     static $e;
@@ -22,7 +23,7 @@ create table if not exists sends(id integer primary key autoincrement, user_id i
 create table if not exists recipients(id integer primary key autoincrement, send_id int, name text, email text, token text unique, status text default 'draft', error text, tries int default 0, sent_at int, delivered_at int, opened_at int, viewed_at int);
 create table if not exists donations(id integer primary key autoincrement, send_id int, user_id int, pence int, stripe_session text unique, account text, fee int default 0, refunded int default 0, created int);
 create table if not exists reports(id integer primary key autoincrement, recipient_id int, reason text, status text default 'open', decision text, created int);
-create table if not exists suppressed(email text primary key, created int);
+create table if not exists optouts(email text, user_id int, created int, primary key(email, user_id));
 create table if not exists settings(k text primary key, v text);
 create table if not exists attempts(k text, t int);
 create table if not exists audit(id integer primary key autoincrement, user_id int, action text, detail text, created int);
@@ -36,6 +37,9 @@ function db(): PDO {
     $p = new PDO('sqlite:' . $f, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
     $p->exec('pragma busy_timeout=5000');
     $p->exec(SCHEMA);
+    foreach (['users' => "roles text default ''", 'sends' => 'stripe_session text', 'recipients' => 'withdrawn int default 0'] as $t => $def) {
+        if (!in_array(explode(' ', $def)[0], array_column($p->query("pragma table_info($t)")->fetchAll(), 'name'))) $p->exec("alter table $t add column $def");
+    }
     return $p;
 }
 function q(string $sql, array $a = []): PDOStatement { $s = db()->prepare($sql); $s->execute($a); return $s; }
@@ -86,6 +90,9 @@ function need_login(): array {
     if (!$u) { flash('Please sign in or register to continue.', 'warn'); redirect('/login?next=' . urlencode($_SERVER['REQUEST_URI'])); }
     return $u;
 }
+const ROLES = ['finance' => 'Finance', 'delivery' => 'Delivery support', 'campaign' => 'Campaign management', 'complaints' => 'Complaints', 'rolesadmin' => 'Role administrator'];
+function can(string $role): bool { return in_array($role, explode(',', (string)(user()['roles'] ?? ''))); }
+function need_role(string $role): array { $u = need_admin(); if (!can($role)) fail(403, 'You do not have permission for that.'); return $u; }
 function need_admin(): array {
     $u = need_login();
     if (!$u['is_admin']) fail(403, 'Not allowed.');
@@ -160,7 +167,7 @@ function page(string $title, string $body, int $code = 200): never {
         . '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;700;800&display=swap">'
         . '<link rel="stylesheet" href="/assets/style.css"></head><body><a class="skip" href="#main">Skip to content</a>'
         . '<header><a class="brand" href="/">7th Swindon Scouts <span>Christmas Cards</span></a><nav aria-label="Main">' . $nav . '</nav></header>'
-        . '<main id="main">' . ($f ? '<p class="flash ' . h($f[0]) . '" role="status">' . h($f[1]) . '</p>' : '') . $body . '</main>'
-        . '<footer>Optional donations support 7th Swindon Scouts. Cards are kept for ' . (int)setting('expiry_days', '60') . ' days after sending.</footer></body></html>';
+        . '<main id="main">' . ($f ? '<p class="flash ' . h($f[0]) . '" role="' . ($f[0] === 'err' ? 'alert" tabindex="-1" data-focus' : 'status"') . '>' . h($f[1]) . '</p>' : '') . $body . '</main>'
+        . '<footer>Sending is free; donations are optional and support 7th Swindon Scouts. Cards stay viewable for ' . (int)setting('expiry_days', '60') . ' days after sending. <a href="/help">Help and FAQ</a></footer><script src="/assets/app.js"></script></body></html>';
     exit;
 }

@@ -53,3 +53,8 @@ header button.link{color:#fff}
 .reveal .card{animation:rise .9s ease-out}
 @keyframes rise{from{opacity:0;transform:translateY(40px) scale(.96)}to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){.reveal .card{animation:none}}
+.fe{color:#b3261e;font-weight:700}.count.over{color:#b3261e;font-weight:700}
+[aria-invalid=true]{border-color:#b3261e;border-width:2px}
+.pill.cancelled,.pill.delivery-unconfirmed{background:#fff6e0}
+details{margin:.6rem 0}summary{cursor:pointer;font-weight:700}
+.progress{font-size:1.1rem}
