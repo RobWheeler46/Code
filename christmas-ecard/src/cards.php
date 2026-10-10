@@ -3,7 +3,15 @@
 // To use real artwork instead, drop public/assets/cards/<id>.(png|jpg|webp|svg) and it takes over.
 // Each design: title, short joke line, background gradient, and a human written description (FR-145).
 function cards(): array {
+    // The first six are finished illustrated cards (public/assets/cards/<id>.webp) with the greeting painted into the picture ('baked'),
+    // so the page does not repeat the title and joke. The rest are the simple drawn designs below.
     $c = [
+        'pegs'     => ['May all your pegs go in first time', 'Happy Christmas from 7th Swindon Scouts.', '#0b2a5c', '#041f3d', 'Christmas card. The words say "May all your pegs go in first time. Happy Christmas from 7th Swindon Scouts." Santa in a Scout neckerchief and head torch kneels in the snow hammering a tent peg into the ground, while puzzled reindeer watch beside a sign saying Santa\'s Campsite and a lit tent with fairy lights. A mug of hot chocolate and a lantern sit nearby.', true],
+        'scouty'   => ['Eat, drink and be Scouty', 'Have a cracking Christmas from 7th Swindon Scouts.', '#7a1f1f', '#2d0a0a', 'Christmas card. The words say "Eat, drink and be Scouty. Have a cracking Christmas from 7th Swindon Scouts." A cheerful elf in a Scout neckerchief sits behind a plate of mince pies surrounded by Christmas crackers, a mug of hot chocolate with marshmallows, a compass, a map, camp badges and a rolled neckerchief with a woggle. A cracker joke asks what Scouts say at Christmas and answers "Have a cracking time".', true],
+        'dry'      => ['Dreaming of a dry Christmas', 'And a world with no wet socks.', '#8a5a1c', '#3a210a', 'Christmas card. The words say "Dreaming of a dry Christmas, and a world with no wet socks." A golden retriever in a Santa hat sleeps with its head on a muddy hiking boot by a glowing wood burner, while damp socks and mittens hang up to dry beside Scout neckerchiefs, rucksacks wrapped in tinsel and a mug of hot chocolate.', true],
+        'knoty'    => ['Have a knoty but nice Christmas', 'Tied together with festive cheer from 7th Swindon Scouts.', '#2a2f6e', '#141842', 'Christmas card. The words say "Have a knoty but nice Christmas! Tied together with festive cheer from 7th Swindon Scouts." Two Scouts in Santa hats decorate a Christmas tree built from lashed wooden poles with a rope star on top and Scout neckerchiefs as decorations, helped by a dog in antlers and a snowman in a Scout hat beside a snowy camp.', true],
+        'chaos'    => ['Merry Christmess', 'May your Christmas be less chaotic than camp in the rain.', '#1b3a6e', '#0c1c3d', 'Christmas card. The words say "Merry Christmess! May your Christmas be less chaotic than camp in the rain." Four laughing Scouts in winter hats and a golden retriever in a Santa hat toast marshmallows round a campfire in the snow, with a snowman in a Scout hat, green tents with fairy lights and a signpost pointing to Good Campers, Great Adventures and Even Better Hot Chocolate.', true],
+        'woggle'   => ['Woggle all the way', 'Hope your Christmas is warm, bright and only slightly muddy.', '#16285a', '#0a1233', 'Christmas card. The words say "Woggle all the way! Hope your Christmas is warm, bright and only slightly muddy." A group of laughing Scouts in Santa hats hold mugs of hot chocolate and toast marshmallows round a campfire with a golden retriever, under bunting and fairy lights. A small sign in the corner says "S\'more adventures in 2025".', true],
         'in-tents' => ['Have an In-Tents Christmas', 'Warm hearts, cold toes and a very festive tent.', '#2a5fb0', '#041f3d', 'A cream coloured tent wearing a Santa hat, with a string of coloured lights along its edges and a warm glow at the door, on a snowy blue night.'],
         'santa'    => ['Even Santa Needs a Scout', 'Lost the sleigh, found the map. Scout to the rescue.', '#0b3f8a', '#06203f', 'Santa sits in a stuck sleigh holding a map upside down while a smiling Scout with a compass points the way and says "This way, Santa".'],
         'blame'    => ['Blame the Scout Leader', 'Who burnt the sausages? Definitely not me.', '#9a1f2b', '#3b0d1d', 'A Scout Leader at a campfire holds a stick with a very burnt sausage and a speech bubble that says "Not my fault", with smoke rising.'],
@@ -16,7 +24,7 @@ function cards(): array {
         'campout'  => ['Snow Place Like Camp', 'Rule one: sleeping bag first, hot chocolate second.', '#0b6b9e', '#0a2540', 'A glowing blue tent with fairy lights and a Camp sign sits in the snow, with a big mug of hot chocolate topped with marshmallows in front.'],
     ];
     $out = [];
-    foreach ($c as $id => [$t, $j, $a, $b, $alt]) $out[$id] = ['title' => $t, 'joke' => $j, 'a' => $a, 'b' => $b, 'on' => setting("off_$id") !== '1', 'desc' => setting("desc_$id") ?: $alt];
+    foreach ($c as $id => $v) { [$t, $j, $a, $b, $alt, $baked] = $v + [5 => false]; $out[$id] = ['title' => $t, 'joke' => $j, 'a' => $a, 'b' => $b, 'on' => setting("off_$id") !== '1', 'desc' => setting("desc_$id") ?: $alt, 'baked' => $baked]; }
     uksort($out, fn($x, $y) => (int)setting("order_$x", (string)array_search($x, array_keys($out))) <=> (int)setting("order_$y", (string)array_search($y, array_keys($out))));
     return $out;
 }
@@ -118,7 +126,7 @@ function card_art(string $id, bool $thumb = false): string {
     $c = cards()[$id] ?? null;
     if (!$c) return '';
     foreach (['png', 'jpg', 'webp', 'svg'] as $x)
-        if (is_file(ROOT . "/public/assets/cards/$id.$x")) return '<img class="art" src="/assets/cards/' . h($id) . '.' . $x . '" alt="' . h($c['desc']) . '">';
+        if (is_file(ROOT . "/public/assets/cards/$id.$x")) return '<img class="art" src="/assets/cards/' . h($id) . '.' . $x . '" alt="' . h($c['desc']) . '"' . ($thumb ? ' loading="lazy" decoding="async"' : '') . '>';
     static $n = 0; $g = 'g' . substr(md5($id), 0, 6) . ++$n; // unique per copy: a hidden duplicate must not steal the gradient
     $snow = '';
     for ($i = 0; $i < 22; $i++) $snow .= '<circle cx="' . (($i * 53 + 17) % 400) . '" cy="' . (($i * 37 + 11) % 270) . '" r="' . (1 + $i % 3) . '" fill="#fff" opacity=".7"/>';

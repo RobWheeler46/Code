@@ -216,3 +216,8 @@ main a:not(.btn):not(.tile){color:var(--purple)}
 
 .card .joke{font-style:italic;color:var(--blue);font-weight:700;margin:-.4rem 0 1rem}
 .tile .tjoke{display:block;padding:0 .9rem .9rem;color:#5c6470;font-size:.9rem;font-weight:400}
+
+/* finished illustrated cards are portrait images: show them whole on the card, crop to the top (the headline) in thumbnails */
+img.art{display:block;width:100%;height:auto}
+.tile img.art,.cardrow .thumb img.art{aspect-ratio:4/3;object-fit:cover;object-position:top}
+@media(max-width:640px){.card .art,.preview .art{aspect-ratio:auto}.card svg.art,.preview svg.art{aspect-ratio:16/9}}
