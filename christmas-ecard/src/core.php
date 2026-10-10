@@ -126,8 +126,8 @@ function email_html(array $r, array $s): string {
     $btn = 'display:inline-block;background:#f5b800;color:#041f3d;font-weight:bold;text-decoration:none;padding:12px 24px;border-radius:24px';
     return '<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#1c1230"><div style="background:#014493;color:#fff;padding:16px 20px;border-bottom:4px solid #f5b800;font-size:18px;font-weight:bold">7th Swindon Scouts Christmas Cards</div><div style="padding:20px">'
         . '<p>Dear ' . $e($r['name']) . ',</p><p><strong>' . $e($s['sender_name']) . '</strong> has sent you a Christmas card.</p>'
-        . '<p><a href="' . $e(card_link($r)) . '" style="' . $btn . '">Open your card</a></p><p style="font-size:13px;color:#5c5470">Button not working? Copy this link: ' . $e(card_link($r)) . '<br>This private link works for ' . expiry_days() . ' days.</p>'
-        . '<p style="font-size:13px;color:#5c5470"><a href="' . $e(base_url() . '/optout/' . $r['token']) . '">Stop cards from this sender or from the service</a> &middot; <a href="' . $e(base_url() . '/privacy') . '">Why did I get this? Privacy notice</a></p></div></div>';
+        . '<p><a href="' . $e(card_link($r)) . '" style="' . $btn . '">Open your card</a></p><p style="font-size:13px;color:#5c6470">Button not working? Copy this link: ' . $e(card_link($r)) . '<br>This private link works for ' . expiry_days() . ' days.</p>'
+        . '<p style="font-size:13px;color:#5c6470"><a href="' . $e(base_url() . '/optout/' . $r['token']) . '">Stop cards from this sender or from the service</a> &middot; <a href="' . $e(base_url() . '/privacy') . '">Why did I get this? Privacy notice</a></p></div></div>';
 }
 
 function email_body(array $r, array $s): string {
