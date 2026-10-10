@@ -2,14 +2,14 @@
 // Ten placeholder designs (SVG motif + colours). To use real artwork, drop public/assets/cards/<id>.(png|jpg|webp|svg).
 function cards(): array {
     $c = [
-        'in-tents'   => ['Have an In-Tents Christmas', 'tent', '#7413dc', '#003982'],
+        'in-tents'   => ['Have an In-Tents Christmas', 'tent', '#2a5fb0', '#041f3d'],
         'santa'      => ['Even Santa Needs a Scout', 'star', '#003982', '#0b6b9e'],
         'blame'      => ['Blame the Scout Leader', 'fire', '#b3261e', '#5b0f2e'],
         'knot'       => ['Knot Naughty, Knot Nice', 'knot', '#00a794', '#00566b'],
         'prepared'   => ['Be Prepared: It Is Christmas', 'tree', '#1f7a3a', '#0d3b24'],
         'toasted'    => ['Merry Toasted Marshmallows', 'fire', '#d97706', '#7c2d12'],
         'hike'       => ['Home Sweet Hike', 'mountain', '#3b5bdb', '#1c2b66'],
-        'sleigh'     => ['Sleigh the Day', 'star', '#7413dc', '#2d0a5e'],
+        'sleigh'     => ['Sleigh the Day', 'star', '#4338ca', '#1e1b4b'],
         'patrol'     => ['Fa-la-la-la Patrol', 'tree', '#00a794', '#0b3d4a'],
         'campout'    => ['Snow Place Like Camp', 'tent', '#0b6b9e', '#0a2540'],
     ];
