@@ -88,3 +88,9 @@ select,button,input[type=checkbox],input[type=radio]{min-height:44px}input[type=
 .rrow{display:grid;gap:.5rem;grid-template-columns:1fr 1fr;padding:.8rem;border:1px solid var(--line);border-radius:10px;background:#fff;margin:.5rem 0}
 .rrow .wide{grid-column:1/-1}
 @media(max-width:640px){.rrow{grid-template-columns:1fr}}
+@media print{
+ @page{margin:15mm}
+ header,footer,.skip,.envbanner,.flash,main>*:not(.reveal){display:none!important}
+ body{background:#fff}.reveal .card{box-shadow:none;border:1px solid #999;max-width:none;break-inside:avoid;animation:none}
+ .art{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
