@@ -15,5 +15,5 @@ ok(str_contains($app, 'name="mode" value="free"') && str_contains($app, 'value="
 preg_match_all("/\$a\['([a-z0-9]+)'\]/", file_get_contents(__DIR__ . '/../src/ops.php'), $ak);
 $missing = array_filter(array_unique($ak[1]), fn($k) => !str_contains($adm, "'$k' => ['/admin"));
 ok(!$missing, 'UX24-07: every alert type on the Overview says where to act (' . implode(',', $missing) . ')');
-ok(str_contains($app, "if ($do === 'send') $do = ($_POST['mode'] ?? '') === 'donate'"), 'the single send button maps the chosen option to the existing free or donate paths');
+ok(str_contains($app, "if (\$do === 'send') \$do = (\$_POST['mode'] ?? '') === 'donate'"),'the single send button maps the chosen option to the existing free or donate paths');
 exit($GLOBALS['bad'] ?? 0);
