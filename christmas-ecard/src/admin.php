@@ -12,7 +12,7 @@ function admin_page(string $title, string $body): never {
         '/admin/reports' => ['Reports', can('complaints')], '/admin/campaign' => ['Campaign settings', can_any('campaign', 'appadmin', 'finance', 'delivery', 'rolesadmin')],
         '/admin/app' => ['Application settings', can_any('appadmin', 'campaign', 'delivery', 'rolesadmin')], '/admin/email' => ['Email and help', can_any('appadmin', 'rolesadmin')],
         '/admin/privacy' => ['Privacy and retention', can_any('rolesadmin', 'campaign', 'appadmin', 'finance', 'delivery')], '/admin/access' => ['Administrator access', can('rolesadmin')],
-        '/admin/health' => ['System health', true], '/admin/audit' => ['Change history', true]];
+        '/admin/senders' => ['Senders', can_any('complaints', 'rolesadmin')], '/admin/launch' => ['Launch readiness', true], '/admin/health' => ['System health', true], '/admin/audit' => ['Change history', true]];
     $here = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
     $nav = '<nav class="adminmenu" aria-label="Administration"><details open><summary>Menu</summary><ul class="plain">';
     foreach ($links as $href => [$label, $ok]) if ($ok) $nav .= '<li><a href="' . $href . '"' . ($href === $here ? ' aria-current="page"' : '') . '>' . h($label) . '</a></li>';
@@ -39,6 +39,9 @@ function config_spec(string $area): array {
             'groups_max' => ['Contact groups per account', 'int', 'min' => 1, 'max' => 100, 'def' => '20'],
             'test_per_hour' => ['Test cards per account per hour', 'int', 'min' => 1, 'max' => 20, 'def' => '3'],
             'abuse_terms' => ['Blocked words in messages (comma separated)', 'text', 'max' => 500, 'def' => ''],
+            'alert_emails' => ['Who receives operational alerts (emails, comma separated)', 'emails', 'def' => ''],
+            'alert_escalate_emails' => ['Who receives an alert nobody acknowledged (emails)', 'emails', 'def' => ''],
+            'alert_escalate_minutes' => ['Escalate unacknowledged alerts after (minutes)', 'int', 'min' => 5, 'max' => 1440, 'def' => '60'],
             'allow_urls' => ['Allow web addresses in messages (never clickable)', 'bool', 'def' => '0']]],
         'privacy' => ['edit' => ['rolesadmin'], 'title' => 'Privacy, expiry and retention', 'when' => 'Expiry changes affect existing card links from the moment you confirm. Retention changes take effect at the next scheduled clean-up. Saving a draft deletes nothing.', 'reason' => true, 'fields' => [
             'expiry_days' => ['Card links stay viewable for (days after sending)', 'int', 'min' => 1, 'max' => 3650, 'def' => '60'],
@@ -56,6 +59,10 @@ function cfg_validate(array $f, string $raw): array {
         case 'datetime': return ($raw === '' || (preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/', $raw) && strtotime($raw))) ? [$raw, null] : [$raw, 'Enter a valid UK date and time.'];
         case 'choice': return isset($f['opts'][$raw]) ? [$raw, null] : [$raw, 'Choose one of the options.'];
         case 'bool': return [$raw === '1' ? '1' : '0', null];
+        case 'emails':
+            $l = array_filter(array_map('trim', explode(',', $raw)), 'strlen');
+            foreach ($l as $x) if (!filter_var($x, FILTER_VALIDATE_EMAIL)) return [$raw, "'$x' is not a valid email address."];
+            return [implode(',', $l), null];
         case 'money':
             if ($raw === '') return ['', null];
             return (preg_match('/^\d{1,5}(\.\d{1,2})?$/', $raw) && (float)$raw >= 1 && (float)$raw <= 100000) ? [(string)(int)round((float)$raw * 100), null] : [$raw, 'Enter an amount in pounds, for example 500 or 500.00.'];
@@ -185,6 +192,7 @@ function confirm_page(string $a, int $i): never {
 function r_admin_action(): void {
     $u = need_admin(); if (!post()) redirect('/admin');
     $a = (string)($_POST['do'] ?? ''); $i = (int)($_POST['id'] ?? 0); $uid = (int)$u['id']; $back = safe_next($_POST['back'] ?? '');
+    if (in_array($a, ['suspend', 'reinstate', 'ack', 'decision', 'override', 'clear_override']) && admin_action2($a, $u)) return;
     $need = ['pause' => ['appadmin', 'rolesadmin'], 'resend' => ['delivery', 'appadmin', 'rolesadmin'], 'money' => ['finance'], 'design' => ['campaign', 'rolesadmin'], 'design_desc' => ['campaign', 'rolesadmin'], 'design_up' => ['campaign', 'rolesadmin'], 'design_down' => ['campaign', 'rolesadmin'],
              'dismiss' => ['complaints'], 'block' => ['complaints'], 'withdraw' => ['complaints'], 'roles' => ['rolesadmin']];
     if (!isset($need[$a])) fail(400, 'Unknown action.');
@@ -234,7 +242,7 @@ function r_admin_action(): void {
 function r_admin(): void {
     $u = need_admin(); $st = campaign_state(); $c = admin_pause_counts();
     $b = '<h1>Administration</h1><div class="cards">'
-        . '<section class="statuscard"><h2>Campaign</h2><p>' . ['open' => 'Open for new cards', 'before' => 'Not open yet', 'closed' => 'Closed to new cards'][$st] . '</p></section>'
+        . '<section class="statuscard"><h2>Campaign</h2><p>' . ['open' => 'Open for new cards', 'before' => 'Not open yet', 'closed' => 'Closed to new cards', 'locked' => 'Locked until launch decisions are approved'][$st] . '</p></section>'
         . '<section class="statuscard"><h2>Dispatch</h2><p>' . (setting('paused') === '1' ? '<strong>Paused</strong>' : 'Running') . '. ' . $c['queued'] . ' queued.</p></section>';
     $alerts = health_alerts();
     $b .= '<section class="statuscard"><h2>Alerts</h2><p>' . ($alerts ? '<strong>' . count($alerts) . ' need attention</strong>' : 'None found') . '</p><a href="/admin/health">System health</a></section></div>';
@@ -316,31 +324,26 @@ function r_admin_email(): void {
 }
 
 // ---------- S38 health
-function health_alerts(): array {
-    $a = []; $now = time(); $hb = (int)setting('last_queue'); $bk = (int)setting('last_backup');
-    if (!$hb) $a[] = 'Scheduled job: Unknown (it has never reported).'; elseif ($now - $hb > 300) $a[] = 'Scheduled job is Stale: last ran ' . when($hb) . '.';
-    if (!$bk) $a[] = 'Backup: Unknown (no backup recorded).'; elseif ($now - $bk > 129600) $a[] = 'Backup is Stale: last ' . when($bk) . '.';
-    $p = (int)one("select count(*) c from sends where status='awaiting_payment' and updated<?", [$now - 900])['c'];
-    if ($p) $a[] = "$p payment attempts have been pending over 15 minutes (not failed; investigate).";
-    $o = (int)one("select count(*) c from sends where status='awaiting_payment' and updated<?", [$now - 86400])['c'];
-    if ($o) $a[] = "$o payment attempts pending over 24 hours: escalate to the Treasurer.";
-    $f = (int)one("select count(*) c from recipients where status in ('failed','bounced')")['c'];
-    if ($f) $a[] = "$f deliveries have failed and need correction.";
-    $q = one("select min(s.queued_at) t from recipients r join sends s on s.id=r.send_id where r.status='queued'");
-    if ($q && $q['t'] && $now - (int)$q['t'] > 900 && setting('paused') !== '1') $a[] = 'Queue is stalled: the oldest queued card has waited since ' . when((int)$q['t']) . '.';
-    return $a;
-}
 function r_admin_health(): void {
     need_admin(); $now = time(); $env = env('STRIPE_SECRET') ? (str_contains(env('STRIPE_SECRET'), '_live_') ? 'LIVE' : 'TEST') : 'SIMULATED';
     $st = fn(int $t, int $max) => !$t ? '<strong>Unknown</strong>' : ($now - $t > $max ? '<strong>Stale</strong> (' . when($t) . ')' : 'OK (' . when($t) . ')');
     $rows = [
         ['Scheduled queue job', $st((int)setting('last_queue'), 300), 'delivery'], ['Email provider', env('POSTMARK_TOKEN') ? 'Configured. Last accepted send: ' . ((int)setting('last_mail_ok') ? when((int)setting('last_mail_ok')) : 'Unknown') : 'Not configured: emails are written to a local log', 'delivery'],
         ['Payment provider (' . $env . ' mode)', env('STRIPE_SECRET') ? 'Configured. Last webhook: ' . ((int)setting('last_stripe_hook') ? when((int)setting('last_stripe_hook')) : 'Unknown') : 'Not configured: payments are simulated', 'finance'],
-        ['Backup', $st((int)setting('last_backup'), 129600), 'appadmin'], ['Campaign availability', ['open' => 'Open', 'before' => 'Not open yet', 'closed' => 'Closed'][campaign_state()], 'campaign'],
+        ['Backup', $st((int)setting('last_backup'), 129600), 'appadmin'], ['Campaign availability', ['open' => 'Open', 'before' => 'Not open yet', 'closed' => 'Closed', 'locked' => 'Locked (launch decisions open)'][campaign_state()], 'campaign'],
         ['Dispatch', setting('paused') === '1' ? 'Paused' : 'Running', 'delivery']];
     $full = can_any('appadmin', 'rolesadmin'); $b = '<h1>System health</h1><p class="note">Checked at ' . date('j M Y H:i:s', $now) . '. Missing or old evidence is shown as Unknown or Stale, never Healthy. This page shows no secrets or private messages.</p><div class="cards">';
     foreach ($rows as [$l, $v, $who]) if ($full || can($who) || ($who === 'campaign' && can('campaign'))) $b .= '<section class="statuscard"><h2>' . h($l) . '</h2><p>' . $v . '</p></section>';
-    $al = health_alerts(); $b .= '</div><h2>Unresolved alerts</h2>' . ($al ? '<ul>' . implode('', array_map(fn($x) => '<li>' . h($x) . '</li>', $al)) . '</ul><p class="note">Alerts are listed here and are not yet sent to a named person. Check this page at least daily while the campaign is live.</p>' : '<p>None found.</p>');
+    $al = health_alerts(); $b .= '</div><h2>Unresolved alerts</h2>';
+    if (!$al) $b .= '<p>None found.</p>'; else {
+        $b .= '<ul class="plain">';
+        foreach ($al as $k => $text) {
+            $row = one('select * from alerts where akey=? and resolved_at is null', [$k]);
+            $b .= '<li class="admincard"><strong>' . h($text) . '</strong><br><small>' . ($row ? 'First seen ' . when((int)$row['first_seen']) . ($row['acked_at'] ? '. Acknowledged ' . when((int)$row['acked_at']) : ($row['escalated'] ? '. <strong>Escalated, not acknowledged</strong>' : '. Not acknowledged')) : 'Will be notified at the next scheduled check') . '</small>'
+                . ($row && !$row['acked_at'] && can_any('appadmin', 'rolesadmin', 'delivery', 'finance') ? ' <form method="post" action="/admin/action" class="inline">' . csrf() . '<input type="hidden" name="do" value="ack"><input type="hidden" name="key" value="' . h($k) . '"><button class="link">Acknowledge</button></form>' : '') . '</li>';
+        }
+        $b .= '</ul><p class="note">Alerts are emailed to the people named under Application settings. This page is the second route: check it at least daily while the campaign is live.</p>';
+    }
     admin_page('System health', $b);
 }
 

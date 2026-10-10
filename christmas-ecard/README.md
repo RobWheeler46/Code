@@ -1,12 +1,15 @@
 # 7th Swindon Christmas E-Cards
 
-MVP of the Christmas E-Card FRD v2.0 (9 Oct 2026). PHP 8.2+, SQLite, no dependencies.
+MVP of the Christmas E-Card FRD v2.0 plus the v2.1 launch Musts (docs/FRD_v2_1_additions.md) (9 Oct 2026). PHP 8.2+, SQLite, no dependencies.
 
     php -S localhost:8060 -t public public/index.php    # run locally
     php tests/smoke.php                                  # core-logic checks
     php src/cli.php admin you@example.com [roles]        # make an admin with all roles (MFA enrolled at first /admin visit)
     php src/cli.php queue                                # cron, every 5 min: send/retry queued cards
     php src/cli.php digest                               # cron, daily: summary emails for senders who opted in
+    php src/cli.php alerts                               # cron, every 5 min: email new alerts, escalate unacknowledged ones
+    php src/cli.php alerts-daily                         # cron, daily: summary to the alert list while the campaign is open
+    php src/cli.php reset-demo                           # staging only: clear cards, donations and non-admin accounts (refuses in production)
     php src/cli.php backup                               # cron, nightly: SQLite snapshot into data/backups (kept 30 days); copy off-site
     php src/cli.php purge                                # cron, daily: blank content past retention (90 days)
 
@@ -27,10 +30,15 @@ Roles: Campaign manager, Application administrator, Finance administrator, Deliv
 ## Address book and groups (FR-100 to FR-116)
 Per-account contacts (name and email only) and groups, searchable, picked into a draft as snapshots. Duplicate rule: whole address case-folded, plus tags and dots kept. Defaults 200 contacts and 20 groups are the FRD proposals, pending approval. Account deletion (Dashboard > Delete my account) cancels unsent cards, switches off sent links, deletes drafts, contacts and groups, and keeps finance, audit and opt-out records.
 
+## FRD 2.1 launch Musts
+Privacy, cookie and terms pages (draft wording, flagged until decision D-14 is approved); 18-or-over and terms acceptance at registration with re-acceptance when `TERMS_VERSION` changes; sender suspension (Admin > Senders); alert emails with acknowledgement and escalation (set recipients in Admin > Application settings, run `alerts` from cron); launch readiness register (Admin > Launch readiness) which locks the campaign in production (`APP_ENV=production`) while required decisions are open, unless a restricted administrator records an override; staging banner; row-based recipient entry; human-written artwork descriptions. The accessibility test plan is in docs/AT_test_plan.md and has not been run yet.
+
 ## Roles and launch decisions
 Roles: finance, delivery, campaign, complaints, role administrator (assigned in Admin > Roles, audited). Launch values the FRD says must be agreed, not guessed (campaign dates, queue handling at closure, expiry, retention, message limits, donation purpose wording) are in Admin > Campaign settings; current defaults are placeholders. Set `SUPPORT_EMAIL` for the Help page.
 
 ## Known gaps vs the FRD
+- **Legal wording** (privacy notice, terms, safeguarding statement) is a draft written by me, not reviewed by anyone responsible. It must be replaced or approved by the Trustees (D-14).
+- FRD 2.1 Shoulds and conditional items (rehearsal allow-list, email preview, success measures, recipient donations, Gift Aid, Christmas Day delivery, printable card, next-year reminder) are not built.
 - **Artwork** is placeholder SVG. Drop real files at `public/assets/cards/<id>.png` (ids in `src/cards.php`).
 - **MySQL**: uses SQLite. Moving to MySQL needs the DDL in `src/lib.php` and `insert or ignore` / `on conflict` adjusted.
 - v1.2 conditional enhancements (scheduling FR-068 to 070, private link sharing FR-071 to 073, keepsake, collaborative cards, artwork management) are not built; the FRD keeps them out of the launch gate.

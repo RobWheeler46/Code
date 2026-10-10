@@ -71,6 +71,8 @@ function support_ref(array $r): string { return 'R-' . $r['id']; } // exposes no
 
 // ---- campaign window (Europe/London); blank = unrestricted
 function campaign_state(): string {
+    // production stays locked while a launch Must decision is Open, unless a restricted administrator recorded an override
+    if (env('APP_ENV', 'development') === 'production' && setting('launch_override') === '' && launch_blockers()) return 'locked';
     $o = setting('opens'); $c = setting('closes');
     if ($o && time() < strtotime($o)) return 'before';
     if ($c && time() >= strtotime($c)) return 'closed';
@@ -125,12 +127,13 @@ function email_html(array $r, array $s): string {
     return '<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#1c1230"><div style="background:#7413dc;color:#fff;padding:16px 20px;font-size:18px;font-weight:bold">7th Swindon Scouts Christmas Cards</div><div style="padding:20px">'
         . '<p>Dear ' . $e($r['name']) . ',</p><p><strong>' . $e($s['sender_name']) . '</strong> has sent you a Christmas card.</p>'
         . '<p><a href="' . $e(card_link($r)) . '" style="' . $btn . '">Open your card</a></p><p style="font-size:13px;color:#5c5470">Button not working? Copy this link: ' . $e(card_link($r)) . '<br>This private link works for ' . expiry_days() . ' days.</p>'
-        . '<p style="font-size:13px;color:#5c5470"><a href="' . $e(base_url() . '/optout/' . $r['token']) . '">Stop cards from this sender or from the service</a></p></div></div>';
+        . '<p style="font-size:13px;color:#5c5470"><a href="' . $e(base_url() . '/optout/' . $r['token']) . '">Stop cards from this sender or from the service</a> &middot; <a href="' . $e(base_url() . '/privacy') . '">Why did I get this? Privacy notice</a></p></div></div>';
 }
 
 function email_body(array $r, array $s): string {
     return "Dear {$r['name']},\n\n{$s['sender_name']} has sent you a Christmas card from 7th Swindon Scouts.\n\nOpen your card here:\n" . card_link($r)
         . "\n\nThis private link works for " . expiry_days() . " days.\n\nDo not want these? Stop cards from this sender or from the service:\n" . base_url() . '/optout/' . $r['token']
+        . "\n\nWhy did I get this? A person you know asked us to send it. Privacy notice: " . base_url() . "/privacy"
         . "\n\n7th Swindon Scouts";
 }
 
@@ -143,6 +146,7 @@ function process_queue(int $limit = 50): int {
         if (!q("update recipients set status='sending', tries=tries+1 where id=? and status='queued'", [$row['id']])->rowCount()) continue;
         $r = one('select * from recipients where id=?', [$row['id']]);
         $s = one('select * from sends where id=?', [$r['send_id']]);
+        if (one('select 1 from users where id=? and suspended=1', [$s['user_id']])) { q("update recipients set status='cancelled', error='Account suspended' where id=?", [$r['id']]); continue; }
         if (opted_out($r['email'], (int)$s['user_id'])) { q("update recipients set status='cancelled', error='Recipient opted out' where id=?", [$r['id']]); continue; }
         $err = mail_send($r['email'], "{$s['sender_name']} sent you a Christmas card", email_body($r, $s), ['rid' => (string)$r['id']], email_html($r, $s), $s['sender_name']);
         if ($err === null) { q("update recipients set status='sent', sent_at=?, error=null where id=?", [time(), $r['id']]); $n++; }

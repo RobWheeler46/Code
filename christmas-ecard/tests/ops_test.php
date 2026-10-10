@@ -1,0 +1,52 @@
+<?php
+// php tests/ops_test.php : terms, suspension, row entry, alerts and launch readiness (FRD 2.1).
+putenv('DB_PATH=' . sys_get_temp_dir() . '/ecard-op-' . getmypid() . '.sqlite'); putenv('POSTMARK_TOKEN=');
+require __DIR__ . '/../src/app.php';
+@mkdir(ROOT . '/data', 0775, true); @unlink(ROOT . '/data/outbox.log');
+function ok($c, string $m): void { echo ($c ? 'PASS ' : 'FAIL ') . $m . "\n"; if (!$c) $GLOBALS['bad'] = 1; }
+function mails(): int { return is_file(ROOT . '/data/outbox.log') ? count(file(ROOT . '/data/outbox.log')) : 0; }
+q("insert into users(name,email,pass,verified,created,terms_version) values('Sam','sam@x.com','x',1,?,?)", [time(), TERMS_VERSION]);
+q("insert into users(name,email,pass,verified,created,terms_version) values('Old','old@x.com','x',1,?,'older')", [time()]);
+
+// FR-132 terms
+ok(terms_ok(one('select * from users where id=1')) && !terms_ok(one('select * from users where id=2')), 'terms version check');
+accept_terms(2); ok(terms_ok(one('select * from users where id=2')) && one('select terms_at from users where id=2')['terms_at'] > 0, 'acceptance stores version and time');
+
+// FR-133 suspension
+q("insert into sends(user_id,card,sender_name,message,status,queued_at,created,updated) values(1,'santa','Sam','Hi','queued',?,?,?)", [time(), time(), time()]);
+q("insert into recipients(send_id,name,email,token,status) values(1,'A','a@x.com','t1','queued'),(1,'B','b@x.com','t2','sent')");
+ok(sender_blocked(one('select * from users where id=1')) === null, 'active sender not blocked');
+$n = suspend_sender(1, 'test', 2); ok($n === 1, 'suspension cancels only unclaimed queued deliveries');
+ok(one("select status from recipients where token='t1'")['status'] === 'cancelled' && one("select status from recipients where token='t2'")['status'] === 'sent', 'sent cards untouched');
+ok(str_contains(sender_blocked(one('select * from users where id=1')), 'A-1') && !str_contains(sender_blocked(one('select * from users where id=1')), 'report'), 'neutral message with support reference');
+q("insert into recipients(send_id,name,email,token,status) values(1,'C','c@x.com','t3','queued')"); $before = mails(); process_queue();
+ok(one("select status from recipients where token='t3'")['status'] === 'cancelled' && mails() === $before, 'dispatch refuses a suspended sender (covers late payments)');
+reinstate_sender(1, 'ok', 2); ok(sender_blocked(one('select * from users where id=1')) === null, 'reinstated');
+ok((int)one("select count(*) c from audit where action in ('sender_suspended','sender_reinstated')")['c'] === 2, 'suspension and reinstatement audited');
+
+// FR-137 rows
+[$rows, $e] = parse_rows(['Gran', 'Bob', '', 'X'], ['gran@x.com', 'nope', '', 'GRAN@x.com'], ['Hi', '', '', '']);
+ok(count($rows) === 1 && isset($e['email1']) && isset($e['email3']) && !isset($e['name0']), 'rows: invalid email and duplicate flagged per row, valid row kept, blank ignored');
+[$rows, $e] = parse_rows(['A'], ['a@x.com'], [str_repeat('x', msg_max() + 1)]); ok(isset($e['msg0']), 'personal message limit enforced');
+[$rows, $e] = parse_rows([''], ['a@x.com'], ['']); ok(isset($e['name0']) && !$rows, 'name required');
+
+// FR-134 alerts
+set_setting('alert_emails', 'ops@x.com'); set_setting('alert_escalate_emails', 'boss@x.com'); set_setting('alert_escalate_minutes', '30');
+$t0 = 1000000; $m0 = mails(); $sent = alerts_tick($t0);
+ok($sent >= 1 && mails() > $m0, 'new alerts email the named people');
+ok(alerts_tick($t0 + 60) === 0, 'the same alert is not emailed again');
+$sent2 = alerts_tick($t0 + 3600); ok($sent2 >= 1 && (int)one('select count(*) c from alerts where escalated=1')['c'] >= 1, 'unacknowledged alert escalates once to the second list');
+ok(alerts_tick($t0 + 7200) === 0, 'escalation happens once');
+set_setting('last_queue', (string)time()); alerts_tick(time());
+ok((int)one("select resolved_at from alerts where akey='cron'")['resolved_at'] > 0, 'alert resolves itself when the condition clears');
+
+// FR-135 launch readiness
+ok(launch_blockers() === 13, '13 required decisions open at start (3 conditional never block)');
+q("insert into decisions(id,value,ref,status) values('D-14','ok','minute 1','approved')"); ok(launch_blockers() === 12 && legal_approved(), 'approved decision with a reference clears one blocker');
+q("insert into decisions(id,value,ref,status) values('D-01','ok','','approved')"); ok(launch_blockers() === 12, 'approval without a reference does not count');
+q("insert into decisions(id,value,ref,status) values('D-11','','','open')"); ok(launch_blockers() === 12, 'conditional decisions never block');
+putenv('APP_ENV=production'); ok(campaign_state() === 'locked', 'production is locked while required decisions are open');
+set_setting('launch_override', 'Trustee chair agreed 10 Oct'); ok(campaign_state() === 'open', 'recorded override unlocks');
+set_setting('launch_override', ''); putenv('APP_ENV=development'); ok(campaign_state() === 'open', 'development is never locked');
+
+@unlink(env('DB_PATH')); exit($GLOBALS['bad'] ?? 0);

@@ -29,6 +29,8 @@ create table if not exists attempts(k text, t int);
 create table if not exists contacts(id integer primary key autoincrement, user_id int, name text, email text, created int, updated int);
 create table if not exists groups(id integer primary key autoincrement, user_id int, name text);
 create table if not exists contact_groups(contact_id int, group_id int, primary key(contact_id, group_id));
+create table if not exists alerts(akey text primary key, text text, severity text, first_seen int, last_notified int, acked_by int, acked_at int, escalated int default 0, resolved_at int);
+create table if not exists decisions(id text primary key, value text, approver text, approved_on text, ref text, status text default 'open');
 create table if not exists audit(id integer primary key autoincrement, user_id int, action text, detail text, created int);
 SQL;
 
@@ -40,7 +42,7 @@ function db(): PDO {
     $p = new PDO('sqlite:' . $f, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
     $p->exec('pragma busy_timeout=5000');
     $p->exec(SCHEMA);
-    foreach ([['users', "roles text default ''"], ['users', "notify text default 'off'"], ['sends', 'stripe_session text'], ['sends', 'donation_note int default 0'], ['sends', 'ref text'], ['recipients', 'withdrawn int default 0'], ['recipients', 'own_msg text'], ['recipients', 'next_at int default 0'], ['donations', "refund_status text default 'none'"]] as [$t, $def]) {
+    foreach ([['users', "roles text default ''"], ['users', "notify text default 'off'"], ['sends', 'stripe_session text'], ['sends', 'donation_note int default 0'], ['sends', 'ref text'], ['recipients', 'withdrawn int default 0'], ['recipients', 'own_msg text'], ['recipients', 'next_at int default 0'], ['donations', "refund_status text default 'none'"], ['users', 'terms_version text'], ['users', 'terms_at int'], ['users', 'suspended int default 0'], ['users', 'suspend_reason text']] as [$t, $def]) {
         if (!in_array(explode(' ', $def)[0], array_column($p->query("pragma table_info($t)")->fetchAll(), 'name'))) $p->exec("alter table $t add column $def");
     }
     return $p;
@@ -172,8 +174,8 @@ function page(string $title, string $body, int $code = 200): never {
     echo '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
         . '<title>' . h($title) . ' | 7th Swindon Scouts Christmas Cards</title>'
         . '<link rel="stylesheet" href="/assets/style.css"></head><body><a class="skip" href="#main">Skip to content</a>'
-        . '<header><a class="brand" href="/"><img src="/assets/brand/7th-swindon-stacked-purple.svg" alt="7th Swindon Scouts" width="64" height="61"><span>Christmas Cards</span></a><nav aria-label="Main">' . $nav . '</nav></header>'
+        . (env('APP_ENV', 'development') !== 'production' ? '<p class="envbanner" role="note">' . h(strtoupper(env('APP_ENV', 'development'))) . ' environment. Test mode: nothing here is real. Do not enter real details.</p>' : '') . '<header><a class="brand" href="/"><img src="/assets/brand/7th-swindon-stacked-purple.svg" alt="7th Swindon Scouts" width="64" height="61"><span>Christmas Cards</span></a><nav aria-label="Main">' . $nav . '</nav></header>'
         . '<main id="main">' . ($f ? '<p class="flash ' . h($f[0]) . '" role="' . ($f[0] === 'err' ? 'alert" tabindex="-1" data-focus' : 'status"') . '>' . h($f[1]) . '</p>' : '') . $body . '</main>'
-        . '<footer>Sending is free; donations are optional and support 7th Swindon Scouts. Cards stay viewable for ' . (int)setting('expiry_days', '60') . ' days after sending. <a href="/help">Help and FAQ</a></footer><script src="/assets/app.js"></script></body></html>';
+        . '<footer><a href="/privacy">Privacy and cookies</a> &middot; <a href="/terms">Terms and safeguarding</a> &middot; <a href="/help">Help and FAQ</a><br>Sending is free; donations are optional and support 7th Swindon Scouts. Cards stay viewable for ' . (int)setting('expiry_days', '60') . ' days after sending.</footer><script src="/assets/app.js"></script></body></html>';
     exit;
 }

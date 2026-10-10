@@ -13,8 +13,21 @@ function cards(): array {
         'patrol'     => ['Fa-la-la-la Patrol', 'tree', '#00a794', '#0b3d4a'],
         'campout'    => ['Snow Place Like Camp', 'tent', '#0b6b9e', '#0a2540'],
     ];
+    // Human-written descriptions of the artwork (FR-145). Campaign managers can replace them in Admin.
+    $alt = [
+        'in-tents' => 'A white tent with a dark doorway glows against a deep purple and blue night sky, with snow falling.',
+        'santa' => 'A bright yellow star shines in a dark blue night sky with snow falling.',
+        'blame' => 'A small campfire with orange and red flames burns on two logs against a dark red sky with snow.',
+        'knot' => 'Two interlocking cream rope loops on a green and teal background with snow falling.',
+        'prepared' => 'A green Christmas tree with a yellow star on top against a deep green sky with snow.',
+        'toasted' => 'A campfire with a golden flame and red centre on logs against an orange and brown sky, with snow.',
+        'hike' => 'Snow-covered mountains in pale blue and white under a blue evening sky with snow falling.',
+        'sleigh' => 'A yellow star among small white stars in a deep purple sky with snow.',
+        'patrol' => 'A green Christmas tree topped with a gold star against a teal night sky with snow.',
+        'campout' => 'A white tent with a dark doorway against a blue night sky with snow falling.',
+    ];
     $out = [];
-    foreach ($c as $id => [$t, $m, $a, $b]) $out[$id] = ['title' => $t, 'motif' => $m, 'a' => $a, 'b' => $b, 'on' => setting("off_$id") !== '1', 'desc' => setting("desc_$id") ?: $t];
+    foreach ($c as $id => [$t, $m, $a, $b]) $out[$id] = ['title' => $t, 'motif' => $m, 'a' => $a, 'b' => $b, 'on' => setting("off_$id") !== '1', 'desc' => setting("desc_$id") ?: ($alt[$id] ?? $t)];
     uksort($out, fn($a, $b) => (int)setting("order_$a", (string)array_search($a, array_keys($out))) <=> (int)setting("order_$b", (string)array_search($b, array_keys($out))));
     return $out;
 }

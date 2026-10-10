@@ -2,8 +2,11 @@
 require __DIR__ . '/lib.php';
 require __DIR__ . '/cards.php';
 require __DIR__ . '/core.php';
+require __DIR__ . '/ops.php';
+require __DIR__ . '/legal.php';
 require __DIR__ . '/contacts.php';
 require __DIR__ . '/admin.php';
+require __DIR__ . '/admin2.php';
 
 function post(): bool { return $_SERVER['REQUEST_METHOD'] === 'POST'; }
 function field(string $k, int $max = 200): string { return mb_substr(trim((string)($_POST[$k] ?? '')), 0, $max); }
@@ -29,7 +32,8 @@ function r_home(): void {
     if (preg_match('/^[a-z0-9-]{1,30}$/', (string)($_GET['ref'] ?? ''))) $_SESSION['ref'] = $_GET['ref']; // promotion source label only, never a person
     $st = campaign_state();
     $b = '<section class="hero"><h1>Send a Scout Christmas card</h1><p>Sending is free. You can add an optional donation to support 7th Swindon Scouts.</p><p><a class="btn" href="#gallery">Choose a card</a></p></section>';
-    if ($st === 'before') $b .= '<p class="flash warn">Sending opens on ' . h(date('j F Y \a\t H:i', strtotime(setting('opens')))) . '. You can prepare a card now.</p>';
+    if ($st === 'locked') $b .= '<p class="flash warn">Sending is not open yet. You can prepare a card now.</p>';
+    if ($st === 'before') $b .='<p class="flash warn">Sending opens on ' . h(date('j F Y \a\t H:i', strtotime(setting('opens')))) . '. You can prepare a card now.</p>';
     if ($st === 'closed') $b .= '<p class="flash warn">This year\'s card sending has closed. Cards already sent stay viewable until they expire.</p>';
     $t = (int)setting('target_pence');
     if (setting('show_progress') === '1' && $t) $b .= '<p class="progress">Raised so far: <strong>' . gbp(progress()) . '</strong> of ' . gbp($t) . ' target (confirmed donations, after refunds).</p>';
@@ -61,17 +65,18 @@ function r_register(): void {
     if (post()) {
         limit('reg', 10, 3600);
         $n = field('name', 80); $e = strtolower(field('email')); $p = (string)($_POST['password'] ?? '');
+        if (empty($_POST['accept'])) { flash('Please confirm you are 18 or over and accept the terms.', 'err'); redirect('/register'); }
         if (!$n || !filter_var($e, FILTER_VALIDATE_EMAIL) || strlen($p) < 10) { flash('Please give your name, a valid email and a password of at least 10 characters.', 'err'); redirect('/register'); }
         if (one('select 1 from users where email=?', [$e])) { flash('That email is already registered. Try signing in.', 'err'); redirect('/login'); }
         $t = token();
-        q('insert into users(name,email,pass,verify_token,created) values(?,?,?,?,?)', [$n, $e, password_hash($p, PASSWORD_DEFAULT), $t, time()]);
+        q('insert into users(name,email,pass,verify_token,created,terms_version,terms_at) values(?,?,?,?,?,?,?)', [$n, $e, password_hash($p, PASSWORD_DEFAULT), $t, time(), TERMS_VERSION, time()]);
         $uid = (int)db()->lastInsertId(); $keep = $_SESSION['drafts'] ?? [];
         session_regenerate_id(true); $_SESSION['uid'] = $uid; $_SESSION['drafts'] = $keep; claim_drafts($uid);
         mail_send($e, 'Confirm your email for 7th Swindon Scouts Christmas Cards', "Hello $n,\n\nPlease confirm your email address. We will take you back to your saved card.\n" . base_url() . "/verify?t=$t\n");
         flash('Welcome! Your card is saved. Check your email and click the link to verify before sending.');
         redirect(($d = one("select id from sends where user_id=? and status='draft' order by id desc", [$uid])) ? '/compose?id=' . $d['id'] : '/dashboard');
     }
-    page('Register', '<h1>Register</h1><p>You need an account to send, so we can verify who is sending. Your card stays saved.</p><form method="post" class="stack">' . csrf() . '<label>Your name<input name="name" required maxlength="80" autocomplete="name"></label><label>Email<input type="email" name="email" required autocomplete="email"></label><label>Password (10+ characters)<input type="password" name="password" required minlength="10" autocomplete="new-password"></label><button class="btn">Create account</button></form><p>Already registered? <a href="/login">Sign in</a></p>');
+    page('Register', '<h1>Register</h1><p>You need an account to send, so we can verify who is sending. Your card stays saved.</p><form method="post" class="stack">' . csrf() . '<label>Your name<input name="name" required maxlength="80" autocomplete="name"></label><label>Email<input type="email" name="email" required autocomplete="email"></label><label>Password (10+ characters)<input type="password" name="password" required minlength="10" autocomplete="new-password"></label><label class="opt"><input type="checkbox" name="accept" value="1" required> I am 18 or over and I accept the <a href="/terms">terms and safeguarding statement</a> and have read the <a href="/privacy">privacy notice</a></label><button class="btn">Create account</button></form><p>Already registered? <a href="/login">Sign in</a></p>');
 }
 
 function r_verify(): void {
@@ -142,22 +147,31 @@ function r_compose(): void {
         $card = field('card', 40);
         if (!(cards()[$card]['on'] ?? false)) { flash('Please choose an available design.', 'err'); redirect('/'); }
         $act = $_POST['act'] ?? 'save';
-        $from = trim((string)($_POST['sender_name'] ?? '')) ?: ($u['name'] ?? ''); $msg = trim((string)($_POST['message'] ?? '')); $text = (string)($_POST['recipients'] ?? '');
-        [$rows, $rerrs] = parse_recipients($text);
-        if (count($rows) > max_recipients()) $rerrs[] = 'You can send to at most ' . max_recipients() . ' people at once.';
-        $errs = [];
+        $from = trim((string)($_POST['sender_name'] ?? '')) ?: ($u['name'] ?? ''); $msg = trim((string)($_POST['message'] ?? ''));
+        $names = array_values((array)($_POST['r_name'] ?? [])); $emails = array_values((array)($_POST['r_email'] ?? [])); $msgs = array_values((array)($_POST['r_msg'] ?? [])); $paste = (string)($_POST['paste'] ?? '');
+        $stash = fn(array $extra = []) => $_SESSION['old'] = array_merge(['card' => $card, 'sender_name' => (string)($_POST['sender_name'] ?? ''), 'message' => (string)($_POST['message'] ?? ''), 'r_name' => $names, 'r_email' => $emails, 'r_msg' => $msgs, 'paste' => $paste], $extra);
+        if ($act === 'addrow' || preg_match('/^remove_(\d+)$/', $act, $mm)) { // rows only: keep everything typed, change the row list, no validation yet
+            if (isset($mm)) foreach (['names', 'emails', 'msgs'] as $v) { array_splice($$v, (int)$mm[1], 1); }
+            $stash(['r_name' => $names, 'r_email' => $emails, 'r_msg' => $msgs, 'addrow' => $act === 'addrow' ? 1 : 0]);
+            redirect('/compose?' . ($s ? 'id=' . $s['id'] : 'card=' . urlencode($card)) . '#recipients');
+        }
+        [$rows, $rowErrs] = parse_rows($names, $emails, $msgs);
+        [$prows, $perrs] = parse_recipients($paste); $have = array_flip(array_map(fn($r) => strtolower($r[1]), $rows));
+        foreach ($prows as $pr) if (!isset($have[strtolower($pr[1])])) { $have[strtolower($pr[1])] = 1; $rows[] = $pr; } else $perrs[] = $pr[1] . ' is already on the card';
+        $errs = $rowErrs;
+        if ($perrs) $errs['paste'] = $perrs;
+        if (count($rows) > max_recipients()) $errs['recipients'] = ['You can send to at most ' . max_recipients() . ' people at once.'];
         if (mb_strlen($from) > name_max()) $errs['sender_name'] = 'Please use ' . name_max() . ' characters or fewer.';
         if (mb_strlen($msg) > msg_max()) $errs['message'] = 'Please use ' . msg_max() . ' characters or fewer (you have ' . mb_strlen($msg) . ').';
         if (!isset($errs['message']) && $msg !== '' && ($bad = abuse_check($msg))) $errs['message'] = ucfirst($bad);
         if (!isset($errs['sender_name']) && $from !== '' && ($bad = abuse_check($from))) $errs['sender_name'] = ucfirst($bad);
-        if ($rerrs) $errs['recipients'] = $rerrs;
         if ($act === 'continue') {
             if ($from === '') $errs['sender_name'] ??= 'Please say who the card is from.';
             if ($msg === '') $errs['message'] ??= 'Please write a message.';
-            if (!$rows) $errs['recipients'] ??= ['Add at least one recipient.'];
+            if (!$rows && !$errs) $errs['recipients'] = ['Add at least one recipient.'];
         }
-        if ($errs) { // nothing is saved; every field comes back as typed
-            $_SESSION['old'] = ['card' => $card, 'sender_name' => (string)($_POST['sender_name'] ?? ''), 'message' => (string)($_POST['message'] ?? ''), 'recipients' => $text]; $_SESSION['errs'] = $errs;
+        if ($errs) { // nothing is saved; every field and row comes back as typed
+            $stash(); $_SESSION['errs'] = $errs;
             flash('Please check the highlighted fields. Nothing you typed has been lost.', 'warn');
             redirect('/compose?' . ($s ? 'id=' . $s['id'] : 'card=' . urlencode($card)));
         }
@@ -169,6 +183,7 @@ function r_compose(): void {
         foreach ($rows as [$n, $e, $own]) q('insert into recipients(send_id,name,email,own_msg,token) values(?,?,?,?,?)', [$sid, $n, $e, $own, token()]);
         if ($act === 'test') {
             if (!$u || !$u['verified']) { flash('Verify your email first, then you can send yourself a test.', 'warn'); redirect("/compose?id=$sid"); }
+            sender_gate($u, "/compose?id=$sid");
             limit('test', max(1, (int)setting('test_per_hour', '3')), 3600);
             mail_send($u['email'], 'Test card preview', "Here is your private preview of the card:\n" . base_url() . "/preview?id=$sid\n(Sign in first if asked.)");
             flash('Test sent to ' . $u['email'] . '. Your draft is saved.'); redirect("/compose?id=$sid");
@@ -182,11 +197,26 @@ function r_compose(): void {
     $card = $old['card'] ?? $s['card'] ?? (string)($_GET['card'] ?? '');
     if (!(cards()[$card]['on'] ?? false)) redirect('/');
     $back = !$s && !empty($_GET['back']) && preg_match('/^[a-f0-9]{48}$/', $_GET['back']) ? one('select s.sender_name from recipients r join sends s on s.id=r.send_id where r.token=?', [$_GET['back']]) : null;
-    $rt = $old['recipients'] ?? ($s ? implode("\n", array_map(fn($r) => $r['name'] . ', ' . $r['email'] . ($r['own_msg'] ? ' | ' . $r['own_msg'] : ''), all('select * from recipients where send_id=? order by id', [$s['id']]))) : ($back ? $back['sender_name'] . ', ' : ''));
+    $f = true;
+    $rowsIn = [];
+    if ($old && isset($old['r_email'])) { foreach ($old['r_email'] as $i => $em) $rowsIn[] = [(string)($old['r_name'][$i] ?? ''), (string)$em, (string)($old['r_msg'][$i] ?? '')]; if (!empty($old['addrow'])) $rowsIn[] = ['', '', '']; }
+    elseif ($s) foreach (all('select * from recipients where send_id=? order by id', [$s['id']]) as $r) $rowsIn[] = [$r['name'], $r['email'], (string)$r['own_msg']];
+    elseif ($back) $rowsIn[] = [$back['sender_name'], '', ''];
+    if (!$rowsIn) $rowsIn[] = ['', '', ''];
+    $rowsHtml = ''; $nrows = count($rowsIn);
+    foreach ($rowsIn as $i => [$rn, $re, $rm]) {
+        $rowsHtml .= '<div class="rrow" role="group" aria-label="Recipient ' . ($i + 1) . '"><label>Name<input name="r_name[]" maxlength="100" value="' . h($rn) . '"' . fa($errs, "name$i", $f) . '>' . fe($errs, "name$i") . '</label>'
+            . '<label>Email<input type="email" name="r_email[]" value="' . h($re) . '"' . fa($errs, "email$i", $f) . '>' . fe($errs, "email$i") . '</label>'
+            . '<details class="wide"' . ($rm !== '' || isset($errs["msg$i"]) ? ' open' : '') . '><summary>Personal message for this person (optional)</summary><label>Message<textarea name="r_msg[]" rows="2"' . fa($errs, "msg$i", $f) . '>' . h($rm) . '</textarea>' . fe($errs, "msg$i") . '</label></details>'
+            . ($nrows > 1 ? '<button class="btn alt" name="act" value="remove_' . $i . '" aria-label="Remove recipient ' . ($i + 1) . '">Remove</button>' : '') . '</div>';
+    }
+    $recipientsHtml = '<fieldset id="recipients"><legend>Who is it for? (up to ' . max_recipients() . ')</legend>' . fe($errs, 'recipients') . $rowsHtml
+        . ($nrows < max_recipients() ? '<button class="btn alt" name="act" value="addrow">Add another recipient</button>' : '<p class="note">That is the most you can send at once (' . max_recipients() . ').</p>')
+        . ' <small class="count" data-recipient-count>' . $nrows . ' of ' . max_recipients() . '</small>'
+        . '<details' . (isset($errs['paste']) || ($old['paste'] ?? '') !== '' ? ' open' : '') . '><summary>Paste several at once</summary><label>One per line as <em>Name, email</em><textarea name="paste" rows="4" placeholder="Gran, gran@example.com&#10;Uncle Bob, bob@example.com"' . fa($errs, 'paste', $f) . '>' . h($old['paste'] ?? '') . '</textarea>' . fe($errs, 'paste') . '</label></details></fieldset>';
     $from = $old['sender_name'] ?? $s['sender_name'] ?? ($u['name'] ?? ''); $msg = $old['message'] ?? $s['message'] ?? '';
     $opts = '';
     foreach (cards() as $id => $c) if ($c['on']) $opts .= '<option value="' . h($id) . '"' . ($id === $card ? ' selected' : '') . '>' . h($c['title']) . '</option>';
-    $f = true;
     $saved = $s ? '<p class="note" role="status">Draft saved at ' . date('H:i', (int)$s['updated']) . '.</p>' : '<p class="note">Not saved yet. Use Save draft to keep your work' . ($u ? '.' : ' (you will register before sending).') . '</p>';
     page('Write your card', steps(2) . '<h1>Write your card</h1>' . ($u ? '' : '<p class="note">You can prepare your card now. Before it is sent you will create a free account and verify your email, and your card will wait for you.</p>')
         . '<div class="two"><div class="card preview" aria-label="Live preview">' . card_art($card) . '<div class="inner"><p class="msg" data-preview-msg>' . nl2br(h($msg)) . '</p><p class="from">With love from<br><strong data-preview-from>' . h($from) . '</strong></p></div></div><form method="post" class="stack" data-dirty-warn>' . csrf()
@@ -195,7 +225,7 @@ function r_compose(): void {
         . '<label>Your message<textarea name="message" rows="5" data-max="' . msg_max() . '"' . fa($errs, 'message', $f) . '>' . h($msg) . '</textarea><small class="count">Up to ' . msg_max() . ' characters</small>' . fe($errs, 'message') . '</label>'
         . '<details><summary>Need ideas? Greeting examples</summary><p class="note">Examples only. Choosing one adds it to your message, which you can then edit.</p><ul class="starters">' . implode('', array_map(fn($t) => '<li>' . h($t) . ' <button type="button" class="link" data-starter="' . h($t) . '">Use this</button></li>', STARTERS)) . '</ul></details>'
         . ($back ? '<p class="note">Sending a card back to ' . h($back['sender_name']) . ': add their email address below.</p>' : '')
-        . '<label>Recipients: one per line as <em>Name, email</em> (maximum ' . max_recipients() . '). To give one person a different message, add <em>| their message</em> after the email.<textarea name="recipients" rows="6" data-count-recipients placeholder="Gran, gran@example.com&#10;Uncle Bob, bob@example.com | Hope the knee is better!"' . fa($errs, 'recipients', $f) . '>' . h($rt) . '</textarea><small class="count" data-recipient-count>Up to ' . max_recipients() . ' recipients</small>' . fe($errs, 'recipients') . '</label>'
+        . $recipientsHtml
         . ($s && $u && $u['verified'] ? '<p><button class="btn alt" name="act" value="pick">Choose from address book</button></p>' : ($u ? '<p class="note">Save your draft and verify your email to choose from your address book.</p>' : ''))
         . $saved . '<div class="row"><button class="btn" name="act" value="continue">Continue</button><button class="btn alt" name="act" value="preview">Preview</button><button class="btn alt" name="act" value="save">Save draft</button><button class="btn alt" name="act" value="test">Email me a test</button></div></form></div>');
 }
@@ -260,6 +290,7 @@ function r_review(): void {
             redirect("/review?id=$id&recover=cancelled");
         }
         if (!$u['verified']) { flash('Please verify your email before sending.', 'warn'); redirect("/review?id=$id"); }
+        sender_gate($u, "/review?id=$id");
         if (campaign_state() !== 'open') { flash('Card sending is not open right now, so your card cannot be submitted. Your draft is saved.', 'warn'); redirect("/review?id=$id"); }
         if (!$rs || count($rs) > max_recipients() || $s['message'] === '') { flash('Your card needs a message and 1 to ' . max_recipients() . ' recipients.', 'err'); redirect("/compose?id=$id"); }
         if ($pending) { flash('You have a payment waiting. Check its status or cancel it first. Cards are not sent until that is resolved.', 'warn'); redirect("/review?id=$id"); }
@@ -284,7 +315,7 @@ function r_review(): void {
     $state = campaign_state();
     $b = steps(3) . '<h1>Review and send</h1>';
     if (!$u['verified']) $b .= '<p class="flash warn">Verify your email (see the link we sent) before you can send. <form method="post" action="/resend-verification" class="inline">' . csrf() . '<button class="link">Send it again</button></form></p>';
-    if ($state !== 'open') $b .= '<p class="flash warn">Card sending is ' . ($state === 'before' ? 'not open yet' : 'closed') . ', so you cannot submit this card. Your draft is saved.</p>';
+    if ($state !== 'open') $b .= '<p class="flash warn">Card sending is ' . (in_array($state, ['before', 'locked']) ? 'not open yet' : 'closed') . ', so you cannot submit this card. Your draft is saved.</p>';
     if (setting('paused') === '1') $b .= '<p class="note">Sending is briefly paused. Cards you submit will be queued and go out when it resumes.</p>';
     $b .= card_view($s['card'], $rs[0]['name'] ?? 'Friend', $rs ? resolved_msg($rs[0], $s) : $s['message'], $s['sender_name']) . '<h2>Sending to ' . count($rs) . ' ' . (count($rs) === 1 ? 'person' : 'people') . '</h2><p class="note">From: ' . h($s['sender_name']) . '. Each person sees the greeting shown here for them.</p><ul class="rlist">' . $list . '</ul><p><a href="/compose?id=' . $id . '">Edit card, message or recipients</a></p>';
     $rep = repeats_for($s);
@@ -571,8 +602,8 @@ function r_account_delete(): void {
 
 function dispatch(string $path): void {
     $routes = ['/' => 'r_home', '/help' => 'r_help', '/register' => 'r_register', '/verify' => 'r_verify', '/resend-verification' => 'r_resend_verify', '/login' => 'r_login', '/logout' => 'r_logout', '/forgot' => 'r_forgot', '/reset' => 'r_reset',
-        '/compose' => 'r_compose', '/preview' => 'r_preview', '/review' => 'r_review', '/pay-cancelled' => 'r_pay_cancelled', '/return' => 'r_return', '/dev/pay' => 'r_dev_pay', '/dashboard' => 'r_dashboard', '/send' => 'r_send', '/prefs' => 'r_prefs', '/account/delete' => 'r_account_delete', '/contacts' => 'r_contacts', '/contacts/edit' => 'r_contact_edit', '/contacts/delete-all' => 'r_contacts_delete_all', '/contacts/pick' => 'r_pick', '/contacts/save' => 'r_save_contact', '/groups' => 'r_groups', '/discard' => 'r_discard', '/change-email' => 'r_change_email', '/copy' => 'r_copy',
-        '/mfa' => 'r_mfa', '/admin' => 'r_admin', '/admin/delivery' => 'r_admin_delivery', '/admin/finance' => 'r_admin_finance', '/admin/reports' => 'r_admin_reports', '/admin/campaign' => 'r_admin_campaign', '/admin/app' => 'r_admin_app', '/admin/email' => 'r_admin_email', '/admin/privacy' => 'r_admin_privacy', '/admin/access' => 'r_admin_access', '/admin/health' => 'r_admin_health', '/admin/audit' => 'r_admin_audit', '/admin/action' => 'r_admin_action', '/admin/export' => 'r_export', '/admin/message' => 'r_message', '/hooks/stripe' => 'r_stripe_hook', '/hooks/postmark' => 'r_postmark_hook'];
+        '/compose' => 'r_compose', '/preview' => 'r_preview', '/review' => 'r_review', '/pay-cancelled' => 'r_pay_cancelled', '/return' => 'r_return', '/dev/pay' => 'r_dev_pay', '/dashboard' => 'r_dashboard', '/send' => 'r_send', '/prefs' => 'r_prefs', '/privacy' => 'r_privacy', '/terms' => 'r_terms', '/accept-terms' => 'r_accept_terms', '/account/delete' => 'r_account_delete', '/contacts' => 'r_contacts', '/contacts/edit' => 'r_contact_edit', '/contacts/delete-all' => 'r_contacts_delete_all', '/contacts/pick' => 'r_pick', '/contacts/save' => 'r_save_contact', '/groups' => 'r_groups', '/discard' => 'r_discard', '/change-email' => 'r_change_email', '/copy' => 'r_copy',
+        '/mfa' => 'r_mfa', '/admin' => 'r_admin', '/admin/delivery' => 'r_admin_delivery', '/admin/finance' => 'r_admin_finance', '/admin/reports' => 'r_admin_reports', '/admin/campaign' => 'r_admin_campaign', '/admin/app' => 'r_admin_app', '/admin/email' => 'r_admin_email', '/admin/privacy' => 'r_admin_privacy', '/admin/access' => 'r_admin_access', '/admin/health' => 'r_admin_health', '/admin/audit' => 'r_admin_audit', '/admin/action' => 'r_admin_action', '/admin/senders' => 'r_admin_senders', '/admin/launch' => 'r_admin_launch', '/admin/export' => 'r_export', '/admin/message' => 'r_message', '/hooks/stripe' => 'r_stripe_hook', '/hooks/postmark' => 'r_postmark_hook'];
     if (post() && !str_starts_with($path, '/hooks/')) check_csrf();
     if (preg_match('#^/c/([a-f0-9]+)(?:/(open|report))?$#', $path, $m)) r_card($m[1], $m[2] ?? '');
     if (preg_match('#^/optout/([a-f0-9]+)$#', $path, $m)) r_optout($m[1]);

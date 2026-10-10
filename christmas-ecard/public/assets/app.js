@@ -18,10 +18,11 @@
   var mi = document.querySelector('textarea[name=message]'), fi = document.querySelector('input[name=sender_name]');
   if (pm && mi) mi.addEventListener('input', function () { pm.textContent = mi.value; });
   if (pf && fi) fi.addEventListener('input', function () { pf.textContent = fi.value; });
-  var rt = document.querySelector('[data-count-recipients]'), rc = document.querySelector('[data-recipient-count]');
-  if (rt && rc) {
-    var updR = function () { var n = rt.value.split('\n').filter(function (l) { return l.indexOf("@") > -1; }).length; rc.textContent = n + " of 20 recipients"; rc.classList.toggle("over", n > 20); };
-    rt.addEventListener('input', updR); updR();
+  var rc = document.querySelector('[data-recipient-count]');
+  if (rc) {
+    var max = parseInt(rc.textContent.split(' of ')[1], 10) || 20;
+    var updR = function () { var n = document.querySelectorAll('input[name="r_email[]"]').length; var filled = 0; document.querySelectorAll('input[name="r_email[]"]').forEach(function (e) { if (e.value.trim()) filled++; }); var p = document.querySelector('textarea[name=paste]'); if (p) filled += p.value.split('\n').filter(function (l) { return l.indexOf('@') > -1; }).length; rc.textContent = filled + ' of ' + max + ' recipients'; rc.classList.toggle('over', filled > max); };
+    document.addEventListener('input', function (e) { if (e.target.matches('input[name="r_email[]"], textarea[name=paste]')) updR(); }); updR();
   }
   var form = document.querySelector('form[data-dirty-warn]'), dirty = false;
   if (form) {

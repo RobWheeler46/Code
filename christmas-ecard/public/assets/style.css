@@ -84,3 +84,7 @@ select,button,input[type=checkbox],input[type=radio]{min-height:44px}input[type=
  table.stacked td,table.stacked th{border:0;padding:.25rem .4rem}
  .designrow{grid-template-columns:1fr}.facts{grid-template-columns:1fr}
 }
+.envbanner{margin:0;padding:.5rem 1rem;background:var(--yellow);color:var(--navy);font-weight:800;text-align:center}
+.rrow{display:grid;gap:.5rem;grid-template-columns:1fr 1fr;padding:.8rem;border:1px solid var(--line);border-radius:10px;background:#fff;margin:.5rem 0}
+.rrow .wide{grid-column:1/-1}
+@media(max-width:640px){.rrow{grid-template-columns:1fr}}
