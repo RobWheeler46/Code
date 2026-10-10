@@ -6,6 +6,7 @@ MVP of the Christmas E-Card FRD v2.0 plus the v2.1 launch Musts (docs/FRD_v2_1_a
     php tests/smoke.php                                  # core-logic checks
     php src/cli.php admin you@example.com [roles]        # make an admin with all roles (MFA enrolled at first /admin visit)
     php src/cli.php queue                                # cron, every 5 min: send/retry queued cards
+    php src/cli.php remind                               # cron, once each November: yearly reminder to users who ticked the box (max one per user per year)
     php src/cli.php digest                               # cron, daily: summary emails for senders who opted in
     php src/cli.php alerts                               # cron, every 5 min: email new alerts, escalate unacknowledged ones
     php src/cli.php alerts-daily                         # cron, daily: summary to the alert list while the campaign is open

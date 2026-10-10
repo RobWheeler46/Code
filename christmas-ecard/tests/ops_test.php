@@ -49,4 +49,12 @@ putenv('APP_ENV=production'); ok(campaign_state() === 'locked', 'production is l
 set_setting('launch_override', 'Trustee chair agreed 10 Oct'); ok(campaign_state() === 'open', 'recorded override unlocks');
 set_setting('launch_override', ''); putenv('APP_ENV=development'); ok(campaign_state() === 'open', 'development is never locked');
 
+// FR-144 reminders
+q("insert into users(name,email,pass,verified,created,remind) values('Yes','yes@x.com','x',1,?,1),('No','no@x.com','x',1,?,0)", [time(), time()]);
+$m = mails(); ok(send_reminders(2026) === 1 && mails() === $m + 1, 'only consenting users get the reminder');
+ok(send_reminders(2026) === 0, 'at most one reminder per user per year'); ok(send_reminders(2027) === 1, 'sends again the next year');
+$yid = (int)one("select id from users where email='yes@x.com'")['id'];
+ok(hash_equals(remind_token($yid), remind_token($yid)) && !hash_equals(remind_token($yid), remind_token($yid + 1)), 'stop link token is per user');
+ok(str_contains(file_get_contents(ROOT . '/data/outbox.log'), 'remind-off?u=' . $yid), 'every reminder carries a one-click stop link');
+
 @unlink(env('DB_PATH')); exit($GLOBALS['bad'] ?? 0);

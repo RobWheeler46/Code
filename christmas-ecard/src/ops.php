@@ -107,3 +107,24 @@ function launch_blockers(): int {
     return $n;
 }
 function legal_approved(): bool { $d = one("select status from decisions where id='D-14'"); return $d && $d['status'] === 'approved'; }
+
+// ---- FR-144: optional once-a-year reminder. Consent is a separate, unticked choice; withdrawal is one click from every message.
+function remind_token(int $uid): string {
+    if (setting('secret') === '') set_setting('secret', bin2hex(random_bytes(24)));
+    return hash_hmac('sha256', "remind-$uid", setting('secret'));
+}
+function remind_link(int $uid): string { return base_url() . "/remind-off?u=$uid&t=" . remind_token($uid); }
+/** Sends at most one reminder per consenting, active user per calendar year. Returns how many were sent. */
+function send_reminders(?int $year = null): int {
+    $year ??= (int)date('Y'); $n = 0;
+    foreach (all("select * from users where remind=1 and verified=1 and suspended=0 and (remind_year is null or remind_year<>?) and email not like '%@deleted.invalid'", [$year]) as $u) {
+        if (mail_send($u['email'], 'Christmas cards from 7th Swindon Scouts are back', "Hello {$u['name']},\n\nYou asked us to let you know when our Christmas card service opens again. It is open at " . base_url() . "/ - sending is free, and a donation is optional.\n\nThis is the only email of this kind we send each year. To stop it, one click: " . remind_link((int)$u['id']) . "\n\n7th Swindon Scouts") === null) { q('update users set remind_year=? where id=?', [$year, $u['id']]); $n++; }
+    }
+    return $n;
+}
+function r_remind_off(): void {
+    $uid = (int)($_GET['u'] ?? $_POST['u'] ?? 0); $t = (string)($_GET['t'] ?? $_POST['t'] ?? '');
+    if (!$uid || !hash_equals(remind_token($uid), $t)) fail(404, 'That link is not valid.'); // same reply for unknown and wrong
+    if (post()) { q('update users set remind=0 where id=?', [$uid]); page('Reminder stopped', '<h1>Done</h1><p>We will not send you that reminder again.</p>'); }
+    page('Stop the reminder', '<h1>Stop the yearly reminder?</h1><form method="post">' . csrf() . '<input type="hidden" name="u" value="' . $uid . '"><input type="hidden" name="t" value="' . h($t) . '"><button class="btn">Yes, stop it</button></form>');
+}

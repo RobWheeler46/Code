@@ -69,14 +69,14 @@ function r_register(): void {
         if (!$n || !filter_var($e, FILTER_VALIDATE_EMAIL) || strlen($p) < 10) { flash('Please give your name, a valid email and a password of at least 10 characters.', 'err'); redirect('/register'); }
         if (one('select 1 from users where email=?', [$e])) { flash('That email is already registered. Try signing in.', 'err'); redirect('/login'); }
         $t = token();
-        q('insert into users(name,email,pass,verify_token,created,terms_version,terms_at) values(?,?,?,?,?,?,?)', [$n, $e, password_hash($p, PASSWORD_DEFAULT), $t, time(), TERMS_VERSION, time()]);
+        q('insert into users(name,email,pass,verify_token,created,terms_version,terms_at,remind) values(?,?,?,?,?,?,?,?)', [$n, $e, password_hash($p, PASSWORD_DEFAULT), $t, time(), TERMS_VERSION, time(), empty($_POST['remind']) ? 0 : 1]);
         $uid = (int)db()->lastInsertId(); $keep = $_SESSION['drafts'] ?? [];
         session_regenerate_id(true); $_SESSION['uid'] = $uid; $_SESSION['drafts'] = $keep; claim_drafts($uid);
         mail_send($e, 'Confirm your email for 7th Swindon Scouts Christmas Cards', "Hello $n,\n\nPlease confirm your email address. We will take you back to your saved card.\n" . base_url() . "/verify?t=$t\n");
         flash('Welcome! Your card is saved. Check your email and click the link to verify before sending.');
         redirect(($d = one("select id from sends where user_id=? and status='draft' order by id desc", [$uid])) ? '/compose?id=' . $d['id'] : '/dashboard');
     }
-    page('Register', '<h1>Register</h1><p>You need an account to send, so we can verify who is sending. Your card stays saved.</p><form method="post" class="stack">' . csrf() . '<label>Your name<input name="name" required maxlength="80" autocomplete="name"></label><label>Email<input type="email" name="email" required autocomplete="email"></label><label>Password (10+ characters)<input type="password" name="password" required minlength="10" autocomplete="new-password"></label><label class="opt"><input type="checkbox" name="accept" value="1" required> I am 18 or over and I accept the <a href="/terms">terms and safeguarding statement</a> and have read the <a href="/privacy">privacy notice</a></label><button class="btn">Create account</button></form><p>Already registered? <a href="/login">Sign in</a></p>');
+    page('Register', '<h1>Register</h1><p>You need an account to send, so we can verify who is sending. Your card stays saved.</p><form method="post" class="stack">' . csrf() . '<label>Your name<input name="name" required maxlength="80" autocomplete="name"></label><label>Email<input type="email" name="email" required autocomplete="email"></label><label>Password (10+ characters)<input type="password" name="password" required minlength="10" autocomplete="new-password"></label><label class="opt"><input type="checkbox" name="accept" value="1" required> I am 18 or over and I accept the <a href="/terms">terms and safeguarding statement</a> and have read the <a href="/privacy">privacy notice</a></label><label class="opt"><input type="checkbox" name="remind" value="1"> Email me once next year when the Christmas card service opens again (optional)</label><button class="btn">Create account</button></form><p>Already registered? <a href="/login">Sign in</a></p>');
 }
 
 function r_verify(): void {
@@ -399,7 +399,7 @@ function r_postmark_hook(): void {
 function r_dashboard(): void {
     $u = need_login();
     $b = '<h1>My cards</h1>' . ($u['verified'] ? '' : '<p class="flash warn">Please verify your email: click the link we sent to ' . h($u['email']) . '. You need this before sending. <form method="post" action="/resend-verification" class="inline">' . csrf() . '<button class="link">Send it again</button></form><details><summary>Wrong email address?</summary><form method="post" action="/change-email" class="row">' . csrf() . '<label>Correct email<input type="email" name="email" required></label><button class="btn alt">Change and resend</button></form></details></p>') . '<p><a class="btn" href="/">Create a new card</a></p>'
-        . '<form method="post" action="/prefs" class="row">' . csrf() . '<label>Optional status emails<select name="notify">' . implode('', array_map(fn($k, $l) => '<option value="' . $k . '"' . ($u['notify'] === $k ? ' selected' : '') . '>' . $l . '</option>', ['off', 'viewed', 'summary'], ['Off (default)', 'Email me when a card is opened', 'One daily summary'])) . '</select></label><button class="btn alt">Save</button></form>';
+        . '<form method="post" action="/prefs" class="row">' . csrf() . '<label>Optional status emails<select name="notify">' . implode('', array_map(fn($k, $l) => '<option value="' . $k . '"' . ($u['notify'] === $k ? ' selected' : '') . '>' . $l . '</option>', ['off', 'viewed', 'summary'], ['Off (default)', 'Email me when a card is opened', 'One daily summary'])) . '</select></label><label class="opt"><input type="checkbox" name="remind" value="1"' . ($u['remind'] ? ' checked' : '') . '> Remind me once a year when the service opens</label><button class="btn alt">Save</button></form>';
     $rows = '';
     foreach (all('select * from sends where user_id=? order by id desc', [$u['id']]) as $s) {
         $c = [];
@@ -537,7 +537,7 @@ function r_message(): void {
 
 function r_prefs(): void {
     $u = need_login();
-    if (post()) { q('update users set notify=? where id=?', [in_array($_POST['notify'] ?? '', ['viewed', 'summary']) ? $_POST['notify'] : 'off', $u['id']]); flash('Email preference saved.'); }
+    if (post()) { q('update users set notify=?, remind=? where id=?', [in_array($_POST['notify'] ?? '', ['viewed', 'summary']) ? $_POST['notify'] : 'off', empty($_POST['remind']) ? 0 : 1, $u['id']]); flash('Email preferences saved.'); }
     redirect('/dashboard');
 }
 
@@ -612,7 +612,7 @@ function r_account_delete(): void {
 
 function dispatch(string $path): void {
     $routes = ['/' => 'r_home', '/help' => 'r_help', '/register' => 'r_register', '/verify' => 'r_verify', '/resend-verification' => 'r_resend_verify', '/login' => 'r_login', '/logout' => 'r_logout', '/forgot' => 'r_forgot', '/reset' => 'r_reset',
-        '/compose' => 'r_compose', '/preview' => 'r_preview', '/email-preview' => 'r_email_preview', '/review' => 'r_review', '/pay-cancelled' => 'r_pay_cancelled', '/return' => 'r_return', '/dev/pay' => 'r_dev_pay', '/dashboard' => 'r_dashboard', '/send' => 'r_send', '/prefs' => 'r_prefs', '/privacy' => 'r_privacy', '/terms' => 'r_terms', '/accept-terms' => 'r_accept_terms', '/account/delete' => 'r_account_delete', '/contacts' => 'r_contacts', '/contacts/edit' => 'r_contact_edit', '/contacts/delete-all' => 'r_contacts_delete_all', '/contacts/pick' => 'r_pick', '/contacts/save' => 'r_save_contact', '/groups' => 'r_groups', '/discard' => 'r_discard', '/change-email' => 'r_change_email', '/copy' => 'r_copy',
+        '/compose' => 'r_compose', '/preview' => 'r_preview', '/email-preview' => 'r_email_preview', '/review' => 'r_review', '/pay-cancelled' => 'r_pay_cancelled', '/return' => 'r_return', '/dev/pay' => 'r_dev_pay', '/dashboard' => 'r_dashboard', '/send' => 'r_send', '/prefs' => 'r_prefs', '/remind-off' => 'r_remind_off', '/privacy' => 'r_privacy', '/terms' => 'r_terms', '/accept-terms' => 'r_accept_terms', '/account/delete' => 'r_account_delete', '/contacts' => 'r_contacts', '/contacts/edit' => 'r_contact_edit', '/contacts/delete-all' => 'r_contacts_delete_all', '/contacts/pick' => 'r_pick', '/contacts/save' => 'r_save_contact', '/groups' => 'r_groups', '/discard' => 'r_discard', '/change-email' => 'r_change_email', '/copy' => 'r_copy',
         '/mfa' => 'r_mfa', '/admin' => 'r_admin', '/admin/delivery' => 'r_admin_delivery', '/admin/finance' => 'r_admin_finance', '/admin/reports' => 'r_admin_reports', '/admin/campaign' => 'r_admin_campaign', '/admin/app' => 'r_admin_app', '/admin/email' => 'r_admin_email', '/admin/privacy' => 'r_admin_privacy', '/admin/access' => 'r_admin_access', '/admin/health' => 'r_admin_health', '/admin/audit' => 'r_admin_audit', '/admin/action' => 'r_admin_action', '/admin/senders' => 'r_admin_senders', '/admin/launch' => 'r_admin_launch', '/admin/export' => 'r_export', '/admin/message' => 'r_message', '/hooks/stripe' => 'r_stripe_hook', '/hooks/postmark' => 'r_postmark_hook'];
     if (post() && !str_starts_with($path, '/hooks/')) check_csrf();
     if (preg_match('#^/c/([a-f0-9]+)(?:/(open|report))?$#', $path, $m)) r_card($m[1], $m[2] ?? '');
