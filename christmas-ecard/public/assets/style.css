@@ -224,3 +224,6 @@ img.art{display:block;width:100%;height:auto}
 .heroart img.art{aspect-ratio:4/3;object-fit:cover;object-position:top}
 .heroart svg.art{aspect-ratio:4/3}
 .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+
+.noanim *,.noanim *::before,.noanim *::after{animation:none!important;transition:none!important}
+.navgroup{margin:.8rem 0 .2rem;font-weight:800;font-size:.85rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted,#5c6470)}

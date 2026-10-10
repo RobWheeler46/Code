@@ -32,3 +32,5 @@
   }
 })();
 document.querySelectorAll('[data-print]').forEach(function (b) { b.addEventListener('click', function () { window.print(); }); });
+
+document.querySelectorAll('[data-skip]').forEach(function (b) { b.addEventListener('click', function () { document.documentElement.classList.add('noanim'); b.parentNode.hidden = true; }); });

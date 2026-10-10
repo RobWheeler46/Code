@@ -14,9 +14,15 @@ function admin_page(string $title, string $body): never {
         '/admin/privacy' => ['Privacy and retention', can_any('rolesadmin', 'campaign', 'appadmin', 'finance', 'delivery')], '/admin/access' => ['Administrator access', can('rolesadmin')],
         '/admin/senders' => ['Senders', can_any('complaints', 'rolesadmin')], '/admin/launch' => ['Launch readiness', true], '/admin/giftaid' => ['Gift Aid', can('finance')], '/admin/measures' => ['Measures', can_any('campaign', 'finance', 'appadmin', 'rolesadmin')], '/admin/rehearsal' => ['Rehearsal', can_any('appadmin', 'rolesadmin')], '/admin/health' => ['System health', true], '/admin/audit' => ['Change history', true]];
     $here = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-    $nav = '<nav class="adminmenu" aria-label="Administration"><details open><summary>Menu</summary><ul class="plain">';
-    foreach ($links as $href => [$label, $ok]) if ($ok) $nav .= '<li><a href="' . $href . '"' . ($href === $here ? ' aria-current="page"' : '') . '>' . h($label) . '</a></li>';
-    page($title, $nav . '</ul></details><p class="note">Signed in as ' . h($u['name']) . ' (' . h(implode(', ', array_map(fn($r) => ROLES[$r] ?? $r, array_filter(explode(',', $u['roles'])))) ?: 'no roles') . ')</p>' . $body);
+    $groups = ['Overview' => ['/admin'], 'Cards and delivery' => ['/admin/delivery', '/admin/reports', '/admin/senders', '/admin/rehearsal'], 'Fundraising' => ['/admin/finance', '/admin/giftaid', '/admin/measures'],
+        'Campaign setup' => ['/admin/campaign', '/admin/launch', '/admin/email', '/admin/privacy'], 'Administration' => ['/admin/app', '/admin/access', '/admin/health', '/admin/audit']]; // five areas; each link still passes its own server side role check
+    $nav = '<nav class="adminmenu" aria-label="Administration"><details open><summary>Menu</summary>';
+    foreach ($groups as $g => $hrefs) {
+        $li = ''; foreach ($hrefs as $href) if ($links[$href][1]) $li .= '<li><a href="' . $href . '"' . ($href === $here ? ' aria-current="page"' : '') . '>' . h($links[$href][0]) . '</a></li>';
+        if ($li !== '') $nav .= '<p class="navgroup">' . h($g) . '</p><ul class="plain">' . $li . '</ul>';
+    }
+    $nav .= '</details></nav>';
+    page($title, $nav . '<p class="note">Signed in as ' . h($u['name']) . ' (' . h(implode(', ', array_map(fn($r) => ROLES[$r] ?? $r, array_filter(explode(',', $u['roles'])))) ?: 'no roles') . ')</p>' . $body);
 }
 function role_names(string $csv): string { return implode(', ', array_map(fn($r) => ROLES[$r] ?? $r, array_filter(explode(',', $csv)))) ?: 'no roles'; }
 

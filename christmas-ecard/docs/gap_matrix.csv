@@ -1,0 +1,177 @@
+Requirement,Area,Reported status (pack),Audited status,Evidence (files),Automated tests,Notes
+FR-001,Identity & account,Built,implemented,"src/app.php r_register, r_verify, r_login, r_logout, r_forgot, r_reset",tests/smoke.php,
+FR-002,Identity & account,Built,implemented,"src/app.php r_register, r_verify, r_login, r_logout, r_forgot, r_reset",tests/smoke.php,
+FR-003,Identity & account,Built,implemented,"src/app.php r_register, r_verify, r_login, r_logout, r_forgot, r_reset",tests/smoke.php,
+FR-004,Identity & account,Built,implemented,"src/app.php r_register, r_verify, r_login, r_logout, r_forgot, r_reset",tests/smoke.php,
+FR-005,Identity & account,Partly,partial,"src/app.php r_dashboard, r_prefs, r_account_delete",smoke,No profile editing page.
+FR-006,Design catalogue,Built,implemented,"src/cards.php, src/app.php r_compose, src/admin.php (design management)","admin_test, smoke",
+FR-007,Design catalogue,Built,implemented,"src/cards.php, src/app.php r_compose, src/admin.php (design management)","admin_test, smoke",
+FR-008,Design catalogue,Built,implemented,"src/cards.php, src/app.php r_compose, src/admin.php (design management)","admin_test, smoke",
+FR-009,Design catalogue,Built,implemented,"src/cards.php, src/app.php r_compose, src/admin.php (design management)","admin_test, smoke",
+FR-010,Card composition,Built,implemented,"src/app.php r_compose, r_preview, r_review; src/core.php",smoke,
+FR-011,Card composition,Built,implemented,"src/app.php r_compose, r_preview, r_review; src/core.php",smoke,
+FR-012,Card composition,Built,implemented,"src/app.php r_compose, r_preview, r_review; src/core.php",smoke,
+FR-013,Card composition,Built,implemented,"src/app.php r_compose, r_preview, r_review; src/core.php",smoke,
+FR-014,Card composition,Built,implemented,"src/app.php r_compose, r_preview, r_review; src/core.php",smoke,
+FR-015,Card composition,Built,implemented,"src/app.php r_compose, r_preview, r_review; src/core.php",smoke,
+FR-016,Card composition,Built,implemented,"src/app.php r_compose, r_preview, r_review; src/core.php",smoke,
+FR-017,Donations & checkout,Built,implemented,"src/app.php r_review, r_return, r_dev_pay; src/core.php confirm_payment","smoke, resilience_test",Refund import: charge.refunded handled in src/resilience.php; Stripe live mode untested.
+FR-018,Donations & checkout,Built,implemented,"src/app.php r_review, r_return, r_dev_pay; src/core.php confirm_payment","smoke, resilience_test",Refund import: charge.refunded handled in src/resilience.php; Stripe live mode untested.
+FR-019,Donations & checkout,Built,implemented,"src/app.php r_review, r_return, r_dev_pay; src/core.php confirm_payment","smoke, resilience_test",Refund import: charge.refunded handled in src/resilience.php; Stripe live mode untested.
+FR-020,Donations & checkout,Built,implemented,"src/app.php r_review, r_return, r_dev_pay; src/core.php confirm_payment","smoke, resilience_test",Refund import: charge.refunded handled in src/resilience.php; Stripe live mode untested.
+FR-021,Donations & checkout,Built,implemented,"src/app.php r_review, r_return, r_dev_pay; src/core.php confirm_payment","smoke, resilience_test",Refund import: charge.refunded handled in src/resilience.php; Stripe live mode untested.
+FR-022,Donations & checkout,Built,implemented,"src/app.php r_review, r_return, r_dev_pay; src/core.php confirm_payment","smoke, resilience_test",Refund import: charge.refunded handled in src/resilience.php; Stripe live mode untested.
+FR-023,Donations & checkout,Built,implemented,"src/app.php r_review, r_return, r_dev_pay; src/core.php confirm_payment","smoke, resilience_test",Refund import: charge.refunded handled in src/resilience.php; Stripe live mode untested.
+FR-024,Delivery and recovery,Built,implemented,"src/core.php process_queue, requeue_recipient; src/admin.php delivery view","smoke, ops_test",Postmark live behaviour unverified (no live account in tests).
+FR-025,Delivery and recovery,Built,implemented,"src/core.php process_queue, requeue_recipient; src/admin.php delivery view","smoke, ops_test",Postmark live behaviour unverified (no live account in tests).
+FR-026,Delivery and recovery,Built,implemented,"src/core.php process_queue, requeue_recipient; src/admin.php delivery view","smoke, ops_test",Postmark live behaviour unverified (no live account in tests).
+FR-027,Delivery and recovery,Built,implemented,"src/core.php process_queue, requeue_recipient; src/admin.php delivery view","smoke, ops_test",Postmark live behaviour unverified (no live account in tests).
+FR-028,Delivery and recovery,Built,implemented,"src/core.php process_queue, requeue_recipient; src/admin.php delivery view","smoke, ops_test",Postmark live behaviour unverified (no live account in tests).
+FR-029,Delivery and recovery,Built,implemented,"src/core.php process_queue, requeue_recipient; src/admin.php delivery view","smoke, ops_test",Postmark live behaviour unverified (no live account in tests).
+FR-030,Delivery and recovery,Built,implemented,"src/core.php process_queue, requeue_recipient; src/admin.php delivery view","smoke, ops_test",Postmark live behaviour unverified (no live account in tests).
+FR-031,Recipient opening,Built,implemented,"src/app.php r_card, r_optout; public/assets/style.css",smoke,No Skip animation control (see UX24-06).
+FR-032,Recipient opening,Built,implemented,"src/app.php r_card, r_optout; public/assets/style.css",smoke,No Skip animation control (see UX24-06).
+FR-033,Recipient opening,Built,implemented,"src/app.php r_card, r_optout; public/assets/style.css",smoke,No Skip animation control (see UX24-06).
+FR-034,Recipient opening,Built,implemented,"src/app.php r_card, r_optout; public/assets/style.css",smoke,No Skip animation control (see UX24-06).
+FR-035,Recipient opening,Built,implemented,"src/app.php r_card, r_optout; public/assets/style.css",smoke,No Skip animation control (see UX24-06).
+FR-036,Recipient opening,Built,implemented,"src/app.php r_card, r_optout; public/assets/style.css",smoke,No Skip animation control (see UX24-06).
+FR-037,Recipient opening,Built,implemented,"src/app.php r_card, r_optout; public/assets/style.css",smoke,No Skip animation control (see UX24-06).
+FR-038,Recovery and help,Built,implemented,"src/app.php, src/core.php, src/ops.php, src/admin.php","smoke, ops_test, admin_test","Support contact and hours are operational, not code."
+FR-039,Recovery and help,Built,implemented,"src/app.php, src/core.php, src/ops.php, src/admin.php","smoke, ops_test, admin_test","Support contact and hours are operational, not code."
+FR-040,Recovery and help,Built,implemented,"src/app.php, src/core.php, src/ops.php, src/admin.php","smoke, ops_test, admin_test","Support contact and hours are operational, not code."
+FR-041,Recovery and help,Built,implemented,"src/app.php, src/core.php, src/ops.php, src/admin.php","smoke, ops_test, admin_test","Support contact and hours are operational, not code."
+FR-042,Recovery and help,Built,implemented,"src/app.php, src/core.php, src/ops.php, src/admin.php","smoke, ops_test, admin_test","Support contact and hours are operational, not code."
+FR-043,Recovery and help,Built,implemented,"src/app.php, src/core.php, src/ops.php, src/admin.php","smoke, ops_test, admin_test","Support contact and hours are operational, not code."
+FR-044,Recovery and help,Built,implemented,"src/app.php, src/core.php, src/ops.php, src/admin.php","smoke, ops_test, admin_test","Support contact and hours are operational, not code."
+FR-045,Recovery and help,Built,implemented,"src/app.php, src/core.php, src/ops.php, src/admin.php","smoke, ops_test, admin_test","Support contact and hours are operational, not code."
+FR-046,Campaign operations,Built,implemented,"src/app.php, src/core.php, src/ops.php, src/admin.php","smoke, ops_test, admin_test","Support contact and hours are operational, not code."
+FR-047,Campaign operations,Built,implemented,"src/app.php, src/core.php, src/ops.php, src/admin.php","smoke, ops_test, admin_test","Support contact and hours are operational, not code."
+FR-048,Campaign operations,Built,implemented,"src/app.php, src/core.php, src/ops.php, src/admin.php","smoke, ops_test, admin_test","Support contact and hours are operational, not code."
+FR-049,Campaign operations,Built,implemented,"src/app.php, src/core.php, src/ops.php, src/admin.php","smoke, ops_test, admin_test","Support contact and hours are operational, not code."
+FR-050,Campaign operations,Built,implemented,"src/app.php, src/core.php, src/ops.php, src/admin.php","smoke, ops_test, admin_test","Support contact and hours are operational, not code."
+FR-051,Campaign operations,Built,implemented,"src/app.php, src/core.php, src/ops.php, src/admin.php","smoke, ops_test, admin_test","Support contact and hours are operational, not code."
+FR-052,Campaign operations,Built,implemented,"src/app.php, src/core.php, src/ops.php, src/admin.php","smoke, ops_test, admin_test","Support contact and hours are operational, not code."
+FR-053,Campaign operations,Built,implemented,"src/app.php, src/core.php, src/ops.php, src/admin.php","smoke, ops_test, admin_test","Support contact and hours are operational, not code."
+FR-054,Campaign operations,Built,implemented,"src/app.php, src/core.php, src/ops.php, src/admin.php","smoke, ops_test, admin_test","Support contact and hours are operational, not code."
+FR-055,Campaign operations,Built,implemented,"src/app.php, src/core.php, src/ops.php, src/admin.php","smoke, ops_test, admin_test","Support contact and hours are operational, not code."
+FR-056,Campaign operations,Built,implemented,"src/app.php, src/core.php, src/ops.php, src/admin.php","smoke, ops_test, admin_test","Support contact and hours are operational, not code."
+FR-057,Campaign operations,Built,implemented,"src/app.php, src/core.php, src/ops.php, src/admin.php","smoke, ops_test, admin_test","Support contact and hours are operational, not code."
+FR-058,Sender and campaign extras,Built,implemented,"src/app.php (overrides, copy, QR, send back, starters, notifications); src/cards.php","ops_test, smoke",QR image comes from a third party service.
+FR-059,Sender and campaign extras,Built,implemented,"src/app.php (overrides, copy, QR, send back, starters, notifications); src/cards.php","ops_test, smoke",QR image comes from a third party service.
+FR-060,Sender and campaign extras,Built,implemented,"src/app.php (overrides, copy, QR, send back, starters, notifications); src/cards.php","ops_test, smoke",QR image comes from a third party service.
+FR-061,Sender and campaign extras,Built,implemented,"src/app.php (overrides, copy, QR, send back, starters, notifications); src/cards.php","ops_test, smoke",QR image comes from a third party service.
+FR-062,Sender and campaign extras,Built,implemented,"src/app.php (overrides, copy, QR, send back, starters, notifications); src/cards.php","ops_test, smoke",QR image comes from a third party service.
+FR-063,Sender and campaign extras,Built,implemented,"src/app.php (overrides, copy, QR, send back, starters, notifications); src/cards.php","ops_test, smoke",QR image comes from a third party service.
+FR-064,Sender and campaign extras,Built,implemented,"src/app.php (overrides, copy, QR, send back, starters, notifications); src/cards.php","ops_test, smoke",QR image comes from a third party service.
+FR-065,Sender and campaign extras,Built,implemented,"src/app.php (overrides, copy, QR, send back, starters, notifications); src/cards.php","ops_test, smoke",QR image comes from a third party service.
+FR-066,Sender and campaign extras,Built,implemented,"src/app.php (overrides, copy, QR, send back, starters, notifications); src/cards.php","ops_test, smoke",QR image comes from a third party service.
+FR-067,Sender and campaign extras,Built,implemented,"src/app.php (overrides, copy, QR, send back, starters, notifications); src/cards.php","ops_test, smoke",QR image comes from a third party service.
+FR-068,Deferred enhancement: original detail missing,Not built (aggregate),missing,-,-,Conditional enhancements. Printable card (FR-143) covers part of FR-074; FR-076 partly covered by FR-083.
+FR-069,Deferred enhancement: original detail missing,Not built (aggregate),missing,-,-,Conditional enhancements. Printable card (FR-143) covers part of FR-074; FR-076 partly covered by FR-083.
+FR-070,Deferred enhancement: original detail missing,Not built (aggregate),missing,-,-,Conditional enhancements. Printable card (FR-143) covers part of FR-074; FR-076 partly covered by FR-083.
+FR-071,Deferred enhancement: original detail missing,Not built (aggregate),missing,-,-,Conditional enhancements. Printable card (FR-143) covers part of FR-074; FR-076 partly covered by FR-083.
+FR-072,Deferred enhancement: original detail missing,Not built (aggregate),missing,-,-,Conditional enhancements. Printable card (FR-143) covers part of FR-074; FR-076 partly covered by FR-083.
+FR-073,Deferred enhancement: original detail missing,Not built (aggregate),missing,-,-,Conditional enhancements. Printable card (FR-143) covers part of FR-074; FR-076 partly covered by FR-083.
+FR-074,Deferred enhancement: original detail missing,Not built (aggregate),missing,-,-,Conditional enhancements. Printable card (FR-143) covers part of FR-074; FR-076 partly covered by FR-083.
+FR-075,Deferred enhancement: original detail missing,Not built (aggregate),missing,-,-,Conditional enhancements. Printable card (FR-143) covers part of FR-074; FR-076 partly covered by FR-083.
+FR-076,Deferred enhancement: original detail missing,Not built (aggregate),missing,-,-,Conditional enhancements. Printable card (FR-143) covers part of FR-074; FR-076 partly covered by FR-083.
+FR-077,Submission and admin tasks,Built,implemented,"src/app.php r_review, steps(); src/admin.php","smoke, admin_test",
+FR-078,Submission and admin tasks,Built,implemented,"src/app.php r_review, steps(); src/admin.php","smoke, admin_test",
+FR-079,Submission and admin tasks,Built,implemented,"src/app.php r_review, steps(); src/admin.php","smoke, admin_test",
+FR-080,Submission and admin tasks,Built,implemented,"src/app.php r_review, steps(); src/admin.php","smoke, admin_test",
+FR-081,Submission and admin tasks,Built,implemented,src/admin.php config engine; src/admin2.php,admin_test,
+FR-082,Submission and admin tasks,Built,implemented,src/admin.php config engine; src/admin2.php,admin_test,
+FR-083,Submission and admin tasks,Built,implemented,src/admin.php config engine; src/admin2.php,admin_test,
+FR-084,Settings,Partly,partial,src/admin.php config_spec,admin_test,"Subject lines, branding assets and help content are not editable."
+FR-085,Settings,Partly,partial,src/admin.php config_spec,admin_test,"Subject lines, branding assets and help content are not editable."
+FR-086,"Governance, audit, roles",Built,implemented,src/admin.php (retention impact review),admin_test,
+FR-087,"Governance, audit, roles",Partly,partial,src/admin.php r_admin_access,admin_test,No beneficiary change workflow; no email invitation.
+FR-088,"Governance, audit, roles",Partly,partial,src/admin.php r_admin_access,admin_test,No beneficiary change workflow; no email invitation.
+FR-089,"Governance, audit, roles",Built,implemented,"src/admin.php, src/ops.php health_alerts","admin_test, ops_test",Audit export is not built (FR-159).
+FR-090,"Governance, audit, roles",Built,implemented,"src/admin.php, src/ops.php health_alerts","admin_test, ops_test",Audit export is not built (FR-159).
+FR-091,"Governance, audit, roles",Built,implemented,"src/admin.php, src/ops.php health_alerts","admin_test, ops_test",Audit export is not built (FR-159).
+FR-092,"Governance, audit, roles",Built,implemented,"src/admin.php, src/ops.php health_alerts","admin_test, ops_test",Audit export is not built (FR-159).
+FR-093,"Governance, audit, roles",Built,implemented,"src/admin.php, src/ops.php health_alerts","admin_test, ops_test",Audit export is not built (FR-159).
+FR-094,"Governance, audit, roles",Built,implemented,"src/admin.php, src/ops.php health_alerts","admin_test, ops_test",Audit export is not built (FR-159).
+FR-095,Config restore (deferred),Not built,missing,-,-,Restore previous configuration (Should).
+FR-096,Branding,Built,implemented,public/assets/style.css; src/app.php page(); email_html(),ops_test (email logo),"Contrast computed, not checked with an external tool."
+FR-097,Branding,Built,implemented,public/assets/style.css; src/app.php page(); email_html(),ops_test (email logo),"Contrast computed, not checked with an external tool."
+FR-098,Branding,Built,implemented,public/assets/style.css; src/app.php page(); email_html(),ops_test (email logo),"Contrast computed, not checked with an external tool."
+FR-099,Branding,Built,implemented,public/assets/style.css; src/app.php page(); email_html(),ops_test (email logo),"Contrast computed, not checked with an external tool."
+FR-100,Contacts and groups,Built,implemented,src/contacts.php,tests/contacts_test.php,
+FR-101,Contacts and groups,Built,implemented,src/contacts.php,tests/contacts_test.php,
+FR-102,Contacts and groups,Built,implemented,src/contacts.php,tests/contacts_test.php,
+FR-103,Contacts and groups,Built,implemented,src/contacts.php,tests/contacts_test.php,
+FR-104,Contacts and groups,Built,implemented,src/contacts.php,tests/contacts_test.php,
+FR-105,Contacts and groups,Built,implemented,src/contacts.php,tests/contacts_test.php,
+FR-106,Contacts and groups,Built,implemented,src/contacts.php,tests/contacts_test.php,
+FR-107,Contacts and groups,Built,implemented,src/contacts.php,tests/contacts_test.php,
+FR-108,Contacts and groups,Built,implemented,src/contacts.php,tests/contacts_test.php,
+FR-109,Contacts and groups,Built,implemented,src/contacts.php,tests/contacts_test.php,
+FR-110,Contacts and groups,Built,implemented,src/contacts.php,tests/contacts_test.php,
+FR-111,Contacts and groups,Built,implemented,src/contacts.php,tests/contacts_test.php,
+FR-112,Contacts and groups,Built,implemented,src/contacts.php,tests/contacts_test.php,
+FR-113,Contacts and groups,Built,implemented,src/contacts.php,tests/contacts_test.php,
+FR-114,Contacts and groups,Built,implemented,src/contacts.php,tests/contacts_test.php,
+FR-115,Contacts and groups,Built,implemented,src/contacts.php,tests/contacts_test.php,
+FR-116,Contacts and groups,Built,implemented,src/contacts.php,tests/contacts_test.php,
+FR-117,Access and responsive design,Partly,partial,src/admin.php; public/assets/style.css,admin_test,No assistive technology audit; nav grouped into five areas (UX24-07).
+FR-118,Access and responsive design,Partly,partial,src/admin.php; public/assets/style.css,admin_test,No assistive technology audit; nav grouped into five areas (UX24-07).
+FR-119,Access and responsive design,Partly,partial,src/admin.php; public/assets/style.css,admin_test,No assistive technology audit; nav grouped into five areas (UX24-07).
+FR-120,Access and responsive design,Partly,partial,src/admin.php; public/assets/style.css,admin_test,No assistive technology audit; nav grouped into five areas (UX24-07).
+FR-121,Access and responsive design,Partly,partial,src/admin.php; public/assets/style.css,admin_test,No assistive technology audit; nav grouped into five areas (UX24-07).
+FR-122,Access and responsive design,Partly,partial,src/admin.php; public/assets/style.css,admin_test,No assistive technology audit; nav grouped into five areas (UX24-07).
+FR-123,Access and responsive design,Partly,partial,src/admin.php; public/assets/style.css,admin_test,No assistive technology audit; nav grouped into five areas (UX24-07).
+FR-124,Recovery,Built,implemented,src/core.php requeue_recipient,ops_test,
+FR-125,Recovery,Partly,partial,src/app.php (pending checks); src/ops.php,ops_test,Resolution is by checking or cancelling the attempt.
+FR-126,Recovery,Built,implemented,src/core.php process_queue retry policy,ops_test,
+FR-127,Privacy and view status,Built,implemented,"src/app.php r_account_delete, is_scanner()",smoke,
+FR-128,Privacy and view status,Built,implemented,"src/app.php r_account_delete, is_scanner()",smoke,
+FR-129,Refunds and alerts,Partly,partial,src/resilience.php stripe_handle_event (charge.refunded); src/admin.php manual entry,resilience_test,Disputes listed only.
+FR-130,Refunds and alerts,Built,implemented,"src/ops.php alerts_tick, health_alerts",ops_test,
+FR-131,"Privacy, safety and readiness",Built,implemented,"src/legal.php, src/ops.php, src/admin2.php",ops_test,Legal wording is draft and unapproved (D-14).
+FR-132,"Privacy, safety and readiness",Built,implemented,"src/legal.php, src/ops.php, src/admin2.php",ops_test,Legal wording is draft and unapproved (D-14).
+FR-133,"Privacy, safety and readiness",Built,implemented,"src/legal.php, src/ops.php, src/admin2.php",ops_test,Legal wording is draft and unapproved (D-14).
+FR-134,"Privacy, safety and readiness",Built,implemented,"src/legal.php, src/ops.php, src/admin2.php",ops_test,Legal wording is draft and unapproved (D-14).
+FR-135,"Privacy, safety and readiness",Built,implemented,"src/legal.php, src/ops.php, src/admin2.php",ops_test,Legal wording is draft and unapproved (D-14).
+FR-136,Rehearsal and measures,Built,implemented,"src/admin3.php, src/app.php r_email_preview",ops_test,
+FR-137,Rehearsal and measures,Built,implemented,"src/admin3.php, src/app.php r_email_preview",ops_test,
+FR-138,Rehearsal and measures,Built,implemented,"src/admin3.php, src/app.php r_email_preview",ops_test,
+FR-139,Rehearsal and measures,Built,implemented,"src/admin3.php, src/app.php r_email_preview",ops_test,
+FR-140,Recipient donations (decision),Decision / not built,missing,-,-,"Blocked by D-11. Not built, not visible."
+FR-141,Gift Aid,Decision / built off,implemented,src/giftaid.php,tests/giftaid_test.php,Flag off until D-12.
+FR-142,Christmas Day delivery (decision),Decision / not built,missing,-,-,"Blocked by D-13. Not built, not visible."
+FR-143,Print and reminders,Built,implemented,"src/app.php (print stylesheet, remind-off); src/ops.php send_reminders",ops_test,
+FR-144,Print and reminders,Built,implemented,"src/app.php (print stylesheet, remind-off); src/ops.php send_reminders",ops_test,
+FR-145,Alt text / AT review,Partly,partial,src/cards.php descriptions; docs/AT_test_plan.md,-,Assistive technology tests not run.
+FR-146,Illustrations and hero,Built,implemented,src/cards.php,"admin_test, resilience_test",
+FR-147,Illustrations and hero,Built,implemented,src/cards.php,"admin_test, resilience_test",
+FR-148,Illustrations and hero,Built,implemented,src/cards.php,"admin_test, resilience_test",
+FR-149,Illustrations and hero,Built,implemented,src/cards.php,"admin_test, resilience_test",
+FR-150,See exact FR text in Annex A §5,Proposed; not built,missing,-,-,"R1.1 guest sending, not approved."
+FR-151,See exact FR text in Annex A §5,Proposed; not built,missing,-,-,"R1.1. Draft saving exists (FR-015); no autosave, autocomplete or journey preview."
+FR-152,See exact FR text in Annex A §5,Proposed; not built,missing,-,-,"R1.1. Draft saving exists (FR-015); no autosave, autocomplete or journey preview."
+FR-153,See exact FR text in Annex A §5,Proposed; not built,missing,-,-,"R1.1. Draft saving exists (FR-015); no autosave, autocomplete or journey preview."
+FR-154,See exact FR text in Annex A §5,Proposed; not built,missing,-,-,R2 / R1.1.
+FR-155,See exact FR text in Annex A §5,Proposed; not built,missing,-,-,R2 / R1.1.
+FR-156,See exact FR text in Annex A §5,Proposed; not built,implemented,"src/resilience.php freeze_art, r_art; src/core.php",resilience_test,
+FR-157,See exact FR text in Annex A §5,Proposed; not built,implemented,"src/resilience.php stripe_handle_event, payment_exceptions",resilience_test,Live Stripe verification not done.
+FR-158,See exact FR text in Annex A §5,Proposed; not built,missing,-,-,R2.
+FR-159,See exact FR text in Annex A §5,Proposed; not built,missing,-,-,R2.
+FR-160,See exact FR text in Annex A §5,Proposed; not built,partial,"src/lib.php limit_for, honeypot",resilience_test,No bot detection beyond trap field and limits.
+FR-161,See exact FR text in Annex A §5,Proposed; not built,implemented,src/admin.php need_role; src/lib.php; access review,resilience_test,
+FR-162,See exact FR text in Annex A §5,Proposed; not built,implemented,"src/resilience.php backup_run, backup_restore; src/cli.php",resilience_test,Needs BACKUP_KEY and off server route; staging restore not run.
+FR-163,See exact FR text in Annex A §5,Proposed; not built,implemented,src/resilience.php postmark_handle_event,resilience_test,Live Postmark webhook untested.
+FR-164,See exact FR text in Annex A §5,Proposed; not built,missing,-,-,R2 archive.
+UX24-01,Compose and recipients on one screen,Must,implemented,"src/app.php r_compose (recipient rows, FR-137)",smoke,"No standalone recipients route exists, so SCR-04 redirect is not needed."
+UX24-02,Compose before sign-in,Should,implemented,"src/app.php r_compose, r_register, r_verify (anonymous drafts kept 7 days)",smoke,Cross-session leak check not explicitly tested.
+UX24-03,"Free selected first, donation explicit",Must,partial,src/app.php r_review,smoke,Both actions exist; free is not the pre-selected default control. To confirm in UAT.
+UX24-04,"Progressive rows, count, no recipient disclosure",Must,implemented,src/app.php r_compose; src/core.php email_html,ops_test,
+UX24-05,Human readable states,Must,implemented,src/core.php rstatus(),smoke,
+UX24-06,"Skippable animation, reduced motion",Must,implemented,"public/assets/style.css (reduced motion, .noanim); src/app.php r_card; public/assets/app.js",tests/ux24_test.php,Skip animation added in this pass. Screen reader and keyboard UAT still to do.
+UX24-07,Five role safe admin areas,Should,implemented,src/admin.php admin_page (five areas),"tests/ux24_test.php, admin_test",Grouped in this pass; routes and permissions unchanged. Actions first Overview not yet redesigned.
+UX24-08,"Stable hero, never held back",Should,implemented,src/cards.php hero_for_session,resilience_test,
+UX24-09,Immutable sent artwork,Must,implemented,src/resilience.php freeze_art,resilience_test,
+UX24-10,Preview and test cannot send or charge,Must,implemented,"src/app.php r_preview, r_email_preview (GET, read only)",smoke,Test card goes only to the verified sender.
+UX24-11,Three stage progress model,Should,partial,src/app.php steps(),-,Progress bar exists; accuracy during auth and payment subflows needs UAT.
+UX24-12,No safeguards removed by simplification,Must,implemented,Navigation change only; src/admin.php need_role unchanged,"admin_test, resilience_test",
