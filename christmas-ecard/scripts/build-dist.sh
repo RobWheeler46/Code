@@ -6,6 +6,8 @@ rm -rf dist && mkdir -p dist/app/data dist/public_html
 cp -r src dist/app/src
 cp .env.example dist/app/.env.example
 cp -r public/assets dist/public_html/assets
+# a flat copy of every picture for easy access (not deployed, not in the zip)
+mkdir -p dist/images && cp public/assets/cards/* public/assets/brand/* dist/images/
 sed 's#/\.\./src/#/../app/src/#' public/index.php > dist/public_html/index.php
 printf 'Require all denied\n' > dist/app/data/.htaccess
 printf 'Require all denied\n' > dist/app/src/.htaccess
