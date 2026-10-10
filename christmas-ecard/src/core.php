@@ -1,6 +1,7 @@
 <?php
 // Domain logic: recipients, queue, payments, opt-outs, status. No HTML here.
-const MAX_RECIPIENTS = 20;
+/** Recipient ceiling is configurable but never above the launch maximum of twenty. */
+function max_recipients(): int { return max(1, min(20, (int)setting('max_recipients', '20'))); }
 
 function msg_max(): int { return (int)setting('msg_max', '500'); }   // launch configuration: agree with Trustees
 function name_max(): int { return (int)setting('name_max', '60'); }
@@ -13,10 +14,10 @@ function parse_recipients(string $text): array {
         [$line, $own] = array_map('trim', explode('|', $line, 2) + [1 => '']);
         if ($line === '') continue;
         if (!preg_match('/^(.+?)\s*(?:,|<)\s*([^\s<>,]+)\s*>?$/u', $line, $m)) { $errs[] = "Could not read: $line"; continue; }
-        $name = trim($m[1]); $email = strtolower($m[2]);
+        $name = trim($m[1]); $email = norm_email($m[2]); $key = strtolower($email);
         if (mb_strlen($name) > 60 || !filter_var($email, FILTER_VALIDATE_EMAIL)) { $errs[] = "Invalid name or email: $line"; continue; }
-        if (isset($seen[$email])) { $errs[] = "$email appears more than once in this card"; continue; }
-        $seen[$email] = 1;
+        if (isset($seen[$key])) { $errs[] = "$email appears more than once in this card"; continue; }
+        $seen[$key] = 1;
         if (mb_strlen($own) > msg_max()) { $errs[] = "Personal message for $name is over " . msg_max() . ' characters'; continue; }
         if ($own !== '' && ($bad = abuse_check($own))) { $errs[] = "Personal message for $name: $bad"; continue; }
         $rows[] = [$name, $email, $own];
@@ -82,7 +83,7 @@ function opted_out(string $email, int $userId): bool { return (bool)one('select 
 
 /** Same recipient address already sent a card by this sender in another submission. */
 function repeats_for(array $s): array {
-    return array_column(all("select distinct r.email from recipients r join recipients o on o.email=r.email join sends so on so.id=o.send_id
+    return array_column(all("select distinct r.email from recipients r join recipients o on lower(o.email)=lower(r.email) join sends so on so.id=o.send_id
         where r.send_id=? and so.user_id=? and so.id<>r.send_id and o.status not in ('draft','cancelled')", [$s['id'], $s['user_id']]), 'email');
 }
 

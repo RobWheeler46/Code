@@ -26,6 +26,9 @@ create table if not exists reports(id integer primary key autoincrement, recipie
 create table if not exists optouts(email text, user_id int, created int, primary key(email, user_id));
 create table if not exists settings(k text primary key, v text);
 create table if not exists attempts(k text, t int);
+create table if not exists contacts(id integer primary key autoincrement, user_id int, name text, email text, created int, updated int);
+create table if not exists groups(id integer primary key autoincrement, user_id int, name text);
+create table if not exists contact_groups(contact_id int, group_id int, primary key(contact_id, group_id));
 create table if not exists audit(id integer primary key autoincrement, user_id int, action text, detail text, created int);
 SQL;
 
@@ -63,7 +66,7 @@ function boot(): void {
     header('X-Frame-Options: DENY');
     header('X-Content-Type-Options: nosniff');
     header('Referrer-Policy: same-origin'); // keeps card tokens out of Referer
-    header("Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; form-action 'self' https://checkout.stripe.com");
+    header("Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; form-action 'self' https://checkout.stripe.com");
 }
 function csrf(): string { return '<input type="hidden" name="_c" value="' . $_SESSION['csrf'] . '">'; }
 function check_csrf(): void { if (!hash_equals($_SESSION['csrf'], (string)($_POST['_c'] ?? ''))) fail(403, 'Your session expired. Please go back, refresh and try again.'); }
@@ -160,14 +163,13 @@ function page(string $title, string $body, int $code = 200): never {
     $u = user(); $f = flash();
     $nav = '<a href="/">Cards</a>';
     if ($u) {
-        $nav .= '<a href="/dashboard">My cards</a>' . ($u['is_admin'] ? '<a href="/admin">Admin</a>' : '')
+        $nav .= '<a href="/dashboard">My cards</a><a href="/contacts">Address book</a>' . ($u['is_admin'] ? '<a href="/admin">Admin</a>' : '')
             . '<form method="post" action="/logout" class="inline">' . csrf() . '<button class="link">Sign out</button></form>';
     } else $nav .= '<a href="/login">Sign in</a><a href="/register">Register</a>';
     echo '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
         . '<title>' . h($title) . ' | 7th Swindon Scouts Christmas Cards</title>'
-        . '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;700;800&display=swap">'
         . '<link rel="stylesheet" href="/assets/style.css"></head><body><a class="skip" href="#main">Skip to content</a>'
-        . '<header><a class="brand" href="/">7th Swindon Scouts <span>Christmas Cards</span></a><nav aria-label="Main">' . $nav . '</nav></header>'
+        . '<header><a class="brand" href="/"><img src="/assets/brand/7th-swindon-stacked-purple.svg" alt="7th Swindon Scouts" width="64" height="61"><span>Christmas Cards</span></a><nav aria-label="Main">' . $nav . '</nav></header>'
         . '<main id="main">' . ($f ? '<p class="flash ' . h($f[0]) . '" role="' . ($f[0] === 'err' ? 'alert" tabindex="-1" data-focus' : 'status"') . '>' . h($f[1]) . '</p>' : '') . $body . '</main>'
         . '<footer>Sending is free; donations are optional and support 7th Swindon Scouts. Cards stay viewable for ' . (int)setting('expiry_days', '60') . ' days after sending. <a href="/help">Help and FAQ</a></footer><script src="/assets/app.js"></script></body></html>';
     exit;
