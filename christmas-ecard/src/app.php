@@ -3,6 +3,7 @@ require __DIR__ . '/lib.php';
 require __DIR__ . '/cards.php';
 require __DIR__ . '/core.php';
 require __DIR__ . '/contacts.php';
+require __DIR__ . '/admin.php';
 
 function post(): bool { return $_SERVER['REQUEST_METHOD'] === 'POST'; }
 function field(string $k, int $max = 200): string { return mb_substr(trim((string)($_POST[$k] ?? '')), 0, $max); }
@@ -47,6 +48,8 @@ function r_help(): void {
         'What do the statuses mean?' => implode(' ', array_map(fn($k, $v) => "$k: $v", array_keys(STATUS_HELP), STATUS_HELP)),
         'How long does a card last?' => 'A card link works for ' . expiry_days() . ' days after it is sent.',
         'I have a question about a donation' => "Email $e and quote the reference from your receipt.",
+        'How do you decide a card was viewed?' => 'A card counts as Viewed only when the recipient deliberately presses Open your card. Opening the email, or a security scanner fetching the link, does not count. If someone reads the card without that step we cannot tell, so it shows as not confirmed. Viewed never means we know who read it.',
+        'Can I delete my account?' => 'Yes, from the bottom of My cards. It cancels cards that have not started sending, deletes your saved contacts and groups, and switches off the links of the cards you sent. Finance records and opt-out records are kept separately.',
         'I received a card I do not want' => 'Open the card and use "Report this card", or use the "stop cards" link at the bottom of the email.',
     ];
     $b = '<h1>Help and FAQ</h1>';
@@ -166,7 +169,7 @@ function r_compose(): void {
         foreach ($rows as [$n, $e, $own]) q('insert into recipients(send_id,name,email,own_msg,token) values(?,?,?,?,?)', [$sid, $n, $e, $own, token()]);
         if ($act === 'test') {
             if (!$u || !$u['verified']) { flash('Verify your email first, then you can send yourself a test.', 'warn'); redirect("/compose?id=$sid"); }
-            limit('test', 5, 3600);
+            limit('test', max(1, (int)setting('test_per_hour', '3')), 3600);
             mail_send($u['email'], 'Test card preview', "Here is your private preview of the card:\n" . base_url() . "/preview?id=$sid\n(Sign in first if asked.)");
             flash('Test sent to ' . $u['email'] . '. Your draft is saved.'); redirect("/compose?id=$sid");
         }
@@ -295,7 +298,7 @@ function r_review(): void {
         $rec = $_GET['recover'] ?? '';
         if ($rec === 'cancelled' || $rec === 'failed') $form .= '<p class="flash warn" role="status"><strong>' . ($rec === 'cancelled' ? 'Payment was cancelled.' : 'Payment did not go through.') . '</strong> Nothing was charged and your card and recipients are safe. You can try again, or choose to send for free. Cards are only sent when you press a send button below.</p>';
         $form .= '<fieldset><legend>Optional donation to 7th Swindon Scouts</legend><p>' . h(setting('donation_purpose', 'Donations support 7th Swindon Scouts.')) . ' One donation covers all ' . count($rs) . ' of your cards. Sending is free either way.</p>';
-        foreach ([200, 500, 1000] as $a) $form .= '<label class="opt"><input type="radio" name="amount" value="' . $a . '"> ' . gbp($a) . '</label>';
+        foreach (array_map('intval', explode(',', setting('amounts_pence', '200,500,1000'))) as $a) $form .= '<label class="opt"><input type="radio" name="amount" value="' . $a . '"> ' . gbp($a) . '</label>';
         $form .= '<label class="opt"><input type="radio" name="amount" value="custom"> Other amount (£) <input type="number" name="custom" min="1" max="500" step="0.01" aria-label="Custom amount in pounds"></label>'
             . '<label class="opt"><input type="checkbox" name="donation_note" value="1"> Add a line to the cards saying they came with a donation to 7th Swindon Scouts (no amount is shown; only after payment is confirmed)</label></fieldset>'
             . '<div class="row"><button class="btn" name="do" value="donate">Donate and send cards</button><button class="btn" name="do" value="free">Send cards for free</button></div>';
@@ -330,6 +333,7 @@ function r_dev_pay(): void { // local stand-in for Stripe when STRIPE_SECRET is 
 function r_stripe_hook(): void {
     $body = (string)file_get_contents('php://input');
     if (!env('STRIPE_WEBHOOK_SECRET') || !stripe_sig_ok($body, $_SERVER['HTTP_STRIPE_SIGNATURE'] ?? '')) { http_response_code(400); exit('bad signature'); }
+    set_setting('last_stripe_hook', (string)time());
     $e = json_decode($body, true); $o = $e['data']['object'] ?? [];
     if (($e['type'] ?? '') === 'checkout.session.completed' && ($o['payment_status'] ?? '') === 'paid')
         confirm_payment((int)($o['metadata']['send_id'] ?? 0), $o['id'], (int)$o['amount_total'], env('STRIPE_ACCOUNT'));
@@ -366,7 +370,7 @@ function r_dashboard(): void {
     $b .= $rows ? '<table><caption class="sr">Your cards</caption><tr><th>Date</th><th>Card</th><th>State</th><th>Recipients</th><th>Donation</th></tr>' . $rows . '</table>' : '<p>No cards yet.</p>';
     $d = all('select * from donations where user_id=? order by id desc', [$u['id']]);
     if ($d) $b .= '<h2>Donation history</h2><table><tr><th>Date</th><th>Amount</th><th>Reference</th></tr>' . implode('', array_map(fn($x) => '<tr><td>' . date('j M Y', (int)$x['created']) . '</td><td>' . gbp((int)$x['pence']) . '</td><td>' . h($x['stripe_session']) . '</td></tr>', $d)) . '</table>';
-    page('My cards', $b);
+    page('My cards', $b . '<p><a href="/contacts">Address book</a> &middot; <a href="/account/delete">Delete my account</a></p>');
 }
 
 function r_send(): void {
@@ -382,11 +386,10 @@ function r_send(): void {
             flash($ok . ' cancelled.' . ($late ? " $late had already started sending and could not be stopped." : '') . ' Cancelling does not refund a donation.', $late ? 'warn' : 'ok');
         } else { // correct a failed address: a new, audited delivery attempt (failed/bounced rows only, so no duplicates)
             $r = one('select * from recipients where id=? and send_id=?', [$rid, $sid]);
-            $e = strtolower(field('email'));
-            if ($r && in_array($r['status'], ['failed', 'bounced']) && filter_var($e, FILTER_VALIDATE_EMAIL)) {
-                q("update recipients set email=?, status='queued', tries=0, error=null, delivered_at=null where id=? and status in ('failed','bounced')", [$e, $r['id']]);
-                audit((int)$u['id'], 'address_correction', "recipient {$r['id']}"); process_queue(); flash('Address updated and the card is queued again.');
-            } else flash('Could not update that address.', 'err');
+            $e = field('email'); $unconfirmed = $r && rstatus($r) === 'Delivery unconfirmed';
+            if ($r && $unconfirmed && empty($_POST['understand'])) flash('Please tick the box to confirm you understand the first email may already have arrived.', 'err');
+            elseif ($r && requeue_recipient((int)$r['id'], $e, (int)$u['id'], 'sender')) { process_queue(); flash('Updated. A fresh private link was made and the old one no longer works.'); }
+            else flash('Could not update that address.', 'err');
         }
         redirect("/send?id=$sid");
     }
@@ -394,7 +397,8 @@ function r_send(): void {
     foreach (all('select * from recipients where send_id=? order by id', [$sid]) as $r) {
         $st = rstatus($r); if ($r['status'] === 'queued') $queued++;
         $act = '';
-        if ($st === 'Failed') $act = '<form method="post" class="row">' . csrf() . '<input type="hidden" name="id" value="' . $sid . '"><input type="hidden" name="rid" value="' . $r['id'] . '"><input type="email" name="email" value="' . h($r['email']) . '" required aria-label="Corrected email for ' . h($r['name']) . '"><button class="btn alt">Fix and resend</button></form><small>' . h($r['error']) . '</small>';
+        if ($st === 'Delivery unconfirmed') $act = '<form method="post" class="stack">' . csrf() . '<input type="hidden" name="id" value="' . $sid . '"><input type="hidden" name="rid" value="' . $r['id'] . '"><input type="email" name="email" value="' . h($r['email']) . '" required aria-label="Email for ' . h($r['name']) . '"><label class="opt"><input type="checkbox" name="understand" value="1"> The first email may already have arrived. Send again with a new link.</label><button class="btn alt">Resend</button></form>';
+        elseif ($st === 'Failed') $act = '<form method="post" class="row">' . csrf() . '<input type="hidden" name="id" value="' . $sid . '"><input type="hidden" name="rid" value="' . $r['id'] . '"><input type="email" name="email" value="' . h($r['email']) . '" required aria-label="Corrected email for ' . h($r['name']) . '"><button class="btn alt">Fix and resend</button></form><small>' . h($r['error']) . '</small>';
         elseif ($r['status'] === 'queued') $act = '<form method="post" class="inline">' . csrf() . '<input type="hidden" name="id" value="' . $sid . '"><input type="hidden" name="rid" value="' . $r['id'] . '"><button class="link" name="do" value="cancel">Cancel</button></form>';
         elseif ($st === 'Cancelled') $act = '<small>' . h($r['error']) . '</small>';
         $rows .= '<tr><td>' . h($r['name']) . '</td><td>' . h($r['email']) . '</td><td><span class="pill ' . strtolower(str_replace(' ', '-', $st)) . '">' . $st . '</span></td><td>' . $act . '</td></tr>';
@@ -417,7 +421,7 @@ function r_card(string $t, string $act = ''): void {
     $s = one('select * from sends where id=?', [$r['send_id']]);
     if ($r['withdrawn']) gone_page($r, 'This card has been withdrawn', 'The card is no longer available.');
     if ($r['sent_at'] && time() > expiry_ts($r)) gone_page($r, 'This card has expired', 'Cards stay viewable for ' . expiry_days() . ' days after they are sent.');
-    if (post() && $act === 'open') { if (q('update recipients set viewed_at=? where id=? and viewed_at is null', [time(), $r['id']])->rowCount()) notify_view($r, $s); redirect("/c/$t?o=1"); } // human click, not a link scanner
+    if (post() && $act === 'open') { if (!is_scanner() && q('update recipients set viewed_at=? where id=? and viewed_at is null', [time(), $r['id']])->rowCount()) notify_view($r, $s); redirect("/c/$t?o=1"); } // human click, not a link scanner
     if (post() && $act === 'report') {
         limit('report', 5, 3600);
         q('insert into reports(recipient_id,reason,created) values(?,?,?)', [$r['id'], field('reason', 500), time()]);
@@ -457,141 +461,6 @@ function r_mfa(): void {
     }
     $enrol = $new ? '<p>First time: add this key to an authenticator app (time based, 6 digits):</p><p><code>' . h($sec) . '</code></p>' : '';
     page('Two-step sign in', '<h1>Administrator two-step sign in</h1>' . $enrol . '<form method="post" class="stack">' . csrf() . '<label>6-digit code<input name="code" inputmode="numeric" autocomplete="one-time-code" required></label><button class="btn">Continue</button></form>');
-}
-
-function adminbtn(string $do, int $id, string $label): string {
-    return '<form method="post" class="inline">' . csrf() . '<input type="hidden" name="do" value="' . $do . '"><input type="hidden" name="id" value="' . $id . '"><button class="link">' . h($label) . '</button></form> ';
-}
-function set_int(string $k, string $v, int $min, int $max): void { if (ctype_digit($v) && (int)$v >= $min && (int)$v <= $max) set_setting($k, $v); }
-
-/** FR-080: high-impact changes name the records they affect and need a second, deliberate click. */
-function confirm_page(string $a, int $i): never {
-    $rep = in_array($a, ['block', 'withdraw']) ? one('select r.id, x.email from reports r join recipients x on x.id=r.recipient_id where r.id=?', [$i]) : null;
-    $what = match ($a) {
-        'pause' => setting('paused') === '1' ? 'Resume all card sending. Queued cards will start going out.' : 'Pause all card dispatch. Nothing new will be sent until you resume. Queued cards stay queued.',
-        'block' => 'Stop every future card to ' . ($rep['email'] ?? 'this recipient') . ' from every sender (report #' . $i . '). Cards already sent stay viewable.',
-        'withdraw' => 'Withdraw the card sent to ' . ($rep['email'] ?? 'this recipient') . ' (report #' . $i . '). Their link will stop working. This does not refund any donation.',
-        'roles' => 'Change roles for ' . strtolower(trim((string)($_POST['email'] ?? ''))) . ' to: ' . (implode(', ', array_map(fn($r) => ROLES[$r] ?? $r, (array)($_POST['roles'] ?? []))) ?: 'no roles (removes admin access)') . '.',
-        default => 'Confirm this change.',
-    };
-    $hid = '';
-    foreach ($_POST as $k => $v) if ($k !== '_c' && $k !== 'confirmed') foreach ((array)$v as $x) $hid .= '<input type="hidden" name="' . h($k) . (is_array($v) ? '[]' : '') . '" value="' . h((string)$x) . '">';
-    page('Confirm change', '<h1>Please confirm</h1><p>' . h($what) . '</p><p>This will be recorded in the audit trail.</p><form method="post" class="row">' . csrf() . $hid . '<input type="hidden" name="confirmed" value="1"><button class="btn">Yes, do it</button><a class="btn alt" href="/admin">Cancel</a></form>');
-}
-
-function admin_post(array $u): void {
-    $a = (string)($_POST['do'] ?? ''); $i = (int)($_POST['id'] ?? 0); $uid = (int)$u['id'];
-    $need = ['pause' => 'delivery', 'resend' => 'delivery', 'money' => 'finance', 'target' => 'campaign', 'design' => 'campaign', 'settings' => 'campaign',
-             'dismiss' => 'complaints', 'block' => 'complaints', 'withdraw' => 'complaints', 'roles' => 'rolesadmin'];
-    if (!isset($need[$a])) fail(400, 'Unknown action.');
-    if (!can($need[$a]) && !($a === 'pause' && can('campaign'))) fail(403, 'You do not have permission for that.');
-    if (in_array($a, ['pause', 'block', 'withdraw', 'roles']) && empty($_POST['confirmed'])) confirm_page($a, $i);
-    switch ($a) {
-        case 'pause': set_setting('paused', setting('paused') === '1' ? '0' : '1'); audit($uid, 'pause_toggle', setting('paused')); break;
-        case 'resend':
-            q("update recipients set status='queued', tries=0, error=null where id=? and status in ('failed','bounced','sending')", [$i]);
-            audit($uid, 'resend', "recipient $i"); process_queue(); break;
-        case 'money': q('update donations set fee=?, refunded=? where id=?', [(int)round((float)$_POST['fee'] * 100), (int)round((float)$_POST['refunded'] * 100), $i]); audit($uid, 'reconcile', "donation $i fee {$_POST['fee']} refunded {$_POST['refunded']}"); break;
-        case 'target': set_setting('target_pence', (string)(int)round((float)($_POST['target'] ?? 0) * 100)); audit($uid, 'target', field('target')); break;
-        case 'design':
-            if (isset(cards()[$_POST['card'] ?? ''])) { set_setting('off_' . $_POST['card'], cards()[$_POST['card']]['on'] ? '1' : '0'); audit($uid, 'design_toggle', $_POST['card']); } break;
-        case 'settings':
-            set_int('msg_max', field('msg_max', 5), 50, 2000); set_int('name_max', field('name_max', 3), 10, 100); set_int('expiry_days', field('expiry_days', 4), 1, 3650); set_int('retention_days', field('retention_days', 4), 1, 3650);
-            foreach (['opens', 'closes'] as $k) { $v = field($k, 20); if ($v === '' || strtotime($v)) set_setting($k, $v); }
-            set_setting('closure_queue', ($_POST['closure_queue'] ?? '') === 'hold' ? 'hold' : 'send');
-            set_setting('show_progress', empty($_POST['show_progress']) ? '0' : '1');
-            set_setting('abuse_terms', field('abuse_terms', 500)); set_setting('allow_urls', empty($_POST['allow_urls']) ? '0' : '1');
-            set_setting('donation_purpose', field('donation_purpose', 300)); set_setting('campaign', field('campaign', 60) ?: 'Christmas 2026');
-            audit($uid, 'campaign_settings', json_encode(array_intersect_key($_POST, array_flip(['msg_max', 'name_max', 'expiry_days', 'retention_days', 'opens', 'closes', 'closure_queue', 'show_progress'])))); break;
-        case 'dismiss': case 'block': case 'withdraw':
-            $rep = one('select r.*, x.email, x.send_id from reports r join recipients x on x.id=r.recipient_id where r.id=?', [$i]);
-            if ($rep) {
-                if ($a === 'block') optout($rep['email'], 0);
-                if ($a === 'withdraw') q('update recipients set withdrawn=1 where id=?', [$rep['recipient_id']]);
-                q("update reports set status='closed', decision=? where id=?", [['dismiss' => 'Dismissed', 'block' => 'Recipient blocked from further cards', 'withdraw' => 'Card withdrawn'][$a], $i]);
-                audit($uid, "report_$a", "report $i");
-            } break;
-        case 'roles':
-            $e = strtolower(field('email')); $t = one('select * from users where email=?', [$e]);
-            if (!$t) { flash('No registered user with that email.', 'err'); redirect('/admin'); }
-            $new = array_values(array_intersect(array_keys(ROLES), (array)($_POST['roles'] ?? [])));
-            $others = (int)one("select count(*) c from users where id<>? and is_admin=1 and (',' || roles || ',') like '%,rolesadmin,%'", [$t['id']])['c'];
-            if (!in_array('rolesadmin', $new) && !$others) { flash('There must always be at least one role administrator.', 'err'); redirect('/admin'); }
-            q('update users set roles=?, is_admin=? where id=?', [implode(',', $new), $new ? 1 : 0, $t['id']]);
-            audit($uid, 'role_change', "$e: [{$t['roles']}] -> [" . implode(',', $new) . ']'); break;
-    }
-    flash('Saved.'); redirect('/admin');
-}
-
-function r_admin(): void {
-    $u = need_admin();
-    if (post()) admin_post($u);
-    $b = '<h1>Administration</h1><p class="note">Your roles: ' . h(implode(', ', array_map(fn($r) => ROLES[$r] ?? $r, array_filter(explode(',', $u['roles'])))) ?: 'none') . '</p>';
-    $rc = []; foreach (all('select * from recipients') as $r) { $k = rstatus($r); $rc[$k] = ($rc[$k] ?? 0) + 1; }
-    $b .= '<h2>Card activity</h2><p>' . h(implode(', ', array_map(fn($k, $v) => "$v $k", array_keys($rc), $rc)) ?: 'Nothing sent yet') . '</p><ul>';
-    foreach (all("select card, count(*) n from sends where status not in ('draft','awaiting_payment') group by card order by n desc") as $x) $b .= '<li>' . h(cards()[$x['card']]['title'] ?? $x['card']) . ': ' . $x['n'] . '</li>';
-    $b .= '</ul>';
-    if (can('finance') || can('campaign')) {
-        $d = one('select count(*) n, coalesce(sum(pence),0) gross, coalesce(sum(fee),0) fee, coalesce(sum(refunded),0) ref from donations'); $tgt = (int)setting('target_pence');
-        $b .= '<h2>Fundraising</h2><p>Confirmed gross donations: <strong>' . gbp((int)$d['gross']) . '</strong> from ' . $d['n'] . ' donations (average ' . gbp($d['n'] ? intdiv((int)$d['gross'], (int)$d['n']) : 0) . '). Fees ' . gbp((int)$d['fee']) . ', refunds ' . gbp((int)$d['ref']) . ', net after both ' . gbp((int)($d['gross'] - $d['fee'] - $d['ref'])) . ($tgt ? '. Target ' . gbp($tgt) . ' (public progress counts gross minus refunds)' : '') . '.</p>';
-    }
-    if (can('delivery')) {
-        $old = one("select min(id) i, min(queued_at) q from sends where status='queued'"); $hb = (int)setting('last_queue');
-        $b .= '<h2>Email operations</h2><p>Queued: ' . ($rc['Queued'] ?? 0) . '. Last cron run: ' . ($hb ? when($hb) . (time() - $hb > 900 ? ' <strong>(overdue: check cron)</strong>' : '') : '<strong>never</strong>') . '. Sending is <strong>' . (setting('paused') === '1' ? 'paused' : 'running') . '</strong> '
-            . '<form method="post" class="inline">' . csrf() . '<input type="hidden" name="do" value="pause"><button class="link">' . (setting('paused') === '1' ? 'Resume' : 'Pause') . '</button></form>. Cron: <code>php src/cli.php queue</code> every 5 minutes.</p><table><tr><th>Recipient</th><th>Status</th><th>Error</th><th></th></tr>';
-        foreach (all("select * from recipients where status in ('failed','bounced','sending') order by id desc limit 50") as $r)
-            $b .= '<tr><td>' . h($r['email']) . '</td><td>' . rstatus($r) . '</td><td>' . h($r['error']) . '</td><td>' . adminbtn('resend', (int)$r['id'], 'Resend') . '</td></tr>';
-        $b .= '</table>' . (str_ends_with($b, '</th></tr>') ? '<p class="note">No delivery exceptions. Nothing needs attention.</p>' : '');
-    }
-    if (can('finance')) {
-        $b .= '<h2>Payments</h2><p><a href="/admin/export">Export finance CSV</a></p><table><tr><th>Date</th><th>Amount</th><th>Reference</th><th>Fee / refunded (£)</th></tr>';
-        foreach (all('select * from donations order by id desc limit 100') as $x)
-            $b .= '<tr><td>' . date('j M Y', (int)$x['created']) . '</td><td>' . gbp((int)$x['pence']) . '</td><td>' . h($x['stripe_session']) . '</td><td><form method="post" class="row">' . csrf() . '<input type="hidden" name="do" value="money"><input type="hidden" name="id" value="' . $x['id'] . '"><input name="fee" size="5" value="' . number_format($x['fee'] / 100, 2, '.', '') . '" aria-label="Fee"><input name="refunded" size="5" value="' . number_format($x['refunded'] / 100, 2, '.', '') . '" aria-label="Refunded"><button class="btn alt">Save</button></form></td></tr>';
-        $b .= '</table>' . (str_ends_with($b, '</th></tr>') ? '<p class="note">No confirmed donations yet.</p>' : ''); $b .= '<p>Unpaid or mismatched:</p><ul>';
-        foreach (all("select id, donation, updated from sends where status='awaiting_payment' and updated<? order by id desc", [time() - 3600]) as $x) $b .= '<li>Card #' . $x['id'] . ' awaiting payment of ' . gbp((int)$x['donation']) . ' since ' . when((int)$x['updated']) . '</li>';
-        foreach (all("select * from audit where action='payment_mismatch' order by id desc limit 10") as $x) $b .= '<li>Mismatch: ' . h($x['detail']) . '</li>';
-        $b .= '</ul>';
-    }
-    if (can('complaints')) {
-        $b .= '<h2>Reports</h2><table><tr><th>Recipient</th><th>Reason</th><th>Status</th><th></th></tr>';
-        foreach (all('select r.*, x.email from reports r join recipients x on x.id=r.recipient_id order by r.id desc limit 50') as $x)
-            $b .= '<tr><td>' . h($x['email']) . '</td><td>' . h($x['reason']) . '</td><td>' . h($x['status'] === 'open' ? 'Open' : $x['decision']) . '</td><td><a href="/admin/message?report=' . $x['id'] . '">View card</a> ' . ($x['status'] === 'open' ? adminbtn('dismiss', (int)$x['id'], 'Dismiss') . adminbtn('block', (int)$x['id'], 'Block recipient') . adminbtn('withdraw', (int)$x['id'], 'Withdraw card') : '') . '</td></tr>';
-        $b .= '</table>' . (str_ends_with($b, '</th></tr>') ? '<p class="note">No reports. Nothing needs a decision.</p>' : '');
-    }
-    if (can('campaign')) {
-        $tgt = (int)setting('target_pence'); $pub = base_url() . '/';
-        $b .= '<h2>Share the campaign</h2><p>Public link: <code>' . h($pub) . '</code>. Add <code>?ref=newsletter</code> (letters, numbers, hyphens) to see which promotion works. It leads to the gallery and contains nothing private.</p>'
-            . '<p><a href="https://api.qrserver.com/v1/create-qr-code/?size=800x800&amp;format=png&amp;data=' . h(urlencode($pub)) . '" download="christmas-cards-qr.png">Download QR code (PNG)</a></p><ul>';
-        foreach (all("select coalesce(ref,'(no label)') r, count(*) n from sends where status not in ('draft') group by ref order by n desc") as $x) $b .= '<li>' . h($x['r']) . ': ' . $x['n'] . ' cards</li>';
-        $b .= '</ul>';
-        $b .= '<h2>Campaign settings</h2><p class="note">These are launch decisions for the Trustees to agree and record. Dates are UK time.</p><form method="post" class="stack">' . csrf() . '<input type="hidden" name="do" value="settings">'
-            . '<label>Campaign name<input name="campaign" value="' . h(setting('campaign', 'Christmas 2026')) . '"></label>'
-            . '<label>Sending opens<input type="datetime-local" name="opens" value="' . h(setting('opens')) . '"></label><label>Sending closes<input type="datetime-local" name="closes" value="' . h(setting('closes')) . '"></label>'
-            . '<label>Cards already queued when sending closes<select name="closure_queue"><option value="send">Still send them</option><option value="hold"' . (setting('closure_queue') === 'hold' ? ' selected' : '') . '>Hold them</option></select></label>'
-            . '<label>Card expiry (days after sending)<input name="expiry_days" value="' . expiry_days() . '"></label><label>Retention before content is deleted (days)<input name="retention_days" value="' . (int)setting('retention_days', '90') . '"></label>'
-            . '<label>Message limit (characters)<input name="msg_max" value="' . msg_max() . '"></label><label>From name limit (characters)<input name="name_max" value="' . name_max() . '"></label>'
-            . '<label>Donation purpose wording<textarea name="donation_purpose" rows="2">' . h(setting('donation_purpose')) . '</textarea></label>'
-            . '<label>Blocked words in messages (comma separated)<input name="abuse_terms" value="' . h(setting('abuse_terms')) . '"></label>'
-            . '<label class="opt"><input type="checkbox" name="allow_urls" value="1"' . (setting('allow_urls') === '1' ? ' checked' : '') . '> Allow web addresses in messages (they are never clickable)</label>'
-            . '<label class="opt"><input type="checkbox" name="show_progress" value="1"' . (setting('show_progress') === '1' ? ' checked' : '') . '> Show fundraising progress publicly</label><button class="btn">Save settings</button></form>'
-            . '<form method="post" class="row">' . csrf() . '<input type="hidden" name="do" value="target"><label>Fundraising target (£)<input name="target" value="' . number_format($tgt / 100, 2, '.', '') . '"></label><button class="btn alt">Save target</button></form><h3>Designs</h3><ul>';
-        foreach (cards() as $id => $c) $b .= '<li>' . h($c['title']) . ' <form method="post" class="inline">' . csrf() . '<input type="hidden" name="do" value="design"><input type="hidden" name="card" value="' . h($id) . '"><button class="link">' . ($c['on'] ? 'Disable' : 'Enable') . '</button></form></li>';
-        $b .= '</ul>';
-    }
-    if (can('rolesadmin')) {
-        $b .= '<h2>Roles</h2><p class="note">Only role administrators can change these. Every change is audited.</p>';
-        $rows = all("select * from users where is_admin=1 or roles<>'' order by name");
-        $rows[] = ['email' => '', 'roles' => '', 'name' => 'Add by email'];
-        foreach ($rows as $x) {
-            $have = explode(',', $x['roles']);
-            $b .= '<form method="post" class="row">' . csrf() . '<input type="hidden" name="do" value="roles">' . ($x['email'] ? '<strong>' . h($x['name']) . '</strong> <input type="hidden" name="email" value="' . h($x['email']) . '">' . h($x['email']) : '<input type="email" name="email" placeholder="registered email" aria-label="Email of user to add" required>');
-            foreach (ROLES as $k => $l) $b .= '<label class="opt"><input type="checkbox" name="roles[]" value="' . $k . '"' . (in_array($k, $have) ? ' checked' : '') . '> ' . h($l) . '</label>';
-            $b .= '<button class="btn alt">Save</button></form>';
-        }
-    }
-    $b .= '<h2>Audit trail</h2><ul>';
-    foreach (all('select * from audit order by id desc limit 20') as $x) $b .= '<li>' . when((int)$x['created']) . ' ' . h($x['action']) . ' ' . h($x['detail']) . '</li>';
-    page('Administration', $b . '</ul>');
 }
 
 function r_export(): void {
@@ -666,10 +535,44 @@ function r_change_email(): void { // wrong-address correction before verificatio
     redirect('/dashboard');
 }
 
+/** FR-127: authenticated account deletion with explicit impact, reauthentication and category-specific retention. */
+function r_account_delete(): void {
+    $u = need_login(); $uid = (int)$u['id'];
+    $mine = array_column(all('select id from sends where user_id=?', [$uid]), 'id'); $in = $mine ? implode(',', array_map('intval', $mine)) : '0';
+    $c = ['contacts' => (int)one('select count(*) c from contacts where user_id=?', [$uid])['c'], 'groups' => (int)one('select count(*) c from groups where user_id=?', [$uid])['c'],
+        'drafts' => (int)one("select count(*) c from sends where user_id=? and status='draft'", [$uid])['c'],
+        'queued' => (int)one("select count(*) c from recipients where send_id in ($in) and status='queued'")['c'],
+        'claimed' => (int)one("select count(*) c from recipients where send_id in ($in) and status in ('sending','sent')")['c'],
+        'pending' => (int)one("select count(*) c from sends where user_id=? and status='awaiting_payment'", [$uid])['c']];
+    if (post()) {
+        limit('acctdel', 5, 3600);
+        if (!password_verify((string)($_POST['password'] ?? ''), $u['pass'])) { flash('That password is not right, so nothing was deleted.', 'err'); redirect('/account/delete'); }
+        if ($c['pending']) { flash('You have a payment waiting. Resolve it from My cards first.', 'warn'); redirect('/account/delete'); }
+        if ($u['is_admin']) { flash('Ask a restricted administrator to remove your admin roles first.', 'warn'); redirect('/account/delete'); }
+        if (empty($_POST['confirmed'])) { flash('Please tick the box to confirm.', 'err'); redirect('/account/delete'); }
+        db()->beginTransaction();
+        q("update recipients set status='cancelled', error='Account closed' where send_id in ($in) and status='queued'");   // unclaimed only
+        q("update recipients set withdrawn=1 where send_id in ($in) and status<>'draft'");                                  // live links switched off
+        q("delete from recipients where send_id in (select id from sends where user_id=? and status='draft')", [$uid]); q("delete from sends where user_id=? and status='draft'", [$uid]);
+        q('delete from contact_groups where contact_id in (select id from contacts where user_id=?)', [$uid]); q('delete from contacts where user_id=?', [$uid]); q('delete from groups where user_id=?', [$uid]);
+        q("update users set name='Deleted account', email=?, pass='', verified=0, verify_token='', reset_token='', roles='', is_admin=0, totp_secret=null, notify='off' where id=?", ["deleted-$uid@deleted.invalid", $uid]);
+        db()->commit();
+        audit($uid, 'account_deleted', "contacts {$c['contacts']}, groups {$c['groups']}, drafts {$c['drafts']}, cancelled {$c['queued']}, withdrawn {$c['claimed']}");
+        $_SESSION = []; session_destroy(); session_start(); flash('Your account has been closed. Unsent cards were cancelled and your saved details were deleted.'); redirect('/');
+    }
+    page('Delete my account', '<h1>Delete my account</h1><p>This closes your account and signs you out everywhere. It cannot be undone.</p><ul>'
+        . '<li>Deleted: ' . $c['contacts'] . ' saved contacts, ' . $c['groups'] . ' groups and ' . $c['drafts'] . ' drafts.</li>'
+        . '<li>Cancelled: ' . $c['queued'] . ' cards that have not started sending.</li>'
+        . '<li>Switched off: the private links of ' . $c['claimed'] . ' cards already sent. Emails already sent cannot be recalled.</li></ul>'
+        . '<p class="note">We keep, separately and protected: donation and finance records, an audit record that this happened, and opt-out records (so people who asked to stop are not emailed again). Your donations are not refunded.</p>'
+        . ($c['pending'] ? '<p class="flash warn">You have a payment waiting. Resolve it first.</p>' : '')
+        . '<form method="post" class="stack">' . csrf() . '<label>Your password (to confirm it is you)<input type="password" name="password" required autocomplete="current-password"></label><label class="opt"><input type="checkbox" name="confirmed" value="1"> I understand and want to delete my account</label><button class="btn">Delete my account</button><a class="btn alt" href="/dashboard">Keep my account</a></form>');
+}
+
 function dispatch(string $path): void {
     $routes = ['/' => 'r_home', '/help' => 'r_help', '/register' => 'r_register', '/verify' => 'r_verify', '/resend-verification' => 'r_resend_verify', '/login' => 'r_login', '/logout' => 'r_logout', '/forgot' => 'r_forgot', '/reset' => 'r_reset',
-        '/compose' => 'r_compose', '/preview' => 'r_preview', '/review' => 'r_review', '/pay-cancelled' => 'r_pay_cancelled', '/return' => 'r_return', '/dev/pay' => 'r_dev_pay', '/dashboard' => 'r_dashboard', '/send' => 'r_send', '/prefs' => 'r_prefs', '/contacts' => 'r_contacts', '/contacts/edit' => 'r_contact_edit', '/contacts/delete-all' => 'r_contacts_delete_all', '/contacts/pick' => 'r_pick', '/contacts/save' => 'r_save_contact', '/groups' => 'r_groups', '/discard' => 'r_discard', '/change-email' => 'r_change_email', '/copy' => 'r_copy',
-        '/mfa' => 'r_mfa', '/admin' => 'r_admin', '/admin/export' => 'r_export', '/admin/message' => 'r_message', '/hooks/stripe' => 'r_stripe_hook', '/hooks/postmark' => 'r_postmark_hook'];
+        '/compose' => 'r_compose', '/preview' => 'r_preview', '/review' => 'r_review', '/pay-cancelled' => 'r_pay_cancelled', '/return' => 'r_return', '/dev/pay' => 'r_dev_pay', '/dashboard' => 'r_dashboard', '/send' => 'r_send', '/prefs' => 'r_prefs', '/account/delete' => 'r_account_delete', '/contacts' => 'r_contacts', '/contacts/edit' => 'r_contact_edit', '/contacts/delete-all' => 'r_contacts_delete_all', '/contacts/pick' => 'r_pick', '/contacts/save' => 'r_save_contact', '/groups' => 'r_groups', '/discard' => 'r_discard', '/change-email' => 'r_change_email', '/copy' => 'r_copy',
+        '/mfa' => 'r_mfa', '/admin' => 'r_admin', '/admin/delivery' => 'r_admin_delivery', '/admin/finance' => 'r_admin_finance', '/admin/reports' => 'r_admin_reports', '/admin/campaign' => 'r_admin_campaign', '/admin/app' => 'r_admin_app', '/admin/email' => 'r_admin_email', '/admin/privacy' => 'r_admin_privacy', '/admin/access' => 'r_admin_access', '/admin/health' => 'r_admin_health', '/admin/audit' => 'r_admin_audit', '/admin/action' => 'r_admin_action', '/admin/export' => 'r_export', '/admin/message' => 'r_message', '/hooks/stripe' => 'r_stripe_hook', '/hooks/postmark' => 'r_postmark_hook'];
     if (post() && !str_starts_with($path, '/hooks/')) check_csrf();
     if (preg_match('#^/c/([a-f0-9]+)(?:/(open|report))?$#', $path, $m)) r_card($m[1], $m[2] ?? '');
     if (preg_match('#^/optout/([a-f0-9]+)$#', $path, $m)) r_optout($m[1]);

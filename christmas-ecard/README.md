@@ -1,12 +1,13 @@
 # 7th Swindon Christmas E-Cards
 
-MVP of the Christmas E-Card FRD v1.3 (launch items) (9 Oct 2026). PHP 8.2+, SQLite, no dependencies.
+MVP of the Christmas E-Card FRD v2.0 (9 Oct 2026). PHP 8.2+, SQLite, no dependencies.
 
     php -S localhost:8060 -t public public/index.php    # run locally
     php tests/smoke.php                                  # core-logic checks
     php src/cli.php admin you@example.com [roles]        # make an admin with all roles (MFA enrolled at first /admin visit)
     php src/cli.php queue                                # cron, every 5 min: send/retry queued cards
     php src/cli.php digest                               # cron, daily: summary emails for senders who opted in
+    php src/cli.php backup                               # cron, nightly: SQLite snapshot into data/backups (kept 30 days); copy off-site
     php src/cli.php purge                                # cron, daily: blank content past retention (90 days)
 
 With no keys in `.env` (copy `.env.example`): emails go to `data/outbox.log` and payment is a simulated page.
@@ -20,6 +21,12 @@ With no keys in `.env` (copy `.env.example`): emails go to `data/outbox.log` and
 ## Payment recovery rules (FR-077 to FR-079)
 One submission intent: "Send cards for free" queues once; "Donate and send cards" parks the same card as awaiting payment and verified payment resolves it, with no second send step. Cancelled or failed checkout returns to a recovery panel (retry or deliberate free send). An unknown outcome shows a pending panel that blocks both a second charge and the free bypass until Check status or Cancel attempt resolves it safely. A payment that lands after cancellation is recorded but never dispatches cards.
 
+## Admin areas and roles (FRD 2.0 section 8)
+Roles: Campaign manager, Application administrator, Finance administrator, Delivery support, Complaints reviewer, Restricted administrator. Admin pages are split by task (overview, delivery, finance, reports, campaign, application, email, privacy, access, health, change history) and every page and action re-checks the role on the server. Settings pages show old and new values and need a confirm step; saves are versioned (a stale form is rejected and your entries are kept) and audited. Expiry and retention need a reason and approval reference and show affected record counts first. Pause and resume are limited to application and restricted administrators and show queue impact.
+
+## Address book and groups (FR-100 to FR-116)
+Per-account contacts (name and email only) and groups, searchable, picked into a draft as snapshots. Duplicate rule: whole address case-folded, plus tags and dots kept. Defaults 200 contacts and 20 groups are the FRD proposals, pending approval. Account deletion (Dashboard > Delete my account) cancels unsent cards, switches off sent links, deletes drafts, contacts and groups, and keeps finance, audit and opt-out records.
+
 ## Roles and launch decisions
 Roles: finance, delivery, campaign, complaints, role administrator (assigned in Admin > Roles, audited). Launch values the FRD says must be agreed, not guessed (campaign dates, queue handling at closure, expiry, retention, message limits, donation purpose wording) are in Admin > Campaign settings; current defaults are placeholders. Set `SUPPORT_EMAIL` for the Help page.
 
@@ -31,4 +38,6 @@ Roles: finance, delivery, campaign, complaints, role administrator (assigned in 
 - Abuse rules are simple: web addresses blocked by default plus a configurable word list; agree the policy with Trustees.
 - Opt-out suppression is kept until the retention purge never removes it; agree its retention (FR-041).
 - Stripe fees are entered by hand in Admin > Payments; no automatic refund sync.
+- Not built from FRD 2.0: restore of previous configuration (FR-095, Should); alert recipients with acknowledgement and escalation (FR-130: health page lists alerts, nothing is sent or acknowledged); in-app refund execution (by design, refunds are done in Stripe and recorded by hand); Postmark/Stripe event import for refunds; email subject patterns and help content editing (FR-084 partly: preview and test only); beneficiary change workflow and diagnostics beyond the health page; the S30 to S39 screens are real pages but have had no assistive technology audit.
+- The FRD 2.0 section 15 proposed defaults (dates, retention, limits, rates) are NOT applied; the app keeps its earlier placeholders until the Trustees approve values in Admin.
 - Not done: WCAG audit, security review, backup/restore drill, cPanel staging test (AC-16, AC-18).

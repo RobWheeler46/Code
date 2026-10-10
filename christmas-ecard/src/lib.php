@@ -40,7 +40,7 @@ function db(): PDO {
     $p = new PDO('sqlite:' . $f, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
     $p->exec('pragma busy_timeout=5000');
     $p->exec(SCHEMA);
-    foreach ([['users', "roles text default ''"], ['users', "notify text default 'off'"], ['sends', 'stripe_session text'], ['sends', 'donation_note int default 0'], ['sends', 'ref text'], ['recipients', 'withdrawn int default 0'], ['recipients', 'own_msg text']] as [$t, $def]) {
+    foreach ([['users', "roles text default ''"], ['users', "notify text default 'off'"], ['sends', 'stripe_session text'], ['sends', 'donation_note int default 0'], ['sends', 'ref text'], ['recipients', 'withdrawn int default 0'], ['recipients', 'own_msg text'], ['recipients', 'next_at int default 0'], ['donations', "refund_status text default 'none'"]] as [$t, $def]) {
         if (!in_array(explode(' ', $def)[0], array_column($p->query("pragma table_info($t)")->fetchAll(), 'name'))) $p->exec("alter table $t add column $def");
     }
     return $p;
@@ -85,7 +85,7 @@ function safe_next(?string $n): string { return ($n && preg_match('#^/[A-Za-z0-9
 
 function user(): ?array {
     static $u = false;
-    if ($u === false) $u = empty($_SESSION['uid']) ? null : one('select * from users where id=?', [$_SESSION['uid']]);
+    if ($u === false) { $u = empty($_SESSION['uid']) ? null : one('select * from users where id=?', [$_SESSION['uid']]); if ($u && str_ends_with($u['email'], '@deleted.invalid')) $u = null; }
     return $u;
 }
 function need_login(): array {
@@ -93,7 +93,7 @@ function need_login(): array {
     if (!$u) { flash('Please sign in or register to continue.', 'warn'); redirect('/login?next=' . urlencode($_SERVER['REQUEST_URI'])); }
     return $u;
 }
-const ROLES = ['finance' => 'Finance', 'delivery' => 'Delivery support', 'campaign' => 'Campaign management', 'complaints' => 'Complaints', 'rolesadmin' => 'Role administrator'];
+const ROLES = ['campaign' => 'Campaign manager', 'appadmin' => 'Application administrator', 'finance' => 'Finance administrator', 'delivery' => 'Delivery support', 'complaints' => 'Complaints reviewer', 'rolesadmin' => 'Restricted administrator'];
 function can(string $role): bool { return in_array($role, explode(',', (string)(user()['roles'] ?? ''))); }
 function need_role(string $role): array { $u = need_admin(); if (!can($role)) fail(403, 'You do not have permission for that.'); return $u; }
 function need_admin(): array {
@@ -136,8 +136,10 @@ function mail_send(string $to, string $subject, string $text, array $meta = [], 
     curl_setopt_array($ch, [CURLOPT_POST => 1, CURLOPT_RETURNTRANSFER => 1, CURLOPT_TIMEOUT => 20,
         CURLOPT_HTTPHEADER => ['Accept: application/json', 'Content-Type: application/json', 'X-Postmark-Server-Token: ' . env('POSTMARK_TOKEN')],
         CURLOPT_POSTFIELDS => json_encode(array_filter(['From' => $from, 'To' => $to, 'Subject' => $subject, 'TextBody' => $text, 'HtmlBody' => $html, 'MessageStream' => env('POSTMARK_STREAM', 'outbound'), 'TrackOpens' => false, 'Metadata' => $meta ?: null], fn($v) => $v !== null))]);
-    $r = json_decode((string)curl_exec($ch), true);
-    return (($r['ErrorCode'] ?? 1) === 0) ? null : ($r['Message'] ?? 'Mail provider unreachable');
+    $raw = curl_exec($ch); $r = json_decode((string)$raw, true);
+    if (!is_array($r)) return 'UNKNOWN:Provider did not answer, so we cannot tell whether the email was accepted';
+    if (($r['ErrorCode'] ?? 1) === 0) { set_setting('last_mail_ok', (string)time()); return null; }
+    return (in_array($r['ErrorCode'] ?? 0, [300, 406]) ? 'PERM:' : '') . ($r['Message'] ?? 'Mail provider refused the email'); // 300 invalid address, 406 inactive recipient
 }
 
 // ---- stripe

@@ -14,7 +14,8 @@ function cards(): array {
         'campout'    => ['Snow Place Like Camp', 'tent', '#0b6b9e', '#0a2540'],
     ];
     $out = [];
-    foreach ($c as $id => [$t, $m, $a, $b]) $out[$id] = ['title' => $t, 'motif' => $m, 'a' => $a, 'b' => $b, 'on' => setting("off_$id") !== '1'];
+    foreach ($c as $id => [$t, $m, $a, $b]) $out[$id] = ['title' => $t, 'motif' => $m, 'a' => $a, 'b' => $b, 'on' => setting("off_$id") !== '1', 'desc' => setting("desc_$id") ?: $t];
+    uksort($out, fn($a, $b) => (int)setting("order_$a", (string)array_search($a, array_keys($out))) <=> (int)setting("order_$b", (string)array_search($b, array_keys($out))));
     return $out;
 }
 
@@ -22,7 +23,7 @@ function card_art(string $id, bool $thumb = false): string {
     $c = cards()[$id] ?? null;
     if (!$c) return '';
     foreach (['png', 'jpg', 'webp', 'svg'] as $x)
-        if (is_file(ROOT . "/public/assets/cards/$id.$x")) return '<img class="art" src="/assets/cards/' . h($id) . '.' . $x . '" alt="' . h($c['title']) . '">';
+        if (is_file(ROOT . "/public/assets/cards/$id.$x")) return '<img class="art" src="/assets/cards/' . h($id) . '.' . $x . '" alt="' . h($c['desc']) . '">';
     $m = match ($c['motif']) {
         'tent'     => '<polygon points="200,90 90,230 310,230" fill="#fff"/><polygon points="200,150 170,230 230,230" fill="#' . '1a1a2e"/><line x1="200" y1="90" x2="200" y2="70" stroke="#fff" stroke-width="4"/>',
         'tree'     => '<polygon points="200,50 140,130 260,130" fill="#2e9e4f"/><polygon points="200,90 125,180 275,180" fill="#2e9e4f"/><polygon points="200,130 110,235 290,235" fill="#2e9e4f"/><rect x="188" y="235" width="24" height="25" fill="#7a4a21"/><circle cx="200" cy="48" r="9" fill="#ffd93d"/>',
@@ -34,6 +35,6 @@ function card_art(string $id, bool $thumb = false): string {
     $g = 'g' . substr(md5($id), 0, 6);
     $snow = '';
     for ($i = 0; $i < 22; $i++) $snow .= '<circle cx="' . (($i * 53 + 17) % 400) . '" cy="' . (($i * 37 + 11) % 270) . '" r="' . (1 + $i % 3) . '" fill="#fff" opacity=".7"/>';
-    return '<svg class="art" viewBox="0 0 400 280" role="img" aria-label="' . h($c['title']) . '" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="' . $g . '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' . $c['a'] . '"/><stop offset="1" stop-color="' . $c['b'] . '"/></linearGradient></defs>'
+    return '<svg class="art" viewBox="0 0 400 280" role="img" aria-label="' . h($c['desc']) . '" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="' . $g . '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' . $c['a'] . '"/><stop offset="1" stop-color="' . $c['b'] . '"/></linearGradient></defs>'
         . '<rect width="400" height="280" fill="url(#' . $g . ')"/>' . $snow . $m . '<rect y="248" width="400" height="32" fill="#fff" opacity=".9"/></svg>';
 }

@@ -1,0 +1,48 @@
+<?php
+// php tests/admin_test.php : configuration validation, delivery recovery, health evidence (FR-081 to FR-095, FR-124 to FR-130).
+putenv('DB_PATH=' . sys_get_temp_dir() . '/ecard-ad-' . getmypid() . '.sqlite'); putenv('POSTMARK_TOKEN=');
+require __DIR__ . '/../src/app.php';
+function ok($c, string $m): void { echo ($c ? 'PASS ' : 'FAIL ') . $m . "\n"; if (!$c) $GLOBALS['bad'] = 1; }
+q("insert into users(name,email,pass,verified,created) values('Sam','sam@x.com','x',1,?)", [time()]);
+
+$app = config_spec('app')['fields']; $cam = config_spec('campaign')['fields'];
+ok(cfg_validate($app['max_recipients'], '21')[1] !== null && cfg_validate($app['max_recipients'], '0')[1] !== null && cfg_validate($app['max_recipients'], '12') === ['12', null], 'recipient limit bounded 1 to 20');
+ok(cfg_validate($app['msg_max'], '-5')[1] !== null && cfg_validate($app['msg_max'], 'abc')[1] !== null, 'negative and non-numeric limits rejected');
+ok(cfg_validate($cam['amounts_pence'], '2, 5, 10') === ['200,500,1000', null] && cfg_validate($cam['amounts_pence'], '0')[1] !== null && cfg_validate($cam['amounts_pence'], '9999')[1] !== null && cfg_validate($cam['amounts_pence'], '1,2,3,4,5,6')[1] !== null, 'suggested amounts: £1 to £500, at most five');
+ok(cfg_validate($cam['target_pence'], '-1')[1] !== null && cfg_validate($cam['target_pence'], '500') === ['50000', null] && cfg_validate($cam['target_pence'], '') === ['', null], 'target: no negatives, blank allowed');
+ok(cfg_validate($cam['opens'], '2026-13-45T99:99')[1] !== null && cfg_validate($cam['opens'], '2026-11-01T00:00')[1] === null, 'dates validated');
+ok(max_recipients() === 20, 'default ceiling 20'); set_setting('max_recipients', '99'); ok(max_recipients() === 20, 'stored value cannot push the ceiling above 20'); set_setting('max_recipients', '5'); ok(max_recipients() === 5, 'lower ceiling honoured');
+set_setting('max_recipients', '20');
+
+// FR-124 correction: fresh token, old one revoked, audited, no double requeue
+q("insert into sends(user_id,card,sender_name,message,status,created,updated) values(1,'santa','Sam','Hi','queued',?,?)", [time(), time()]);
+q("insert into recipients(send_id,name,email,token,status,error) values(1,'G','gran@x.com','oldtoken','failed','bounced')");
+ok(requeue_recipient(1, 'gran@y.com', 1, 'test') && !requeue_recipient(1, 'gran@z.com', 1, 'test'), 'correction applies once');
+$r = one('select * from recipients where id=1'); ok($r['token'] !== 'oldtoken' && $r['email'] === 'gran@y.com' && $r['status'] === 'queued', 'fresh token, corrected address, queued');
+ok(one("select 1 from recipients where token='oldtoken'") === null, 'superseded link no longer resolves');
+ok(str_contains(one("select detail from audit where action='address_correction'")['detail'], 'previous link revoked'), 'correction audited with original and new address');
+q("insert into recipients(send_id,name,email,token,status,sent_at) values(1,'H','h@x.com','t2','sent',?)", [time()]);
+ok(!requeue_recipient(2, null, 1, 'test'), 'a freshly sent (not uncertain) delivery cannot be resent');
+q('update recipients set sent_at=? where id=2', [time() - 200000]); ok(rstatus(one('select * from recipients where id=2')) === 'Delivery unconfirmed' && requeue_recipient(2, null, 1, 'test'), 'uncertain delivery can be resent by explicit action');
+
+// FR-126: permanent / unknown markers never auto-retry (simulated through queue state)
+q("insert into recipients(send_id,name,email,token,status,tries,next_at) values(1,'W','w@x.com','t3','queued',0,?)", [time() + 600]);
+$before = (int)one("select count(*) c from recipients where status='sent'")['c']; process_queue();
+ok((int)one("select count(*) c from recipients where status='sent'")['c'] === $before + 2 && one("select status from recipients where token='t3'")['status'] === 'queued', 'backed-off delivery waits for its retry time');
+
+// FR-125/130: health shows Unknown/Stale rather than Healthy
+$al = health_alerts(); ok(count(array_filter($al, fn($x) => str_contains($x, 'Unknown'))) >= 2, 'never-run job and backup show Unknown');
+set_setting('last_queue', (string)(time() - 3600)); ok(count(array_filter(health_alerts(), fn($x) => str_contains($x, 'Stale'))) >= 1, 'old evidence shows Stale');
+set_setting('last_queue', (string)time()); set_setting('last_backup', (string)time());
+q("insert into sends(user_id,card,sender_name,message,status,donation,created,updated) values(1,'santa','Sam','x','awaiting_payment',500,?,?)", [time(), time() - 1000]);
+ok(count(array_filter(health_alerts(), fn($x) => str_contains($x, 'pending over 15 minutes'))) === 1, 'pending payment flagged after 15 minutes, not declared failed');
+ok(one("select status from sends where donation=500 and status='awaiting_payment'") !== null, 'elapsed time alone never fails a payment');
+
+// FR-128 scanners
+$_SERVER['HTTP_USER_AGENT'] = 'Mozilla/5.0 Microsoft Office Safelinks'; ok(is_scanner(), 'known scanner is not a human view');
+$_SERVER['HTTP_USER_AGENT'] = 'Mozilla/5.0 (Windows NT 10.0) Firefox/130'; ok(!is_scanner(), 'ordinary browser qualifies');
+
+// privacy impact
+q("update recipients set sent_at=? where id=1", [time() - 40 * 86400]);
+ok(str_contains(implode(' ', privacy_impact(['expiry_days' => 30])), '1 cards that are viewable now would stop'), 'shortening expiry shows affected count');
+@unlink(env('DB_PATH')); exit($GLOBALS['bad'] ?? 0);

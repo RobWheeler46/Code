@@ -139,17 +139,34 @@ function process_queue(int $limit = 50): int {
     if (setting('paused') === '1') return 0;
     if (campaign_state() === 'closed' && setting('closure_queue') === 'hold') return 0;
     $n = 0;
-    foreach (all("select r.id from recipients r where r.status='queued' order by r.id limit $limit") as $row) {
+    foreach (all("select r.id from recipients r where r.status='queued' and r.next_at<=? order by r.id limit $limit", [time()]) as $row) {
         if (!q("update recipients set status='sending', tries=tries+1 where id=? and status='queued'", [$row['id']])->rowCount()) continue;
         $r = one('select * from recipients where id=?', [$row['id']]);
         $s = one('select * from sends where id=?', [$r['send_id']]);
         if (opted_out($r['email'], (int)$s['user_id'])) { q("update recipients set status='cancelled', error='Recipient opted out' where id=?", [$r['id']]); continue; }
         $err = mail_send($r['email'], "{$s['sender_name']} sent you a Christmas card", email_body($r, $s), ['rid' => (string)$r['id']], email_html($r, $s), $s['sender_name']);
         if ($err === null) { q("update recipients set status='sent', sent_at=?, error=null where id=?", [time(), $r['id']]); $n++; }
-        else q('update recipients set status=?, error=? where id=?', [$r['tries'] >= 3 ? 'failed' : 'queued', $err, $r['id']]);
+        elseif (str_starts_with($err, 'UNKNOWN:')) q("update recipients set error=? where id=?", [substr($err, 8), $r['id']]);  // stays 'sending': provider may have accepted it, so never auto-repeat
+        elseif (str_starts_with($err, 'PERM:')) q("update recipients set status='failed', error=? where id=?", [substr($err, 5), $r['id']]); // permanent: no automatic retry
+        elseif ($r['tries'] >= 4) q("update recipients set status='failed', error=? where id=?", [$err . ' (retries used up; needs support review)', $r['id']]); // original attempt + 3 retries
+        else q("update recipients set status='queued', error=?, next_at=? where id=?", [$err, time() + [60, 300, 1800][$r['tries'] - 1], $r['id']]);
     }
     return $n;
 }
+
+/** FR-124: the only way to retry a delivery after failure or uncertainty. Fresh private token (the old link stops working), audited, race-safe. */
+function requeue_recipient(int $rid, ?string $newEmail, int $actor, string $via): bool {
+    $r = one('select * from recipients where id=?', [$rid]);
+    if (!$r || !(in_array($r['status'], ['failed', 'bounced']) || rstatus($r) === 'Delivery unconfirmed')) return false;
+    $email = $newEmail === null ? $r['email'] : norm_email($newEmail);
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) return false;
+    $ok = q("update recipients set email=?, token=?, status='queued', tries=0, next_at=0, error=null, delivered_at=null, sent_at=null where id=? and status=? and token=?", [$email, token(), $rid, $r['status'], $r['token']])->rowCount();
+    if ($ok) audit($actor, 'address_correction', "recipient $rid via $via: {$r['email']} -> $email; previous link revoked");
+    return (bool)$ok;
+}
+
+/** Link scanners and previewers must not count as a human view. */
+function is_scanner(): bool { return (bool)preg_match('/bot|crawl|spider|preview|scan|safelinks|proofpoint|barracuda|mimecast|office|headless|curl|python|go-http/i', $_SERVER['HTTP_USER_AGENT'] ?? ''); }
 
 /** FR-059: copy design, greeting and From name into a new unsent draft. Only explicitly chosen recipients come along (fresh tokens, no status). */
 function copy_send(int $fromId, int $uid, array $recipientIds): int {
