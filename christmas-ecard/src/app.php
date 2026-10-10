@@ -230,6 +230,16 @@ function r_compose(): void {
         . $saved . '<div class="row"><button class="btn" name="act" value="continue">Continue</button><button class="btn alt" name="act" value="preview">Preview</button><button class="btn alt" name="act" value="save">Save draft</button><button class="btn alt" name="act" value="test">Email me a test</button></div></form></div>');
 }
 
+/** FR-138: what the recipient will receive. Built from the real templates but with a dummy token, so no link opens a real card. */
+function r_email_preview(): void {
+    $s = own_send((int)($_GET['id'] ?? 0));
+    $r = one('select * from recipients where send_id=? order by id limit 1 offset ?', [$s['id'], max(0, (int)($_GET['n'] ?? 0))]) ?: one('select * from recipients where send_id=? order by id limit 1', [$s['id']]);
+    $d = ['id' => 0, 'name' => $r['name'] ?? 'Friend', 'email' => 'recipient@example.com', 'token' => str_repeat('0', 48)];
+    page('Email preview', '<h1>Email preview</h1><p>This is what ' . h($d['name']) . ' will get. The links here are examples and do not open a real card.</p>'
+        . '<dl class="facts"><dt>From</dt><dd>' . h($s['sender_name']) . ' via 7th Swindon Scouts (' . h(env('MAIL_FROM', 'cards@7thswindon.org.uk')) . ')</dd><dt>Subject</dt><dd>' . h($s['sender_name']) . ' sent you a Christmas card</dd></dl>'
+        . '<h2>As most people will see it</h2><div class="emailpreview">' . email_html($d, $s) . '</div><h2>Plain text version</h2><pre>' . h(email_body($d, $s)) . '</pre><p><a class="btn" href="/review?id=' . $s['id'] . '">Back to review</a></p>');
+}
+
 function r_preview(): void {
     $s = own_send((int)($_GET['id'] ?? 0));
     $r = one('select * from recipients where send_id=? order by id limit 1', [$s['id']]);
@@ -317,7 +327,7 @@ function r_review(): void {
     if (!$u['verified']) $b .= '<p class="flash warn">Verify your email (see the link we sent) before you can send. <form method="post" action="/resend-verification" class="inline">' . csrf() . '<button class="link">Send it again</button></form></p>';
     if ($state !== 'open') $b .= '<p class="flash warn">Card sending is ' . (in_array($state, ['before', 'locked']) ? 'not open yet' : 'closed') . ', so you cannot submit this card. Your draft is saved.</p>';
     if (setting('paused') === '1') $b .= '<p class="note">Sending is briefly paused. Cards you submit will be queued and go out when it resumes.</p>';
-    $b .= card_view($s['card'], $rs[0]['name'] ?? 'Friend', $rs ? resolved_msg($rs[0], $s) : $s['message'], $s['sender_name']) . '<h2>Sending to ' . count($rs) . ' ' . (count($rs) === 1 ? 'person' : 'people') . '</h2><p class="note">From: ' . h($s['sender_name']) . '. Each person sees the greeting shown here for them.</p><ul class="rlist">' . $list . '</ul><p><a href="/compose?id=' . $id . '">Edit card, message or recipients</a></p>';
+    $b .= card_view($s['card'], $rs[0]['name'] ?? 'Friend', $rs ? resolved_msg($rs[0], $s) : $s['message'], $s['sender_name']) . '<h2>Sending to ' . count($rs) . ' ' . (count($rs) === 1 ? 'person' : 'people') . '</h2><p class="note">From: ' . h($s['sender_name']) . '. Each person sees the greeting shown here for them.</p><ul class="rlist">' . $list . '</ul><p><a href="/compose?id=' . $id . '">Edit card, message or recipients</a> &middot; <a href="/email-preview?id=' . $id . '">Preview the email</a></p>';
     $rep = repeats_for($s);
     $form = '<form method="post" class="stack">' . csrf() . '<input type="hidden" name="id" value="' . $id . '">';
     if ($rep) $form .= '<p class="flash warn">You have already sent a card to: ' . h(implode(', ', $rep)) . '.</p><label class="opt"><input type="checkbox" name="repeat_ok" value="1"> Send to them again on purpose</label>';
@@ -602,7 +612,7 @@ function r_account_delete(): void {
 
 function dispatch(string $path): void {
     $routes = ['/' => 'r_home', '/help' => 'r_help', '/register' => 'r_register', '/verify' => 'r_verify', '/resend-verification' => 'r_resend_verify', '/login' => 'r_login', '/logout' => 'r_logout', '/forgot' => 'r_forgot', '/reset' => 'r_reset',
-        '/compose' => 'r_compose', '/preview' => 'r_preview', '/review' => 'r_review', '/pay-cancelled' => 'r_pay_cancelled', '/return' => 'r_return', '/dev/pay' => 'r_dev_pay', '/dashboard' => 'r_dashboard', '/send' => 'r_send', '/prefs' => 'r_prefs', '/privacy' => 'r_privacy', '/terms' => 'r_terms', '/accept-terms' => 'r_accept_terms', '/account/delete' => 'r_account_delete', '/contacts' => 'r_contacts', '/contacts/edit' => 'r_contact_edit', '/contacts/delete-all' => 'r_contacts_delete_all', '/contacts/pick' => 'r_pick', '/contacts/save' => 'r_save_contact', '/groups' => 'r_groups', '/discard' => 'r_discard', '/change-email' => 'r_change_email', '/copy' => 'r_copy',
+        '/compose' => 'r_compose', '/preview' => 'r_preview', '/email-preview' => 'r_email_preview', '/review' => 'r_review', '/pay-cancelled' => 'r_pay_cancelled', '/return' => 'r_return', '/dev/pay' => 'r_dev_pay', '/dashboard' => 'r_dashboard', '/send' => 'r_send', '/prefs' => 'r_prefs', '/privacy' => 'r_privacy', '/terms' => 'r_terms', '/accept-terms' => 'r_accept_terms', '/account/delete' => 'r_account_delete', '/contacts' => 'r_contacts', '/contacts/edit' => 'r_contact_edit', '/contacts/delete-all' => 'r_contacts_delete_all', '/contacts/pick' => 'r_pick', '/contacts/save' => 'r_save_contact', '/groups' => 'r_groups', '/discard' => 'r_discard', '/change-email' => 'r_change_email', '/copy' => 'r_copy',
         '/mfa' => 'r_mfa', '/admin' => 'r_admin', '/admin/delivery' => 'r_admin_delivery', '/admin/finance' => 'r_admin_finance', '/admin/reports' => 'r_admin_reports', '/admin/campaign' => 'r_admin_campaign', '/admin/app' => 'r_admin_app', '/admin/email' => 'r_admin_email', '/admin/privacy' => 'r_admin_privacy', '/admin/access' => 'r_admin_access', '/admin/health' => 'r_admin_health', '/admin/audit' => 'r_admin_audit', '/admin/action' => 'r_admin_action', '/admin/senders' => 'r_admin_senders', '/admin/launch' => 'r_admin_launch', '/admin/export' => 'r_export', '/admin/message' => 'r_message', '/hooks/stripe' => 'r_stripe_hook', '/hooks/postmark' => 'r_postmark_hook'];
     if (post() && !str_starts_with($path, '/hooks/')) check_csrf();
     if (preg_match('#^/c/([a-f0-9]+)(?:/(open|report))?$#', $path, $m)) r_card($m[1], $m[2] ?? '');
