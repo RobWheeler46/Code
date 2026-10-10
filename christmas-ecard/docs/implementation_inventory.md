@@ -38,7 +38,7 @@ All pass (contacts_test failed once with a stale temporary database name and pas
 1. **Already built, as the pack proposes:** combined compose and recipient entry (S03, no recipients page), compose before sign in with the draft kept through registration and verification (anonymous drafts 7 days), free and donate as separate review buttons, human readable statuses, stable hero, immutable sent artwork, read only previews, Stripe replay safety, bounce handling, MFA, backups and restore, hard launch gates, Gift Aid off until D-12.
 2. **Gaps closed in this pass:** UX24-06 Skip animation control on the recipient reveal; UX24-07 admin navigation grouped into five areas.
 3. **Still open:**
-   - UX24-03: the review page has two equal buttons rather than a free default with the donation behind an explicit choice. Needs a UI decision and UAT.
+   - UX24-03 is now built (free button first, donation behind an expandable section) and needs UAT on wording.
    - UX24-07 is navigation only. The Overview is not yet "actions first".
    - UX24-11: the three stage progress bar exists but its wording around sign in and payment has not been tested.
    - The campaign QR image is fetched from a third party service. The pack prefers local generation; that needs a QR library or a small generator and a privacy decision.

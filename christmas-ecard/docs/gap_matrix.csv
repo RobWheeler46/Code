@@ -165,7 +165,7 @@ FR-163,See exact FR text in Annex A §5,Proposed; not built,implemented,src/resi
 FR-164,See exact FR text in Annex A §5,Proposed; not built,missing,-,-,R2 archive.
 UX24-01,Compose and recipients on one screen,Must,implemented,"src/app.php r_compose (recipient rows, FR-137)",smoke,"No standalone recipients route exists, so SCR-04 redirect is not needed."
 UX24-02,Compose before sign-in,Should,implemented,"src/app.php r_compose, r_register, r_verify (anonymous drafts kept 7 days)",smoke,Cross-session leak check not explicitly tested.
-UX24-03,"Free selected first, donation explicit",Must,partial,src/app.php r_review,smoke,Both actions exist; free is not the pre-selected default control. To confirm in UAT.
+UX24-03,"Free selected first, donation explicit",Must,implemented,"src/app.php r_review (free button first, donation in an expandable section)","tests/ux24_test.php, smoke",Changed in this pass. Wording and layout need UAT.
 UX24-04,"Progressive rows, count, no recipient disclosure",Must,implemented,src/app.php r_compose; src/core.php email_html,ops_test,
 UX24-05,Human readable states,Must,implemented,src/core.php rstatus(),smoke,
 UX24-06,"Skippable animation, reduced motion",Must,implemented,"public/assets/style.css (reduced motion, .noanim); src/app.php r_card; public/assets/app.js",tests/ux24_test.php,Skip animation added in this pass. Screen reader and keyboard UAT still to do.

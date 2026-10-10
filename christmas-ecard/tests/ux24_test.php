@@ -11,4 +11,5 @@ ok(count($grouped[1]) === count(array_unique($grouped[1])), 'no link appears in 
 ok(str_contains($adm, 'if ($links[$href][1])'), 'links are still filtered by each role check');
 $app = file_get_contents(__DIR__ . '/../src/app.php'); $js = file_get_contents(__DIR__ . '/../public/assets/app.js'); $css = file_get_contents(__DIR__ . '/../public/assets/style.css');
 ok(str_contains($app, 'data-skip>Skip animation') && str_contains($js, 'data-skip') && str_contains($css, '.noanim *'), 'recipient reveal has a working Skip animation control');
+ok(strpos($app, 'value="free">Send cards for free') < strpos($app, '<details class="donate"'), 'UX24-03: review shows Send for free first, donation sits behind an explicit choice');
 exit($GLOBALS['bad'] ?? 0);

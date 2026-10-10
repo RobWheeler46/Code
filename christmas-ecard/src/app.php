@@ -349,12 +349,13 @@ function r_review(): void {
     } else {
         $rec = $_GET['recover'] ?? '';
         if ($rec === 'cancelled' || $rec === 'failed') $form .= '<p class="flash warn" role="status"><strong>' . ($rec === 'cancelled' ? 'Payment was cancelled.' : 'Payment did not go through.') . '</strong> Nothing was charged and your card and recipients are safe. You can try again, or choose to send for free. Cards are only sent when you press a send button below.</p>';
-        $form .= '<fieldset><legend>Optional donation to 7th Swindon Scouts</legend><p>' . h(setting('donation_purpose', 'Donations support 7th Swindon Scouts.')) . ' One donation covers all ' . count($rs) . ' of your cards. Sending is free either way.</p>';
+        $form .= '<div class="row"><button class="btn big" name="do" value="free">Send cards for free</button></div><p class="note">Sending is always free. Nothing is charged unless you choose to donate below.</p>'
+            . '<details class="donate"' . ($rec ? ' open' : '') . '><summary>Make an optional donation to 7th Swindon Scouts instead</summary><fieldset><legend>Optional donation</legend><p>' . h(setting('donation_purpose', 'Donations support 7th Swindon Scouts.')) . ' One donation covers all ' . count($rs) . ' of your cards.</p>';
         $form .= '<div class="chips">';
         foreach (array_map('intval', explode(',', setting('amounts_pence', '200,500,1000'))) as $a) $form .= '<label class="opt"><input type="radio" name="amount" value="' . $a . '"> ' . gbp($a) . '</label>';
         $form .= '<label class="opt"><input type="radio" name="amount" value="custom"> Other amount (£) <input type="number" name="custom" min="1" max="500" step="0.01" aria-label="Custom amount in pounds"></label>' . '</div>'
             . '<label class="opt"><input type="checkbox" name="donation_note" value="1"> Add a line to the cards saying they came with a donation to 7th Swindon Scouts (no amount is shown; only after payment is confirmed)</label></fieldset>'
-            . giftaid_form_block() . '<div class="row"><button class="btn" name="do" value="donate">Donate and send cards</button><button class="btn" name="do" value="free">Send cards for free</button></div>';
+            . giftaid_form_block() . '<div class="row"><button class="btn alt" name="do" value="donate">Donate and send cards</button></div></details>';
     }
     page('Review and send', $b . $form . '</form>');
 }
