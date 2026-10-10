@@ -22,7 +22,7 @@ function fa(array $e, string $k, bool &$first): string {
 
 function card_view(string $cardId, string $to, string $msg, string $from, string $note = ''): string {
     $c = cards()[$cardId]; // message is escaped plain text; URLs are never linked
-    return '<article class="card">' . card_art($cardId) . '<div class="inner"><h2>' . h($c['title']) . '</h2><p class="to">Dear ' . h($to) . ',</p><p class="msg">' . nl2br(h($msg)) . '</p><p class="from">With love from<br><strong>' . h($from) . '</strong></p>' . ($note ? '<p class="note">' . h($note) . '</p>' : '') . '</div></article>';
+    return '<article class="card">' . card_art($cardId) . '<div class="inner"><h2>' . h($c['title']) . '</h2><p class="joke">' . h($c['joke']) . '</p><p class="to">Dear ' . h($to) . ',</p><p class="msg">' . nl2br(h($msg)) . '</p><p class="from">With love from<br><strong>' . h($from) . '</strong></p>' . ($note ? '<p class="note">' . h($note) . '</p>' : '') . '</div></article>';
 }
 function gone_page(array $r, string $title, string $why): never {
     page($title, '<h1>' . h($title) . '</h1><p>' . h($why) . '</p><p>If you have a question, email <a href="mailto:' . h(support_email()) . '">' . h(support_email()) . '</a> and quote reference <strong>' . h(support_ref($r)) . '</strong>.</p><p><a class="btn" href="/">Send a card of your own</a></p>', 410);
@@ -43,7 +43,7 @@ function r_home(): void {
         . '<section class="cause"><h2>Every card helps local Scouting</h2><p>' . h(setting('donation_purpose') ?: 'Any donation goes straight to 7th Swindon Scouts.') . '</p><p>Sending is always free. You never have to donate, and a donation never changes how your card looks.</p></section>'
         . '<h2 id="gallery">Pick a design</h2><div class="grid">';
     foreach (cards() as $id => $c) if ($c['on'])
-        $b .= '<a class="tile" href="/compose?card=' . h($id) . '">' . card_art($id) . '<span>' . h($c['title']) . '</span></a>';
+        $b .= '<a class="tile" href="/compose?card=' . h($id) . '">' . card_art($id) . '<span>' . h($c['title']) . '</span><em class="tjoke">' . h($c['joke']) . '</em></a>';
     page('Choose a card', $b . '</div>');
 }
 

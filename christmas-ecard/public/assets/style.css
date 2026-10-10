@@ -213,3 +213,6 @@ main a:not(.btn):not(.tile){color:var(--purple)}
 .brand img{background:none;padding:0;border-radius:50%;height:3.8rem;width:3.8rem;box-shadow:0 0 0 2px rgba(255,255,255,.9)}
 @media(max-width:640px){.brand img{height:3rem;width:3rem}}
 .footlogo{display:block;margin:0 auto .8rem;height:3.5rem;width:3.5rem;border-radius:50%;box-shadow:0 0 0 2px rgba(255,255,255,.5)}
+
+.card .joke{font-style:italic;color:var(--blue);font-weight:700;margin:-.4rem 0 1rem}
+.tile .tjoke{display:block;padding:0 .9rem .9rem;color:#5c6470;font-size:.9rem;font-weight:400}
