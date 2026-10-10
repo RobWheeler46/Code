@@ -51,6 +51,12 @@ foreach ($six as $id) { $c = cards()[$id] ?? null; if (!$c || !$c['baked'] || !i
 ok($good && array_slice(array_keys(cards()), 0, 12) === $six, 'twelve illustrated designs load first, with their images and alt text');
 ok(str_contains(cards()['pegs']['desc'], 'May all your pegs go in first time') && str_contains(cards()['dry']['desc'], 'dry Christmas'), 'alt text repeats the words printed on the card');
 
+// hero picks only enabled designs, and varies
+$seen = []; for ($i = 0; $i < 200; $i++) $seen[hero_card()] = 1;
+ok(!array_diff(array_keys($seen), $six) && count($seen) > 6, 'hero is always an enabled design and varies between visits');
+set_setting('off_pegs', '1'); $seen = []; for ($i = 0; $i < 200; $i++) $seen[hero_card()] = 1; set_setting('off_pegs', '');
+ok(!isset($seen['pegs']), 'a disabled design is never chosen for the hero');
+
 // the ten drawn designs start switched off but can be enabled; the illustrated ones start on and can be disabled
 $on = array_keys(array_filter(cards(), fn($c) => $c['on']));
 ok($on === $six, 'only the twelve illustrated designs are on by default');
