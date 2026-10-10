@@ -1,9 +1,9 @@
 <?php
 // Ten funny Scout themed designs, drawn as SVG scenes so they stay sharp and need no artist or licence.
-// To use real artwork instead, drop public/assets/cards/<id>.(png|jpg|webp|svg) and it takes over.
+// To use real artwork instead, drop public/assets/card-<id>.(png|jpg|webp|svg) and it takes over.
 // Each design: title, short joke line, background gradient, and a human written description (FR-145).
 function cards(): array {
-    // The first six are finished illustrated cards (public/assets/cards/<id>.webp) with the greeting painted into the picture ('baked'),
+    // The first six are finished illustrated cards (public/assets/card-<id>.webp) with the greeting painted into the picture ('baked'),
     // so the page does not repeat the title and joke. The rest are the simple drawn designs below.
     $c = [
         'pegs'     => ['May all your pegs go in first time', 'Happy Christmas from 7th Swindon Scouts.', '#0b2a5c', '#041f3d', 'Christmas card. The words say "May all your pegs go in first time. Happy Christmas from 7th Swindon Scouts." Santa in a Scout neckerchief and head torch kneels in the snow hammering a tent peg into the ground, while puzzled reindeer watch beside a sign saying Santa\'s Campsite and a lit tent with fairy lights. A mug of hot chocolate and a lantern sit nearby.', true],
@@ -135,7 +135,7 @@ function card_art(string $id, bool $thumb = false): string {
     $c = cards()[$id] ?? null;
     if (!$c) return '';
     foreach (['png', 'jpg', 'webp', 'svg'] as $x)
-        if (is_file(ROOT . "/public/assets/cards/$id.$x")) return '<img class="art" src="/assets/cards/' . h($id) . '.' . $x . '" alt="' . h($c['desc']) . '"' . ($thumb ? ' loading="lazy" decoding="async"' : '') . '>';
+        if (is_file(ROOT . "/public/assets/card-$id.$x")) return '<img class="art" src="/assets/card-' . h($id) . '.' . $x . '" alt="' . h($c['desc']) . '"' . ($thumb ? ' loading="lazy" decoding="async"' : '') . '>';
     static $n = 0; $g = 'g' . substr(md5($id), 0, 6) . ++$n; // unique per copy: a hidden duplicate must not steal the gradient
     $snow = '';
     for ($i = 0; $i < 22; $i++) $snow .= '<circle cx="' . (($i * 53 + 17) % 400) . '" cy="' . (($i * 37 + 11) % 270) . '" r="' . (1 + $i % 3) . '" fill="#fff" opacity=".7"/>';

@@ -47,7 +47,7 @@ q("update recipients set sent_at=? where id=1", [time() - 40 * 86400]);
 ok(str_contains(implode(' ', privacy_impact(['expiry_days' => 30])), '1 cards that are viewable now would stop'), 'shortening expiry shows affected count');
 // illustrated designs: image present, greeting is in the picture, alt text carries the printed words
 $six = ['pegs', 'scouty', 'dry', 'knoty', 'chaos', 'woggle', 'scouty-family', 'calm', 'family', 'adventure', 'proud', 'little']; $good = true;
-foreach ($six as $id) { $c = cards()[$id] ?? null; if (!$c || !$c['baked'] || !is_file(ROOT . "/public/assets/cards/$id.webp") || !str_contains(card_art($id), '<img') || !str_contains($c['desc'], 'The words say')) $good = false; }
+foreach ($six as $id) { $c = cards()[$id] ?? null; if (!$c || !$c['baked'] || !is_file(ROOT . "/public/assets/card-$id.webp") || !str_contains(card_art($id), '<img') || !str_contains($c['desc'], 'The words say')) $good = false; }
 ok($good && array_slice(array_keys(cards()), 0, 12) === $six, 'twelve illustrated designs load first, with their images and alt text');
 ok(str_contains(cards()['pegs']['desc'], 'May all your pegs go in first time') && str_contains(cards()['dry']['desc'], 'dry Christmas'), 'alt text repeats the words printed on the card');
 
