@@ -59,9 +59,10 @@ ok(!isset($seen['pegs']), 'a disabled design is never chosen for the hero');
 
 // the ten drawn designs start switched off but can be enabled; the illustrated ones start on and can be disabled
 $on = array_keys(array_filter(cards(), fn($c) => $c['on']));
-ok($on === $six, 'only the twelve illustrated designs are on by default');
+ok($on === array_values(array_diff($six, ['woggle'])), 'the illustrated designs are on by default, except Woggle which is held back until its 2025 artwork is fixed');
 set_setting('off_blame', '0'); set_setting('off_pegs', '1'); $on2 = array_keys(array_filter(cards(), fn($c) => $c['on']));
-ok(in_array('blame', $on2) && !in_array('pegs', $on2) && count($on2) === 12, 'a drawn design can be enabled and an illustrated one disabled');
+ok(in_array('blame', $on2) && !in_array('pegs', $on2) && count($on2) === 11, 'a drawn design can be enabled and an illustrated one disabled');
 set_setting('off_blame', ''); set_setting('off_pegs', '');
+set_setting('off_woggle', '0'); ok(cards()['woggle']['on'], 'Woggle can be enabled in Admin once the picture is fixed'); set_setting('off_woggle', '');
 
 @unlink(env('DB_PATH')); exit($GLOBALS['bad'] ?? 0);

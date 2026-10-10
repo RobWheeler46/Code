@@ -29,9 +29,11 @@ function cards(): array {
         'patrol'   => ['The Snowmen Patrol', 'Sing loudly, stand still and keep your scarf on.', '#0c9a8e', '#0b3d4a', 'Three singing snowmen in Scout neckerchiefs stand in a row beside a patrol flag, with music notes floating above them.'],
         'campout'  => ['Snow Place Like Camp', 'Rule one: sleeping bag first, hot chocolate second.', '#0b6b9e', '#0a2540', 'A glowing blue tent with fairy lights and a Camp sign sits in the snow, with a big mug of hot chocolate topped with marshmallows in front.'],
     ];
-    // Drawn designs (no 'baked' flag) start switched off; Admin can enable them. Illustrated ones start on.
+    // Drawn designs (no 'baked' flag) start switched off; Admin can enable them. Illustrated ones start on,
+    // except any held back here until their artwork is corrected (woggle says 2025 in the picture).
+    $heldBack = ['woggle'];
     $out = [];
-    foreach ($c as $id => $v) { [$t, $j, $a, $b, $alt, $baked] = $v + [5 => false]; $out[$id] = ['title' => $t, 'joke' => $j, 'a' => $a, 'b' => $b, 'on' => $baked ? setting("off_$id") !== '1' : setting("off_$id") === '0', 'desc' => setting("desc_$id") ?: $alt, 'baked' => $baked]; }
+    foreach ($c as $id => $v) { [$t, $j, $a, $b, $alt, $baked] = $v + [5 => false]; $out[$id] = ['title' => $t, 'joke' => $j, 'a' => $a, 'b' => $b, 'on' => ($baked && !in_array($id, $heldBack, true)) ? setting("off_$id") !== '1' : setting("off_$id") === '0', 'desc' => setting("desc_$id") ?: $alt, 'baked' => $baked]; }
     uksort($out, fn($x, $y) => (int)setting("order_$x", (string)array_search($x, array_keys($out))) <=> (int)setting("order_$y", (string)array_search($y, array_keys($out))));
     return $out;
 }
