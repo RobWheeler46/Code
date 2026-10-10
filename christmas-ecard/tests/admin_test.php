@@ -51,4 +51,11 @@ foreach ($six as $id) { $c = cards()[$id] ?? null; if (!$c || !$c['baked'] || !i
 ok($good && array_slice(array_keys(cards()), 0, 12) === $six, 'twelve illustrated designs load first, with their images and alt text');
 ok(str_contains(cards()['pegs']['desc'], 'May all your pegs go in first time') && str_contains(cards()['dry']['desc'], 'dry Christmas'), 'alt text repeats the words printed on the card');
 
+// the ten drawn designs start switched off but can be enabled; the illustrated ones start on and can be disabled
+$on = array_keys(array_filter(cards(), fn($c) => $c['on']));
+ok($on === $six, 'only the twelve illustrated designs are on by default');
+set_setting('off_blame', '0'); set_setting('off_pegs', '1'); $on2 = array_keys(array_filter(cards(), fn($c) => $c['on']));
+ok(in_array('blame', $on2) && !in_array('pegs', $on2) && count($on2) === 12, 'a drawn design can be enabled and an illustrated one disabled');
+set_setting('off_blame', ''); set_setting('off_pegs', '');
+
 @unlink(env('DB_PATH')); exit($GLOBALS['bad'] ?? 0);
