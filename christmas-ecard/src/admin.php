@@ -260,7 +260,10 @@ function r_admin_action(): void {
 // ---------- S30 overview
 function r_admin(): void {
     $u = need_admin(); $st = campaign_state(); $c = admin_pause_counts();
-    $b = '<h1>Administration</h1><div class="cards">'
+    $nc = (int)one("select count(*) n from sends where is_test=0 and status not in ('draft','awaiting_payment')")['n']; $na = count(health_alerts());
+    $b = '<h1>Administration</h1><div class="cards stats"><section class="statuscard"><h2>Cards requested</h2><p class="big">' . $nc . '</p></section>'
+        . (can_any('finance', 'campaign') ? '<section class="statuscard"><h2>Donations recorded</h2><p class="big">' . gbp((int)one('select coalesce(sum(pence-refunded),0) n from donations')['n']) . '</p></section>' : '')
+        . '<section class="statuscard"><h2>Needs attention</h2><p class="big">' . $na . '</p></section></div><div class="cards">'
         . '<section class="statuscard"><h2>Campaign</h2><p>' . ['open' => 'Open for new cards', 'before' => 'Not open yet', 'closed' => 'Closed to new cards', 'locked' => 'Locked until launch decisions are approved'][$st] . '</p></section>'
         . '<section class="statuscard"><h2>Dispatch</h2><p>' . (setting('paused') === '1' ? '<strong>Paused</strong>' : 'Running') . '. ' . $c['queued'] . ' queued.</p></section>';
     $alerts = health_alerts();

@@ -11,8 +11,9 @@ ok(count($grouped[1]) === count(array_unique($grouped[1])), 'no link appears in 
 ok(str_contains($adm, 'if ($links[$href][1])'), 'links are still filtered by each role check');
 $app = file_get_contents(__DIR__ . '/../src/app.php'); $js = file_get_contents(__DIR__ . '/../public/assets/app.js'); $css = file_get_contents(__DIR__ . '/../public/assets/style.css');
 ok(str_contains($app, 'data-skip>Skip animation') && str_contains($js, 'data-skip') && str_contains($css, '.noanim *'), 'recipient reveal has a working Skip animation control');
-ok(strpos($app, 'value="free">Send cards for free') < strpos($app, '<details class="donate"'), 'UX24-03: review shows Send for free first, donation sits behind an explicit choice');
+ok(str_contains($app, 'name="mode" value="free"') && str_contains($app, 'value="send" data-send-btn') && strpos($app, 'name="mode" value="free"') < strpos($app, 'name="mode" value="donate"'), 'UX24-03: review offers free first (chosen unless recovering), donation as an explicit second choice, one send button');
 preg_match_all("/\$a\['([a-z0-9]+)'\]/", file_get_contents(__DIR__ . '/../src/ops.php'), $ak);
 $missing = array_filter(array_unique($ak[1]), fn($k) => !str_contains($adm, "'$k' => ['/admin"));
 ok(!$missing, 'UX24-07: every alert type on the Overview says where to act (' . implode(',', $missing) . ')');
+ok(str_contains($app, "if ($do === 'send') $do = ($_POST['mode'] ?? '') === 'donate'"), 'the single send button maps the chosen option to the existing free or donate paths');
 exit($GLOBALS['bad'] ?? 0);

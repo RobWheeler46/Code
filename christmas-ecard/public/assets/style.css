@@ -227,3 +227,11 @@ img.art{display:block;width:100%;height:auto}
 
 .noanim *,.noanim *::before,.noanim *::after{animation:none!important;transition:none!important}
 .navgroup{margin:.8rem 0 .2rem;font-weight:800;font-size:.85rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted,#5c6470)}
+
+.sendopts{border:0;padding:0;margin:1rem 0}.sendopts legend{font-weight:800;font-size:1.25rem;margin-bottom:.6rem}
+.optcard{display:grid;grid-template-columns:auto 1fr;gap:.1rem .7rem;align-items:start;border:2px solid var(--border,#d9e1ee);border-radius:12px;padding:1rem;margin:.6rem 0;background:#fff;cursor:pointer}
+.optcard span{grid-column:2;color:#5c6470}.optcard:has(input:checked){border-color:#024593;background:#f1f6fd}
+.donatebox{display:none;margin:.6rem 0}.sendopts:has(input[value=donate]:checked) .donatebox{display:block}
+@supports not selector(:has(*)){.donatebox{display:block}}
+.total{display:flex;justify-content:space-between;font-size:1.2rem;border-top:1px solid #d9e1ee;padding-top:.8rem}.total strong{font-size:1.5rem}
+.stats .big{font-size:2rem;font-weight:800;margin:.2rem 0}.lead{color:#5c6470}

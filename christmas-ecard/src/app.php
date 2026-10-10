@@ -225,8 +225,8 @@ function r_compose(): void {
     $opts = '';
     foreach (cards() as $id => $c) if ($c['on']) $opts .= '<option value="' . h($id) . '"' . ($id === $card ? ' selected' : '') . '>' . h($c['title']) . '</option>';
     $saved = $s ? '<p class="note" role="status">Draft saved at ' . date('H:i', (int)$s['updated']) . '.</p>' : '<p class="note">Not saved yet. Use Save draft to keep your work' . ($u ? '.' : ' (you will register before sending).') . '</p>';
-    page('Write your card', steps(2) . '<h1>Write your card</h1>' . ($u ? '' : '<p class="note">You can prepare your card now. Before it is sent you will create a free account and verify your email, and your card will wait for you.</p>')
-        . '<div class="two"><div class="card preview" aria-label="Live preview">' . card_art($card) . '<div class="inner"><p class="msg" data-preview-msg>' . nl2br(h($msg)) . '</p><p class="from">With love from<br><strong data-preview-from>' . h($from) . '</strong></p></div></div><form method="post" class="stack" data-dirty-warn>' . csrf()
+    page('Write your card', steps(2) . '<h1>Write something wonderful</h1><p class="lead">Your message and everyone you are sending it to, together in one place.</p>' . ($u ? '' : '<p class="note">You can prepare your card now. Before it is sent you will create a free account and verify your email, and your card will wait for you.</p>')
+        . '<div class="two"><div class="card preview" aria-label="Live preview">' . card_art($card) . '<p class="center"><a class="btn alt" href="/#gallery">Change design</a></p><div class="inner"><p class="msg" data-preview-msg>' . nl2br(h($msg)) . '</p><p class="from">With love from<br><strong data-preview-from>' . h($from) . '</strong></p></div></div><form method="post" class="stack" data-dirty-warn>' . csrf()
         . '<label>Design<select name="card">' . $opts . '</select></label>'
         . '<label>From (your name or family name)<input name="sender_name" maxlength="' . (name_max() + 20) . '" data-max="' . name_max() . '" value="' . h($from) . '"' . fa($errs, 'sender_name', $f) . '><small class="count">Up to ' . name_max() . ' characters</small>' . fe($errs, 'sender_name') . '</label>'
         . '<label>Your message<textarea name="message" rows="5" data-max="' . msg_max() . '"' . fa($errs, 'message', $f) . '>' . h($msg) . '</textarea><small class="count">Up to ' . msg_max() . ' characters</small>' . fe($errs, 'message') . '</label>'
@@ -234,7 +234,7 @@ function r_compose(): void {
         . ($back ? '<p class="note">Sending a card back to ' . h($back['sender_name']) . ': add their email address below.</p>' : '')
         . $recipientsHtml
         . ($s && $u && $u['verified'] ? '<p><button class="btn alt" name="act" value="pick">Choose from address book</button></p>' : ($u ? '<p class="note">Save your draft and verify your email to choose from your address book.</p>' : ''))
-        . $saved . '<div class="row"><button class="btn" name="act" value="continue">Continue</button><button class="btn alt" name="act" value="preview">Preview</button><button class="btn alt" name="act" value="save">Save draft</button><button class="btn alt" name="act" value="test">Email me a test</button></div></form></div>');
+        . '<p class="note">Only you can see your full recipient list. Each person gets a private, individual message.</p>' . $saved . '<div class="row"><button class="btn" name="act" value="continue">Review your card</button><button class="btn alt" name="act" value="preview">Preview</button><button class="btn alt" name="act" value="save">Save draft</button><button class="btn alt" name="act" value="test">Email me a test</button></div></form></div>');
 }
 
 /** FR-138: what the recipient will receive. Built from the real templates but with a dummy token, so no link opens a real card. */
@@ -294,6 +294,7 @@ function r_review(): void {
     $pending = $s['status'] === 'awaiting_payment';
     if (post()) {
         $do = $_POST['do'] ?? '';
+        if ($do === 'send') $do = ($_POST['mode'] ?? '') === 'donate' ? 'donate' : 'free'; // one button, the radio says which
         if ($do === 'check' && $pending) {
             $r = pay_check($s);
             if ($r === 'expired') { back_to_draft($id); redirect("/review?id=$id&recover=failed"); }
@@ -349,13 +350,15 @@ function r_review(): void {
     } else {
         $rec = $_GET['recover'] ?? '';
         if ($rec === 'cancelled' || $rec === 'failed') $form .= '<p class="flash warn" role="status"><strong>' . ($rec === 'cancelled' ? 'Payment was cancelled.' : 'Payment did not go through.') . '</strong> Nothing was charged and your card and recipients are safe. You can try again, or choose to send for free. Cards are only sent when you press a send button below.</p>';
-        $form .= '<div class="row"><button class="btn big" name="do" value="free">Send cards for free</button></div><p class="note">Sending is always free. Nothing is charged unless you choose to donate below.</p>'
-            . '<details class="donate"' . ($rec ? ' open' : '') . '><summary>Make an optional donation to 7th Swindon Scouts instead</summary><fieldset><legend>Optional donation</legend><p>' . h(setting('donation_purpose', 'Donations support 7th Swindon Scouts.')) . ' One donation covers all ' . count($rs) . ' of your cards.</p>';
-        $form .= '<div class="chips">';
+        $form .= '<fieldset class="sendopts"><legend>How would you like to send?</legend>'
+            . '<label class="optcard"><input type="radio" name="mode" value="free"' . ($rec ? '' : ' checked') . '> <strong>Send for free</strong><span>Your cards are free to send. No payment needed.</span></label>'
+            . '<label class="optcard"><input type="radio" name="mode" value="donate"' . ($rec ? ' checked' : '') . '> <strong>Make an optional donation</strong><span>' . h(setting('donation_purpose', 'Donations support 7th Swindon Scouts.')) . '</span></label>'
+            . '<div class="donatebox"><p>One donation covers all ' . count($rs) . ' of your cards.</p><div class="chips">';
         foreach (array_map('intval', explode(',', setting('amounts_pence', '200,500,1000'))) as $a) $form .= '<label class="opt"><input type="radio" name="amount" value="' . $a . '"> ' . gbp($a) . '</label>';
-        $form .= '<label class="opt"><input type="radio" name="amount" value="custom"> Other amount (£) <input type="number" name="custom" min="1" max="500" step="0.01" aria-label="Custom amount in pounds"></label>' . '</div>'
-            . '<label class="opt"><input type="checkbox" name="donation_note" value="1"> Add a line to the cards saying they came with a donation to 7th Swindon Scouts (no amount is shown; only after payment is confirmed)</label></fieldset>'
-            . giftaid_form_block() . '<div class="row"><button class="btn alt" name="do" value="donate">Donate and send cards</button></div></details>';
+        $form .= '<label class="opt"><input type="radio" name="amount" value="custom"> Other amount (£) <input type="number" name="custom" min="1" max="500" step="0.01" aria-label="Custom amount in pounds"></label></div>'
+            . '<label class="opt"><input type="checkbox" name="donation_note" value="1"> Add a line to the cards saying they came with a donation to 7th Swindon Scouts (no amount is shown; only after payment is confirmed)</label>'
+            . giftaid_form_block() . '</div>'
+            . '<p class="total">Total <strong data-total>£0.00</strong></p><button class="btn big" name="do" value="send" data-send-btn>Send my cards for free</button><p class="note">Sending is always free. Nothing is charged unless you choose to donate.</p></fieldset>';
     }
     page('Review and send', $b . $form . '</form>');
 }

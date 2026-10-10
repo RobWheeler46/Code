@@ -34,3 +34,10 @@
 document.querySelectorAll('[data-print]').forEach(function (b) { b.addEventListener('click', function () { window.print(); }); });
 
 document.querySelectorAll('[data-skip]').forEach(function (b) { b.addEventListener('click', function () { document.documentElement.classList.add('noanim'); b.parentNode.hidden = true; }); });
+
+(function () { var f = document.querySelector('.sendopts'); if (!f) return;
+  function upd() { var d = f.querySelector('input[name=mode][value=donate]').checked, t = 0, p = f.querySelector('input[name=amount]:checked');
+    if (d && p) t = p.value === 'custom' ? Math.round(parseFloat(f.querySelector('input[name=custom]').value || 0) * 100) : parseInt(p.value, 10);
+    f.querySelector('[data-total]').textContent = '£' + (t / 100).toFixed(2);
+    f.querySelector('[data-send-btn]').textContent = d ? 'Donate and send my cards' : 'Send my cards for free'; }
+  f.addEventListener('input', upd); f.addEventListener('change', upd); upd(); })();
