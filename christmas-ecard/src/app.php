@@ -33,7 +33,7 @@ function progress(): int { return (int)one('select coalesce(sum(pence-refunded),
 function r_home(): void {
     if (preg_match('/^[a-z0-9-]{1,30}$/', (string)($_GET['ref'] ?? ''))) $_SESSION['ref'] = $_GET['ref']; // promotion source label only, never a person
     $st = campaign_state();
-    $b = '<section class="hero"><div><p class="eyebrow">7th Swindon Scouts Christmas cards</p><h1>Send a little Christmas cheer, Scout style</h1><p class="lead">Pick a design, write your message and we will email a private card to your friends and family. Sending is free, and a donation is optional.</p><p><a class="btn big" href="#gallery">Choose a card</a> <a class="btn ghost" href="#how">How it works</a></p></div><div class="heroart" aria-hidden="true">' . card_art('in-tents') . '</div></section>';
+    $b = '<section class="hero"><div><p class="eyebrow">7th Swindon Scouts Christmas cards</p><h1>Send a little Christmas cheer, Scout style</h1><p class="lead">Pick a design, write your message and we will email a private card to your friends and family. Sending is free, and a donation is optional.</p><p><a class="btn big" href="#gallery">Choose a card</a> <a class="btn ghost" href="#how">How it works</a></p></div><div class="heroart" aria-hidden="true">' . card_art('pegs') . '</div></section>';
     if ($st === 'locked') $b .= '<p class="flash warn">Sending is not open yet. You can prepare a card now.</p>';
     if ($st === 'before') $b .='<p class="flash warn">Sending opens on ' . h(date('j F Y \a\t H:i', strtotime(setting('opens')))) . '. You can prepare a card now.</p>';
     if ($st === 'closed') $b .= '<p class="flash warn">This year\'s card sending has closed. Cards already sent stay viewable until they expire.</p>';

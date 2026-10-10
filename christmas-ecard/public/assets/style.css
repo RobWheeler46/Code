@@ -221,3 +221,4 @@ main a:not(.btn):not(.tile){color:var(--purple)}
 img.art{display:block;width:100%;height:auto}
 .tile img.art,.cardrow .thumb img.art{aspect-ratio:4/3;object-fit:cover;object-position:top}
 @media(max-width:640px){.card .art,.preview .art{aspect-ratio:auto}.card svg.art,.preview svg.art{aspect-ratio:16/9}}
+.heroart img.art{aspect-ratio:4/3;object-fit:cover;object-position:top}
