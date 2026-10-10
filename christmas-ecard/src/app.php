@@ -203,7 +203,7 @@ function r_compose(): void {
     $old = $_SESSION['old'] ?? null; $errs = $_SESSION['errs'] ?? []; unset($_SESSION['old'], $_SESSION['errs']);
     $card = $old['card'] ?? $s['card'] ?? (string)($_GET['card'] ?? '');
     if (!(cards()[$card]['on'] ?? false)) redirect('/');
-    $back = !$s && !empty($_GET['back']) && preg_match('/^[a-f0-9]{48}$/', $_GET['back']) ? one('select s.sender_name from recipients r join sends s on s.id=r.send_id where r.token=?', [$_GET['back']]) : null;
+    $back = !$s && !empty($_GET['back']) && preg_match('/^[a-f0-9]{48}$/', $_GET['back']) ? one('select s.sender_name from recipients r join sends s on s.id=r.send_id where r.token_hash=sha256(?)', [$_GET['back']]) : null;
     $f = true;
     $rowsIn = [];
     if ($old && isset($old['r_email'])) { foreach ($old['r_email'] as $i => $em) $rowsIn[] = [(string)($old['r_name'][$i] ?? ''), (string)$em, (string)($old['r_msg'][$i] ?? '')]; if (!empty($old['addrow'])) $rowsIn[] = ['', '', '']; }
@@ -457,7 +457,7 @@ function r_send(): void {
 
 // ---------- recipient
 function recipient_by_token(string $t): array {
-    $r = preg_match('/^[a-f0-9]{48}$/', $t) ? one("select * from recipients where token=? and status in ('sent','sending','queued','failed','bounced')", [$t]) : null;
+    $r = preg_match('/^[a-f0-9]{48}$/', $t) ? one("select * from recipients where (token_hash=sha256(?) or (token_hash is null and token=?)) and status in ('sent','sending','queued','failed','bounced')", [$t, $t]) : null;
     return $r ?: fail(404, 'We could not find that card. Please check the link in your email, or visit the Help page.');
 }
 

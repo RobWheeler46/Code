@@ -17,7 +17,7 @@ Date: 10 October 2026. Produced by reading the repository, not from the pack's a
 
 ## Security controls found
 
-Session CSRF on every POST except webhooks; password hashing; email verification before sending; TOTP two step sign in enforced for all admin pages and actions; per-action role map checked on the server (`r_admin_action`); rate limits per visitor and per account/email/token with audit of refusals; hidden trap field on public forms; Stripe signature check and event dedupe; Postmark hook secret; recipient tokens are random and opt-out needs a POST so link scanners cannot opt anyone out; audit log. Recipient tokens are stored in plain text, not hashed (the pack says "if architecture permits"): see the gap list.
+Session CSRF on every POST except webhooks; password hashing; email verification before sending; TOTP two step sign in enforced for all admin pages and actions; per-action role map checked on the server (`r_admin_action`); rate limits per visitor and per account/email/token with audit of refusals; hidden trap field on public forms; Stripe signature check and event dedupe; Postmark hook secret; recipient tokens are random and opt-out needs a POST so link scanners cannot opt anyone out; audit log. Recipient link tokens are random; once a card is mailed only a SHA-256 hash is kept (queued cards keep the plain value until sent because the email needs it).
 
 ## Tests found and run
 
@@ -29,7 +29,8 @@ Session CSRF on every POST except webhooks; password hashing; email verification
 | tests/ops_test.php | 33 | Terms, suspension, alerts, readiness, reminders |
 | tests/giftaid_test.php | 23 | Gift Aid |
 | tests/resilience_test.php | 47 | Frozen art, Stripe events, bounces, backup and restore, gates, rate limits |
-| tests/ux24_test.php | 5 | New in this pass: skip control, five area navigation |
+| tests/token_hash_test.php | 9 | New in this pass: hashed card links, requeue, old link revoked |
+| tests/ux24_test.php | 7 | New in this pass: skip control, five area navigation |
 
 All pass (contacts_test failed once with a stale temporary database name and passed on rerun). The suites are plain PHP scripts with exit codes; there is no browser, accessibility, load or live provider test.
 
@@ -42,7 +43,7 @@ All pass (contacts_test failed once with a stale temporary database name and pas
    - UX24-07: the Overview now lists each exception with an Open link, or the owning role where the viewer lacks access.
    - UX24-11: the three stage progress bar exists but its wording around sign in and payment has not been tested.
    - The campaign QR image is fetched from a third party service. The pack prefers local generation; that needs a QR library or a small generator and a privacy decision.
-   - Recipient tokens are stored unhashed.
+   - Recipient tokens: done in this pass (hash only after sending; existing sent rows migrate on first start).
    - No staging run, live Stripe or Postmark verification, assistive technology test, security review or load test. These are the release gates and cannot be satisfied by code.
    - The pack's FR to AC mapping for FR-001 to FR-145 is provisional because the original v2.0 and v2.1 acceptance wording was not in the pack. The merged baseline in `docs/FRD_baseline_v2_3.md` now supplies it, so the mapping can be reconciled against that file.
 4. **Conflicts to record, not resolved:** the pack says "Postmark appears planned"; the code supports Postmark and a local log fallback, with no live account verified. The pack's Admin tab names (Cards & delivery and so on) are used with "and" in place of "&" to follow the Group's copy rule against symbols and abbreviations.

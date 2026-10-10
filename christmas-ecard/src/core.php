@@ -153,7 +153,7 @@ function process_queue(int $limit = 50): int {
         if (bounced_hard($r['email'])) { q("update recipients set status='failed', error=? where id=?", ['This address has bounced before. Please correct it.', $r['id']]); continue; }
         if (opted_out($r['email'], (int)$s['user_id'])) { q("update recipients set status='cancelled', error='Recipient opted out' where id=?", [$r['id']]); continue; }
         $err = mail_send($r['email'], "{$s['sender_name']} sent you a Christmas card", email_body($r, $s), ['rid' => (string)$r['id']], email_html($r, $s), $s['sender_name']);
-        if ($err === null) { q("update recipients set status='sent', sent_at=?, error=null where id=?", [time(), $r['id']]); $n++; }
+        if ($err === null) { q("update recipients set status='sent', sent_at=?, error=null, token_hash=sha256(token), token=null where id=?", [time(), $r['id']]); $n++; }
         elseif (str_starts_with($err, 'UNKNOWN:')) q("update recipients set error=? where id=?", [substr($err, 8), $r['id']]);  // stays 'sending': provider may have accepted it, so never auto-repeat
         elseif (str_starts_with($err, 'PERM:')) q("update recipients set status='failed', error=? where id=?", [substr($err, 5), $r['id']]); // permanent: no automatic retry
         elseif ($r['tries'] >= 4) q("update recipients set status='failed', error=? where id=?", [$err . ' (retries used up; needs support review)', $r['id']]); // original attempt + 3 retries
@@ -168,7 +168,7 @@ function requeue_recipient(int $rid, ?string $newEmail, int $actor, string $via)
     if (!$r || !(in_array($r['status'], ['failed', 'bounced']) || rstatus($r) === 'Delivery unconfirmed')) return false;
     $email = $newEmail === null ? $r['email'] : norm_email($newEmail);
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) return false;
-    $ok = q("update recipients set email=?, token=?, status='queued', tries=0, next_at=0, error=null, delivered_at=null, sent_at=null where id=? and status=? and token=?", [$email, token(), $rid, $r['status'], $r['token']])->rowCount();
+    $ok = q("update recipients set email=?, token=?, token_hash=sha256(?), status='queued', tries=0, next_at=0, error=null, delivered_at=null, sent_at=null where id=? and status=? and (token_hash=? or (token_hash is null and token=?))", [$email, $nt = token(), $nt, $rid, $r['status'], $r['token_hash'] ?? hash('sha256', (string)$r['token']), (string)$r['token']])->rowCount();
     if ($ok) audit($actor, 'address_correction', "recipient $rid via $via: {$r['email']} -> $email; previous link revoked");
     return (bool)$ok;
 }
@@ -209,7 +209,7 @@ function purge_old(): int {
     $ids = array_column(all("select id from sends where queued_at is not null and queued_at<? and message<>''", [$cut]), 'id');
     foreach ($ids as $id) {
         q("update sends set message='' where id=?", [$id]);
-        q("update recipients set name='', email='deleted-'||id, token='gone-'||id where send_id=?", [$id]);
+        q("update recipients set name='', email='deleted-'||id, token='gone-'||id, token_hash=null where send_id=?", [$id]);
     }
     foreach (array_column(all('select id from sends where user_id=0 and updated<?', [time() - 7 * 86400]), 'id') as $id) {
         q('delete from recipients where send_id=?', [$id]); q('delete from sends where id=?', [$id]);
