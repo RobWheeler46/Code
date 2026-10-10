@@ -57,6 +57,10 @@ $yid = (int)one("select id from users where email='yes@x.com'")['id'];
 ok(hash_equals(remind_token($yid), remind_token($yid)) && !hash_equals(remind_token($yid), remind_token($yid + 1)), 'stop link token is per user');
 ok(str_contains(file_get_contents(ROOT . '/data/outbox.log'), 'remind-off?u=' . $yid), 'every reminder carries a one-click stop link');
 
+// logo in the recipient email uses the public site address, with alt text and still no recipient addresses
+putenv('APP_URL=https://cards.example.org'); $eh = email_html(['name' => 'Gran', 'email' => 'gran@x.com', 'token' => str_repeat('a', 48)], ['sender_name' => 'Smiths']);
+ok(str_contains($eh, 'https://cards.example.org/assets/brand/7th-swindon-circle-blue.png') && str_contains($eh, 'alt="7th Swindon Scouts"') && !str_contains($eh, 'gran@x.com'), 'email carries the logo from APP_URL and no recipient address'); putenv('APP_URL=');
+
 // FR-139 measures and FR-136 test exclusion
 ok(masked(0) === '0' && masked(3) === 'fewer than 5' && masked(5) === '5', 'small counts are masked');
 ok(pct(1, 3) === 'not enough data' && pct(5, 10) === '50%', 'percentages need enough data');

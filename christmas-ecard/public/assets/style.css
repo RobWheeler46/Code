@@ -212,3 +212,4 @@ main a:not(.btn):not(.tile){color:var(--purple)}
 /* Logo: the approved circular 7th Swindon mark, blue #024593 on its own blue, so it reads as a white mark on the top bar */
 .brand img{background:none;padding:0;border-radius:50%;height:3.8rem;width:3.8rem;box-shadow:0 0 0 2px rgba(255,255,255,.9)}
 @media(max-width:640px){.brand img{height:3rem;width:3rem}}
+.footlogo{display:block;margin:0 auto .8rem;height:3.5rem;width:3.5rem;border-radius:50%;box-shadow:0 0 0 2px rgba(255,255,255,.5)}
