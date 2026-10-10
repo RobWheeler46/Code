@@ -39,7 +39,7 @@ Roles: finance, delivery, campaign, complaints, role administrator (assigned in 
 
 ## Known gaps vs the FRD
 - **Legal wording** (privacy notice, terms, safeguarding statement) is a draft written by me, not reviewed by anyone responsible. It must be replaced or approved by the Trustees (D-14).
-- FRD 2.1 Shoulds and conditional items (rehearsal allow-list, email preview, success measures, recipient donations, Gift Aid, Christmas Day delivery, printable card, next-year reminder) are not built.
+- FRD 2.1 conditional items are not built because they wait on Trustee decisions: recipient donations (D-11), Gift Aid (D-12), Christmas Day delivery (D-13). Built: rehearsal allow-list and results log (Admin > Rehearsal), campaign measures (Admin > Measures), email preview, printable card, yearly reminder.
 - **Artwork** is placeholder SVG. Drop real files at `public/assets/cards/<id>.png` (ids in `src/cards.php`).
 - **MySQL**: uses SQLite. Moving to MySQL needs the DDL in `src/lib.php` and `insert or ignore` / `on conflict` adjusted.
 - v1.2 conditional enhancements (scheduling FR-068 to 070, private link sharing FR-071 to 073, keepsake, collaborative cards, artwork management) are not built; the FRD keeps them out of the launch gate.

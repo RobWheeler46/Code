@@ -57,4 +57,12 @@ $yid = (int)one("select id from users where email='yes@x.com'")['id'];
 ok(hash_equals(remind_token($yid), remind_token($yid)) && !hash_equals(remind_token($yid), remind_token($yid + 1)), 'stop link token is per user');
 ok(str_contains(file_get_contents(ROOT . '/data/outbox.log'), 'remind-off?u=' . $yid), 'every reminder carries a one-click stop link');
 
+// FR-139 measures and FR-136 test exclusion
+ok(masked(0) === '0' && masked(3) === 'fewer than 5' && masked(5) === '5', 'small counts are masked');
+ok(pct(1, 3) === 'not enough data' && pct(5, 10) === '50%', 'percentages need enough data');
+q("insert into sends(user_id,card,sender_name,message,status,created,updated,is_test) values(1,'santa','T','x','queued',?,?,1)", [time(), time()]);
+q("insert into recipients(send_id,name,email,token,status,sent_at) values((select max(id) from sends),'T','t@x.com','tt1','sent',?)", [time()]);
+$a = campaign_measures(); q('update sends set is_test=0 where id=(select max(id) from sends)'); $b = campaign_measures();
+ok($b['started'] === $a['started'] + 1 && $b['submitted'] === $a['submitted'] + 1, 'rehearsal cards are left out of the measures');
+
 @unlink(env('DB_PATH')); exit($GLOBALS['bad'] ?? 0);

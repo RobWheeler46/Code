@@ -12,7 +12,7 @@ function admin_page(string $title, string $body): never {
         '/admin/reports' => ['Reports', can('complaints')], '/admin/campaign' => ['Campaign settings', can_any('campaign', 'appadmin', 'finance', 'delivery', 'rolesadmin')],
         '/admin/app' => ['Application settings', can_any('appadmin', 'campaign', 'delivery', 'rolesadmin')], '/admin/email' => ['Email and help', can_any('appadmin', 'rolesadmin')],
         '/admin/privacy' => ['Privacy and retention', can_any('rolesadmin', 'campaign', 'appadmin', 'finance', 'delivery')], '/admin/access' => ['Administrator access', can('rolesadmin')],
-        '/admin/senders' => ['Senders', can_any('complaints', 'rolesadmin')], '/admin/launch' => ['Launch readiness', true], '/admin/health' => ['System health', true], '/admin/audit' => ['Change history', true]];
+        '/admin/senders' => ['Senders', can_any('complaints', 'rolesadmin')], '/admin/launch' => ['Launch readiness', true], '/admin/measures' => ['Measures', can_any('campaign', 'finance', 'appadmin', 'rolesadmin')], '/admin/rehearsal' => ['Rehearsal', can_any('appadmin', 'rolesadmin')], '/admin/health' => ['System health', true], '/admin/audit' => ['Change history', true]];
     $here = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
     $nav = '<nav class="adminmenu" aria-label="Administration"><details open><summary>Menu</summary><ul class="plain">';
     foreach ($links as $href => [$label, $ok]) if ($ok) $nav .= '<li><a href="' . $href . '"' . ($href === $here ? ' aria-current="page"' : '') . '>' . h($label) . '</a></li>';
@@ -39,6 +39,8 @@ function config_spec(string $area): array {
             'groups_max' => ['Contact groups per account', 'int', 'min' => 1, 'max' => 100, 'def' => '20'],
             'test_per_hour' => ['Test cards per account per hour', 'int', 'min' => 1, 'max' => 20, 'def' => '3'],
             'abuse_terms' => ['Blocked words in messages (comma separated)', 'text', 'max' => 500, 'def' => ''],
+            'small_n' => ['Show counts below this number as "fewer than N"', 'int', 'min' => 2, 'max' => 50, 'def' => '5'],
+            'rehearsal_emails' => ['Rehearsal allow-list (emails, comma separated)', 'emails', 'def' => ''],
             'alert_emails' => ['Who receives operational alerts (emails, comma separated)', 'emails', 'def' => ''],
             'alert_escalate_emails' => ['Who receives an alert nobody acknowledged (emails)', 'emails', 'def' => ''],
             'alert_escalate_minutes' => ['Escalate unacknowledged alerts after (minutes)', 'int', 'min' => 5, 'max' => 1440, 'def' => '60'],
@@ -247,9 +249,9 @@ function r_admin(): void {
     $alerts = health_alerts();
     $b .= '<section class="statuscard"><h2>Alerts</h2><p>' . ($alerts ? '<strong>' . count($alerts) . ' need attention</strong>' : 'None found') . '</p><a href="/admin/health">System health</a></section></div>';
     if ($alerts) { $b .= '<h2>Needs attention first</h2><ul>'; foreach ($alerts as $a) $b .= '<li>' . h($a) . '</li>'; $b .= '</ul>'; }
-    $rc = []; foreach (all('select * from recipients') as $r) { $k = rstatus($r); $rc[$k] = ($rc[$k] ?? 0) + 1; }
+    $rc = []; foreach (all('select r.* from recipients r join sends s on s.id=r.send_id where s.is_test=0') as $r) { $k = rstatus($r); $rc[$k] = ($rc[$k] ?? 0) + 1; }
     $b .= '<h2>Card activity</h2><p>' . h(implode(', ', array_map(fn($k, $v) => "$v $k", array_keys($rc), $rc)) ?: 'Nothing sent yet.') . '</p><ul>';
-    foreach (all("select card, count(*) n from sends where status not in ('draft','awaiting_payment') group by card order by n desc") as $x) $b .= '<li>' . h(cards()[$x['card']]['title'] ?? $x['card']) . ': ' . $x['n'] . '</li>';
+    foreach (all("select card, count(*) n from sends where is_test=0 and status not in ('draft','awaiting_payment') group by card order by n desc") as $x) $b .= '<li>' . h(cards()[$x['card']]['title'] ?? $x['card']) . ': ' . $x['n'] . '</li>';
     $b .= '</ul>';
     if (can_any('finance', 'campaign')) {
         $d = one('select count(*) n, coalesce(sum(pence),0) gross, coalesce(sum(fee),0) fee, coalesce(sum(refunded),0) ref from donations'); $tgt = (int)setting('target_pence');
