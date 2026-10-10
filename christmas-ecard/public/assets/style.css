@@ -1,6 +1,6 @@
 @font-face{font-family:"Nunito Sans";font-weight:200 1000;font-display:swap;src:url(/assets/fonts/nunito-sans-latin.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
 @font-face{font-family:"Nunito Sans";font-weight:200 1000;font-display:swap;src:url(/assets/fonts/nunito-sans-latin-ext.woff2) format("woff2");unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
-:root{--purple:#014493;--purple-dark:#013163;--navy:#041f3d;--blue:#2a5fb0;--teal:#0f9d78;--yellow:#f5b800;--bg:#f6f4f0;--ink:#1c2431;--line:#d9e1ee}
+:root{--purple:#024593;--purple-dark:#013163;--navy:#041f3d;--blue:#2a5fb0;--teal:#0f9d78;--yellow:#f5b800;--bg:#f6f4f0;--ink:#1c2431;--line:#d9e1ee}
 *{box-sizing:border-box}
 body{margin:0;font:1rem/1.55 "Nunito Sans",system-ui,sans-serif;background:var(--bg);color:var(--ink)}
 header{display:flex;flex-wrap:wrap;gap:.5rem 1.5rem;align-items:center;justify-content:space-between;padding:.6rem 1rem;background:#fff;border-bottom:4px solid var(--purple)}
@@ -208,3 +208,7 @@ footer h2,footer strong{color:var(--yellow)}footer{border-top:4px solid var(--ye
 .tile span::after{color:var(--blue)}
 main a:not(.btn):not(.tile){color:var(--purple)}
 @media(max-width:640px){.brand img{height:2.8rem}}
+
+/* Logo: the approved circular 7th Swindon mark, blue #024593 on its own blue, so it reads as a white mark on the top bar */
+.brand img{background:none;padding:0;border-radius:50%;height:3.8rem;width:3.8rem;box-shadow:0 0 0 2px rgba(255,255,255,.9)}
+@media(max-width:640px){.brand img{height:3rem;width:3rem}}

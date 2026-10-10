@@ -1,6 +1,6 @@
 # 7th Swindon Christmas E-Cards
 
-Colours: the navy theme shared with 7thPortal and the Group site (navy #014493, deep navy #041f3d, yellow #f5b800, green #0f9d78). FRD 2.0 section 9.1 lists purple tokens; the Trustees chose the blue scheme instead, so update that table.
+Colours: the navy theme shared with 7thPortal and the Group site (logo blue #024593, deep navy #041f3d, yellow #f5b800, green #0f9d78). FRD 2.0 section 9.1 lists purple tokens; the Trustees chose the blue scheme instead, so update that table.
 
 MVP of the Christmas E-Card FRD v2.0 plus the v2.1 launch Musts (docs/FRD_v2_1_additions.md) (9 Oct 2026). PHP 8.2+, SQLite, no dependencies.
 
