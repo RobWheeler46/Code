@@ -62,7 +62,9 @@ function r_admin_launch(): void {
         . '<p class="note">In production the campaign stays locked while a required decision is Open, unless a restricted administrator records an override with a reason. Conditional decisions (D-11 to D-13) never block launch; record them as Deferred or Approved.</p>';
     if ($edit && $blockers) $b .= '<form method="post" action="/admin/action" class="inline">' . csrf() . '<input type="hidden" name="do" value="override"><input type="hidden" name="back" value="/admin/launch"><button class="btn alt">Record an override</button></form> ';
     if ($edit && setting('launch_override') !== '') $b .= '<form method="post" action="/admin/action" class="inline">' . csrf() . '<input type="hidden" name="do" value="clear_override"><input type="hidden" name="back" value="/admin/launch"><button class="btn alt">Clear override</button></form>';
-    $b .= '<h2>Decision register</h2>';
+    $b .= '<h2>Gates that cannot be overridden</h2><p class="note">In production the campaign stays locked while any of these fails. An override only covers the decisions below, never these.</p><table class="stacked"><tr><th>Gate</th><th>Status</th><th>How to pass</th></tr>';
+    foreach (hard_gates() as [$gl, $gok, $ghow]) $b .= '<tr><td>' . h($gl) . '</td><td><span class="pill ' . ($gok ? 'viewed' : 'failed') . '">' . ($gok ? 'Passed' : 'Not passed') . '</span></td><td>' . ($gok ? '' : h($ghow)) . '</td></tr>';
+    $b .= '</table><h2>Decision register</h2>';
     foreach (DECISIONS as $id => [$label, $owner, $must]) {
         $d = $have[$id] ?? ['status' => 'open', 'value' => '', 'approver' => '', 'approved_on' => '', 'ref' => ''];
         $b .= '<form method="post" action="/admin/action" class="stack admincard">' . csrf() . '<input type="hidden" name="do" value="decision"><input type="hidden" name="did" value="' . $id . '"><input type="hidden" name="back" value="/admin/launch">'

@@ -32,6 +32,8 @@ create table if not exists contact_groups(contact_id int, group_id int, primary 
 create table if not exists alerts(akey text primary key, text text, severity text, first_seen int, last_notified int, acked_by int, acked_at int, escalated int default 0, resolved_at int);
 create table if not exists decisions(id text primary key, value text, approver text, approved_on text, ref text, status text default 'open');
 create table if not exists giftaid(id integer primary key autoincrement, send_id int unique, donation_id int, user_id int, title text, first_name text, last_name text, house text, postcode text, wording text, declared_at int, status text default 'pending', claim_batch text, claimed_at int);
+create table if not exists stripe_events(id text primary key, type text, received int, outcome text, detail text, resolved_at int, note text);
+create table if not exists bounces(email text primary key, kind text, detail text, at int);
 create table if not exists audit(id integer primary key autoincrement, user_id int, action text, detail text, created int);
 SQL;
 
@@ -43,7 +45,7 @@ function db(): PDO {
     $p = new PDO('sqlite:' . $f, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
     $p->exec('pragma busy_timeout=5000');
     $p->exec(SCHEMA);
-    foreach ([['users', "roles text default ''"], ['users', "notify text default 'off'"], ['sends', 'stripe_session text'], ['sends', 'donation_note int default 0'], ['sends', 'ref text'], ['recipients', 'withdrawn int default 0'], ['recipients', 'own_msg text'], ['recipients', 'next_at int default 0'], ['donations', "refund_status text default 'none'"], ['sends', 'is_test int default 0'], ['users', 'remind int default 0'], ['users', 'remind_year int'], ['users', 'terms_version text'], ['users', 'terms_at int'], ['users', 'suspended int default 0'], ['users', 'suspend_reason text']] as [$t, $def]) {
+    foreach ([['users', "roles text default ''"], ['users', "notify text default 'off'"], ['sends', 'stripe_session text'], ['sends', 'donation_note int default 0'], ['sends', 'ref text'], ['recipients', 'withdrawn int default 0'], ['recipients', 'own_msg text'], ['recipients', 'next_at int default 0'], ['donations', "refund_status text default 'none'"], ['sends', 'is_test int default 0'], ['users', 'remind int default 0'], ['users', 'remind_year int'], ['sends', 'art_ref text'], ['donations', 'payment_intent text'], ['users', 'last_login int'], ['users', 'terms_version text'], ['users', 'terms_at int'], ['users', 'suspended int default 0'], ['users', 'suspend_reason text']] as [$t, $def]) {
         if (!in_array(explode(' ', $def)[0], array_column($p->query("pragma table_info($t)")->fetchAll(), 'name'))) $p->exec("alter table $t add column $def");
     }
     return $p;
@@ -77,12 +79,17 @@ function flash(?string $msg = null, string $type = 'ok'): ?array {
     if ($msg !== null) { $_SESSION['flash'] = [$type, $msg]; return null; }
     $f = $_SESSION['flash'] ?? null; unset($_SESSION['flash']); return $f;
 }
-function limit(string $key, int $max, int $secs): void {
-    $k = $key . '|' . ($_SERVER['REMOTE_ADDR'] ?? 'cli');
+function limit(string $key, int $max, int $secs): void { limit_for($key . '|' . ($_SERVER['REMOTE_ADDR'] ?? 'cli'), $max, $secs); }
+/** Rate limit on an exact key (an account, an email, a token), not just the visitor's address. Blocked attempts leave an audit signal. */
+function limit_for(string $k, int $max, int $secs): void {
     q('delete from attempts where t<?', [time() - 86400]);
-    if ((int)one('select count(*) c from attempts where k=? and t>?', [$k, time() - $secs])['c'] >= $max) fail(429, 'Too many attempts. Please wait a few minutes and try again.');
+    $n = (int)one('select count(*) c from attempts where k=? and t>?', [$k, time() - $secs])['c'];
+    if ($n >= $max) { if ($n === $max) audit(null, 'rate_limited', explode('|', $k)[0] . (str_contains($k, '|') ? '' : ' (account or key)')); fail(429, 'Too many attempts. Please wait a few minutes and try again.'); }
     q('insert into attempts(k,t) values(?,?)', [$k, time()]);
 }
+/** Hidden trap field for simple bots. People never see or fill it. */
+function hp_field(): string { return '<div class="hp" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>'; }
+function honeypot(): void { if (trim((string)($_POST['website'] ?? '')) !== '') { audit(null, 'honeypot', (string)($_SERVER['REMOTE_ADDR'] ?? '')); fail(400, 'Something went wrong. Please try again.'); } }
 function redirect(string $to): never { header('Location: ' . $to); exit; }
 function safe_next(?string $n): string { return ($n && preg_match('#^/[A-Za-z0-9_/?=&.-]*$#', $n)) ? $n : '/dashboard'; }
 
@@ -128,7 +135,7 @@ function totp_ok(string $secret, string $code): bool {
 }
 
 // ---- email (Postmark, or data/outbox.log when no token is set)
-function mail_send(string $to, string $subject, string $text, array $meta = [], ?string $html = null, ?string $fromName = null): ?string {
+function mail_send(string $to, string $subject, string $text, array $meta = [], ?string $html = null, ?string $fromName = null, ?array $attachments = null): ?string {
     $from = env('MAIL_FROM', 'cards@7thswindon.org.uk'); // always our own verified address, never the sender's
     if ($fromName) $from = '"' . trim(preg_replace('/[^\p{L}\p{N} .,\'&-]/u', '', $fromName)) . ' via 7th Swindon Scouts" <' . $from . '>';
     if (!env('POSTMARK_TOKEN')) {
@@ -139,7 +146,7 @@ function mail_send(string $to, string $subject, string $text, array $meta = [], 
     $ch = curl_init('https://api.postmarkapp.com/email');
     curl_setopt_array($ch, [CURLOPT_POST => 1, CURLOPT_RETURNTRANSFER => 1, CURLOPT_TIMEOUT => 20,
         CURLOPT_HTTPHEADER => ['Accept: application/json', 'Content-Type: application/json', 'X-Postmark-Server-Token: ' . env('POSTMARK_TOKEN')],
-        CURLOPT_POSTFIELDS => json_encode(array_filter(['From' => $from, 'To' => $to, 'Subject' => $subject, 'TextBody' => $text, 'HtmlBody' => $html, 'MessageStream' => env('POSTMARK_STREAM', 'outbound'), 'TrackOpens' => false, 'Metadata' => $meta ?: null], fn($v) => $v !== null))]);
+        CURLOPT_POSTFIELDS => json_encode(array_filter(['From' => $from, 'To' => $to, 'Subject' => $subject, 'TextBody' => $text, 'HtmlBody' => $html, 'MessageStream' => env('POSTMARK_STREAM', 'outbound'), 'TrackOpens' => false, 'Metadata' => $meta ?: null, 'Attachments' => $attachments], fn($v) => $v !== null))]);
     $raw = curl_exec($ch); $r = json_decode((string)$raw, true);
     if (!is_array($r)) return 'UNKNOWN:Provider did not answer, so we cannot tell whether the email was accepted';
     if (($r['ErrorCode'] ?? 1) === 0) { set_setting('last_mail_ok', (string)time()); return null; }

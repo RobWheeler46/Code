@@ -50,6 +50,12 @@ function health_alerts(): array {
     $q = one("select min(s.queued_at) t from recipients r join sends s on s.id=r.send_id where r.status='queued'");
     if ($q && $q['t'] && $now - (int)$q['t'] > 900 && setting('paused') !== '1') $a['queue'] = 'Queue is stalled: the oldest queued card has waited since ' . when((int)$q['t']) . '.';
     if (($n = launch_blockers()) > 0) $a['launch'] = "$n launch decisions are still Open.";
+    $of = (int)setting('last_offsite'); if (!$of) $a['offsite'] = 'Off-server backup: Unknown (none recorded).'; elseif ($now - $of > 129600) $a['offsite'] = 'Off-server backup is Stale: last ' . when($of) . '.';
+    $rt = (int)setting('last_restore_test'); if (!$rt) $a['restore'] = 'Restore rehearsal: never done.'; elseif (!str_starts_with((string)setting('last_restore_result'), 'ok')) $a['restore'] = 'The last restore rehearsal failed: ' . setting('last_restore_result') . '.';
+    $ex = payment_exceptions(); if ($ex['events'] || $ex['orphans']) $a['payexc'] = count($ex['events']) + count($ex['orphans']) . ' payment exceptions need finance review.';
+    $cm = (int)one("select count(*) c from bounces where kind='complaint' and at>?", [$now - 86400])['c']; if ($cm) $a['complaint'] = "$cm spam complaints in the last day.";
+    $rl = (int)one("select count(*) c from audit where action in ('rate_limited','honeypot') and created>?", [$now - 3600])['c']; if ($rl >= 20) $a['abuse'] = "$rl blocked or suspicious attempts in the last hour.";
+    if ((int)one('select count(*) c from users where is_admin=1')['c'] > 0) { $ar = (int)setting('access_review_at'); if (!$ar || $now - $ar > 90 * 86400) $a['access'] = 'Administrator access has not been reviewed in the last 90 days.'; }
     return $a;
 }
 function alert_list(string $key): array { return array_values(array_filter(array_map('trim', explode(',', setting($key))))); }
@@ -99,11 +105,13 @@ const DECISIONS = [
     'D-14' => ['Wording and ownership of privacy notice, terms, acceptable use and safeguarding statement', 'Trustees with the responsible administrator', true],
     'D-15' => ['Alert recipients, second route, escalation time, out-of-hours expectations', 'Operations owner with project lead', true],
     'D-16' => ['Success measures, targets and small-number threshold', 'Project lead with campaign owner', true],
+    'G-SEC' => ['Security assessment complete, with no open critical or high launch blockers (cannot be overridden)', 'Technical lead', true],
+    'G-SUP' => ['Complaint, suspension and support route tested end to end (cannot be overridden)', 'Operations owner', true],
 ];
 /** Required decisions not approved with a reference. Conditional decisions (third value false) never block. */
 function launch_blockers(): int {
     $n = 0; $have = array_column(all('select id, status, ref from decisions'), null, 'id');
-    foreach (DECISIONS as $id => [, , $must]) if ($must && (($have[$id]['status'] ?? 'open') !== 'approved' || trim((string)($have[$id]['ref'] ?? '')) === '')) $n++;
+    foreach (DECISIONS as $id => [, , $must]) if ($must && !str_starts_with($id, 'G-') && (($have[$id]['status'] ?? 'open') !== 'approved' || trim((string)($have[$id]['ref'] ?? '')) === '')) $n++;
     return $n;
 }
 function legal_approved(): bool { $d = one("select status from decisions where id='D-14'"); return $d && $d['status'] === 'approved'; }

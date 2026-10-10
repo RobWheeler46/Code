@@ -131,9 +131,12 @@ function card_scene(string $id): string {
     return '';
 }
 
-function card_art(string $id, bool $thumb = false): string {
+function card_art(string $id, bool $thumb = false, ?string $frozen = null): string {
     $c = cards()[$id] ?? null;
     if (!$c) return '';
+    // a card that was sent keeps the exact picture it was sent with, even if the design's file is replaced later (FR-156)
+    if ($frozen && preg_match('/^[a-z0-9-]+-[0-9a-f]{12}.(png|jpg|webp|svg)$/', $frozen) && is_file(ROOT . "/data/art/$frozen"))
+        return '<img class="art" src="/art/' . h($frozen) . '" alt="' . h($c['desc']) . '"' . ($thumb ? ' loading="lazy" decoding="async"' : '') . '>';
     foreach (['png', 'jpg', 'webp', 'svg'] as $x)
         if (is_file(ROOT . "/public/assets/card-$id.$x")) return '<img class="art" src="/assets/card-' . h($id) . '.' . $x . '" alt="' . h($c['desc']) . '"' . ($thumb ? ' loading="lazy" decoding="async"' : '') . '>';
     static $n = 0; $g = 'g' . substr(md5($id), 0, 6) . ++$n; // unique per copy: a hidden duplicate must not steal the gradient
@@ -147,4 +150,11 @@ function card_art(string $id, bool $thumb = false): string {
 function hero_card(): string {
     $on = array_keys(array_filter(cards(), fn($c) => $c['on']));
     return $on ? $on[array_rand($on)] : '';
+}
+
+/** Home page hero: random per visit, then stable for that visitor's session while the design stays enabled. */
+function hero_for_session(): string {
+    $id = (string)($_SESSION['hero'] ?? '');
+    if (!(cards()[$id]['on'] ?? false)) { $id = hero_card(); $_SESSION['hero'] = $id; }
+    return $id;
 }

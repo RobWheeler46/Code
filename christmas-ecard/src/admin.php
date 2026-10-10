@@ -202,7 +202,7 @@ function r_admin_action(): void {
     $a = (string)($_POST['do'] ?? ''); $i = (int)($_POST['id'] ?? 0); $uid = (int)$u['id']; $back = safe_next($_POST['back'] ?? '');
     if (in_array($a, ['suspend', 'reinstate', 'ack', 'decision', 'override', 'clear_override']) && admin_action2($a, $u)) return;
     $need = ['pause' => ['appadmin', 'rolesadmin'], 'resend' => ['delivery', 'appadmin', 'rolesadmin'], 'money' => ['finance'], 'design' => ['campaign', 'rolesadmin'], 'design_desc' => ['campaign', 'rolesadmin'], 'design_up' => ['campaign', 'rolesadmin'], 'design_down' => ['campaign', 'rolesadmin'],
-             'dismiss' => ['complaints'], 'block' => ['complaints'], 'withdraw' => ['complaints'], 'roles' => ['rolesadmin']];
+             'dismiss' => ['complaints'], 'block' => ['complaints'], 'withdraw' => ['complaints'], 'roles' => ['rolesadmin'], 'resolve_event' => ['finance'], 'access_review' => ['rolesadmin']];
     if (!isset($need[$a])) fail(400, 'Unknown action.');
     if (!can_any(...$need[$a])) fail(403, 'You do not have permission for that.');
     if (in_array($a, ['pause', 'block', 'withdraw', 'roles']) && empty($_POST['confirmed'])) confirm_page($a, $i);
@@ -216,6 +216,11 @@ function r_admin_action(): void {
             $r = one('select * from recipients where id=?', [$i]); $st = $r ? rstatus($r) : '';
             if ($r && (in_array($r['status'], ['failed', 'bounced']) || $st === 'Delivery unconfirmed')) { if (requeue_recipient($i, null, $uid, 'delivery support')) process_queue(); }
             break;
+        case 'resolve_event':
+            $note = field('note', 300); if ($note === '') { flash('Say what was done about it.', 'err'); redirect('/admin/finance'); }
+            q('update stripe_events set resolved_at=?, note=? where id=? and resolved_at is null', [time(), $note, (string)($_POST['eid'] ?? '')]); audit($uid, 'payment_exception_resolved', ($_POST['eid'] ?? '') . ': ' . $note); break;
+        case 'access_review':
+            set_setting('access_review_at', (string)time()); audit($uid, 'access_review', count(all('select id from users where is_admin=1')) . ' administrators reviewed'); break;
         case 'money':
             q('update donations set fee=?, refunded=?, refund_status=? where id=?', [(int)round((float)$_POST['fee'] * 100), (int)round((float)$_POST['refunded'] * 100), in_array($_POST['refund_status'] ?? '', ['none', 'requested', 'pending', 'confirmed', 'failed']) ? $_POST['refund_status'] : 'none', $i]);
             audit($uid, 'reconcile', "donation $i fee {$_POST['fee']} refunded {$_POST['refunded']} status {$_POST['refund_status']}"); break;
@@ -291,7 +296,11 @@ function r_admin_finance(): void {
     $b .= '</table>' . (str_ends_with($b, '</th></tr>') ? '<p class="note">No confirmed donations yet.</p>' : '') . '<h2>Pending or mismatched payments</h2><ul>';
     foreach (all("select id, donation, updated from sends where status='awaiting_payment' and updated<? order by updated", [time() - 900]) as $x) $b .= '<li>Card C-' . $x['id'] . ': ' . gbp((int)$x['donation']) . ' pending since ' . when((int)$x['updated']) . (time() - (int)$x['updated'] > 86400 ? ' <strong>(over 24 hours: escalate to the Treasurer)</strong>' : ' (investigating; it is not failed and no new charge is invited)') . '</li>';
     foreach (all("select * from audit where action='payment_mismatch' order by id desc limit 10") as $x) $b .= '<li>Mismatch: ' . h($x['detail']) . '</li>';
-    admin_page('Finance', $b . '</ul>' . (str_ends_with($b, '<ul>') ? '<p class="note">Nothing needs attention.</p>' : ''));
+    $none = str_ends_with($b, '<ul>'); $b .= '</ul>' . ($none ? '<p class="note">Nothing needs attention.</p>' : '');
+    $ex = payment_exceptions(); $b .= '<h2>Payment exceptions</h2><p class="note">Events from the payment provider that did not apply cleanly, and gifts received for cards that were never sent. Nothing is repeated or refunded automatically.</p><ul class="plain">';
+    foreach ($ex['events'] as $x) $b .= '<li class="admincard"><strong>' . h($x['detail'] ?: $x['type']) . '</strong> <small>(' . h($x['type']) . ', ' . when((int)$x['received']) . ', ' . h($x['id']) . ')</small><form method="post" action="/admin/action" class="row">' . csrf() . '<input type="hidden" name="do" value="resolve_event"><input type="hidden" name="back" value="/admin/finance"><input type="hidden" name="eid" value="' . h($x['id']) . '"><label>What was done<input name="note" required maxlength="300"></label><button class="btn alt">Mark resolved</button></form></li>';
+    foreach ($ex['orphans'] as $x) $b .= '<li class="admincard"><strong>Gift of ' . gbp((int)$x['pence']) . ' received, but card C-' . $x['send_id'] . ' has not been sent</strong> <small>(' . h($x['stripe_session']) . ', ' . when((int)$x['created']) . '). The sender can still choose to send it; no charge is repeated.</small></li>';
+    admin_page('Finance', $b . '</ul>' . (!$ex['events'] && !$ex['orphans'] ? '<p class="note">No payment exceptions.</p>' : ''));
 }
 
 // ---------- reports
@@ -307,6 +316,9 @@ function r_admin_reports(): void {
 function r_admin_access(): void {
     need_role('rolesadmin');
     $b = '<h1>Administrator access</h1><p class="note">Only restricted administrators can change this. Every change is audited and takes effect on the person\'s next request. Roles do not grant access to private address books or donor records unless listed.</p>';
+    $rv = (int)setting('access_review_at'); $b .= '<section class="admincard"><h2>Access review</h2><p>Last reviewed: <strong>' . ($rv ? when($rv) : 'never') . '</strong>. Review who has access at least every 90 days (placeholder until the Trustees set it).</p><table class="stacked"><tr><th>Administrator</th><th>Roles</th><th>Last signed in</th><th>Two-step</th></tr>';
+    foreach (all('select * from users where is_admin=1 order by name') as $x) $b .= '<tr><td>' . h($x['name']) . ' ' . h($x['email']) . '</td><td>' . h(role_names($x['roles'])) . '</td><td>' . ($x['last_login'] ? when((int)$x['last_login']) : 'Unknown') . '</td><td>' . ($x['totp_secret'] ? 'Set up' : '<strong>Not set up</strong>') . '</td></tr>';
+    $b .= '</table><form method="post" action="/admin/action" class="inline">' . csrf() . '<input type="hidden" name="do" value="access_review"><input type="hidden" name="back" value="/admin/access"><button class="btn alt">Record that I reviewed this list</button></form></section>';
     $rows = all("select * from users where is_admin=1 or roles<>'' order by name"); $rows[] = ['email' => '', 'roles' => '', 'name' => 'Add by email', 'totp_secret' => null, 'verified' => 1];
     foreach ($rows as $x) {
         $have = explode(',', $x['roles']);

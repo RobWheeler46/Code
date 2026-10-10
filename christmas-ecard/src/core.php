@@ -72,7 +72,7 @@ function support_ref(array $r): string { return 'R-' . $r['id']; } // exposes no
 // ---- campaign window (Europe/London); blank = unrestricted
 function campaign_state(): string {
     // production stays locked while a launch Must decision is Open, unless a restricted administrator recorded an override
-    if (env('APP_ENV', 'development') === 'production' && setting('launch_override') === '' && launch_blockers()) return 'locked';
+    if (env('APP_ENV', 'development') === 'production' && (hard_gates_failing() || (setting('launch_override') === '' && launch_blockers()))) return 'locked'; // hard gates cannot be overridden
     $o = setting('opens'); $c = setting('closes');
     if ($o && time() < strtotime($o)) return 'before';
     if ($c && time() >= strtotime($c)) return 'closed';
@@ -98,20 +98,21 @@ function queue_send(int $sid): bool {
     $go = q("update sends set status='queued', queued_at=? where id=? and status in ('draft','awaiting_payment')", [time(), $sid])->rowCount();
     if ($go) q("update recipients set status='queued' where send_id=? and status='draft'", [$sid]);
     db()->commit();
-    if ($go) process_queue();
+    if ($go) { freeze_art($sid); process_queue(); }
     return (bool)$go;
 }
 
 /** Idempotent. A confirmation arriving after the parent chose free sending only records the donation; it never queues again. */
-function confirm_payment(int $sid, string $cs, int $amt, string $acct = ''): bool {
+function confirm_payment(int $sid, string $cs, int $amt, string $acct = '', string $pi = ''): bool {
     $s = one('select * from sends where id=?', [$sid]);
     if (!$s) return false;
     if ($amt !== (int)$s['donation']) { audit(null, 'payment_mismatch', "send $sid session $cs paid $amt expected {$s['donation']}"); return false; }
     db()->beginTransaction();
-    $new = q('insert or ignore into donations(send_id,user_id,pence,stripe_session,account,created) values(?,?,?,?,?,?)', [$sid, $s['user_id'], $amt, $cs, $acct, time()])->rowCount();
+    $new = q('insert or ignore into donations(send_id,user_id,pence,stripe_session,account,created,payment_intent) values(?,?,?,?,?,?,?)', [$sid, $s['user_id'], $amt, $cs, $acct, time(), $pi])->rowCount();
     $go = q("update sends set status='queued', queued_at=? where id=? and status='awaiting_payment'", [time(), $sid])->rowCount();
     if ($go) q("update recipients set status='queued' where send_id=? and status='draft'", [$sid]);
     db()->commit();
+    freeze_art($sid);
     $gaLine = $new ? giftaid_receipt_line($sid, $amt) : '';
     if ($new) giftaid_link($sid, $cs);
     if ($new) {
@@ -149,6 +150,7 @@ function process_queue(int $limit = 50): int {
         $r = one('select * from recipients where id=?', [$row['id']]);
         $s = one('select * from sends where id=?', [$r['send_id']]);
         if (one('select 1 from users where id=? and suspended=1', [$s['user_id']])) { q("update recipients set status='cancelled', error='Account suspended' where id=?", [$r['id']]); continue; }
+        if (bounced_hard($r['email'])) { q("update recipients set status='failed', error=? where id=?", ['This address has bounced before. Please correct it.', $r['id']]); continue; }
         if (opted_out($r['email'], (int)$s['user_id'])) { q("update recipients set status='cancelled', error='Recipient opted out' where id=?", [$r['id']]); continue; }
         $err = mail_send($r['email'], "{$s['sender_name']} sent you a Christmas card", email_body($r, $s), ['rid' => (string)$r['id']], email_html($r, $s), $s['sender_name']);
         if ($err === null) { q("update recipients set status='sent', sent_at=?, error=null where id=?", [time(), $r['id']]); $n++; }

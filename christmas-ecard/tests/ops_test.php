@@ -46,7 +46,7 @@ q("insert into decisions(id,value,ref,status) values('D-14','ok','minute 1','app
 q("insert into decisions(id,value,ref,status) values('D-01','ok','','approved')"); ok(launch_blockers() === 12, 'approval without a reference does not count');
 q("insert into decisions(id,value,ref,status) values('D-11','','','open')"); ok(launch_blockers() === 12, 'conditional decisions never block');
 putenv('APP_ENV=production'); ok(campaign_state() === 'locked', 'production is locked while required decisions are open');
-set_setting('launch_override', 'Trustee chair agreed 10 Oct'); ok(campaign_state() === 'open', 'recorded override unlocks');
+set_setting('launch_override', 'Trustee chair agreed 10 Oct'); ok(campaign_state() === 'locked', 'an override alone cannot unlock production while hard gates fail (gates are tested in resilience_test)');
 set_setting('launch_override', ''); putenv('APP_ENV=development'); ok(campaign_state() === 'open', 'development is never locked');
 
 // FR-144 reminders

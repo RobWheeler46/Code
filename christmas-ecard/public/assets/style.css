@@ -223,3 +223,4 @@ img.art{display:block;width:100%;height:auto}
 @media(max-width:640px){.card .art,.preview .art{aspect-ratio:auto}.card svg.art,.preview svg.art{aspect-ratio:16/9}}
 .heroart img.art{aspect-ratio:4/3;object-fit:cover;object-position:top}
 .heroart svg.art{aspect-ratio:4/3}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}

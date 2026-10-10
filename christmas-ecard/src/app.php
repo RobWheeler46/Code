@@ -9,6 +9,7 @@ require __DIR__ . '/admin.php';
 require __DIR__ . '/admin2.php';
 require __DIR__ . '/admin3.php';
 require __DIR__ . '/giftaid.php';
+require __DIR__ . '/resilience.php';
 
 function post(): bool { return $_SERVER['REQUEST_METHOD'] === 'POST'; }
 function field(string $k, int $max = 200): string { return mb_substr(trim((string)($_POST[$k] ?? '')), 0, $max); }
@@ -20,9 +21,9 @@ function fa(array $e, string $k, bool &$first): string {
     $a = ' aria-invalid="true" aria-describedby="e-' . $k . '"' . ($first ? ' data-focus' : ''); $first = false; return $a;
 }
 
-function card_view(string $cardId, string $to, string $msg, string $from, string $note = ''): string {
+function card_view(string $cardId, string $to, string $msg, string $from, string $note = '', ?string $artRef = null): string {
     $c = cards()[$cardId]; // message is escaped plain text; URLs are never linked
-    return '<article class="card">' . card_art($cardId) . '<div class="inner">' . ($c['baked'] ? '' : '<h2>' . h($c['title']) . '</h2><p class="joke">' . h($c['joke']) . '</p>') . '<p class="to">Dear ' . h($to) . ',</p><p class="msg">' . nl2br(h($msg)) . '</p><p class="from">With love from<br><strong>' . h($from) . '</strong></p>' . ($note ? '<p class="note">' . h($note) . '</p>' : '') . '</div></article>';
+    return '<article class="card">' . card_art($cardId, false, $artRef) . '<div class="inner">' . ($c['baked'] ? '' : '<h2>' . h($c['title']) . '</h2><p class="joke">' . h($c['joke']) . '</p>') . '<p class="to">Dear ' . h($to) . ',</p><p class="msg">' . nl2br(h($msg)) . '</p><p class="from">With love from<br><strong>' . h($from) . '</strong></p>' . ($note ? '<p class="note">' . h($note) . '</p>' : '') . '</div></article>';
 }
 function gone_page(array $r, string $title, string $why): never {
     page($title, '<h1>' . h($title) . '</h1><p>' . h($why) . '</p><p>If you have a question, email <a href="mailto:' . h(support_email()) . '">' . h(support_email()) . '</a> and quote reference <strong>' . h(support_ref($r)) . '</strong>.</p><p><a class="btn" href="/">Send a card of your own</a></p>', 410);
@@ -33,7 +34,7 @@ function progress(): int { return (int)one('select coalesce(sum(pence-refunded),
 function r_home(): void {
     if (preg_match('/^[a-z0-9-]{1,30}$/', (string)($_GET['ref'] ?? ''))) $_SESSION['ref'] = $_GET['ref']; // promotion source label only, never a person
     $st = campaign_state();
-    $b = '<section class="hero"><div><p class="eyebrow">7th Swindon Scouts Christmas cards</p><h1>Send a little Christmas cheer, Scout style</h1><p class="lead">Pick a design, write your message and we will email a private card to your friends and family. Sending is free, and a donation is optional.</p><p><a class="btn big" href="#gallery">Choose a card</a> <a class="btn ghost" href="#how">How it works</a></p></div><div class="heroart" aria-hidden="true">' . (($hero = hero_card()) ? card_art($hero) : '') . '</div></section>';
+    $b = '<section class="hero"><div><p class="eyebrow">7th Swindon Scouts Christmas cards</p><h1>Send a little Christmas cheer, Scout style</h1><p class="lead">Pick a design, write your message and we will email a private card to your friends and family. Sending is free, and a donation is optional.</p><p><a class="btn big" href="#gallery">Choose a card</a> <a class="btn ghost" href="#how">How it works</a></p></div><div class="heroart" aria-hidden="true">' . (($hero = hero_for_session()) ? card_art($hero) : '') . '</div></section>';
     if ($st === 'locked') $b .= '<p class="flash warn">Sending is not open yet. You can prepare a card now.</p>';
     if ($st === 'before') $b .='<p class="flash warn">Sending opens on ' . h(date('j F Y \a\t H:i', strtotime(setting('opens')))) . '. You can prepare a card now.</p>';
     if ($st === 'closed') $b .= '<p class="flash warn">This year\'s card sending has closed. Cards already sent stay viewable until they expire.</p>';
@@ -67,6 +68,7 @@ function r_help(): void {
 
 function r_register(): void {
     if (post()) {
+        honeypot();
         limit('reg', 10, 3600);
         $n = field('name', 80); $e = strtolower(field('email')); $p = (string)($_POST['password'] ?? '');
         if (empty($_POST['accept'])) { flash('Please confirm you are 18 or over and accept the terms.', 'err'); redirect('/register'); }
@@ -80,7 +82,7 @@ function r_register(): void {
         flash('Welcome! Your card is saved. Check your email and click the link to verify before sending.');
         redirect(($d = one("select id from sends where user_id=? and status='draft' order by id desc", [$uid])) ? '/compose?id=' . $d['id'] : '/dashboard');
     }
-    page('Register', '<h1>Register</h1><p>You need an account to send, so we can verify who is sending. Your card stays saved.</p><form method="post" class="stack">' . csrf() . '<label>Your name<input name="name" required maxlength="80" autocomplete="name"></label><label>Email<input type="email" name="email" required autocomplete="email"></label><label>Password (10+ characters)<input type="password" name="password" required minlength="10" autocomplete="new-password"></label><label class="opt"><input type="checkbox" name="accept" value="1" required> I am 18 or over and I accept the <a href="/terms">terms and safeguarding statement</a> and have read the <a href="/privacy">privacy notice</a></label><label class="opt"><input type="checkbox" name="remind" value="1"> Email me once next year when the Christmas card service opens again (optional)</label><button class="btn">Create account</button></form><p>Already registered? <a href="/login">Sign in</a></p>');
+    page('Register', '<h1>Register</h1><p>You need an account to send, so we can verify who is sending. Your card stays saved.</p><form method="post" class="stack">' . csrf() . '<label>Your name<input name="name" required maxlength="80" autocomplete="name"></label><label>Email<input type="email" name="email" required autocomplete="email"></label><label>Password (10+ characters)<input type="password" name="password" required minlength="10" autocomplete="new-password"></label><label class="opt"><input type="checkbox" name="accept" value="1" required> I am 18 or over and I accept the <a href="/terms">terms and safeguarding statement</a> and have read the <a href="/privacy">privacy notice</a></label><label class="opt"><input type="checkbox" name="remind" value="1"> Email me once next year when the Christmas card service opens again (optional)</label>' . hp_field() . '<button class="btn">Create account</button></form><p>Already registered? <a href="/login">Sign in</a></p>');
 }
 
 function r_verify(): void {
@@ -108,7 +110,7 @@ function r_login(): void {
         if (!$u || !password_verify((string)($_POST['password'] ?? ''), $u['pass'])) { flash('Email or password not recognised.', 'err'); redirect('/login'); }
         $keep = $_SESSION['drafts'] ?? [];
         session_regenerate_id(true);
-        $_SESSION['uid'] = (int)$u['id']; $_SESSION['mfa'] = false; $_SESSION['drafts'] = $keep; claim_drafts((int)$u['id']);
+        $_SESSION['uid'] = (int)$u['id']; $_SESSION['mfa'] = false; q('update users set last_login=? where id=?', [time(), $u['id']]); $_SESSION['drafts'] = $keep; claim_drafts((int)$u['id']);
         redirect(safe_next($_POST['next'] ?? ''));
     }
     page('Sign in', '<h1>Sign in</h1><form method="post" class="stack">' . csrf() . '<input type="hidden" name="next" value="' . h($_GET['next'] ?? '') . '"><label>Email<input type="email" name="email" required autocomplete="email"></label><label>Password<input type="password" name="password" required autocomplete="current-password"></label><button class="btn">Sign in</button></form><p><a href="/forgot">Forgotten your password?</a> &middot; <a href="/register">Register</a></p>');
@@ -118,7 +120,8 @@ function r_logout(): void { $_SESSION = []; session_destroy(); redirect('/'); }
 
 function r_forgot(): void {
     if (post()) {
-        limit('forgot', 5, 3600);
+        honeypot();
+        limit('forgot', 5, 3600); limit_for('forgot:' . strtolower(field('email')), 3, 3600);
         if ($u = one('select * from users where email=?', [strtolower(field('email'))])) {
             $t = token();
             q('update users set reset_token=?, reset_exp=? where id=?', [$t, time() + 3600, $u['id']]);
@@ -126,7 +129,7 @@ function r_forgot(): void {
         }
         flash('If that email is registered, a reset link is on its way.'); redirect('/login');
     }
-    page('Forgotten password', '<h1>Forgotten password</h1><form method="post" class="stack">' . csrf() . '<label>Email<input type="email" name="email" required></label><button class="btn">Send reset link</button></form>');
+    page('Forgotten password', '<h1>Forgotten password</h1><form method="post" class="stack">' . csrf() . '<label>Email<input type="email" name="email" required></label>' . hp_field() . '<button class="btn">Send reset link</button></form>');
 }
 
 function r_reset(): void {
@@ -188,7 +191,7 @@ function r_compose(): void {
         if ($act === 'test') {
             if (!$u || !$u['verified']) { flash('Verify your email first, then you can send yourself a test.', 'warn'); redirect("/compose?id=$sid"); }
             sender_gate($u, "/compose?id=$sid");
-            limit('test', max(1, (int)setting('test_per_hour', '3')), 3600);
+            limit('test', max(1, (int)setting('test_per_hour', '3')), 3600); limit_for("test:{$u['id']}", max(1, (int)setting('test_per_hour', '3')), 3600);
             mail_send($u['email'], 'Test card preview', "Here is your private preview of the card:\n" . base_url() . "/preview?id=$sid\n(Sign in first if asked.)");
             flash('Test sent to ' . $u['email'] . '. Your draft is saved.'); redirect("/compose?id=$sid");
         }
@@ -254,7 +257,7 @@ function r_preview(): void {
 function pay_check(array $s): string {
     if (!env('STRIPE_SECRET') || !$s['stripe_session']) return 'pending';
     $r = stripe('GET', '/checkout/sessions/' . $s['stripe_session']);
-    if (($r['payment_status'] ?? '') === 'paid') { confirm_payment((int)$s['id'], $s['stripe_session'], (int)$r['amount_total'], env('STRIPE_ACCOUNT')); return 'paid'; }
+    if (($r['payment_status'] ?? '') === 'paid') { confirm_payment((int)$s['id'], $s['stripe_session'], (int)$r['amount_total'], env('STRIPE_ACCOUNT'), (string)($r['payment_intent'] ?? '')); return 'paid'; }
     return ($r['status'] ?? '') === 'expired' ? 'expired' : 'pending';
 }
 function back_to_draft(int $id): void { q("update sends set status='draft', stripe_session=null, updated=? where id=? and status='awaiting_payment'", [time(), $id]); }
@@ -309,6 +312,7 @@ function r_review(): void {
         if (!$rs || count($rs) > max_recipients() || $s['message'] === '') { flash('Your card needs a message and 1 to ' . max_recipients() . ' recipients.', 'err'); redirect("/compose?id=$id"); }
         if ($pending) { flash('You have a payment waiting. Check its status or cancel it first. Cards are not sent until that is resolved.', 'warn'); redirect("/review?id=$id"); }
         if (repeats_for($s) && empty($_POST['repeat_ok'])) { flash('Some recipients already have a card from you. Tick the box to send again on purpose.', 'err'); redirect("/review?id=$id"); }
+        limit_for("submit:{$u['id']}", 5, 3600); // proposed D-02 default: 5 submissions an hour per account
         if ($do === 'free') { giftaid_save_pending($id, null); queue_send($id); flash('Cards are queued for sending.'); redirect("/send?id=$id&done=1"); }
         $pick = (string)($_POST['amount'] ?? '');
         $pence = $pick === 'custom' ? (int)round((float)($_POST['custom'] ?? 0) * 100) : (int)$pick;
@@ -317,7 +321,7 @@ function r_review(): void {
         if (giftaid_on() && !empty($_POST['giftaid'])) { [$ga, $gerr] = giftaid_validate($_POST); if ($gerr) { $_SESSION['ga_old'] = $_POST; flash(implode(' ', $gerr), 'err'); redirect("/review?id=$id"); } }
         // one submission intent: only the request that wins this update may start a checkout
         if (!q("update sends set donation=?, donation_note=?, status='awaiting_payment', updated=? where id=? and status='draft'", [$pence, empty($_POST['donation_note']) ? 0 : 1, time(), $id])->rowCount()) redirect("/review?id=$id");
-        giftaid_save_pending($id, $ga);
+        giftaid_save_pending($id, $ga); freeze_art($id);
         if (!env('STRIPE_SECRET')) redirect('/dev/pay?id=' . $id);
         $r = stripe('POST', '/checkout/sessions', [
             'mode' => 'payment', 'client_reference_id' => $id, 'metadata' => ['send_id' => $id],
@@ -361,7 +365,7 @@ function r_return(): void {
     if (preg_match('/^cs_[A-Za-z0-9_]+$/', $cs)) {
         $r = stripe('GET', "/checkout/sessions/$cs");
         if (($r['payment_status'] ?? '') === 'paid' && (string)($r['client_reference_id'] ?? '') === (string)$s['id'])
-            confirm_payment((int)$s['id'], $cs, (int)$r['amount_total'], env('STRIPE_ACCOUNT'));
+            confirm_payment((int)$s['id'], $cs, (int)$r['amount_total'], env('STRIPE_ACCOUNT'), (string)($r['payment_intent'] ?? ''));
     }
     flash('Thank you. If your payment is confirmed your cards are queued; otherwise we will keep checking.');
     redirect(one('select status from sends where id=?', [$s['id']])['status'] === 'awaiting_payment' ? '/review?id=' . $s['id'] : '/send?id=' . $s['id'] . '&done=1');
@@ -383,24 +387,13 @@ function r_stripe_hook(): void {
     $body = (string)file_get_contents('php://input');
     if (!env('STRIPE_WEBHOOK_SECRET') || !stripe_sig_ok($body, $_SERVER['HTTP_STRIPE_SIGNATURE'] ?? '')) { http_response_code(400); exit('bad signature'); }
     set_setting('last_stripe_hook', (string)time());
-    $e = json_decode($body, true); $o = $e['data']['object'] ?? [];
-    if (($e['type'] ?? '') === 'checkout.session.completed' && ($o['payment_status'] ?? '') === 'paid')
-        confirm_payment((int)($o['metadata']['send_id'] ?? 0), $o['id'], (int)$o['amount_total'], env('STRIPE_ACCOUNT'));
-    exit('ok');
+    exit(stripe_handle_event(json_decode($body, true) ?: []));
 }
 
 function r_postmark_hook(): void {
     if (!env('POSTMARK_HOOK_KEY') || !hash_equals(env('POSTMARK_HOOK_KEY'), (string)($_GET['k'] ?? ''))) { http_response_code(403); exit; }
     $e = json_decode((string)file_get_contents('php://input'), true) ?: [];
-    $rid = (int)($e['Metadata']['rid'] ?? 0);
-    match ($e['RecordType'] ?? '') {
-        'Delivery' => q('update recipients set delivered_at=? where id=? and delivered_at is null', [time(), $rid]),
-        'Bounce'   => q("update recipients set status='bounced', error=? where id=?", [substr((string)($e['Description'] ?? 'Bounced'), 0, 200), $rid]),
-        'SpamComplaint' => q("update recipients set status='bounced', error='Spam complaint' where id=?", [$rid]),
-        'Open'     => q('update recipients set opened_at=? where id=? and opened_at is null', [time(), $rid]), // email signal only, never "viewed"
-        default    => null,
-    };
-    exit('ok');
+    exit(postmark_handle_event($e));
 }
 
 // ---------- sender dashboard
@@ -416,7 +409,7 @@ function r_dashboard(): void {
         $link = $s['status'] === 'draft' ? "/compose?id={$s['id']}" : ($s['status'] === 'awaiting_payment' ? "/review?id={$s['id']}" : "/send?id={$s['id']}");
         $act = $s['status'] === 'draft' ? '<a class="btn" href="' . $link . '">Keep writing</a> <form method="post" action="/discard" class="inline">' . csrf() . '<input type="hidden" name="id" value="' . $s['id'] . '"><button class="link">Discard draft</button></form>' : '<a class="btn alt" href="' . $link . '">See how it is going</a> <a href="/copy?id=' . $s['id'] . '">Send it again to someone</a>';
         $don = donation_state($s) === 'No donation' ? '' : '<br><small>' . h(donation_state($s)) . '</small>';
-        $rows .= '<li class="cardrow"><div class="thumb">' . card_art($s['card']) . '</div><div><h3>' . h(cards()[$s['card']]['title'] ?? $s['card']) . ($s['status'] === 'draft' ? ' <span class="pill">Draft</span>' : '') . '</h3><p class="note">' . date('j M Y', (int)$s['created']) . ($sum ? ' &middot; ' . h($sum) : '') . $don . '</p><p>' . $act . '</p></div></li>';
+        $rows .= '<li class="cardrow"><div class="thumb">' . card_art($s['card'], true, $s['art_ref'] ?? null) . '</div><div><h3>' . h(cards()[$s['card']]['title'] ?? $s['card']) . ($s['status'] === 'draft' ? ' <span class="pill">Draft</span>' : '') . '</h3><p class="note">' . date('j M Y', (int)$s['created']) . ($sum ? ' &middot; ' . h($sum) : '') . $don . '</p><p>' . $act . '</p></div></li>';
     }
     $b .= $rows ? '<ul class="plain cardlist">' . $rows . '</ul>' : '<section class="next"><h2>No cards yet</h2><p>Your first card is only a few minutes away.</p><p><a class="btn big" href="/">Choose a design</a></p></section>';
     $d = all('select * from donations where user_id=? order by id desc', [$u['id']]);
@@ -475,7 +468,8 @@ function r_card(string $t, string $act = ''): void {
     if ($r['sent_at'] && time() > expiry_ts($r)) gone_page($r, 'This card has expired', 'Cards stay viewable for ' . expiry_days() . ' days after they are sent.');
     if (post() && $act === 'open') { if (!is_scanner() && q('update recipients set viewed_at=? where id=? and viewed_at is null', [time(), $r['id']])->rowCount()) notify_view($r, $s); redirect("/c/$t?o=1"); } // human click, not a link scanner
     if (post() && $act === 'report') {
-        limit('report', 5, 3600);
+        honeypot();
+        limit('report', 5, 3600); limit_for("report:$t", 3, 3600);
         q('insert into reports(recipient_id,reason,created) values(?,?,?)', [$r['id'], field('reason', 500), time()]);
         flash('Thank you. We have received your report and will look into it.'); redirect("/c/$t");
     }
@@ -483,8 +477,8 @@ function r_card(string $t, string $act = ''): void {
     if (empty($_GET['o'])) {
         page('A card for you', '<section class="envelope-wrap"><div class="envelope" aria-hidden="true"><div class="flap"></div><div class="seal"></div><div class="stamp"></div><div class="to">To ' . h($r['name']) . '</div></div><h1>A Christmas card for ' . h($r['name']) . '</h1><p class="lead">From ' . h($s['sender_name']) . '</p><form method="post" action="/c/' . h($t) . '/open">' . csrf() . '<button class="btn big">Open your card</button></form><p class="note">Press the button to open it.</p></section>' . $stop);
     }
-    page('Your Christmas card', '<div class="reveal">' . card_view($s['card'], $r['name'], resolved_msg($r, $s), $s['sender_name'], card_note($s)) . '</div><section class="next"><h2>Want to say thank you?</h2><p>Send ' . h($s['sender_name']) . ' a card of your own. It is free, and it only takes a minute.</p><p><a class="btn big" href="/compose?card=' . h($s['card']) . '&amp;back=' . h($t) . '">Send a card back</a> <a class="btn alt" href="/">Make a card for someone else</a></p></section><p class="center"><a href="/c/' . h($t) . '">Replay the envelope</a> &middot; <button type="button" class="link" data-print>Print this card</button><br><small class="note">A printed copy stays with you after this link expires.</small></p>'
-        . '<details class="center"><summary>Report this card</summary><form method="post" action="/c/' . h($t) . '/report" class="stack">' . csrf() . '<label>What is wrong?<textarea name="reason" maxlength="500" required></textarea></label><button class="btn alt">Send report</button></form></details>' . $stop);
+    page('Your Christmas card', '<div class="reveal">' . card_view($s['card'], $r['name'], resolved_msg($r, $s), $s['sender_name'], card_note($s), $s['art_ref'] ?? null) . '</div><section class="next"><h2>Want to say thank you?</h2><p>Send ' . h($s['sender_name']) . ' a card of your own. It is free, and it only takes a minute.</p><p><a class="btn big" href="/compose?card=' . h($s['card']) . '&amp;back=' . h($t) . '">Send a card back</a> <a class="btn alt" href="/">Make a card for someone else</a></p></section><p class="center"><a href="/c/' . h($t) . '">Replay the envelope</a> &middot; <button type="button" class="link" data-print>Print this card</button><br><small class="note">A printed copy stays with you after this link expires.</small></p>'
+        . '<details class="center"><summary>Report this card</summary><form method="post" action="/c/' . h($t) . '/report" class="stack">' . csrf() . '' . hp_field() . '<label>What is wrong?<textarea name="reason" maxlength="500" required></textarea></label><button class="btn alt">Send report</button></form></details>' . $stop);
 }
 
 /** Opt-out needs a deliberate POST, so link scanners that only GET cannot opt anyone out. Same reply whatever the prior state. */
@@ -543,7 +537,7 @@ function r_message(): void {
     $why = field('reason', 200); if ($why === '') fail(400, 'A reason is required.');
     audit((int)$u['id'], 'message_access', "report {$rep['id']}: $why");
     $s = one('select * from sends where id=?', [$rep['send_id']]);
-    page('Reported card', '<h1>Reported card</h1>' . card_view($s['card'], $rep['name'], resolved_msg(one('select * from recipients where id=?', [$rep['recipient_id']]), $s), $s['sender_name']) . '<p><a href="/admin">Back</a></p>');
+    page('Reported card', '<h1>Reported card</h1>' . card_view($s['card'], $rep['name'], resolved_msg(one('select * from recipients where id=?', [$rep['recipient_id']]), $s), $s['sender_name'], '', $s['art_ref'] ?? null) . '<p><a href="/admin">Back</a></p>');
 }
 
 function r_prefs(): void {
@@ -627,6 +621,7 @@ function dispatch(string $path): void {
         '/mfa' => 'r_mfa', '/admin' => 'r_admin', '/admin/delivery' => 'r_admin_delivery', '/admin/finance' => 'r_admin_finance', '/admin/reports' => 'r_admin_reports', '/admin/campaign' => 'r_admin_campaign', '/admin/app' => 'r_admin_app', '/admin/email' => 'r_admin_email', '/admin/privacy' => 'r_admin_privacy', '/admin/access' => 'r_admin_access', '/admin/health' => 'r_admin_health', '/admin/audit' => 'r_admin_audit', '/admin/action' => 'r_admin_action', '/admin/senders' => 'r_admin_senders', '/admin/launch' => 'r_admin_launch', '/admin/measures' => 'r_admin_measures', '/admin/giftaid' => 'r_admin_giftaid', '/admin/rehearsal' => 'r_admin_rehearsal', '/admin/export' => 'r_export', '/admin/message' => 'r_message', '/hooks/stripe' => 'r_stripe_hook', '/hooks/postmark' => 'r_postmark_hook'];
     if (post() && !str_starts_with($path, '/hooks/')) check_csrf();
     if (preg_match('#^/c/([a-f0-9]+)(?:/(open|report))?$#', $path, $m)) r_card($m[1], $m[2] ?? '');
+    if (preg_match('#^/art/([a-z0-9.-]+)$#', $path, $m)) r_art($m[1]);
     if (preg_match('#^/optout/([a-f0-9]+)$#', $path, $m)) r_optout($m[1]);
     if (isset($routes[$path])) $routes[$path]();
     fail(404, 'Page not found.');
