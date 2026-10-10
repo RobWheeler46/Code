@@ -32,13 +32,15 @@ function progress(): int { return (int)one('select coalesce(sum(pence-refunded),
 function r_home(): void {
     if (preg_match('/^[a-z0-9-]{1,30}$/', (string)($_GET['ref'] ?? ''))) $_SESSION['ref'] = $_GET['ref']; // promotion source label only, never a person
     $st = campaign_state();
-    $b = '<section class="hero"><h1>Send a Scout Christmas card</h1><p>Sending is free. You can add an optional donation to support 7th Swindon Scouts.</p><p><a class="btn" href="#gallery">Choose a card</a></p></section>';
+    $b = '<section class="hero"><div><p class="eyebrow">7th Swindon Scouts Christmas cards</p><h1>Send a little Christmas cheer, Scout style</h1><p class="lead">Pick a design, write your message and we will email a private card to your friends and family. Sending is free, and a donation is optional.</p><p><a class="btn big" href="#gallery">Choose a card</a> <a class="btn ghost" href="#how">How it works</a></p></div><div class="heroart" aria-hidden="true">' . card_art('in-tents') . '</div></section>';
     if ($st === 'locked') $b .= '<p class="flash warn">Sending is not open yet. You can prepare a card now.</p>';
     if ($st === 'before') $b .='<p class="flash warn">Sending opens on ' . h(date('j F Y \a\t H:i', strtotime(setting('opens')))) . '. You can prepare a card now.</p>';
     if ($st === 'closed') $b .= '<p class="flash warn">This year\'s card sending has closed. Cards already sent stay viewable until they expire.</p>';
     $t = (int)setting('target_pence');
     if (setting('show_progress') === '1' && $t) $b .= '<p class="progress">Raised so far: <strong>' . gbp(progress()) . '</strong> of ' . gbp($t) . ' target (confirmed donations, after refunds).</p>';
-    $b .= '<h2 id="gallery">Pick a design</h2><div class="grid">';
+    $b .= '<h2 id="how">How it works</h2><ol class="how"><li><b>1</b><strong>Choose a design</strong>Ten Scout themed cards, from tents to campfires.</li><li><b>2</b><strong>Write your message</strong>Add up to ' . max_recipients() . ' people. Give anyone a personal note if you like.</li><li><b>3</b><strong>We send each card</strong>Everyone gets their own private link and opens a Christmas envelope.</li></ol>'
+        . '<section class="cause"><h2>Every card helps local Scouting</h2><p>' . h(setting('donation_purpose') ?: 'Any donation goes straight to 7th Swindon Scouts.') . '</p><p>Sending is always free. You never have to donate, and a donation never changes how your card looks.</p></section>'
+        . '<h2 id="gallery">Pick a design</h2><div class="grid">';
     foreach (cards() as $id => $c) if ($c['on'])
         $b .= '<a class="tile" href="/compose?card=' . h($id) . '">' . card_art($id) . '<span>' . h($c['title']) . '</span></a>';
     page('Choose a card', $b . '</div>');
@@ -267,7 +269,7 @@ function pay_cancel(array $s): string {
 
 function steps(int $n): string {
     $l = ['Choose a card', 'Message and recipients', 'Review and send'];
-    return '<ol class="steps" aria-label="Progress">' . implode('', array_map(fn($t, $i) => '<li' . ($i + 1 === $n ? ' aria-current="step"' : '') . '>' . ($i + 1) . '. ' . h($t) . '</li>', $l, array_keys($l))) . '</ol>';
+    return '<ol class="steps" aria-label="Progress">' . implode('', array_map(fn($t, $i) => '<li' . ($i + 1 === $n ? ' aria-current="step"' : '') . '><span class="sn">' . ($i + 1) . '.</span><span class="sl"> ' . h($t) . '</span></li>', $l, array_keys($l))) . '</ol>';
 }
 
 /** Recovery states S08/S09: cancelled or failed checkout vs unknown (pending). */
@@ -340,8 +342,9 @@ function r_review(): void {
         $rec = $_GET['recover'] ?? '';
         if ($rec === 'cancelled' || $rec === 'failed') $form .= '<p class="flash warn" role="status"><strong>' . ($rec === 'cancelled' ? 'Payment was cancelled.' : 'Payment did not go through.') . '</strong> Nothing was charged and your card and recipients are safe. You can try again, or choose to send for free. Cards are only sent when you press a send button below.</p>';
         $form .= '<fieldset><legend>Optional donation to 7th Swindon Scouts</legend><p>' . h(setting('donation_purpose', 'Donations support 7th Swindon Scouts.')) . ' One donation covers all ' . count($rs) . ' of your cards. Sending is free either way.</p>';
+        $form .= '<div class="chips">';
         foreach (array_map('intval', explode(',', setting('amounts_pence', '200,500,1000'))) as $a) $form .= '<label class="opt"><input type="radio" name="amount" value="' . $a . '"> ' . gbp($a) . '</label>';
-        $form .= '<label class="opt"><input type="radio" name="amount" value="custom"> Other amount (£) <input type="number" name="custom" min="1" max="500" step="0.01" aria-label="Custom amount in pounds"></label>'
+        $form .= '<label class="opt"><input type="radio" name="amount" value="custom"> Other amount (£) <input type="number" name="custom" min="1" max="500" step="0.01" aria-label="Custom amount in pounds"></label>' . '</div>'
             . '<label class="opt"><input type="checkbox" name="donation_note" value="1"> Add a line to the cards saying they came with a donation to 7th Swindon Scouts (no amount is shown; only after payment is confirmed)</label></fieldset>'
             . '<div class="row"><button class="btn" name="do" value="donate">Donate and send cards</button><button class="btn" name="do" value="free">Send cards for free</button></div>';
     }
@@ -400,16 +403,18 @@ function r_postmark_hook(): void {
 function r_dashboard(): void {
     $u = need_login();
     $b = '<h1>My cards</h1>' . ($u['verified'] ? '' : '<p class="flash warn">Please verify your email: click the link we sent to ' . h($u['email']) . '. You need this before sending. <form method="post" action="/resend-verification" class="inline">' . csrf() . '<button class="link">Send it again</button></form><details><summary>Wrong email address?</summary><form method="post" action="/change-email" class="row">' . csrf() . '<label>Correct email<input type="email" name="email" required></label><button class="btn alt">Change and resend</button></form></details></p>') . '<p><a class="btn" href="/">Create a new card</a></p>'
-        . '<form method="post" action="/prefs" class="row">' . csrf() . '<label>Optional status emails<select name="notify">' . implode('', array_map(fn($k, $l) => '<option value="' . $k . '"' . ($u['notify'] === $k ? ' selected' : '') . '>' . $l . '</option>', ['off', 'viewed', 'summary'], ['Off (default)', 'Email me when a card is opened', 'One daily summary'])) . '</select></label><label class="opt"><input type="checkbox" name="remind" value="1"' . ($u['remind'] ? ' checked' : '') . '> Remind me once a year when the service opens</label><button class="btn alt">Save</button></form>';
+        . '<details class="admincard"><summary>Email preferences</summary><form method="post" action="/prefs" class="row">' . csrf() . '<label>Optional status emails<select name="notify">' . implode('', array_map(fn($k, $l) => '<option value="' . $k . '"' . ($u['notify'] === $k ? ' selected' : '') . '>' . $l . '</option>', ['off', 'viewed', 'summary'], ['Off (default)', 'Email me when a card is opened', 'One daily summary'])) . '</select></label><label class="opt"><input type="checkbox" name="remind" value="1"' . ($u['remind'] ? ' checked' : '') . '> Remind me once a year when the service opens</label><button class="btn alt">Save</button></form></details>';
     $rows = '';
     foreach (all('select * from sends where user_id=? order by id desc', [$u['id']]) as $s) {
         $c = [];
         foreach (all('select * from recipients where send_id=?', [$s['id']]) as $r) { $k = rstatus($r); $c[$k] = ($c[$k] ?? 0) + 1; }
         $sum = implode(', ', array_map(fn($k, $v) => "$v $k", array_keys($c), $c));
         $link = $s['status'] === 'draft' ? "/compose?id={$s['id']}" : ($s['status'] === 'awaiting_payment' ? "/review?id={$s['id']}" : "/send?id={$s['id']}");
-        $rows .= '<tr><td>' . date('j M Y', (int)$s['created']) . '</td><td><a href="' . $link . '">' . h(cards()[$s['card']]['title'] ?? $s['card']) . '</a>' . ($s['status'] === 'draft' ? ' <form method="post" action="/discard" class="inline">' . csrf() . '<input type="hidden" name="id" value="' . $s['id'] . '"><button class="link">Discard draft</button></form>' : ' <a href="/copy?id=' . $s['id'] . '">Copy as new draft</a>') . '</td><td>' . h(ucfirst(str_replace('_', ' ', $s['status']))) . '</td><td>' . h($sum) . '</td><td>' . h(donation_state($s) === 'No donation' ? '' : donation_state($s)) . '</td></tr>';
+        $act = $s['status'] === 'draft' ? '<a class="btn" href="' . $link . '">Keep writing</a> <form method="post" action="/discard" class="inline">' . csrf() . '<input type="hidden" name="id" value="' . $s['id'] . '"><button class="link">Discard draft</button></form>' : '<a class="btn alt" href="' . $link . '">See how it is going</a> <a href="/copy?id=' . $s['id'] . '">Send it again to someone</a>';
+        $don = donation_state($s) === 'No donation' ? '' : '<br><small>' . h(donation_state($s)) . '</small>';
+        $rows .= '<li class="cardrow"><div class="thumb">' . card_art($s['card']) . '</div><div><h3>' . h(cards()[$s['card']]['title'] ?? $s['card']) . ($s['status'] === 'draft' ? ' <span class="pill">Draft</span>' : '') . '</h3><p class="note">' . date('j M Y', (int)$s['created']) . ($sum ? ' &middot; ' . h($sum) : '') . $don . '</p><p>' . $act . '</p></div></li>';
     }
-    $b .= $rows ? '<table><caption class="sr">Your cards</caption><tr><th>Date</th><th>Card</th><th>State</th><th>Recipients</th><th>Donation</th></tr>' . $rows . '</table>' : '<p>No cards yet.</p>';
+    $b .= $rows ? '<ul class="plain cardlist">' . $rows . '</ul>' : '<section class="next"><h2>No cards yet</h2><p>Your first card is only a few minutes away.</p><p><a class="btn big" href="/">Choose a design</a></p></section>';
     $d = all('select * from donations where user_id=? order by id desc', [$u['id']]);
     if ($d) $b .= '<h2>Donation history</h2><table><tr><th>Date</th><th>Amount</th><th>Reference</th></tr>' . implode('', array_map(fn($x) => '<tr><td>' . date('j M Y', (int)$x['created']) . '</td><td>' . gbp((int)$x['pence']) . '</td><td>' . h($x['stripe_session']) . '</td></tr>', $d)) . '</table>';
     page('My cards', $b . '<p><a href="/contacts">Address book</a> &middot; <a href="/account/delete">Delete my account</a></p>');
@@ -459,6 +464,7 @@ function recipient_by_token(string $t): array {
 }
 
 function r_card(string $t, string $act = ''): void {
+    $GLOBALS['bare'] = true; // recipients see the brand only, not account links
     $r = recipient_by_token($t);
     $s = one('select * from sends where id=?', [$r['send_id']]);
     if ($r['withdrawn']) gone_page($r, 'This card has been withdrawn', 'The card is no longer available.');
@@ -471,9 +477,9 @@ function r_card(string $t, string $act = ''): void {
     }
     $stop = '<p class="center"><a href="/optout/' . h($t) . '">Stop cards from ' . h($s['sender_name']) . ' or from this service</a></p>';
     if (empty($_GET['o'])) {
-        page('A card for you', '<section class="envelope-wrap"><div class="envelope" aria-hidden="true"><div class="flap"></div><div class="to">To ' . h($r['name']) . '</div></div><h1>A Christmas card for ' . h($r['name']) . '</h1><p>From ' . h($s['sender_name']) . '</p><form method="post" action="/c/' . h($t) . '/open">' . csrf() . '<button class="btn">Open your card</button></form></section>' . $stop);
+        page('A card for you', '<section class="envelope-wrap"><div class="envelope" aria-hidden="true"><div class="flap"></div><div class="seal"></div><div class="stamp"></div><div class="to">To ' . h($r['name']) . '</div></div><h1>A Christmas card for ' . h($r['name']) . '</h1><p class="lead">From ' . h($s['sender_name']) . '</p><form method="post" action="/c/' . h($t) . '/open">' . csrf() . '<button class="btn big">Open your card</button></form><p class="note">Press the button to open it.</p></section>' . $stop);
     }
-    page('Your Christmas card', '<div class="reveal">' . card_view($s['card'], $r['name'], resolved_msg($r, $s), $s['sender_name'], card_note($s)) . '</div><p class="center"><a class="btn" href="/compose?card=' . h($s['card']) . '&amp;back=' . h($t) . '">Send a card back to ' . h($s['sender_name']) . '</a> <a class="btn alt" href="/">Create your own card</a></p><p class="center"><a href="/c/' . h($t) . '">Replay the envelope</a> &middot; <button type="button" class="link" data-print>Print this card</button><br><small class="note">A printed copy stays with you after this link expires.</small></p>'
+    page('Your Christmas card', '<div class="reveal">' . card_view($s['card'], $r['name'], resolved_msg($r, $s), $s['sender_name'], card_note($s)) . '</div><section class="next"><h2>Want to say thank you?</h2><p>Send ' . h($s['sender_name']) . ' a card of your own. It is free, and it only takes a minute.</p><p><a class="btn big" href="/compose?card=' . h($s['card']) . '&amp;back=' . h($t) . '">Send a card back</a> <a class="btn alt" href="/">Make a card for someone else</a></p></section><p class="center"><a href="/c/' . h($t) . '">Replay the envelope</a> &middot; <button type="button" class="link" data-print>Print this card</button><br><small class="note">A printed copy stays with you after this link expires.</small></p>'
         . '<details class="center"><summary>Report this card</summary><form method="post" action="/c/' . h($t) . '/report" class="stack">' . csrf() . '<label>What is wrong?<textarea name="reason" maxlength="500" required></textarea></label><button class="btn alt">Send report</button></form></details>' . $stop);
 }
 

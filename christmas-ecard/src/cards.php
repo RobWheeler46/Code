@@ -48,6 +48,6 @@ function card_art(string $id, bool $thumb = false): string {
     $g = 'g' . substr(md5($id), 0, 6);
     $snow = '';
     for ($i = 0; $i < 22; $i++) $snow .= '<circle cx="' . (($i * 53 + 17) % 400) . '" cy="' . (($i * 37 + 11) % 270) . '" r="' . (1 + $i % 3) . '" fill="#fff" opacity=".7"/>';
-    return '<svg class="art" viewBox="0 0 400 280" role="img" aria-label="' . h($c['desc']) . '" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="' . $g . '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' . $c['a'] . '"/><stop offset="1" stop-color="' . $c['b'] . '"/></linearGradient></defs>'
-        . '<rect width="400" height="280" fill="url(#' . $g . ')"/>' . $snow . $m . '<rect y="248" width="400" height="32" fill="#fff" opacity=".9"/></svg>';
+    return '<svg class="art" viewBox="0 0 400 280" preserveAspectRatio="xMidYMid slice" role="img" aria-label="' . h($c['desc']) . '" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="' . $g . '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' . $c['a'] . '"/><stop offset="1" stop-color="' . $c['b'] . '"/></linearGradient></defs>'
+        . '<rect width="400" height="280" fill="url(#' . $g . ')"/>' . $snow . $m . '<path d="M0 266 Q55 236 125 256 T255 250 T400 244 V280 H0Z" fill="#fff" opacity=".95"/><path d="M0 274 Q90 258 180 270 T400 264 V280 H0Z" fill="#e9e4f7"/></svg>';
 }

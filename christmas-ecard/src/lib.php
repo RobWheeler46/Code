@@ -167,7 +167,8 @@ function page(string $title, string $body, int $code = 200): never {
     http_response_code($code);
     $u = user(); $f = flash();
     $nav = '<a href="/">Cards</a>';
-    if ($u) {
+    if (!empty($GLOBALS['bare'])) $nav = ''; // recipient pages: just the brand, no account links
+    elseif ($u) {
         $nav .= '<a href="/dashboard">My cards</a><a href="/contacts">Address book</a>' . ($u['is_admin'] ? '<a href="/admin">Admin</a>' : '')
             . '<form method="post" action="/logout" class="inline">' . csrf() . '<button class="link">Sign out</button></form>';
     } else $nav .= '<a href="/login">Sign in</a><a href="/register">Register</a>';

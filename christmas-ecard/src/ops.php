@@ -118,7 +118,7 @@ function remind_link(int $uid): string { return base_url() . "/remind-off?u=$uid
 function send_reminders(?int $year = null): int {
     $year ??= (int)date('Y'); $n = 0;
     foreach (all("select * from users where remind=1 and verified=1 and suspended=0 and (remind_year is null or remind_year<>?) and email not like '%@deleted.invalid'", [$year]) as $u) {
-        if (mail_send($u['email'], 'Christmas cards from 7th Swindon Scouts are back', "Hello {$u['name']},\n\nYou asked us to let you know when our Christmas card service opens again. It is open at " . base_url() . "/ - sending is free, and a donation is optional.\n\nThis is the only email of this kind we send each year. To stop it, one click: " . remind_link((int)$u['id']) . "\n\n7th Swindon Scouts") === null) { q('update users set remind_year=? where id=?', [$year, $u['id']]); $n++; }
+        if (mail_send($u['email'], 'Christmas cards from 7th Swindon Scouts are back', "Hello {$u['name']},\n\nYou asked us to let you know when our Christmas card service opens again. It is open at " . base_url() . "/. Sending is free, and a donation is optional.\n\nThis is the only email of this kind we send each year. To stop it, one click: " . remind_link((int)$u['id']) . "\n\n7th Swindon Scouts") === null) { q('update users set remind_year=? where id=?', [$year, $u['id']]); $n++; }
     }
     return $n;
 }
