@@ -4,7 +4,7 @@
 
 // ---------- FR-156: a sent card keeps the artwork it was sent with
 function art_source(string $id): ?string {
-    foreach (['png', 'jpg', 'webp', 'svg'] as $x) if (is_file(ROOT . "/public/assets/card-$id.$x")) return ROOT . "/public/assets/card-$id.$x";
+    foreach (['png', 'jpg', 'webp', 'svg'] as $x) if ($f = asset_file("card-$id.$x")) return $f;
     return null;
 }
 /** Copies the current picture into data/art under a name that includes a content hash. Idempotent. Drawn designs have no file to freeze. */

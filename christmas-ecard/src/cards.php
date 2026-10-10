@@ -131,6 +131,12 @@ function card_scene(string $id): string {
     return '';
 }
 
+/** Finds a public asset on disk. Locally it sits in public/assets; on cPanel the web root is separate from the app folder, so look there too. */
+function asset_file(string $name): ?string {
+    foreach ([ROOT . '/public/assets', rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''), '/\\') . '/assets', rtrim((string)env('PUBLIC_ASSETS', ''), '/\\')] as $d)
+        if ($d !== '/assets' && $d !== '' && is_file("$d/$name")) return "$d/$name";
+    return null;
+}
 function card_art(string $id, bool $thumb = false, ?string $frozen = null): string {
     $c = cards()[$id] ?? null;
     if (!$c) return '';
@@ -138,7 +144,7 @@ function card_art(string $id, bool $thumb = false, ?string $frozen = null): stri
     if ($frozen && preg_match('/^[a-z0-9-]+-[0-9a-f]{12}.(png|jpg|webp|svg)$/', $frozen) && is_file(ROOT . "/data/art/$frozen"))
         return '<img class="art" src="/art/' . h($frozen) . '" alt="' . h($c['desc']) . '"' . ($thumb ? ' loading="lazy" decoding="async"' : '') . '>';
     foreach (['png', 'jpg', 'webp', 'svg'] as $x)
-        if (is_file(ROOT . "/public/assets/card-$id.$x")) return '<img class="art" src="/assets/card-' . h($id) . '.' . $x . '" alt="' . h($c['desc']) . '"' . ($thumb ? ' loading="lazy" decoding="async"' : '') . '>';
+        if (asset_file("card-$id.$x")) return '<img class="art" src="/assets/card-' . h($id) . '.' . $x . '" alt="' . h($c['desc']) . '"' . ($thumb ? ' loading="lazy" decoding="async"' : '') . '>';
     static $n = 0; $g = 'g' . substr(md5($id), 0, 6) . ++$n; // unique per copy: a hidden duplicate must not steal the gradient
     $snow = '';
     for ($i = 0; $i < 22; $i++) $snow .= '<circle cx="' . (($i * 53 + 17) % 400) . '" cy="' . (($i * 37 + 11) % 270) . '" r="' . (1 + $i % 3) . '" fill="#fff" opacity=".7"/>';

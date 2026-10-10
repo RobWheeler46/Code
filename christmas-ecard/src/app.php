@@ -40,7 +40,7 @@ function r_home(): void {
     if ($st === 'closed') $b .= '<p class="flash warn">This year\'s card sending has closed. Cards already sent stay viewable until they expire.</p>';
     $t = (int)setting('target_pence');
     if (setting('show_progress') === '1' && $t) $b .= '<p class="progress">Raised so far: <strong>' . gbp(progress()) . '</strong> of ' . gbp($t) . ' target (confirmed donations, after refunds).</p>';
-    $b .= '<h2 id="how">How it works</h2><ol class="how"><li><b>1</b><strong>Choose a design</strong>Ten Scout themed cards, from tents to campfires.</li><li><b>2</b><strong>Write your message</strong>Add up to ' . max_recipients() . ' people. Give anyone a personal note if you like.</li><li><b>3</b><strong>We send each card</strong>Everyone gets their own private link and opens a Christmas envelope.</li></ol>'
+    $b .= '<h2 id="how">How it works</h2><ol class="how"><li><b>1</b><strong>Choose a design</strong>Illustrated Scout themed cards, from tents to campfires.</li><li><b>2</b><strong>Write your message</strong>Add up to ' . max_recipients() . ' people. Give anyone a personal note if you like.</li><li><b>3</b><strong>We send each card</strong>Everyone gets their own private link and opens a Christmas envelope.</li></ol>'
         . '<section class="cause"><h2>Every card helps local Scouting</h2><p>' . h(setting('donation_purpose') ?: 'Any donation goes straight to 7th Swindon Scouts.') . '</p><p>Sending is always free. You never have to donate, and a donation never changes how your card looks.</p></section>'
         . '<h2 id="gallery">Pick a design</h2><div class="grid">';
     foreach (cards() as $id => $c) if ($c['on'])
