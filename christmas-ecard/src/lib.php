@@ -31,6 +31,7 @@ create table if not exists groups(id integer primary key autoincrement, user_id 
 create table if not exists contact_groups(contact_id int, group_id int, primary key(contact_id, group_id));
 create table if not exists alerts(akey text primary key, text text, severity text, first_seen int, last_notified int, acked_by int, acked_at int, escalated int default 0, resolved_at int);
 create table if not exists decisions(id text primary key, value text, approver text, approved_on text, ref text, status text default 'open');
+create table if not exists giftaid(id integer primary key autoincrement, send_id int unique, donation_id int, user_id int, title text, first_name text, last_name text, house text, postcode text, wording text, declared_at int, status text default 'pending', claim_batch text, claimed_at int);
 create table if not exists audit(id integer primary key autoincrement, user_id int, action text, detail text, created int);
 SQL;
 

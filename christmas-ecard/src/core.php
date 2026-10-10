@@ -112,10 +112,12 @@ function confirm_payment(int $sid, string $cs, int $amt, string $acct = ''): boo
     $go = q("update sends set status='queued', queued_at=? where id=? and status='awaiting_payment'", [time(), $sid])->rowCount();
     if ($go) q("update recipients set status='queued' where send_id=? and status='draft'", [$sid]);
     db()->commit();
+    $gaLine = $new ? giftaid_receipt_line($sid, $amt) : '';
+    if ($new) giftaid_link($sid, $cs);
     if ($new) {
         $u = one('select * from users where id=?', [$s['user_id']]);
         mail_send($u['email'], 'Your donation receipt: 7th Swindon Scouts',
-            "Hello {$u['name']},\n\nThank you. We have received your donation of " . gbp($amt) . " to 7th Swindon Scouts.\nReference: $cs\n\n" . ($go ? 'Your Christmas cards are being sent.' : 'Your cards had already been queued; this donation did not trigger a second send.') . "\n\n7th Swindon Scouts");
+            "Hello {$u['name']},\n\nThank you. We have received your donation of " . gbp($amt) . " to 7th Swindon Scouts.\nReference: $cs\n\n" . $gaLine . ($go ? 'Your Christmas cards are being sent.' : 'Your cards had already been queued; this donation did not trigger a second send.') . "\n\n7th Swindon Scouts");
     }
     if ($go) process_queue();
     return true;

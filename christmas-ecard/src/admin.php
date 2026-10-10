@@ -12,7 +12,7 @@ function admin_page(string $title, string $body): never {
         '/admin/reports' => ['Reports', can('complaints')], '/admin/campaign' => ['Campaign settings', can_any('campaign', 'appadmin', 'finance', 'delivery', 'rolesadmin')],
         '/admin/app' => ['Application settings', can_any('appadmin', 'campaign', 'delivery', 'rolesadmin')], '/admin/email' => ['Email and help', can_any('appadmin', 'rolesadmin')],
         '/admin/privacy' => ['Privacy and retention', can_any('rolesadmin', 'campaign', 'appadmin', 'finance', 'delivery')], '/admin/access' => ['Administrator access', can('rolesadmin')],
-        '/admin/senders' => ['Senders', can_any('complaints', 'rolesadmin')], '/admin/launch' => ['Launch readiness', true], '/admin/measures' => ['Measures', can_any('campaign', 'finance', 'appadmin', 'rolesadmin')], '/admin/rehearsal' => ['Rehearsal', can_any('appadmin', 'rolesadmin')], '/admin/health' => ['System health', true], '/admin/audit' => ['Change history', true]];
+        '/admin/senders' => ['Senders', can_any('complaints', 'rolesadmin')], '/admin/launch' => ['Launch readiness', true], '/admin/giftaid' => ['Gift Aid', can('finance')], '/admin/measures' => ['Measures', can_any('campaign', 'finance', 'appadmin', 'rolesadmin')], '/admin/rehearsal' => ['Rehearsal', can_any('appadmin', 'rolesadmin')], '/admin/health' => ['System health', true], '/admin/audit' => ['Change history', true]];
     $here = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
     $nav = '<nav class="adminmenu" aria-label="Administration"><details open><summary>Menu</summary><ul class="plain">';
     foreach ($links as $href => [$label, $ok]) if ($ok) $nav .= '<li><a href="' . $href . '"' . ($href === $here ? ' aria-current="page"' : '') . '>' . h($label) . '</a></li>';
@@ -30,7 +30,9 @@ function config_spec(string $area): array {
             'donation_purpose' => ['Approved purpose of donations', 'text', 'max' => 300, 'def' => ''],
             'target_pence' => ['Fundraising target in pounds (blank for none)', 'money', 'def' => ''],
             'amounts_pence' => ['Suggested donation amounts in pounds, comma separated (up to 5, £1 to £500)', 'amounts', 'def' => '200,500,1000'],
-            'show_progress' => ['Show fundraising progress publicly', 'bool', 'def' => '0']]],
+            'show_progress' => ['Show fundraising progress publicly', 'bool', 'def' => '0'],
+            'giftaid_charity' => ['Charity name used in the Gift Aid declaration (as HMRC knows it)', 'text', 'max' => 100, 'def' => ''],
+            'giftaid_enabled' => ['Offer Gift Aid on donations (needs decision D-12 approved)', 'bool', 'def' => '0']]],
         'app' => ['edit' => ['appadmin', 'rolesadmin'], 'title' => 'Application settings', 'when' => 'Applies to new entries straight away. Existing drafts are kept; a draft above a new limit must be corrected before submission. Accepted batches are unchanged.', 'fields' => [
             'max_recipients' => ['Recipients per card (1 to 20)', 'int', 'min' => 1, 'max' => 20, 'def' => '20'],
             'msg_max' => ['Greeting limit (characters)', 'int', 'min' => 50, 'max' => 2000, 'def' => '500'],
@@ -113,6 +115,10 @@ function r_admin_config(string $area): void {
         if (!$edit) fail(403, 'You do not have permission for that.');
         $prop = []; $errs = [];
         foreach ($spec['fields'] as $k => $f) { [$v, $e] = cfg_validate($f, (string)($_POST['f_' . $k] ?? '')); $prop[$k] = $v; if ($e) $errs[$k] = $e; }
+        if ($area === 'campaign' && ($prop['giftaid_enabled'] ?? '0') === '1') {
+            if (!giftaid_approved()) $errs['giftaid_enabled'] = 'Record decision D-12 as approved, with its reference, in Launch readiness first.';
+            if (trim((string)($prop['giftaid_charity'] ?? '')) === '') $errs['giftaid_charity'] = 'Enter the charity name as it appears on the HMRC declaration.';
+        }
         $reason = trim((string)($_POST['reason'] ?? '')); $ref = trim((string)($_POST['approval'] ?? ''));
         $diff = []; foreach ($spec['fields'] as $k => $f) if ($prop[$k] !== cfg_current($k, $f)) $diff[$k] = [cfg_current($k, $f), $prop[$k]];
         $confirmed = !empty($_POST['confirmed']);
