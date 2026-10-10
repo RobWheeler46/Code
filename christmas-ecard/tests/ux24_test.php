@@ -12,4 +12,7 @@ ok(str_contains($adm, 'if ($links[$href][1])'), 'links are still filtered by eac
 $app = file_get_contents(__DIR__ . '/../src/app.php'); $js = file_get_contents(__DIR__ . '/../public/assets/app.js'); $css = file_get_contents(__DIR__ . '/../public/assets/style.css');
 ok(str_contains($app, 'data-skip>Skip animation') && str_contains($js, 'data-skip') && str_contains($css, '.noanim *'), 'recipient reveal has a working Skip animation control');
 ok(strpos($app, 'value="free">Send cards for free') < strpos($app, '<details class="donate"'), 'UX24-03: review shows Send for free first, donation sits behind an explicit choice');
+preg_match_all("/\$a\['([a-z0-9]+)'\]/", file_get_contents(__DIR__ . '/../src/ops.php'), $ak);
+$missing = array_filter(array_unique($ak[1]), fn($k) => !str_contains($adm, "'$k' => ['/admin"));
+ok(!$missing, 'UX24-07: every alert type on the Overview says where to act (' . implode(',', $missing) . ')');
 exit($GLOBALS['bad'] ?? 0);

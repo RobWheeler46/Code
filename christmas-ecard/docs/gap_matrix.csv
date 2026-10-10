@@ -169,7 +169,7 @@ UX24-03,"Free selected first, donation explicit",Must,implemented,"src/app.php r
 UX24-04,"Progressive rows, count, no recipient disclosure",Must,implemented,src/app.php r_compose; src/core.php email_html,ops_test,
 UX24-05,Human readable states,Must,implemented,src/core.php rstatus(),smoke,
 UX24-06,"Skippable animation, reduced motion",Must,implemented,"public/assets/style.css (reduced motion, .noanim); src/app.php r_card; public/assets/app.js",tests/ux24_test.php,Skip animation added in this pass. Screen reader and keyboard UAT still to do.
-UX24-07,Five role safe admin areas,Should,implemented,src/admin.php admin_page (five areas),"tests/ux24_test.php, admin_test",Grouped in this pass; routes and permissions unchanged. Actions first Overview not yet redesigned.
+UX24-07,Five role safe admin areas,Should,implemented,src/admin.php admin_page (five areas),"tests/ux24_test.php, admin_test",Grouped in this pass; routes and permissions unchanged. Overview now lists each exception with an Open link or its owning role.
 UX24-08,"Stable hero, never held back",Should,implemented,src/cards.php hero_for_session,resilience_test,
 UX24-09,Immutable sent artwork,Must,implemented,src/resilience.php freeze_art,resilience_test,
 UX24-10,Preview and test cannot send or charge,Must,implemented,"src/app.php r_preview, r_email_preview (GET, read only)",smoke,Test card goes only to the verified sender.

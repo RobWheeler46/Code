@@ -265,7 +265,15 @@ function r_admin(): void {
         . '<section class="statuscard"><h2>Dispatch</h2><p>' . (setting('paused') === '1' ? '<strong>Paused</strong>' : 'Running') . '. ' . $c['queued'] . ' queued.</p></section>';
     $alerts = health_alerts();
     $b .= '<section class="statuscard"><h2>Alerts</h2><p>' . ($alerts ? '<strong>' . count($alerts) . ' need attention</strong>' : 'None found') . '</p><a href="/admin/health">System health</a></section></div>';
-    if ($alerts) { $b .= '<h2>Needs attention first</h2><ul>'; foreach ($alerts as $a) $b .= '<li>' . h($a) . '</li>'; $b .= '</ul>'; }
+    if ($alerts) { // UX24-07: each exception names where to act; people without that role see who owns it, never the private detail
+        $go = ['cron' => ['/admin/health', 'appadmin,rolesadmin', 'Application administrator'], 'backup' => ['/admin/health', 'appadmin,rolesadmin', 'Application administrator'], 'offsite' => ['/admin/health', 'appadmin,rolesadmin', 'Application administrator'], 'restore' => ['/admin/health', 'appadmin,rolesadmin', 'Application administrator'],
+            'queue' => ['/admin/delivery', 'delivery,appadmin,rolesadmin', 'Delivery support'], 'failed' => ['/admin/delivery', 'delivery,appadmin,rolesadmin', 'Delivery support'], 'pay15' => ['/admin/finance', 'finance', 'Finance administrator'], 'pay24' => ['/admin/finance', 'finance', 'Finance administrator'], 'payexc' => ['/admin/finance', 'finance', 'Finance administrator'],
+            'complaint' => ['/admin/reports', 'complaints', 'Complaints reviewer'], 'abuse' => ['/admin/senders', 'complaints,rolesadmin', 'Complaints reviewer'], 'access' => ['/admin/access', 'rolesadmin', 'Restricted administrator'], 'launch' => ['/admin/launch', '', 'Campaign manager']];
+        $b .= '<h2>Needs attention first</h2><ul class="tasks">';
+        foreach ($alerts as $k => $a) { [$href, $roles, $owner] = $go[$k] ?? ['/admin/health', '', 'Application administrator']; $mine = $roles === '' || can_any(...explode(',', $roles));
+            $b .= '<li>' . h($a) . ' ' . ($mine ? '<a class="btn alt" href="' . $href . '">Open</a>' : '<span class="note">Owner: ' . h($owner) . '</span>') . '</li>'; }
+        $b .= '</ul>';
+    } else $b .= '<p class="note">Nothing needs attention right now.</p>';
     $rc = []; foreach (all('select r.* from recipients r join sends s on s.id=r.send_id where s.is_test=0') as $r) { $k = rstatus($r); $rc[$k] = ($rc[$k] ?? 0) + 1; }
     $b .= '<h2>Card activity</h2><p>' . h(implode(', ', array_map(fn($k, $v) => "$v $k", array_keys($rc), $rc)) ?: 'Nothing sent yet.') . '</p><ul>';
     foreach (all("select card, count(*) n from sends where is_test=0 and status not in ('draft','awaiting_payment') group by card order by n desc") as $x) $b .= '<li>' . h(cards()[$x['card']]['title'] ?? $x['card']) . ': ' . $x['n'] . '</li>';

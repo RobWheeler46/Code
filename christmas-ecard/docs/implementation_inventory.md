@@ -39,7 +39,7 @@ All pass (contacts_test failed once with a stale temporary database name and pas
 2. **Gaps closed in this pass:** UX24-06 Skip animation control on the recipient reveal; UX24-07 admin navigation grouped into five areas.
 3. **Still open:**
    - UX24-03 is now built (free button first, donation behind an expandable section) and needs UAT on wording.
-   - UX24-07 is navigation only. The Overview is not yet "actions first".
+   - UX24-07: the Overview now lists each exception with an Open link, or the owning role where the viewer lacks access.
    - UX24-11: the three stage progress bar exists but its wording around sign in and payment has not been tested.
    - The campaign QR image is fetched from a third party service. The pack prefers local generation; that needs a QR library or a small generator and a privacy decision.
    - Recipient tokens are stored unhashed.
