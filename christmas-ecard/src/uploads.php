@@ -129,3 +129,12 @@ function library_files(): array {
     foreach (glob("$d/*/*") ?: [] as $f) if (is_file($f) && basename(dirname($f)) !== 'tmp') $o[basename(dirname($f)) . '/' . basename($f)] = $f;
     return $o;
 }
+
+/** Deletes the files of one stored asset (originals, full and thumbnail) given their keys. Only names this service makes are touched. */
+function art_forget(array $keys): void {
+    foreach (['original_key', 'full_key', 'thumb_key'] as $k) {
+        $key = (string)($keys[$k] ?? '');
+        if (!preg_match('#^[0-9a-f]{2}/[oft]-[0-9a-f]{32}\.[a-z]+$#', $key)) continue;
+        @unlink(art_dir() . '/' . $key); @rmdir(art_dir() . '/' . dirname($key));
+    }
+}

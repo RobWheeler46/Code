@@ -16,6 +16,8 @@ create index if not exists cd_version on campaign_designs(published_version_id);
 ");
     foreach ([['sends', 'campaign_id int'], ['sends', 'design_version_id int']] as [$t, $def])
         if (!in_array(explode(' ', $def)[0], array_column($p->query("pragma table_info($t)")->fetchAll(), 'name'))) $p->exec("alter table $t add column $def");
+    foreach (['original_key text', 'full_key text', 'thumb_key text', 'rights_confirmed int default 0', 'year_checked int default 0', 'rev int default 1', 'updated int', 'author_id int'] as $def)
+        if (!in_array(explode(' ', $def)[0], array_column($p->query('pragma table_info(design_versions)')->fetchAll(), 'name'))) $p->exec("alter table design_versions add column $def");
     $p->exec('create index if not exists sends_campaign on sends(campaign_id)');
     if (function_exists('library_import')) library_import($p);
 }
