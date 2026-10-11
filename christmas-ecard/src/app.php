@@ -219,7 +219,7 @@ function r_compose(): void {
     $gone = '';
     if (!(cards()[$card]['on'] ?? false)) { // a saved draft keeps its message and recipients when its design is held back; a direct link to an unavailable design goes home
         if (!$s || !gallery_cards()) { flash('That design is not available. Please choose another.', 'warn'); redirect('/#gallery'); }
-        $gone = '<p class="flash warn" role="status">The design you first chose is no longer available. Pick another below. Your message and recipients are safe.</p>'; $card = (string)array_key_first(gallery_cards());
+        $gone = '<p class="flash warn" role="status">The design you first chose is no longer available. Use Change design to pick another. Your message and recipients are safe.</p>'; $card = (string)array_key_first(gallery_cards());
     }
     $back = !$s && !empty($_GET['back']) && preg_match('/^[a-f0-9]{48}$/', $_GET['back']) ? one('select s.sender_name from recipients r join sends s on s.id=r.send_id where r.token_hash=sha256(?)', [$_GET['back']]) : null;
     $f = true;
@@ -240,12 +240,10 @@ function r_compose(): void {
         . ' <small class="count" data-recipient-count>' . $nrows . ' of ' . max_recipients() . '</small>'
         . '<details' . (isset($errs['paste']) || ($old['paste'] ?? '') !== '' ? ' open' : '') . '><summary>Paste several at once</summary><label>One per line as <em>Name, email</em><textarea name="paste" rows="4" placeholder="Gran, gran@example.com&#10;Uncle Bob, bob@example.com"' . fa($errs, 'paste', $f) . '>' . h($old['paste'] ?? '') . '</textarea>' . fe($errs, 'paste') . '</label></details></fieldset>';
     $from = $old['sender_name'] ?? $s['sender_name'] ?? ($u['name'] ?? ''); $msg = $old['message'] ?? $s['message'] ?? '';
-    $opts = '';
-    foreach (cards() as $id => $c) if ($c['on']) $opts .= '<option value="' . h($id) . '"' . ($id === $card ? ' selected' : '') . '>' . h($c['title']) . '</option>';
     $saved = $s ? '<p class="note" role="status">Draft saved at ' . date('H:i', (int)$s['updated']) . '.</p>' : '<p class="note">Not saved yet. Use Save draft to keep your work' . ($u ? '.' : ' (you will register before sending).') . '</p>';
     page('Write your card', steps(2) . $gone . '<h1>Write something wonderful</h1><p class="lead">Your message and everyone you are sending it to, together in one place.</p>' . ($u ? '' : '<p class="note">You can prepare your card now. Before it is sent you will create a free account and verify your email, and your card will wait for you.</p>')
         . '<div class="two"><div class="card preview" aria-label="Live preview">' . card_art($card) . '<p class="center"><a class="btn alt" href="/#gallery">Change design</a></p><div class="inner"><p class="msg" data-preview-msg>' . nl2br(h($msg)) . '</p><p class="from">With love from<br><strong data-preview-from>' . h($from) . '</strong></p></div></div><form method="post" class="stack" data-dirty-warn>' . csrf()
-        . '<label>Design<select name="card">' . $opts . '</select></label>'
+        . '<input type="hidden" name="card" value="' . h($card) . '">'
         . '<label>From (your name or family name)<input name="sender_name" maxlength="' . (name_max() + 20) . '" data-max="' . name_max() . '" value="' . h($from) . '"' . fa($errs, 'sender_name', $f) . '><small class="count">Up to ' . name_max() . ' characters</small>' . fe($errs, 'sender_name') . '</label>'
         . '<label>Your message<textarea name="message" rows="5" data-max="' . msg_max() . '"' . fa($errs, 'message', $f) . '>' . h($msg) . '</textarea><small class="count">Up to ' . msg_max() . ' characters</small>' . fe($errs, 'message') . '</label>'
         . '<details><summary>Need ideas? Greeting examples</summary><p class="note">Examples only. Choosing one adds it to your message, which you can then edit.</p><ul class="starters">' . implode('', array_map(fn($t) => '<li>' . h($t) . ' <button type="button" class="link" data-starter="' . h($t) . '">Use this</button></li>', STARTERS)) . '</ul></details>'
