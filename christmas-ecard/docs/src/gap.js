@@ -6,7 +6,7 @@ const esc = (v) => /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
 // [from, to, class, evidence, tests, note]
 const R = [
   [1, 4, 'implemented', 'src/app.php r_register, r_verify, r_login, r_logout, r_forgot, r_reset', 'tests/smoke.php', ''],
-  [5, 5, 'partial', 'src/app.php r_dashboard, r_prefs, r_account_delete', 'smoke', 'No profile editing page.'],
+  [5, 5, 'implemented', 'src/account.php r_account (name, email with confirmation, password, preferences); r_dashboard; r_account_delete', 'tests/account_test.php', ''],
   [6, 9, 'implemented', 'src/cards.php, src/app.php r_compose, src/admin.php (design management)', 'admin_test, smoke', ''],
   [10, 16, 'implemented', 'src/app.php r_compose, r_preview, r_review; src/core.php', 'smoke', ''],
   [17, 23, 'implemented', 'src/app.php r_review, r_return, r_dev_pay; src/core.php confirm_payment', 'smoke, resilience_test', 'Refund import: charge.refunded handled in src/resilience.php; Stripe live mode untested.'],

@@ -3,7 +3,7 @@ FR-001,Identity & account,Built,implemented,"src/app.php r_register, r_verify, r
 FR-002,Identity & account,Built,implemented,"src/app.php r_register, r_verify, r_login, r_logout, r_forgot, r_reset",tests/smoke.php,
 FR-003,Identity & account,Built,implemented,"src/app.php r_register, r_verify, r_login, r_logout, r_forgot, r_reset",tests/smoke.php,
 FR-004,Identity & account,Built,implemented,"src/app.php r_register, r_verify, r_login, r_logout, r_forgot, r_reset",tests/smoke.php,
-FR-005,Identity & account,Partly,partial,"src/app.php r_dashboard, r_prefs, r_account_delete",smoke,No profile editing page.
+FR-005,Identity & account,Partly,implemented,"src/account.php r_account (name, email with confirmation, password, preferences); r_dashboard; r_account_delete",tests/account_test.php,
 FR-006,Design catalogue,Built,implemented,"src/cards.php, src/app.php r_compose, src/admin.php (design management)","admin_test, smoke",
 FR-007,Design catalogue,Built,implemented,"src/cards.php, src/app.php r_compose, src/admin.php (design management)","admin_test, smoke",
 FR-008,Design catalogue,Built,implemented,"src/cards.php, src/app.php r_compose, src/admin.php (design management)","admin_test, smoke",

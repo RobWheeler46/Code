@@ -45,7 +45,7 @@ function db(): PDO {
     $p = new PDO('sqlite:' . $f, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
     $p->exec('pragma busy_timeout=5000');
     $p->exec(SCHEMA);
-    foreach ([['users', "roles text default ''"], ['users', "notify text default 'off'"], ['sends', 'stripe_session text'], ['sends', 'donation_note int default 0'], ['sends', 'ref text'], ['recipients', 'withdrawn int default 0'], ['recipients', 'token_hash text'], ['recipients', 'own_msg text'], ['recipients', 'next_at int default 0'], ['donations', "refund_status text default 'none'"], ['sends', 'is_test int default 0'], ['users', 'remind int default 0'], ['users', 'remind_year int'], ['sends', 'art_ref text'], ['donations', 'payment_intent text'], ['users', 'last_login int'], ['users', 'terms_version text'], ['users', 'terms_at int'], ['users', 'suspended int default 0'], ['users', 'suspend_reason text']] as [$t, $def]) {
+    foreach ([['users', 'pending_email text'], ['users', 'pending_token text'], ['users', 'pending_exp int default 0'], ['users', "roles text default ''"], ['users', "notify text default 'off'"], ['sends', 'stripe_session text'], ['sends', 'donation_note int default 0'], ['sends', 'ref text'], ['recipients', 'withdrawn int default 0'], ['recipients', 'token_hash text'], ['recipients', 'own_msg text'], ['recipients', 'next_at int default 0'], ['donations', "refund_status text default 'none'"], ['sends', 'is_test int default 0'], ['users', 'remind int default 0'], ['users', 'remind_year int'], ['sends', 'art_ref text'], ['donations', 'payment_intent text'], ['users', 'last_login int'], ['users', 'terms_version text'], ['users', 'terms_at int'], ['users', 'suspended int default 0'], ['users', 'suspend_reason text']] as [$t, $def]) {
         if (!in_array(explode(' ', $def)[0], array_column($p->query("pragma table_info($t)")->fetchAll(), 'name'))) $p->exec("alter table $t add column $def");
     }
     // Private card links are kept only as a SHA-256 hash once mailed, so a copy of the database cannot open anyone's card.
@@ -192,7 +192,7 @@ function page(string $title, string $body, int $code = 200): never {
     $nav = '<a href="/">Cards</a>';
     if (!empty($GLOBALS['bare'])) $nav = ''; // recipient pages: just the brand, no account links
     elseif ($u) {
-        $nav .= '<a href="/dashboard">My cards</a><a href="/contacts">Address book</a>' . ($u['is_admin'] ? '<a href="/admin">Admin</a>' : '')
+        $nav .= '<a href="/dashboard">My cards</a><a href="/contacts">Address book</a><a href="/account">Account</a>' . ($u['is_admin'] ? '<a href="/admin">Admin</a>' : '')
             . '<form method="post" action="/logout" class="inline">' . csrf() . '<button class="link">Sign out</button></form>';
     } else $nav .= '<a href="/login">Sign in</a><a href="/register">Register</a>';
     echo '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
