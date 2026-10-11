@@ -48,3 +48,7 @@ Test data rule: development uses made-up members only, using obviously fake `.ex
 ## What I can start now without any member data
 
 TG-02 only: the Trustee roles, the hidden feature-flagged route, and the access tests that prove public, support, finance and ordinary campaign managers are refused. It would not store or show a single member.
+
+## TG-02 built (11 October 2026)
+
+The hidden, flagged Trustee greetings entry now exists and holds no member data. Four new roles (Trustee greeting editor, reviewer, approver and private greeting dispatch operator) are separate from the administrator roles: a restricted administrator, a campaign manager, finance or delivery support cannot open it, and the command line admin helper does not hand them out. The route `/private/trustee-greetings` answers with the same "Page not found" as a missing page for signed out visitors, ordinary senders and anyone without a Trustee greeting role, and for everyone while the switch is off. The switch (Admin > Administration > Private features, restricted administrators only) needs a reason and a Trustee approval reference to turn on, is audited, and switching off hides the console at once. The console only says it is not connected and lists who holds each role. The section leader switch exists but cannot be turned on because that part is not built. `tests/trustee_access_test.php` has 35 checks over real HTTP, including that no member, guardian or greeting table exists. The next step needs decisions D-T1 to D-T3 (roles, member source, routing).
