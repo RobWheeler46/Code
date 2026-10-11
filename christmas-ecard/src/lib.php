@@ -25,6 +25,7 @@ create table if not exists donations(id integer primary key autoincrement, send_
 create table if not exists reports(id integer primary key autoincrement, recipient_id int, reason text, status text default 'open', decision text, created int);
 create table if not exists optouts(email text, user_id int, created int, primary key(email, user_id));
 create table if not exists settings(k text primary key, v text);
+create table if not exists admin_invites(id integer primary key autoincrement, email text not null, roles text not null, token_hash text unique, invited_by int, created int, expires int, accepted_at int, accepted_by int, revoked_at int);
 create table if not exists attempts(k text, t int);
 create table if not exists contacts(id integer primary key autoincrement, user_id int, name text, email text, created int, updated int);
 create table if not exists groups(id integer primary key autoincrement, user_id int, name text);

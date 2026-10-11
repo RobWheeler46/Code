@@ -361,12 +361,14 @@ function r_admin_access(): void {
     $rv = (int)setting('access_review_at'); $b .= '<section class="admincard"><h2>Access review</h2><p>Last reviewed: <strong>' . ($rv ? when($rv) : 'never') . '</strong>. Review who has access at least every 90 days (placeholder until the Trustees set it).</p><table class="stacked"><tr><th>Administrator</th><th>Roles</th><th>Last signed in</th><th>Two-step</th></tr>';
     foreach (all('select * from users where is_admin=1 order by name') as $x) $b .= '<tr><td>' . h($x['name']) . ' ' . h($x['email']) . '</td><td>' . h(role_names($x['roles'])) . '</td><td>' . ($x['last_login'] ? when((int)$x['last_login']) : 'Unknown') . '</td><td>' . ($x['totp_secret'] ? 'Set up' : '<strong>Not set up</strong>') . '</td></tr>';
     $b .= '</table><form method="post" action="/admin/action" class="inline">' . csrf() . '<input type="hidden" name="do" value="access_review"><input type="hidden" name="back" value="/admin/access"><button class="btn alt">Record that I reviewed this list</button></form></section>';
-    $rows = all("select * from users where is_admin=1 or roles<>'' order by name"); $rows[] = ['email' => '', 'roles' => '', 'name' => 'Add by email', 'totp_secret' => null, 'verified' => 1];
+    $b .= invites_panel();
+    $b .= '<h2>Roles for people who already have an account</h2>';
+    $rows = all("select * from users where is_admin=1 or roles<>'' order by name"); $rows[] = ['email' => '', 'roles' => '', 'name' => 'Give roles to a registered user by email', 'totp_secret' => null, 'verified' => 1];
     foreach ($rows as $x) {
         $have = explode(',', $x['roles']);
         $b .= '<form method="post" action="/admin/action" class="stack admincard">' . csrf() . '<input type="hidden" name="do" value="roles"><input type="hidden" name="back" value="/admin/access">' . ($x['email'] ? '<p><strong>' . h($x['name']) . '</strong> ' . h($x['email']) . '<br>Two-step sign-in: ' . ($x['totp_secret'] ? 'set up' : '<strong>not set up yet</strong>') . '</p><input type="hidden" name="email" value="' . h($x['email']) . '">' : '<label>Registered email of a verified user<input type="email" name="email" required></label>');
         foreach (ROLES as $k => $l) $b .= '<label class="opt"><input type="checkbox" name="roles[]" value="' . $k . '"' . (in_array($k, $have) ? ' checked' : '') . '> ' . h($l) . '</label>';
-        $b .= '<button class="btn alt">' . ($x['email'] ? 'Save roles for ' . h($x['name']) : 'Invite administrator') . '</button></form>';
+        $b .= '<button class="btn alt">' . ($x['email'] ? 'Save roles for ' . h($x['name']) : 'Give roles') . '</button></form>';
     }
     admin_page('Administrator access', $b);
 }

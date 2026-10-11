@@ -85,8 +85,8 @@ FR-083,Submission and admin tasks,Built,implemented,src/admin.php config engine;
 FR-084,Settings,Partly,implemented,"src/admin.php config_spec (limits, wording)","admin_test, wording_test","Branding assets and logos are still fixed approved files, by design."
 FR-085,Settings,Partly,implemented,"src/admin.php config_spec (limits, wording)","admin_test, wording_test","Branding assets and logos are still fixed approved files, by design."
 FR-086,"Governance, audit, roles",Built,implemented,src/admin.php (retention impact review),admin_test,
-FR-087,"Governance, audit, roles",Partly,partial,src/admin.php r_admin_access,admin_test,No beneficiary change workflow; no email invitation.
-FR-088,"Governance, audit, roles",Partly,partial,src/admin.php r_admin_access,admin_test,No beneficiary change workflow; no email invitation.
+FR-087,"Governance, audit, roles",Partly,partial,src/admin.php r_admin_access,admin_test,No beneficiary change workflow.
+FR-088,"Governance, audit, roles",Partly,implemented,src/invites.php; src/admin.php r_admin_access,tests/invites_test.php,"Invitation by email, role assignment, revocation, MFA enrolment on first use."
 FR-089,"Governance, audit, roles",Built,implemented,"src/admin.php, src/ops.php health_alerts","admin_test, ops_test",Audit export is not built (FR-159).
 FR-090,"Governance, audit, roles",Built,implemented,"src/admin.php, src/ops.php health_alerts","admin_test, ops_test",Audit export is not built (FR-159).
 FR-091,"Governance, audit, roles",Built,implemented,"src/admin.php, src/ops.php health_alerts","admin_test, ops_test",Audit export is not built (FR-159).
