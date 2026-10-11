@@ -235,8 +235,7 @@ function r_admin_action(): void {
         case 'design_desc':
             if (isset(cards()[$_POST['card'] ?? ''])) { set_setting('desc_' . $_POST['card'], field('desc', 200)); audit($uid, 'design_description', $_POST['card']); } break;
         case 'design_up': case 'design_down':
-            $ids = array_keys(cards()); $k = array_search($_POST['card'] ?? '', $ids, true);
-            if ($k !== false && ($j = $a === 'design_up' ? $k - 1 : $k + 1) >= 0 && $j < count($ids)) { [$ids[$k], $ids[$j]] = [$ids[$j], $ids[$k]]; foreach ($ids as $n => $id) set_setting("order_$id", (string)$n); audit($uid, 'design_order', implode(',', $ids)); } break;
+            design_move((string)($_POST['card'] ?? ''), $a === 'design_up' ? -1 : 1, $uid); break;
         case 'dismiss': case 'block': case 'withdraw':
             $rep = one('select r.*, x.email, x.send_id from reports r join recipients x on x.id=r.recipient_id where r.id=?', [$i]);
             if ($rep) {

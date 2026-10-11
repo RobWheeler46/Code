@@ -31,6 +31,7 @@ function lib_rows(string $status = ''): array {
         $r['pub_no'] = $r['pub_vid'] ? (int)(one('select version_no n from design_versions where id=?', [$r['pub_vid']])['n'] ?? 0) : 0;
     }
     unset($r);
+    $pos = array_flip(array_keys($cards)); usort($rows, fn($a, $b) => ($pos[$a['slug']] ?? 9999) <=> ($pos[$b['slug']] ?? 9999) ?: $a['did'] <=> $b['did']); // the order senders see
     return $status === '' ? $rows : array_values(array_filter($rows, fn($r) => $r['state'] === $status));
 }
 function lib_row(int $did): ?array { foreach (lib_rows() as $r) if ((int)$r['did'] === $did) return $r; return null; }
@@ -245,6 +246,9 @@ const LIB_ACTIONS = [
     'archive' => ['Archive', 'The design is kept for history but cannot be chosen. Cards already sent still show it.'],
     'restore' => ['Restore to held back', 'The design returns to the library as held back. It will not be visible to senders until you put it back in the gallery.'],
     'new_version' => ['Create new version', 'This starts a private draft of the next version with the same details. The published version stays in the gallery until you publish the new one. Cards already sent keep the version they were sent with.'],
+    'feature' => ['Feature on the home page', 'The home page picture is chosen from featured designs when there are any. It still only ever shows designs senders can choose.'],
+    'unfeature' => ['Stop featuring', 'The home page picture will no longer favour this design.'],
+    'move_up' => ['Move earlier', ''], 'move_down' => ['Move later', ''],
     'use_version' => ['Use this version for new cards', 'New cards will use this version. Cards already sent keep the version they were sent with, so nothing already sent changes.'],
 ];
 function lib_action_form(string $do, int $did, int $vid, int $rev, string $label = '', string $cls = 'btn alt', bool $disabled = false): string {
@@ -255,16 +259,16 @@ function r_admin_library_action(): void {
     $u = need_admin(); lib_role(); if (!post()) redirect('/admin/library');
     $do = (string)($_POST['do'] ?? ''); $did = (int)($_POST['id'] ?? 0); $vid = (int)($_POST['vid'] ?? 0); $rev = (int)($_POST['rev'] ?? 0); $uid = (int)$u['id'];
     if (!isset(LIB_ACTIONS[$do]) || !($r = lib_row($did))) fail(400, 'Unknown action.');
-    if (empty($_POST['confirmed'])) { // every change says what it will do first
+    if (empty($_POST['confirmed']) && !in_array($do, ['move_up', 'move_down'], true)) { // every change says what it will do first (ordering is easy to undo, so it does not ask)
         $back = '/admin/library/preview?id=' . $did;
         admin_page(LIB_ACTIONS[$do][0], '<h1>' . h(LIB_ACTIONS[$do][0]) . ': ' . h($r['internal_name']) . '</h1><p>' . h(LIB_ACTIONS[$do][1]) . '</p><form method="post" action="/admin/library/action" class="stack">' . csrf()
             . '<input type="hidden" name="do" value="' . h($do) . '"><input type="hidden" name="id" value="' . $did . '"><input type="hidden" name="vid" value="' . $vid . '"><input type="hidden" name="rev" value="' . $rev . '"><input type="hidden" name="confirmed" value="1">'
             . '<div class="row"><button class="btn">' . h(LIB_ACTIONS[$do][0]) . '</button><a class="btn alt" href="' . $back . '">Cancel</a></div></form>');
     }
     limit_for("library:$uid", 30, 3600);
-    $res = match ($do) { 'publish' => library_publish($did, $vid, $rev, $uid), 'new_version' => library_new_version($did, $uid), 'use_version' => library_use_version($did, $vid, $uid), default => library_transition($did, $do, $uid) };
+    $res = match ($do) { 'move_up', 'move_down' => library_order($did, $do, $uid), 'feature', 'unfeature' => library_feature($did, $do === 'feature', $uid), 'publish' => library_publish($did, $vid, $rev, $uid), 'new_version' => library_new_version($did, $uid), 'use_version' => library_use_version($did, $vid, $uid), default => library_transition($did, $do, $uid) };
     if (!$res['ok']) fail(!empty($res['conflict']) ? 409 : 403, $res['error'] ?? 'That could not be done.');
-    flash(!empty($res['same']) ? 'Nothing to change: it is already like that.' : ['publish' => 'Published. New cards can now use it.', 'hold' => 'Held back. Senders can no longer choose it.', 'unhold' => 'Back in the gallery.', 'archive' => 'Archived.', 'restore' => 'Restored as held back.', 'new_version' => 'New version started as a private draft.', 'use_version' => 'New cards will now use that version.'][$do]);
+    flash(!empty($res['same']) ? 'Nothing to change: it is already like that.' : ['publish' => 'Published. New cards can now use it.', 'hold' => 'Held back. Senders can no longer choose it.', 'unhold' => 'Back in the gallery.', 'archive' => 'Archived.', 'restore' => 'Restored as held back.', 'new_version' => 'New version started as a private draft.', 'use_version' => 'New cards will now use that version.', 'feature' => 'Featured on the home page.', 'unfeature' => 'No longer featured.', 'move_up' => 'Moved earlier.', 'move_down' => 'Moved later.'][$do]);
     redirect('/admin/library/preview?id=' . $did);
 }
 
@@ -274,7 +278,7 @@ function r_admin_library_preview(): void {
     $act = '';
     if ($r['editable']) {
         $act .= '<a class="btn alt" href="/admin/library/edit?id=' . $did . '">Edit draft</a> ' . ($pub ? lib_action_form('publish', $did, (int)$r['vid'], (int)$r['rev'], 'Publish version ' . (int)$r['version_no'], 'btn', (bool)$miss) : '<span class="note">Only a publisher can publish.</span>');
-    } elseif ($r['state'] === 'published') $act .= lib_action_form('hold', $did, 0, 0) . lib_action_form('new_version', $did, 0, 0);
+    } elseif ($r['state'] === 'published') $act .= lib_action_form('hold', $did, 0, 0) . lib_action_form('new_version', $did, 0, 0) . lib_action_form('move_up', $did, 0, 0) . lib_action_form('move_down', $did, 0, 0) . ($pub ? lib_action_form(in_array($r['slug'], featured_slugs(), true) ? 'unfeature' : 'feature', $did, 0, 0) : '');
     elseif ($r['state'] === 'held_back') $act .= ($pub ? lib_action_form('unhold', $did, 0, 0, '', 'btn') . ($r['imported'] ? '' : lib_action_form('archive', $did, 0, 0)) : '<span class="note">Only a publisher can put it back.</span>') . lib_action_form('new_version', $did, 0, 0);
     elseif ($r['state'] === 'archived') $act .= $pub ? lib_action_form('restore', $did, 0, 0) : '';
     $hist = '<table class="stacked"><tr><th>Version</th><th>Status</th><th>Published</th><th></th></tr>';
@@ -299,4 +303,18 @@ function r_admin_library_img(): void {
     $key = $v ? (($_GET['k'] ?? '') === 'full' ? $v['full_key'] : $v['thumb_key']) : ''; $f = $key && preg_match('#^[0-9a-f]{2}/[oft]-[0-9a-f]{32}\.[a-z]+$#', $key) ? art_dir() . '/' . $key : '';
     if (!$f || !is_file($f)) { http_response_code(404); exit; }
     header('Content-Type: image/webp'); header('X-Content-Type-Options: nosniff'); header('Cache-Control: private, max-age=300'); header('Content-Length: ' . filesize($f)); readfile($f); exit;
+}
+
+/** Move a published design earlier or later among the designs senders can see. The same order the gallery and the older design screen use. */
+function library_order(int $did, string $act, int $uid): array {
+    if (!lib_user_can($uid, 'manage')) return ['ok' => false, 'error' => 'You do not have permission for that.'];
+    $r = lib_row($did); if (!$r || $r['state'] !== 'published') return ['ok' => false, 'error' => 'Only designs in the gallery can be moved.'];
+    return design_move($r['slug'], $act === 'move_up' ? -1 : 1, $uid, true) ? ['ok' => true] : ['ok' => true, 'same' => true];
+}
+function library_feature(int $did, bool $on, int $uid): array {
+    if (!lib_user_can($uid, 'publish')) return ['ok' => false, 'error' => 'Only a publisher can do that.'];
+    $r = lib_row($did); if (!$r || !in_array($r['state'], ['published', 'held_back'], true)) return ['ok' => false, 'error' => 'We could not find that design.'];
+    $n = q('update campaign_designs set featured=? where campaign_id=? and design_id=? and featured<>?', [$on ? 1 : 0, lib_campaign(), $did, $on ? 1 : 0])->rowCount();
+    if ($n) audit($uid, $on ? 'library_feature' : 'library_unfeature', "design $did {$r['internal_name']}");
+    return $n ? ['ok' => true] : ['ok' => true, 'same' => true];
 }

@@ -46,7 +46,7 @@ function r_home(): void {
     $b .= '<h2 id="how">How it works</h2><ol class="how"><li><b>1</b><strong>Choose a design</strong>Illustrated Scout themed cards, from tents to campfires.</li><li><b>2</b><strong>Write your message</strong>Add up to ' . max_recipients() . ' people. Give anyone a personal note if you like.</li><li><b>3</b><strong>We send each card</strong>Everyone gets their own private link and opens a Christmas envelope.</li></ol>'
         . '<section class="cause"><h2>Every card helps local Scouting</h2><p>' . h(setting('donation_purpose') ?: 'Any donation goes straight to 7th Swindon Scouts.') . '</p><p>Sending is always free. You never have to donate, and a donation never changes how your card looks.</p></section>'
         . '<h2 id="gallery">Pick a design</h2><div class="grid">';
-    foreach (cards() as $id => $c) if ($c['on'])
+    foreach (gallery_cards() as $id => $c)
         $b .= '<a class="tile" href="/compose?card=' . h($id) . '">' . card_art($id, true) . '<span>' . h($c['title']) . '</span><em class="tjoke">' . h($c['joke']) . '</em></a>';
     page('Choose a card', $b . '</div>');
 }
@@ -155,7 +155,7 @@ function r_compose(): void {
     if ($s && $s['status'] !== 'draft') redirect($u ? '/send?id=' . $s['id'] : '/');
     if (post()) {
         $card = field('card', 40);
-        if (!(cards()[$card]['on'] ?? false)) { flash('Please choose an available design.', 'err'); redirect('/'); }
+        if (!(cards()[$card]['on'] ?? false)) { flash('Please choose an available design.', 'err'); redirect($s ? '/compose?id=' . (int)$s['id'] : '/'); }
         $act = $_POST['act'] ?? 'save';
         $from = trim((string)($_POST['sender_name'] ?? '')) ?: ($u['name'] ?? ''); $msg = trim((string)($_POST['message'] ?? ''));
         $names = array_values((array)($_POST['r_name'] ?? [])); $emails = array_values((array)($_POST['r_email'] ?? [])); $msgs = array_values((array)($_POST['r_msg'] ?? [])); $paste = (string)($_POST['paste'] ?? '');
@@ -205,7 +205,11 @@ function r_compose(): void {
     }
     $old = $_SESSION['old'] ?? null; $errs = $_SESSION['errs'] ?? []; unset($_SESSION['old'], $_SESSION['errs']);
     $card = $old['card'] ?? $s['card'] ?? (string)($_GET['card'] ?? '');
-    if (!(cards()[$card]['on'] ?? false)) redirect('/');
+    $gone = '';
+    if (!(cards()[$card]['on'] ?? false)) { // a saved draft keeps its message and recipients when its design is held back; a direct link to an unavailable design goes home
+        if (!$s || !gallery_cards()) { flash('That design is not available. Please choose another.', 'warn'); redirect('/#gallery'); }
+        $gone = '<p class="flash warn" role="status">The design you first chose is no longer available. Pick another below. Your message and recipients are safe.</p>'; $card = (string)array_key_first(gallery_cards());
+    }
     $back = !$s && !empty($_GET['back']) && preg_match('/^[a-f0-9]{48}$/', $_GET['back']) ? one('select s.sender_name from recipients r join sends s on s.id=r.send_id where r.token_hash=sha256(?)', [$_GET['back']]) : null;
     $f = true;
     $rowsIn = [];
@@ -228,7 +232,7 @@ function r_compose(): void {
     $opts = '';
     foreach (cards() as $id => $c) if ($c['on']) $opts .= '<option value="' . h($id) . '"' . ($id === $card ? ' selected' : '') . '>' . h($c['title']) . '</option>';
     $saved = $s ? '<p class="note" role="status">Draft saved at ' . date('H:i', (int)$s['updated']) . '.</p>' : '<p class="note">Not saved yet. Use Save draft to keep your work' . ($u ? '.' : ' (you will register before sending).') . '</p>';
-    page('Write your card', steps(2) . '<h1>Write something wonderful</h1><p class="lead">Your message and everyone you are sending it to, together in one place.</p>' . ($u ? '' : '<p class="note">You can prepare your card now. Before it is sent you will create a free account and verify your email, and your card will wait for you.</p>')
+    page('Write your card', steps(2) . $gone . '<h1>Write something wonderful</h1><p class="lead">Your message and everyone you are sending it to, together in one place.</p>' . ($u ? '' : '<p class="note">You can prepare your card now. Before it is sent you will create a free account and verify your email, and your card will wait for you.</p>')
         . '<div class="two"><div class="card preview" aria-label="Live preview">' . card_art($card) . '<p class="center"><a class="btn alt" href="/#gallery">Change design</a></p><div class="inner"><p class="msg" data-preview-msg>' . nl2br(h($msg)) . '</p><p class="from">With love from<br><strong data-preview-from>' . h($from) . '</strong></p></div></div><form method="post" class="stack" data-dirty-warn>' . csrf()
         . '<label>Design<select name="card">' . $opts . '</select></label>'
         . '<label>From (your name or family name)<input name="sender_name" maxlength="' . (name_max() + 20) . '" data-max="' . name_max() . '" value="' . h($from) . '"' . fa($errs, 'sender_name', $f) . '><small class="count">Up to ' . name_max() . ' characters</small>' . fe($errs, 'sender_name') . '</label>'
@@ -292,6 +296,7 @@ function r_pay_cancelled(): void { // Stripe cancel_url lands here
 function r_review(): void {
     $u = need_login(); $s = own_send((int)($_GET['id'] ?? $_POST['id'] ?? 0));
     if (!in_array($s['status'], ['draft', 'awaiting_payment'])) redirect('/send?id=' . $s['id']);
+    if ($s['status'] === 'draft' && !(cards()[$s['card']]['on'] ?? false)) { flash('The design you chose is no longer available. Pick another and your message and recipients are kept.', 'warn'); redirect('/compose?id=' . (int)$s['id']); }
     $id = (int)$s['id'];
     $rs = all('select * from recipients where send_id=? order by id', [$id]);
     $pending = $s['status'] === 'awaiting_payment';

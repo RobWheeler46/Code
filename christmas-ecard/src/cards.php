@@ -155,10 +155,31 @@ function card_art(string $id, bool $thumb = false, ?string $frozen = null, ?int 
         . '<rect width="400" height="280" fill="url(#' . $g . ')"/>' . $snow . card_scene($id) . '<path d="M0 266 Q55 236 125 256 T255 250 T400 244 V280 H0Z" fill="#fff" opacity=".95"/><path d="M0 274 Q90 258 180 270 T400 264 V280 H0Z" fill="#e9e4f7"/></svg>';
 }
 
-/** A random enabled design for the home page hero, so every visit shows a different card. */
+/** The designs a sender may choose from, in the order the Group set. The only list the gallery, the hero and the start route use (FR-171, FR-177). */
+function gallery_cards(): array { return array_filter(cards(), fn($c) => $c['on']); }
+
+/** Designs the Group has featured on the home page. */
+function featured_slugs(): array {
+    try { return array_column(all('select d.slug from campaign_designs cd join designs d on d.id=cd.design_id where cd.featured=1 and cd.campaign_id=(select min(id) from campaigns)'), 'slug'); } catch (Throwable $e) { return []; }
+}
+
+/** A random design for the home page hero, from the featured ones when there are any, otherwise from all available ones. Never a held back design. */
 function hero_card(): string {
-    $on = array_keys(array_filter(cards(), fn($c) => $c['on']));
-    return $on ? $on[array_rand($on)] : '';
+    $on = array_keys(gallery_cards()); $f = array_values(array_intersect($on, featured_slugs()));
+    $pool = $f ?: $on;
+    return $pool ? $pool[array_rand($pool)] : '';
+}
+
+/** Moves a design earlier (-1) or later (+1). $visibleOnly swaps with the next design senders can see, so the move is always noticeable. */
+function design_move(string $slug, int $dir, int $uid, bool $visibleOnly = false): bool {
+    $all = cards(); $ids = array_keys($all); $k = array_search($slug, $ids, true); if ($k === false) return false;
+    $j = $k + $dir; while ($visibleOnly && isset($ids[$j]) && empty($all[$ids[$j]]['on'])) $j += $dir;
+    if (!isset($ids[$j]) || $j < 0) return false;
+    [$ids[$k], $ids[$j]] = [$ids[$j], $ids[$k]];
+    foreach ($ids as $n => $id) set_setting("order_$id", (string)$n);
+    try { foreach ($ids as $n => $id) q('update campaign_designs set order_rank=? where campaign_id=(select min(id) from campaigns) and design_id=(select id from designs where slug=?)', [$n, $id]); } catch (Throwable $e) { }
+    audit($uid, 'design_order', implode(',', $ids));
+    return true;
 }
 
 /** Home page hero: random per visit, then stable for that visitor's session while the design stays enabled. */
