@@ -16,7 +16,7 @@ create index if not exists cd_version on campaign_designs(published_version_id);
 ");
     foreach ([['sends', 'campaign_id int'], ['sends', 'design_version_id int']] as [$t, $def])
         if (!in_array(explode(' ', $def)[0], array_column($p->query("pragma table_info($t)")->fetchAll(), 'name'))) $p->exec("alter table $t add column $def");
-    foreach (['original_key text', 'full_key text', 'thumb_key text', 'rights_confirmed int default 0', 'year_checked int default 0', 'rev int default 1', 'updated int', 'author_id int'] as $def)
+    foreach (['original_key text', 'full_key text', 'thumb_key text', 'rights_confirmed int default 0', 'year_checked int default 0', 'rev int default 1', 'updated int', 'author_id int', 'published_at int', 'published_by int', 'pub_name text', 'pub_thumb text'] as $def)
         if (!in_array(explode(' ', $def)[0], array_column($p->query('pragma table_info(design_versions)')->fetchAll(), 'name'))) $p->exec("alter table design_versions add column $def");
     $p->exec('create index if not exists sends_campaign on sends(campaign_id)');
     if (function_exists('library_import')) library_import($p);
@@ -45,9 +45,10 @@ function library_import(PDO $p): void {
         $ins[1]->execute([$slug, $file ? 'assets/' . basename($file) : null, $file ? hash_file('sha256', $file) : null, $dim[0] ?? null, $dim[1] ?? null, $c['title'], $c['joke'], $c['desc'], $now]);
         $ins[2]->execute([$cid, $slug, $slug, !empty($c['on']) ? 'published' : 'held_back', $rank++]);
     }
+    $p->exec('update design_versions set published_at=created where published_at is null and full_key is null and version_no=1');
     // existing and new sends are tied to the campaign and the design version they used (version 1 until EC-04 adds more)
-    if ((int)$p->query('select count(*) from sends where campaign_id is null')->fetchColumn())
-        $p->exec("update sends set campaign_id=$cid, design_version_id=(select v.id from design_versions v join designs d on d.id=v.design_id where d.slug=sends.card and v.version_no=1) where campaign_id is null");
+    if ((int)$p->query('select count(*) from sends where campaign_id is null')->fetchColumn()) // drafts are pinned later, when they are sent (freeze_art), so a version published in between is not missed
+        $p->exec("update sends set campaign_id=$cid, design_version_id=case when status in ('draft','awaiting_payment') then null else (select v.id from design_versions v join designs d on d.id=v.design_id where d.slug=sends.card and v.version_no=1) end where campaign_id is null");
 }
 
 /** Removes everything EC-01 added. The sends columns are left in place if this SQLite is too old to drop them (they are nullable and unused). */
@@ -59,4 +60,36 @@ function library_rollback(): array {
         try { $p->exec("alter table sends drop column $col"); $out[] = "dropped sends.$col"; } catch (Throwable $e) { $out[] = "kept sends.$col (this SQLite cannot drop columns; harmless)"; }
     }
     return $out;
+}
+
+/** Designs whose published version has its own picture (new designs and replaced artwork) are added to, or override, the fixed design list. */
+function library_cards_overlay(array $out): array {
+    try {
+        $rows = db()->query("select d.slug, v.id vid, v.title, v.description joke, v.alt_text, v.pub_name, v.pub_thumb, cd.state from campaign_designs cd join designs d on d.id=cd.design_id
+            join design_versions v on v.id=cd.published_version_id where v.pub_name is not null and cd.campaign_id=(select min(id) from campaigns)")->fetchAll();
+    } catch (Throwable $e) { return $out; }
+    foreach ($rows as $r) {
+        $slug = $r['slug'];
+        $e = ['title' => $r['title'], 'joke' => $r['joke'], 'a' => '#0b2a5c', 'b' => '#041f3d', 'desc' => $r['alt_text'], 'baked' => true, 'art' => $r['pub_name'], 'thumb' => $r['pub_thumb'] ?: $r['pub_name'], 'lib' => (int)$r['vid'],
+            'on' => isset($out[$slug]) ? $out[$slug]['on'] : ($r['state'] === 'published' && setting("off_$slug") !== '1')];
+        $out[$slug] = $e;
+    }
+    return $out;
+}
+
+/** The title, words and alternative text a card had when it was sent: from its pinned version when it has one, never from today's catalogue. */
+function card_meta(string $cardId, ?int $vid): ?array {
+    $c = cards()[$cardId] ?? null;
+    if ($c && $vid) {
+        try { $v = one('select v.title, v.description, v.alt_text from design_versions v join designs d on d.id=v.design_id where v.id=? and d.slug=?', [$vid, $cardId]); } catch (Throwable $e) { $v = null; }
+        if ($v && $v['alt_text'] !== null && $v['alt_text'] !== '') { $c['title'] = $v['title']; $c['joke'] = $v['description']; $c['desc'] = $v['alt_text']; }
+    }
+    return $c;
+}
+
+/** Ties a send to the version that is published right now, at the moment it leaves draft. */
+function library_pin_version(int $sid, string $slug): void {
+    try {
+        q('update sends set campaign_id=coalesce(campaign_id,(select min(id) from campaigns)), design_version_id=(select cd.published_version_id from campaign_designs cd join designs d on d.id=cd.design_id where d.slug=? and cd.campaign_id=(select min(id) from campaigns)) where id=?', [$slug, $sid]);
+    } catch (Throwable $e) { /* library tables switched off */ }
 }

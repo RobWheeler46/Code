@@ -4,13 +4,16 @@
 
 // ---------- FR-156: a sent card keeps the artwork it was sent with
 function art_source(string $id): ?string {
+    $c = cards()[$id] ?? []; if (!empty($c['art']) && is_file(ROOT . '/data/art/' . $c['art'])) return ROOT . '/data/art/' . $c['art']; // a library design: its published picture
     foreach (['png', 'jpg', 'webp', 'svg'] as $x) if ($f = asset_file("card-$id.$x")) return $f;
     return null;
 }
 /** Copies the current picture into data/art under a name that includes a content hash. Idempotent. Drawn designs have no file to freeze. */
 function freeze_art(int $sid): void {
     $s = one('select card, art_ref from sends where id=?', [$sid]);
-    if (!$s || $s['art_ref'] || !($src = art_source($s['card']))) return;
+    if (!$s || $s['art_ref']) return;
+    if (function_exists('library_pin_version')) library_pin_version($sid, $s['card']); // the version published at this moment
+    if (!($src = art_source($s['card']))) return;
     $name = $s['card'] . '-' . substr(sha1_file($src), 0, 12) . '.' . pathinfo($src, PATHINFO_EXTENSION);
     @mkdir(ROOT . '/data/art', 0775, true);
     if (!is_file(ROOT . "/data/art/$name")) copy($src, ROOT . "/data/art/$name");

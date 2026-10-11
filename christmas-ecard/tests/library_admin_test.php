@@ -6,7 +6,7 @@ require __DIR__ . '/../src/app.php';
 function ok($c, string $m): void { echo ($c ? 'PASS ' : 'FAIL ') . $m . "\n"; if (!$c) $GLOBALS['bad'] = 1; }
 function pic(string $to, int $w = 1060, int $h = 1484): string { $im = imagecreatetruecolor($w, $h); imagefilledrectangle($im, 0, 0, $w, $h, imagecolorallocate($im, rand(0, 90), 60, 140)); imagepng($im, $to); imagedestroy($im); return $to; }
 function libfiles(): int { $n = 0; foreach (glob(art_dir() . '/*/*') ?: [] as $f) if (is_file($f) && basename(dirname($f)) !== 'tmp') $n++; return $n; }
-q("insert into users(name,email,pass,verified,created) values('Cam','c@x.com','x',1,?)", [time()]);
+q("insert into users(name,email,pass,verified,created,is_admin,roles) values('Cam','c@x.com','x',1,?,1,'campaign,rolesadmin')", [time()]);
 $good = ['name' => 'Snowy Scouts', 'words' => 'Have a snowy Christmas', 'alt' => 'A Scout and a snowman toast marshmallows. The words say: Have a snowy Christmas.', 'rights' => '1', 'year' => '1', 'focus' => '10'];
 
 $pubBefore = count(array_filter(cards(), fn($c) => $c['on'])); $slugsBefore = array_keys(cards());

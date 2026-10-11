@@ -34,6 +34,7 @@ function cards(): array {
     $heldBack = ['woggle'];
     $out = [];
     foreach ($c as $id => $v) { [$t, $j, $a, $b, $alt, $baked] = $v + [5 => false]; $out[$id] = ['title' => $t, 'joke' => $j, 'a' => $a, 'b' => $b, 'on' => ($baked && !in_array($id, $heldBack, true)) ? setting("off_$id") !== '1' : setting("off_$id") === '0', 'desc' => setting("desc_$id") ?: $alt, 'baked' => $baked]; }
+    if (function_exists('library_cards_overlay')) $out = library_cards_overlay($out);
     uksort($out, fn($x, $y) => (int)setting("order_$x", (string)array_search($x, array_keys($out))) <=> (int)setting("order_$y", (string)array_search($y, array_keys($out))));
     return $out;
 }
@@ -137,12 +138,14 @@ function asset_file(string $name): ?string {
         if ($d !== '/assets' && $d !== '' && is_file("$d/$name")) return "$d/$name";
     return null;
 }
-function card_art(string $id, bool $thumb = false, ?string $frozen = null): string {
-    $c = cards()[$id] ?? null;
+function card_art(string $id, bool $thumb = false, ?string $frozen = null, ?int $vid = null): string {
+    $c = card_meta($id, $vid);
     if (!$c) return '';
     // a card that was sent keeps the exact picture it was sent with, even if the design's file is replaced later (FR-156)
     if ($frozen && preg_match('/^[a-z0-9-]+-[0-9a-f]{12}.(png|jpg|webp|svg)$/', $frozen) && is_file(ROOT . "/data/art/$frozen"))
         return '<img class="art" src="/art/' . h($frozen) . '" alt="' . h($c['desc']) . '"' . ($thumb ? ' loading="lazy" decoding="async"' : '') . '>';
+    if (!empty($c['art']) && is_file(ROOT . '/data/art/' . ($thumb ? $c['thumb'] : $c['art'])))
+        return '<img class="art" src="/art/' . h($thumb ? $c['thumb'] : $c['art']) . '" alt="' . h($c['desc']) . '"' . ($thumb ? ' loading="lazy" decoding="async"' : '') . '>';
     foreach (['png', 'jpg', 'webp', 'svg'] as $x)
         if (asset_file("card-$id.$x")) return '<img class="art" src="/assets/card-' . h($id) . '.' . $x . '" alt="' . h($c['desc']) . '"' . ($thumb ? ' loading="lazy" decoding="async"' : '') . '>';
     static $n = 0; $g = 'g' . substr(md5($id), 0, 6) . ++$n; // unique per copy: a hidden duplicate must not steal the gradient
