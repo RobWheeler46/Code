@@ -52,3 +52,15 @@ TG-02 only: the Trustee roles, the hidden feature-flagged route, and the access 
 ## TG-02 built (11 October 2026)
 
 The hidden, flagged Trustee greetings entry now exists and holds no member data. Four new roles (Trustee greeting editor, reviewer, approver and private greeting dispatch operator) are separate from the administrator roles: a restricted administrator, a campaign manager, finance or delivery support cannot open it, and the command line admin helper does not hand them out. The route `/private/trustee-greetings` answers with the same "Page not found" as a missing page for signed out visitors, ordinary senders and anyone without a Trustee greeting role, and for everyone while the switch is off. The switch (Admin > Administration > Private features, restricted administrators only) needs a reason and a Trustee approval reference to turn on, is audited, and switching off hides the console at once. The console only says it is not connected and lists who holds each role. The section leader switch exists but cannot be turned on because that part is not built. `tests/trustee_access_test.php` has 35 checks over real HTTP, including that no member, guardian or greeting table exists. The next step needs decisions D-T1 to D-T3 (roles, member source, routing).
+
+## Pack v2.9.1: visual card picker for the Trustee editor (11 October 2026)
+
+Read, not built. It only changes the per-member artwork choice inside the Trustee message editor (TG-05, FR-195), which cannot start until the member source and role decisions exist. What it asks for, so it is ready when TG-05 starts:
+
+- Replace the text dropdown with a "Current eCard design" block (thumbnail, name, "Change card design" button) and a modal chooser built on a native dialog: thumbnails with names and selected state, a search box, a meaningful empty state, Escape and Cancel leave the choice alone, "Use [design]" is disabled until a valid design is picked, usable at 320 and 390 pixels without sideways scrolling.
+- Options must come from the eCard Library for the batch's own campaign, never a fixed list and never unpublished designs. Today that is `gallery_cards()` for the one Christmas campaign; once other campaigns can go live it must take the batch's campaign.
+- The choice is stored per member as a published design version id, so sent cards keep their snapshot. This matches how sends are pinned today (`design_version_id`).
+- Changing a design must invalidate any batch approval in the same transaction and need a fresh approval; the server checks that the member belongs to the batch, the user can edit it, the batch is not dispatched, and the design is permitted for that campaign; each change is audited.
+- A draft whose design is no longer published keeps showing its artwork, but a replacement is required before dispatch.
+
+Nothing in the public sender journey changes. One possible reuse: the public compose page still picks a design from a plain dropdown, and the same thumbnail chooser would suit it. Not started.
