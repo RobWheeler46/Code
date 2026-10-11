@@ -17,7 +17,7 @@ const R = [
   [68, 76, 'missing', '-', '-', 'Conditional enhancements. Printable card (FR-143) covers part of FR-074; FR-076 partly covered by FR-083.'],
   [77, 80, 'implemented', 'src/app.php r_review, steps(); src/admin.php', 'smoke, admin_test', ''],
   [81, 83, 'implemented', 'src/admin.php config engine; src/admin2.php', 'admin_test', ''],
-  [84, 85, 'partial', 'src/admin.php config_spec', 'admin_test', 'Subject lines, branding assets and help content are not editable.'],
+  [84, 85, 'implemented', 'src/admin.php config_spec (limits, wording)', 'admin_test, wording_test', 'Branding assets and logos are still fixed approved files, by design.'],
   [86, 86, 'implemented', 'src/admin.php (retention impact review)', 'admin_test', ''],
   [87, 88, 'partial', 'src/admin.php r_admin_access', 'admin_test', 'No beneficiary change workflow; no email invitation.'],
   [89, 94, 'implemented', 'src/admin.php, src/ops.php health_alerts', 'admin_test, ops_test', 'Audit export is not built (FR-159).'],

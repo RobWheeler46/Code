@@ -124,17 +124,24 @@ function confirm_payment(int $sid, string $cs, int $amt, string $acct = '', stri
     return true;
 }
 
+/** Wording an administrator can change. Only the sender name is ever merged in, and each place escapes it for where it goes. */
+function tpl_text(string $tpl, array $s): string { return str_replace('{sender}', (string)$s['sender_name'], $tpl); }
+function tpl_html(string $tpl, array $s): string { return str_replace(htmlspecialchars('{sender}', ENT_QUOTES), '<strong>' . htmlspecialchars((string)$s['sender_name'], ENT_QUOTES) . '</strong>', htmlspecialchars($tpl, ENT_QUOTES)); }
+function email_subject(array $s): string { return trim(preg_replace('/[\r\n]+/', ' ', tpl_text(setting('email_subject') ?: '{sender} sent you a Christmas card', $s))); }
+function email_intro(): string { return setting('email_intro') ?: '{sender} has sent you a Christmas card.'; }
+function email_button(): string { return setting('email_button') ?: 'Open your card'; }
+
 function email_html(array $r, array $s): string {
     $e = fn($x) => htmlspecialchars((string)$x, ENT_QUOTES);
     $btn = 'display:inline-block;background:#f5b800;color:#041f3d;font-weight:bold;text-decoration:none;padding:12px 24px;border-radius:24px';
     return '<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#1c1230"><div style="background:#024593;color:#fff;padding:12px 20px;border-bottom:4px solid #f5b800"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td><img src="' . $e(base_url() . '/assets/brand/7th-swindon-circle-blue.png') . '" alt="7th Swindon Scouts" width="56" height="56" style="display:block;border-radius:28px"></td><td style="padding-left:14px;color:#ffffff;font-size:18px;font-weight:bold">Christmas Cards</td></tr></table></div><div style="padding:20px">'
-        . '<p>Dear ' . $e($r['name']) . ',</p><p><strong>' . $e($s['sender_name']) . '</strong> has sent you a Christmas card.</p>'
-        . '<p><a href="' . $e(card_link($r)) . '" style="' . $btn . '">Open your card</a></p><p style="font-size:13px;color:#5c6470">Button not working? Copy this link: ' . $e(card_link($r)) . '<br>This private link works for ' . expiry_days() . ' days.</p>'
+        . '<p>Dear ' . $e($r['name']) . ',</p><p>' . tpl_html(email_intro(), $s) . '</p>'
+        . '<p><a href="' . $e(card_link($r)) . '" style="' . $btn . '">' . $e(email_button()) . '</a></p><p style="font-size:13px;color:#5c6470">Button not working? Copy this link: ' . $e(card_link($r)) . '<br>This private link works for ' . expiry_days() . ' days.</p>'
         . '<p style="font-size:13px;color:#5c6470"><a href="' . $e(base_url() . '/optout/' . $r['token']) . '">Stop cards from this sender or from the service</a> &middot; <a href="' . $e(base_url() . '/privacy') . '">Why did I get this? Privacy notice</a></p></div></div>';
 }
 
 function email_body(array $r, array $s): string {
-    return "Dear {$r['name']},\n\n{$s['sender_name']} has sent you a Christmas card from 7th Swindon Scouts.\n\nOpen your card here:\n" . card_link($r)
+    return "Dear {$r['name']},\n\n" . tpl_text(email_intro(), $s) . "\n\n" . email_button() . " here:\n" . card_link($r)
         . "\n\nThis private link works for " . expiry_days() . " days.\n\nDo not want these? Stop cards from this sender or from the service:\n" . base_url() . '/optout/' . $r['token']
         . "\n\nWhy did I get this? A person you know asked us to send it. Privacy notice: " . base_url() . "/privacy"
         . "\n\n7th Swindon Scouts";
@@ -152,7 +159,7 @@ function process_queue(int $limit = 50): int {
         if (one('select 1 from users where id=? and suspended=1', [$s['user_id']])) { q("update recipients set status='cancelled', error='Account suspended' where id=?", [$r['id']]); continue; }
         if (bounced_hard($r['email'])) { q("update recipients set status='failed', error=? where id=?", ['This address has bounced before. Please correct it.', $r['id']]); continue; }
         if (opted_out($r['email'], (int)$s['user_id'])) { q("update recipients set status='cancelled', error='Recipient opted out' where id=?", [$r['id']]); continue; }
-        $err = mail_send($r['email'], "{$s['sender_name']} sent you a Christmas card", email_body($r, $s), ['rid' => (string)$r['id']], email_html($r, $s), $s['sender_name']);
+        $err = mail_send($r['email'], email_subject($s), email_body($r, $s), ['rid' => (string)$r['id']], email_html($r, $s), $s['sender_name']);
         if ($err === null) { q("update recipients set status='sent', sent_at=?, error=null, token_hash=sha256(token), token=null where id=?", [time(), $r['id']]); $n++; }
         elseif (str_starts_with($err, 'UNKNOWN:')) q("update recipients set error=? where id=?", [substr($err, 8), $r['id']]);  // stays 'sending': provider may have accepted it, so never auto-repeat
         elseif (str_starts_with($err, 'PERM:')) q("update recipients set status='failed', error=? where id=?", [substr($err, 5), $r['id']]); // permanent: no automatic retry

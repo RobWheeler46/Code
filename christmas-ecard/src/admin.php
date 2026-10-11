@@ -10,12 +10,12 @@ function admin_page(string $title, string $body): never {
     $u = user();
     $links = ['/admin' => ['Overview', true], '/admin/delivery' => ['Delivery', can_any('delivery', 'appadmin', 'rolesadmin')], '/admin/finance' => ['Finance', can('finance')],
         '/admin/reports' => ['Reports', can('complaints')], '/admin/campaign' => ['Campaign settings', can_any('campaign', 'appadmin', 'finance', 'delivery', 'rolesadmin')],
-        '/admin/app' => ['Application settings', can_any('appadmin', 'campaign', 'delivery', 'rolesadmin')], '/admin/email' => ['Email and help', can_any('appadmin', 'rolesadmin')],
+        '/admin/app' => ['Application settings', can_any('appadmin', 'campaign', 'delivery', 'rolesadmin')], '/admin/email' => ['Email and help', can_any('appadmin', 'rolesadmin')], '/admin/wording' => ['Email and help wording', can_any('appadmin', 'rolesadmin')],
         '/admin/privacy' => ['Privacy and retention', can_any('rolesadmin', 'campaign', 'appadmin', 'finance', 'delivery')], '/admin/access' => ['Administrator access', can('rolesadmin')],
         '/admin/senders' => ['Senders', can_any('complaints', 'rolesadmin')], '/admin/launch' => ['Launch readiness', true], '/admin/giftaid' => ['Gift Aid', can('finance')], '/admin/measures' => ['Measures', can_any('campaign', 'finance', 'appadmin', 'rolesadmin')], '/admin/rehearsal' => ['Rehearsal', can_any('appadmin', 'rolesadmin')], '/admin/library' => ['eCard Library', can_any('campaign', 'rolesadmin')], '/admin/campaigns' => ['Occasions and campaigns', can_any('campaign', 'rolesadmin')], '/admin/private-features' => ['Private features', can('rolesadmin')], '/private/trustee-greetings' => ['Trustee greetings', pf_on('private_trustee_greetings') && tg_can()], '/admin/health' => ['System health', true], '/admin/audit' => ['Change history', true]];
     $here = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
     $groups = ['Overview' => ['/admin'], 'Cards and delivery' => ['/private/trustee-greetings', '/admin/delivery', '/admin/reports', '/admin/senders', '/admin/rehearsal'], 'Fundraising' => ['/admin/finance', '/admin/giftaid', '/admin/measures'],
-        'Campaign setup' => ['/admin/campaign', '/admin/library', '/admin/campaigns', '/admin/launch', '/admin/email', '/admin/privacy'], 'Administration' => ['/admin/app', '/admin/private-features', '/admin/access', '/admin/health', '/admin/audit']]; // five areas; each link still passes its own server side role check
+        'Campaign setup' => ['/admin/campaign', '/admin/library', '/admin/campaigns', '/admin/launch', '/admin/email', '/admin/wording', '/admin/privacy'], 'Administration' => ['/admin/app', '/admin/private-features', '/admin/access', '/admin/health', '/admin/audit']]; // five areas; each link still passes its own server side role check
     $nav = '<nav class="adminmenu" aria-label="Administration"><details open><summary>Menu</summary>';
     foreach ($groups as $g => $hrefs) {
         $li = ''; foreach ($hrefs as $href) if ($links[$href][1]) $li .= '<li><a href="' . $href . '"' . ($href === $here ? ' aria-current="page"' : '') . '>' . h($links[$href][0]) . '</a></li>';
@@ -53,6 +53,12 @@ function config_spec(string $area): array {
             'alert_escalate_emails' => ['Who receives an alert nobody acknowledged (emails)', 'emails', 'def' => ''],
             'alert_escalate_minutes' => ['Escalate unacknowledged alerts after (minutes)', 'int', 'min' => 5, 'max' => 1440, 'def' => '60'],
             'allow_urls' => ['Allow web addresses in messages (never clickable)', 'bool', 'def' => '0']]],
+        'wording' => ['edit' => ['appadmin', 'rolesadmin'], 'title' => 'Email and help wording', 'when' => 'Used by new emails and the Help page straight away. Emails already sent are not changed. The private link, the stop and report routes and the privacy link always stay in every email.', 'fields' => [
+            'email_subject' => ['Subject of the card email ({sender} is the sender name)', 'tpl', 'max' => 100, 'allow' => ['{sender}'], 'need' => '{sender}', 'def' => '{sender} sent you a Christmas card'],
+            'email_intro' => ['Opening line of the card email ({sender} is the sender name)', 'tpl', 'max' => 160, 'allow' => ['{sender}'], 'need' => '{sender}', 'def' => '{sender} has sent you a Christmas card.'],
+            'email_button' => ['Words on the button in the email', 'tpl', 'max' => 30, 'allow' => [], 'def' => 'Open your card'],
+            'support_email' => ['Support email address shown on the Help page and in emails (blank uses the server setting)', 'email1', 'def' => ''],
+            'help_extra' => ['Extra questions for the Help page. Put the question on the first line and the answer under it, with a blank line between questions (up to 10)', 'faq', 'def' => '']]],
         'privacy' => ['edit' => ['rolesadmin'], 'title' => 'Privacy, expiry and retention', 'when' => 'Expiry changes affect existing card links from the moment you confirm. Retention changes take effect at the next scheduled clean-up. Saving a draft deletes nothing.', 'reason' => true, 'fields' => [
             'expiry_days' => ['Card links stay viewable for (days after sending)', 'int', 'min' => 1, 'max' => 3650, 'def' => '60'],
             'retention_days' => ['Greetings and recipient details kept for (days after sending)', 'int', 'min' => 1, 'max' => 3650, 'def' => '90']]],
@@ -69,6 +75,23 @@ function cfg_validate(array $f, string $raw): array {
         case 'datetime': return ($raw === '' || (preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/', $raw) && strtotime($raw))) ? [$raw, null] : [$raw, 'Enter a valid UK date and time.'];
         case 'choice': return isset($f['opts'][$raw]) ? [$raw, null] : [$raw, 'Choose one of the options.'];
         case 'bool': return [$raw === '1' ? '1' : '0', null];
+        case 'tpl': // one line of wording with only the placeholders allowed here, so it can never carry markup, line breaks or anything else
+            $raw = preg_replace('/\s+/', ' ', $raw);
+            if ($raw === '') return [$raw, 'This cannot be empty.'];
+            if (mb_strlen($raw) > $f['max']) return [$raw, 'Use ' . $f['max'] . ' characters or fewer.'];
+            if (preg_match('/[\x00-\x1F\x7F<>]/', $raw)) return [$raw, 'Use plain words only: no markup.'];
+            preg_match_all('/\{[^{}]*\}|[{}]/', $raw, $br); foreach ($br[0] as $t) if (!in_array($t, $f['allow'], true)) return [$raw, $f['allow'] ? 'The only placeholder you can use is ' . implode(' ', $f['allow']) . '.' : 'Placeholders such as { } cannot be used here.'];
+            if (!empty($f['need']) && !str_contains($raw, $f['need'])) return [$raw, 'This must include ' . $f['need'] . ' so the person knows who it is from.'];
+            return [$raw, null];
+        case 'email1': return ($raw === '' || filter_var($raw, FILTER_VALIDATE_EMAIL)) ? [strtolower($raw), null] : [$raw, 'Enter one valid email address, or leave it blank.'];
+        case 'faq':
+            $raw = trim(preg_replace("/\r\n?/", "\n", $raw)); if ($raw === '') return ['', null];
+            if (count(preg_split("/
+s*
+/", $raw)) > 10) return [$raw, 'Up to 10 extra questions.'];
+            foreach (explode("\n\n", preg_replace("/\n{3,}/", "\n\n", $raw)) as $blk) { $l = explode("\n", trim($blk), 2); if (count($l) < 2 || trim($l[1]) === '') return [$raw, 'Every question needs an answer on the lines below it.']; if (mb_strlen(trim($l[0])) > 120) return [$raw, 'A question can be at most 120 characters.']; if (mb_strlen(trim($l[1])) > 600) return [$raw, 'An answer can be at most 600 characters.']; }
+            if (preg_match('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', $raw)) return [$raw, 'Use plain text only.'];
+            return [preg_replace("/\n{3,}/", "\n\n", $raw), null];
         case 'emails':
             $l = array_filter(array_map('trim', explode(',', $raw)), 'strlen');
             foreach ($l as $x) if (!filter_var($x, FILTER_VALIDATE_EMAIL)) return [$raw, "'$x' is not a valid email address."];
@@ -94,6 +117,7 @@ function cfg_input(string $key, array $f, string $val, ?string $err, bool $edit,
         'bool' => '<input type="hidden" name="' . $id . '" value="0"><input type="checkbox" name="' . $id . '" value="1"' . ($val === '1' ? ' checked' : '') . $a . '>',
         'choice' => '<select name="' . $id . '"' . $a . '>' . implode('', array_map(fn($k, $l) => '<option value="' . h($k) . '"' . ($k === $val ? ' selected' : '') . '>' . h($l) . '</option>', array_keys($f['opts']), $f['opts'])) . '</select>',
         'datetime' => '<input type="datetime-local" name="' . $id . '" value="' . h($val) . '"' . $a . '>',
+        'faq' => '<textarea name="' . $id . '" rows="8"' . $a . '>' . h($val) . '</textarea>',
         default => '<input name="' . $id . '" value="' . h($val) . '"' . $a . '>',
     };
     return ($f[1] === 'bool' ? '<label class="opt">' . $in . ' ' . h($f[0]) . fe($err ? [$key => $err] : [], $key) . '</label>' : $lab . $in . fe($err ? [$key => $err] : [], $key) . '</label>');
@@ -154,10 +178,12 @@ function r_admin_config(string $area): void {
     $b = '<h1>' . h($spec['title']) . '</h1><p class="note">' . h($spec['when']) . ' Version ' . h(setting('cfg_version', '0')) . '.</p>' . (!$edit ? '<p class="flash warn">You can view these settings but not change them.</p>' : '') . '<form method="post" class="stack">' . csrf() . '<input type="hidden" name="ver" value="' . h(setting('cfg_version', '0')) . '">';
     foreach ($spec['fields'] as $k => $f) $b .= cfg_input($k, $f, $old ? (string)($old['f_' . $k] ?? '') : cfg_form_value($k, $f), $errs[$k] ?? null, $edit, $first);
     if ($area === 'privacy') $b .= '<p class="note">Changing a period shows the affected records first and needs a reason and approval reference.</p>';
+    if ($area === 'wording') $b .= '<p class="note"><a href="/admin/email">Preview the email and send yourself a test</a> once you have saved.</p>';
     if ($area === 'campaign') $b .= '<p class="note">Free sending is always available. Payments cannot be made mandatory here.</p>';
     admin_page($spec['title'], $b . ($edit ? '<button class="btn">Review changes</button>' : '') . '</form>' . ($area === 'campaign' ? admin_designs_and_share() : ''));
 }
 function r_admin_campaign(): void { r_admin_config('campaign'); }
+function r_admin_wording(): void { r_admin_config('wording'); }
 function r_admin_app(): void { r_admin_config('app'); }
 function r_admin_privacy(): void { r_admin_config('privacy'); }
 
@@ -351,10 +377,10 @@ function r_admin_email(): void {
     $demoR = ['id' => 0, 'name' => 'Sample Recipient', 'token' => str_repeat('0', 48), 'email' => 'sample@example.com']; $demoS = ['sender_name' => 'The Sample Family'];
     if (post()) {
         limit('emailtest', 3, 3600);
-        mail_send($u['email'], 'TEST: The Sample Family sent you a Christmas card', email_body($demoR, $demoS), [], email_html($demoR, $demoS), 'The Sample Family');
+        mail_send($u['email'], 'TEST: ' . email_subject($demoS), email_body($demoR, $demoS), [], email_html($demoR, $demoS), 'The Sample Family');
         audit((int)$u['id'], 'email_test', 'to administrator'); flash('Test sent only to ' . $u['email'] . '.'); redirect('/admin/email');
     }
-    admin_page('Email and help', '<h1>Email and help</h1><p>Recipient emails use a fixed approved template: purple header, a clear Open button, plain text alternative, report and opt-out routes. They are sent from our verified address with the sender\'s display name. Nothing here accepts custom HTML.</p>'
+    admin_page('Email and help', '<h1>Email and help</h1><p>Recipient emails use a fixed approved template (<a href="/admin/wording">change the wording</a>): purple header, a clear Open button, plain text alternative, report and opt-out routes. They are sent from our verified address with the sender\'s display name. Nothing here accepts custom HTML.</p>'
         . '<h2>HTML preview</h2><div class="emailpreview">' . email_html($demoR, $demoS) . '</div><h2>Plain text preview</h2><pre>' . h(email_body($demoR, $demoS)) . '</pre>'
         . '<form method="post" class="row">' . csrf() . '<button class="btn alt">Send a test to ' . h($u['email']) . '</button></form><p class="note">Support contact (set by <code>SUPPORT_EMAIL</code>): ' . h(support_email()) . '</p>');
 }

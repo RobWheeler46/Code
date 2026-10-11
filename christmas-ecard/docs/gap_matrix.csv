@@ -82,8 +82,8 @@ FR-080,Submission and admin tasks,Built,implemented,"src/app.php r_review, steps
 FR-081,Submission and admin tasks,Built,implemented,src/admin.php config engine; src/admin2.php,admin_test,
 FR-082,Submission and admin tasks,Built,implemented,src/admin.php config engine; src/admin2.php,admin_test,
 FR-083,Submission and admin tasks,Built,implemented,src/admin.php config engine; src/admin2.php,admin_test,
-FR-084,Settings,Partly,partial,src/admin.php config_spec,admin_test,"Subject lines, branding assets and help content are not editable."
-FR-085,Settings,Partly,partial,src/admin.php config_spec,admin_test,"Subject lines, branding assets and help content are not editable."
+FR-084,Settings,Partly,implemented,"src/admin.php config_spec (limits, wording)","admin_test, wording_test","Branding assets and logos are still fixed approved files, by design."
+FR-085,Settings,Partly,implemented,"src/admin.php config_spec (limits, wording)","admin_test, wording_test","Branding assets and logos are still fixed approved files, by design."
 FR-086,"Governance, audit, roles",Built,implemented,src/admin.php (retention impact review),admin_test,
 FR-087,"Governance, audit, roles",Partly,partial,src/admin.php r_admin_access,admin_test,No beneficiary change workflow; no email invitation.
 FR-088,"Governance, audit, roles",Partly,partial,src/admin.php r_admin_access,admin_test,No beneficiary change workflow; no email invitation.
