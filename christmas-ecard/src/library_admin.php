@@ -12,14 +12,14 @@ function lib_user_can(int $uid, string $act): bool {
     $need = $act === 'publish' ? (array_filter(explode(',', setting('library_publish_roles', 'rolesadmin'))) ?: ['rolesadmin']) : ['campaign', 'rolesadmin'];
     return (bool)array_intersect($roles, $need);
 }
-function lib_campaign(): int { return (int)one('select min(id) i from campaigns')['i']; }
+function lib_campaign(): int { return (int)one('select min(id) i from campaigns where group_id=?', [owner_group()])['i']; }
 
 /** One row per design: its newest version and its state in the campaign. Imported designs take their on or off state from cards(). */
 function lib_rows(string $status = ''): array {
     $rows = all('select d.id did, d.slug, d.internal_name, v.id vid, v.version_no, v.title, v.description, v.alt_text, v.full_key, v.thumb_key, v.rights_confirmed, v.year_checked, v.rev, v.updated, v.created vcreated, v.published_at, v.pub_name,
         cd.published_version_id pub_vid, cd.state, cd.thumb_focus_y
         from designs d join design_versions v on v.id=(select max(id) from design_versions where design_id=d.id)
-        left join campaign_designs cd on cd.design_id=d.id and cd.campaign_id=? order by coalesce(cd.order_rank, 9999), d.id', [lib_campaign()]);
+        left join campaign_designs cd on cd.design_id=d.id and cd.campaign_id=? where d.owner_group_id=? order by coalesce(cd.order_rank, 9999), d.id', [lib_campaign(), owner_group()]);
     $cards = cards();
     $rows = array_values(array_filter($rows, fn($r) => !isset($cards[$r['slug']]) || asset_file('card-' . $r['slug'] . '.webp') || (int)one('select count(*) n from design_versions where design_id=? and full_key is not null', [$r['did']])['n'])); // the older drawn designs have no picture file, so they are not library material
     foreach ($rows as &$r) {
@@ -112,7 +112,7 @@ function library_discard(int $did, int $uid): bool {
 /** Publishes one unpublished version to new gallery choices. Needs every human check done, the revision the person saw, and the publisher role. Idempotent. */
 function library_publish(int $did, int $vid, int $rev, int $uid): array {
     if (!lib_user_can($uid, 'publish')) return ['ok' => false, 'error' => 'Only a publisher can do that.'];
-    $v = one('select v.*, d.slug, d.internal_name from design_versions v join designs d on d.id=v.design_id where v.id=? and v.design_id=?', [$vid, $did]);
+    $v = one('select v.*, d.slug, d.internal_name from design_versions v join designs d on d.id=v.design_id where v.id=? and v.design_id=? and d.owner_group_id=?', [$vid, $did, owner_group()]);
     if (!$v) return ['ok' => false, 'error' => 'We could not find that version.'];
     $cd = one('select * from campaign_designs where campaign_id=? and design_id=?', [lib_campaign(), $did]);
     if ($cd && $cd['state'] === 'archived') return ['ok' => false, 'error' => 'Restore this design before publishing a new version.'];
@@ -168,7 +168,7 @@ function library_new_version(int $did, int $uid): array {
 /** Rollback: new cards use an earlier approved version. Cards already sent never change. */
 function library_use_version(int $did, int $vid, int $uid): array {
     if (!lib_user_can($uid, 'publish')) return ['ok' => false, 'error' => 'Only a publisher can do that.'];
-    $v = one('select * from design_versions where id=? and design_id=?', [$vid, $did]);
+    $v = lib_row($did) ? one('select * from design_versions where id=? and design_id=?', [$vid, $did]) : null; // lib_row only returns this Group's designs
     if (!$v || !$v['published_at']) return ['ok' => false, 'error' => 'Only a version that was published before can be used again.'];
     $cd = one('select * from campaign_designs where campaign_id=? and design_id=?', [lib_campaign(), $did]);
     if (!$cd || $cd['state'] === 'archived') return ['ok' => false, 'error' => 'That design is not available.'];
@@ -299,7 +299,7 @@ function r_admin_library_preview(): void {
 
 /** Drafts are private, so their pictures come through this role checked route rather than a public file. */
 function r_admin_library_img(): void {
-    need_admin(); lib_role(); $v = one('select * from design_versions where id=?', [(int)($_GET['v'] ?? 0)]);
+    need_admin(); lib_role(); $v = one('select v.* from design_versions v join designs d on d.id=v.design_id where v.id=? and d.owner_group_id=?', [(int)($_GET['v'] ?? 0), owner_group()]);
     $key = $v ? (($_GET['k'] ?? '') === 'full' ? $v['full_key'] : $v['thumb_key']) : ''; $f = $key && preg_match('#^[0-9a-f]{2}/[oft]-[0-9a-f]{32}\.[a-z]+$#', $key) ? art_dir() . '/' . $key : '';
     if (!$f || !is_file($f)) { http_response_code(404); exit; }
     header('Content-Type: image/webp'); header('X-Content-Type-Options: nosniff'); header('Cache-Control: private, max-age=300'); header('Content-Length: ' . filesize($f)); readfile($f); exit;

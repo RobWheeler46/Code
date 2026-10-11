@@ -2,6 +2,9 @@
 // EC-01 (build pack v2.7): additive tables for the eCard Library and campaigns. Nothing reads them yet, so the live
 // Christmas behaviour is unchanged; EC-04 and EC-05 move the reads over. Turn off with LIBRARY_MIGRATE=off, undo with `cli.php library-rollback`.
 
+/** The Group whose records this request may read and change. There is one Group today; a future sign in supplies another. Every library query is filtered by it on the server (FR-185). */
+function owner_group(): int { return 1; }
+
 const LIBRARY_TABLES = ['campaign_designs', 'design_versions', 'designs', 'campaigns', 'occasions'];
 
 function library_migrate(PDO $p): void {
@@ -66,7 +69,7 @@ function library_rollback(): array {
 function library_cards_overlay(array $out): array {
     try {
         $rows = db()->query("select d.slug, v.id vid, v.title, v.description joke, v.alt_text, v.pub_name, v.pub_thumb, cd.state from campaign_designs cd join designs d on d.id=cd.design_id
-            join design_versions v on v.id=cd.published_version_id where v.pub_name is not null and cd.campaign_id=(select min(id) from campaigns)")->fetchAll();
+            join design_versions v on v.id=cd.published_version_id where v.pub_name is not null and d.owner_group_id=1 and cd.campaign_id=(select min(id) from campaigns)")->fetchAll();
     } catch (Throwable $e) { return $out; }
     foreach ($rows as $r) {
         $slug = $r['slug'];
