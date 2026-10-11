@@ -206,7 +206,7 @@ function page(string $title, string $body, int $code = 200): never {
         $nav .= '<a href="/dashboard">My cards</a><a href="/contacts">Address book</a><a href="/account">Account</a>' . ($u['is_admin'] ? '<a href="/admin">Admin</a>' : '')
             . '<form method="post" action="/logout" class="inline">' . csrf() . '<button class="link">Sign out</button></form>';
     } else $nav .= '<a href="/login">Sign in</a><a href="/register">Register</a>';
-    echo '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+    echo '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">'
         . '<title>' . h($title) . ' | 7th Swindon Scouts Christmas Cards</title>'
         . '<link rel="stylesheet" href="/assets/style.css"></head><body><a class="skip" href="#main">Skip to content</a>'
         . (env('APP_ENV', 'development') !== 'production' ? '<p class="envbanner" role="note">' . h(strtoupper(env('APP_ENV', 'development'))) . ' environment. Test mode: nothing here is real. Do not enter real details.</p>' : '') . '<header><a class="brand" href="/"><img src="/assets/brand/7th-swindon-circle-blue.png" alt="7th Swindon Scouts" width="64" height="64"><span>Christmas Cards</span></a><nav aria-label="Main">' . $nav . '</nav></header>'
