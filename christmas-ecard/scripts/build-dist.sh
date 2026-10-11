@@ -15,7 +15,7 @@ cat > dist/DEPLOY.md <<'EOF'
 1. Upload `app/` to your home directory, next to (not inside) public_html. Upload `public_html/` contents to the subdomain's document root.
 2. In `app/`, copy `.env.example` to `.env` and fill it in (APP_URL, Postmark, Stripe). Make `app/data/` writable (755 or 775).
 3. Cron every 5 min: `php /home/USER/app/src/cli.php queue`. Daily: `php /home/USER/app/src/cli.php purge`.
-4. Register on the site, then run `php /home/USER/app/src/cli.php admin you@example.com` and visit /admin to enrol MFA.
+4. First administrator: put `ADMIN_EMAIL=you@example.com` in `.env`, then register on the site with that address and confirm it from the email. You become the first restricted administrator (it only works while there is none), and visiting /admin asks you to set up two step sign in. No default password exists. With a terminal you can instead run `php /home/USER/app/src/cli.php admin you@example.com` after registering.
 5. Add the Stripe and Postmark webhooks (see project README).
 Requires PHP 8.2+ with pdo_sqlite and curl.
 EOF

@@ -82,3 +82,14 @@ function r_invite(): void {
     }
     page('Invitation', '<h1>Accept the invitation</h1><p>You are signed in as <strong>' . h($u['email']) . '</strong>. Accepting gives this account these roles: <strong>' . h(role_names($i['roles'])) . '</strong>. You will be asked to set up two step sign in.</p><form method="post" class="stack">' . csrf() . '<input type="hidden" name="t" value="' . h($t) . '"><button class="btn">Accept and continue</button> <a class="btn alt" href="/dashboard">Not now</a></form>');
 }
+
+/** First time set up without a terminal: the person who registers and confirms the address in ADMIN_EMAIL becomes the first restricted administrator.
+ *  It only works while there is no restricted administrator at all, needs the address to be confirmed (so the mailbox owner), has no default password,
+ *  and the two step sign in is then set up the first time they open Admin. After that it does nothing. */
+function bootstrap_admin(int $uid): void {
+    $want = strtolower(trim(env('ADMIN_EMAIL'))); if ($want === '') return;
+    $u = one('select * from users where id=?', [$uid]); if (!$u || !$u['verified'] || strtolower((string)$u['email']) !== $want) return;
+    if ((int)one("select count(*) n from users where is_admin=1 and (',' || roles || ',') like '%,rolesadmin,%'")['n'] > 0) return;
+    q('update users set is_admin=1, roles=? where id=?', [implode(',', array_diff(array_keys(ROLES), array_keys(TG_ROLES))), $uid]);
+    audit($uid, 'admin_bootstrap', "user $uid became the first restricted administrator");
+}

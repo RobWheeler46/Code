@@ -100,6 +100,7 @@ function r_verify(): void {
     $u = one('select * from users where verify_token=? and verify_token<>\'\'', [(string)($_GET['t'] ?? '')]);
     if (!$u) { flash('That verification link is not valid. Sign in to request a new one.', 'err'); redirect('/dashboard'); }
     q("update users set verified=1, verify_token='' where id=?", [$u['id']]);
+    bootstrap_admin((int)$u['id']);
     flash('Email verified. You can now send your card.');
     $d = one("select id from sends where user_id=? and status='draft' order by updated desc", [$u['id']]);
     redirect($d ? '/review?id=' . $d['id'] : '/dashboard'); // back to the saved draft (need_login handles a new tab/browser)
@@ -121,7 +122,7 @@ function r_login(): void {
         if (!$u || !password_verify((string)($_POST['password'] ?? ''), $u['pass'])) { flash('Email or password not recognised.', 'err'); redirect('/login'); }
         $keep = $_SESSION['drafts'] ?? [];
         session_regenerate_id(true);
-        $_SESSION['uid'] = (int)$u['id']; $_SESSION['mfa'] = false; q('update users set last_login=? where id=?', [time(), $u['id']]); $_SESSION['drafts'] = $keep; claim_drafts((int)$u['id']);
+        $_SESSION['uid'] = (int)$u['id']; $_SESSION['mfa'] = false; bootstrap_admin((int)$u['id']); q('update users set last_login=? where id=?', [time(), $u['id']]); $_SESSION['drafts'] = $keep; claim_drafts((int)$u['id']);
         redirect(safe_next($_POST['next'] ?? ''));
     }
     page('Sign in', '<h1>Sign in</h1><form method="post" class="stack">' . csrf() . '<input type="hidden" name="next" value="' . h($_GET['next'] ?? '') . '"><label>Email<input type="email" name="email" required autocomplete="email"></label><label>Password<input type="password" name="password" required autocomplete="current-password"></label><button class="btn">Sign in</button></form><p><a href="/forgot">Forgotten your password?</a> &middot; <a href="/register">Register</a></p>');
