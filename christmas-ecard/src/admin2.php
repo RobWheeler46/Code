@@ -1,5 +1,5 @@
 <?php
-// FRD 2.1 admin: sender suspension (S41), launch readiness (S42), alert acknowledgement, alert settings.
+// FRD 2.1 admin: sender suspension (S41), alert acknowledgement, alert settings.
 
 function reason_page(string $title, string $what, array $keep, string $back): never {
     $hid = ''; foreach ($keep as $k => $v) $hid .= '<input type="hidden" name="' . h($k) . '" value="' . h((string)$v) . '">';
@@ -20,20 +20,6 @@ function admin_action2(string $a, array $u): bool {
             if (!can_any('appadmin', 'rolesadmin', 'delivery', 'finance')) fail(403, 'You do not have permission for that.');
             q('update alerts set acked_by=?, acked_at=? where akey=? and acked_at is null', [$uid, time(), (string)($_POST['key'] ?? '')]); audit($uid, 'alert_ack', (string)($_POST['key'] ?? ''));
             flash('Acknowledged.'); redirect('/admin/health');
-        case 'decision':
-            if (!can('rolesadmin')) fail(403, 'You do not have permission for that.');
-            $id = (string)($_POST['did'] ?? ''); if (!isset(DECISIONS[$id])) fail(400, 'Unknown decision.');
-            $st = in_array($_POST['status'] ?? '', ['open', 'approved', 'deferred']) ? $_POST['status'] : 'open'; $ref = field('ref', 100);
-            if ($st === 'approved' && ($ref === '' || field('value', 500) === '')) { flash('An approved decision needs the approved value and a reference.', 'err'); redirect('/admin/launch'); }
-            q('insert into decisions(id,value,approver,approved_on,ref,status) values(?,?,?,?,?,?) on conflict(id) do update set value=excluded.value, approver=excluded.approver, approved_on=excluded.approved_on, ref=excluded.ref, status=excluded.status', [$id, field('value', 500), field('approver', 100), field('on', 20), $ref, $st]);
-            audit($uid, 'decision_recorded', "$id: $st, ref $ref"); flash("$id saved."); redirect('/admin/launch');
-        case 'override': case 'clear_override':
-            if (!can('rolesadmin')) fail(403, 'You do not have permission for that.');
-            if ($a === 'override') {
-                if (!$confirmed || $reason === '') reason_page('Open the campaign with decisions still open', launch_blockers() . ' launch decisions are not approved. Overriding lets senders submit cards before they are.', ['do' => 'override', 'back' => '/admin/launch'], '/admin/launch');
-                set_setting('launch_override', $reason); audit($uid, 'launch_override', $reason); flash('Override recorded.');
-            } else { set_setting('launch_override', ''); audit($uid, 'launch_override_cleared'); flash('Override cleared.'); }
-            redirect('/admin/launch');
     }
     return false;
 }
@@ -54,24 +40,3 @@ function r_admin_senders(): void {
     admin_page('Senders', $b);
 }
 
-// ---------- S42 launch readiness
-function r_admin_launch(): void {
-    need_admin(); if (!ops_admin()) fail(403, 'You do not have permission for that.'); $edit = can('rolesadmin'); $have = array_column(all('select * from decisions'), null, 'id'); $env = env('APP_ENV', 'development');
-    $blockers = launch_blockers();
-    $b = '<h1>Launch readiness</h1><dl class="facts"><dt>Environment</dt><dd><strong>' . h(strtoupper($env)) . '</strong>' . ($env === 'production' ? '' : ' (test mode, banner shown to everyone)') . '</dd><dt>Open launch decisions</dt><dd><strong>' . $blockers . '</strong></dd><dt>Campaign status</dt><dd>' . h(['open' => 'Open', 'before' => 'Not open yet', 'closed' => 'Closed', 'locked' => 'Locked until decisions are approved'][campaign_state()]) . '</dd><dt>Override</dt><dd>' . (setting('launch_override') !== '' ? 'Active: ' . h(setting('launch_override')) : 'None') . '</dd></dl>'
-        . '<p class="note">In production the campaign stays locked while a required decision is Open, unless a restricted administrator records an override with a reason. Conditional decisions (D-11 to D-13) never block launch; record them as Deferred or Approved.</p>';
-    if ($edit && $blockers) $b .= '<form method="post" action="/admin/action" class="inline">' . csrf() . '<input type="hidden" name="do" value="override"><input type="hidden" name="back" value="/admin/launch"><button class="btn alt">Record an override</button></form> ';
-    if ($edit && setting('launch_override') !== '') $b .= '<form method="post" action="/admin/action" class="inline">' . csrf() . '<input type="hidden" name="do" value="clear_override"><input type="hidden" name="back" value="/admin/launch"><button class="btn alt">Clear override</button></form>';
-    $b .= '<h2>Gates that cannot be overridden</h2><p class="note">In production the campaign stays locked while any of these fails. An override only covers the decisions below, never these.</p><table class="stacked"><tr><th>Gate</th><th>Status</th><th>How to pass</th></tr>';
-    foreach (hard_gates() as [$gl, $gok, $ghow]) $b .= '<tr><td>' . h($gl) . '</td><td><span class="pill ' . ($gok ? 'viewed' : 'failed') . '">' . ($gok ? 'Passed' : 'Not passed') . '</span></td><td>' . ($gok ? '' : h($ghow)) . '</td></tr>';
-    $b .= '</table><h2>Decision register</h2>';
-    foreach (DECISIONS as $id => [$label, $owner, $must]) {
-        $d = $have[$id] ?? ['status' => 'open', 'value' => '', 'approver' => '', 'approved_on' => '', 'ref' => ''];
-        $b .= '<form method="post" action="/admin/action" class="stack admincard">' . csrf() . '<input type="hidden" name="do" value="decision"><input type="hidden" name="did" value="' . $id . '"><input type="hidden" name="back" value="/admin/launch">'
-            . '<p><strong>' . $id . '</strong> ' . h($label) . '<br><small>Owner: ' . h($owner) . ($must ? '' : ' (conditional)') . '</small> <span class="pill ' . ($d['status'] === 'approved' ? 'viewed' : '') . '">' . h(ucfirst($d['status'])) . '</span></p>';
-        if ($edit) $b .= '<label>Approved value<input name="value" maxlength="500" value="' . h($d['value']) . '"></label><div class="row"><label>Approved by<input name="approver" value="' . h($d['approver']) . '"></label><label>Date<input name="on" type="date" value="' . h($d['approved_on']) . '"></label><label>Reference<input name="ref" value="' . h($d['ref']) . '"></label><label>Status<select name="status">' . implode('', array_map(fn($s) => '<option' . ($s === $d['status'] ? ' selected' : '') . '>' . $s . '</option>', ['open', 'approved', 'deferred'])) . '</select></label></div><button class="btn alt">Save ' . $id . '</button>';
-        else $b .= '<p>' . ($d['value'] !== '' ? h($d['value']) . ' (' . h($d['approver']) . ', ' . h($d['approved_on']) . ', ref ' . h($d['ref']) . ')' : 'Nothing recorded yet.') . '</p>';
-        $b .= '</form>';
-    }
-    admin_page('Launch readiness', $b);
-}

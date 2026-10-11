@@ -1,5 +1,5 @@
 <?php
-// FRD 2.1 operations logic: terms, sender suspension, row entry validation, alerts, launch readiness.
+// FRD 2.1 operations logic: terms, sender suspension, row entry validation, alerts, alerts.
 
 const TERMS_VERSION = '2026-10-v1'; // bump when the terms or acceptable-use rules change materially
 
@@ -49,7 +49,6 @@ function health_alerts(): array {
     if ($f) $a['failed'] = "$f deliveries have failed and need correction.";
     $q = one("select min(s.queued_at) t from recipients r join sends s on s.id=r.send_id where r.status='queued'");
     if ($q && $q['t'] && $now - (int)$q['t'] > 900 && setting('paused') !== '1') $a['queue'] = 'Queue is stalled: the oldest queued card has waited since ' . when((int)$q['t']) . '.';
-    if (($n = launch_blockers()) > 0) $a['launch'] = "$n launch decisions are still Open.";
     $of = (int)setting('last_offsite'); if (!$of) $a['offsite'] = 'Off-server backup: Unknown (none recorded).'; elseif ($now - $of > 129600) $a['offsite'] = 'Off-server backup is Stale: last ' . when($of) . '.';
     $rt = (int)setting('last_restore_test'); if (!$rt) $a['restore'] = 'Restore rehearsal: never done.'; elseif (!str_starts_with((string)setting('last_restore_result'), 'ok')) $a['restore'] = 'The last restore rehearsal failed: ' . setting('last_restore_result') . '.';
     $ex = payment_exceptions(); if ($ex['events'] || $ex['orphans']) $a['payexc'] = count($ex['events']) + count($ex['orphans']) . ' payment exceptions need finance review.';
@@ -86,35 +85,6 @@ function alerts_daily(): int {
     foreach (alert_list('alert_emails') as $to) { mail_send($to, '[Christmas cards] Daily summary', $cur ? "Open alerts:\n- " . implode("\n- ", $cur) . "\n" . base_url() . "/admin/health\n" : "No alerts. Queue and payments look normal.\n"); $n++; }
     return $n;
 }
-
-// ---- launch readiness (FR-135)
-const DECISIONS = [
-    'D-01' => ['Campaign dates, queue treatment at closure, expiry, retention and deletion periods', 'Trustees with operational and privacy owner', true],
-    'D-02' => ['Field limits, address book and group capacities, rate limits, email forms, duplicate rule', 'Project lead with application administrator', true],
-    'D-03' => ['Currency, donation bounds, suggested amounts, payment investigation thresholds', 'Treasurer with project lead', true],
-    'D-04' => ['Refund role, execution route, approval conditions, receipts, reconciliation', 'Treasurer and Trustees', true],
-    'D-05' => ['Retry limits, uncertain-send handling, support contact and hours, pause and late-send policy', 'Operations owner with project lead', true],
-    'D-06' => ['Expected volume and concurrency, response and queue-delay targets', 'Technical lead with campaign owner', true],
-    'D-07' => ['Recovery objectives, monitoring cadence, backup restoration evidence, administrator recovery', 'Technical and restricted administrator owners', true],
-    'D-08' => ['Include or defer each launch Should; numbered AC-01 to AC-18; test mapping and UAT owners', 'Project lead with Trustees', true],
-    'D-09' => ['Reconcile FRD with SDD and OpenSpec; confirm providers and hosting; verify callbacks and domain', 'Technical lead', true],
-    'D-10' => ['Account deletion effects, retained categories, view-qualification method and wording', 'Trustees with privacy and technical owners', true],
-    'D-11' => ['Recipient donations: include or defer, and wording (conditional)', 'Treasurer with Trustees', false],
-    'D-12' => ['Gift Aid: include or defer, eligibility, declaration wording (conditional)', 'Treasurer with Trustees', false],
-    'D-13' => ['Christmas Day delivery: include or defer, time, late-send policy (conditional)', 'Campaign owner with operations owner', false],
-    'D-14' => ['Wording and ownership of privacy notice, terms, acceptable use and safeguarding statement', 'Trustees with the responsible administrator', true],
-    'D-15' => ['Alert recipients, second route, escalation time, out-of-hours expectations', 'Operations owner with project lead', true],
-    'D-16' => ['Success measures, targets and small-number threshold', 'Project lead with campaign owner', true],
-    'G-SEC' => ['Security assessment complete, with no open critical or high launch blockers (cannot be overridden)', 'Technical lead', true],
-    'G-SUP' => ['Complaint, suspension and support route tested end to end (cannot be overridden)', 'Operations owner', true],
-];
-/** Required decisions not approved with a reference. Conditional decisions (third value false) never block. */
-function launch_blockers(): int {
-    $n = 0; $have = array_column(all('select id, status, ref from decisions'), null, 'id');
-    foreach (DECISIONS as $id => [, , $must]) if ($must && !str_starts_with($id, 'G-') && (($have[$id]['status'] ?? 'open') !== 'approved' || trim((string)($have[$id]['ref'] ?? '')) === '')) $n++;
-    return $n;
-}
-function legal_approved(): bool { $d = one("select status from decisions where id='D-14'"); return $d && $d['status'] === 'approved'; }
 
 // ---- FR-144: optional once-a-year reminder. Consent is a separate, unticked choice; withdrawal is one click from every message.
 function remind_token(int $uid): string {

@@ -71,8 +71,7 @@ function support_ref(array $r): string { return 'R-' . $r['id']; } // exposes no
 
 // ---- campaign window (Europe/London); blank = unrestricted
 function campaign_state(): string {
-    // production stays locked while a launch Must decision is Open, unless a restricted administrator recorded an override
-    if (env('APP_ENV', 'development') === 'production' && (hard_gates_failing() || (setting('launch_override') === '' && launch_blockers()))) return 'locked'; // hard gates cannot be overridden
+    if (env('APP_ENV', 'development') === 'production' && hard_gates_failing()) return 'locked'; // payment and backup evidence
     $o = setting('opens'); $c = setting('closes');
     if ($o && time() < strtotime($o)) return 'before';
     if ($c && time() >= strtotime($c)) return 'closed';

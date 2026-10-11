@@ -9,7 +9,7 @@ foreach ($roles as $r) { $sec = b32e(random_bytes(10)); q("insert into users(nam
 // the expectation, written out again here on purpose (not read from the manifest): which roles may use which destination
 $six = ['campaign', 'appadmin', 'finance', 'delivery', 'complaints', 'rolesadmin'];
 $rules = ['/admin' => ['*'], '/admin/library' => ['campaign', 'rolesadmin'], '/admin/campaigns' => ['campaign', 'rolesadmin'], '/admin/campaign' => ['campaign', 'appadmin', 'finance', 'delivery', 'rolesadmin'],
-    '/admin/launch' => $six, '/admin/delivery' => ['delivery', 'appadmin', 'rolesadmin'], '/admin/reports' => ['complaints'], '/admin/senders' => ['complaints', 'rolesadmin'], '/admin/finance' => ['finance'], '/admin/giftaid' => ['finance'],
+    '/admin/delivery' => ['delivery', 'appadmin', 'rolesadmin'], '/admin/reports' => ['complaints'], '/admin/senders' => ['complaints', 'rolesadmin'], '/admin/finance' => ['finance'], '/admin/giftaid' => ['finance'],
     '/admin/measures' => ['campaign', 'finance', 'appadmin', 'rolesadmin'], '/admin/platform' => $six, '/admin/app' => ['appadmin', 'campaign', 'delivery', 'rolesadmin'], '/admin/mail' => ['appadmin', 'rolesadmin'], '/admin/wording' => ['appadmin', 'rolesadmin'],
     '/admin/email' => ['appadmin', 'rolesadmin'], '/admin/privacy' => ['rolesadmin', 'campaign', 'appadmin', 'finance', 'delivery'], '/admin/access' => ['rolesadmin'], '/admin/rehearsal' => ['appadmin', 'rolesadmin'],
     '/admin/health' => $six, '/admin/audit' => $six];

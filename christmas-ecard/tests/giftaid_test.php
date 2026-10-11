@@ -1,5 +1,5 @@
 <?php
-// php tests/giftaid_test.php : Gift Aid rules (FR-141, D-12).
+// php tests/giftaid_test.php : Gift Aid rules (FR-141).
 putenv('DB_PATH=' . sys_get_temp_dir() . '/ecard-ga-' . getmypid() . '.sqlite'); putenv('POSTMARK_TOKEN=');
 require __DIR__ . '/../src/app.php';
 @mkdir(ROOT . '/data', 0775, true); @unlink(ROOT . '/data/outbox.log');
@@ -8,10 +8,8 @@ q("insert into users(name,email,pass,verified,created,terms_version) values('Sam
 
 // gating: off until approved, named, and switched on
 ok(!giftaid_on(), 'off by default');
-set_setting('giftaid_enabled', '1'); set_setting('giftaid_charity', '7th Swindon Scout Group'); ok(!giftaid_on(), 'switch alone is not enough without D-12 approval');
-q("insert into decisions(id,value,ref,status) values('D-12','Include','Minute 9','open')"); ok(!giftaid_on(), 'open decision does not enable it');
-q("update decisions set status='approved' where id='D-12'"); ok(giftaid_on(), 'on once approved with a reference, charity named and switched on');
-q("update decisions set ref='' where id='D-12'"); ok(!giftaid_on(), 'approval without a reference does not count'); q("update decisions set ref='Minute 9' where id='D-12'");
+set_setting('giftaid_enabled', '1'); ok(!giftaid_on(), 'the switch alone is not enough without a charity name');
+set_setting('giftaid_charity', '7th Swindon Scout Group'); ok(giftaid_on(), 'on once the charity is named and it is switched on');
 ok(str_contains(giftaid_wording(), '7th Swindon Scout Group') && str_contains(giftaid_wording(), 'UK taxpayer'), 'declaration names the charity and states taxpayer status');
 
 // validation

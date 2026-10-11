@@ -21,7 +21,7 @@ function config_spec(string $area): array {
             'amounts_pence' => ['Suggested donation amounts in pounds, comma separated (up to 5, £1 to £500)', 'amounts', 'def' => '200,500,1000'],
             'show_progress' => ['Show fundraising progress publicly', 'bool', 'def' => '0'],
             'giftaid_charity' => ['Charity name used in the Gift Aid declaration (as HMRC knows it)', 'text', 'max' => 100, 'def' => ''],
-            'giftaid_enabled' => ['Offer Gift Aid on donations (needs decision D-12 approved)', 'bool', 'def' => '0']]],
+            'giftaid_enabled' => ['Offer Gift Aid on donations', 'bool', 'def' => '0']]],
         'app' => ['view' => ['appadmin', 'campaign', 'delivery', 'rolesadmin'], 'edit' => ['appadmin', 'rolesadmin'], 'title' => 'Application settings', 'when' => 'Applies to new entries straight away. Existing drafts are kept; a draft above a new limit must be corrected before submission. Accepted batches are unchanged.', 'fields' => [
             'max_recipients' => ['Recipients per card (1 to 20)', 'int', 'min' => 1, 'max' => 20, 'def' => '20'],
             'msg_max' => ['Greeting limit (characters)', 'int', 'min' => 50, 'max' => 2000, 'def' => '500'],
@@ -129,7 +129,6 @@ function r_admin_config(string $area): void {
         $prop = []; $errs = [];
         foreach ($spec['fields'] as $k => $f) { [$v, $e] = cfg_validate($f, (string)($_POST['f_' . $k] ?? '')); $prop[$k] = $v; if ($e) $errs[$k] = $e; }
         if ($area === 'campaign' && ($prop['giftaid_enabled'] ?? '0') === '1') {
-            if (!giftaid_approved()) $errs['giftaid_enabled'] = 'Record decision D-12 as approved, with its reference, in Launch readiness first.';
             if (trim((string)($prop['giftaid_charity'] ?? '')) === '') $errs['giftaid_charity'] = 'Enter the charity name as it appears on the HMRC declaration.';
         }
         $reason = trim((string)($_POST['reason'] ?? '')); $ref = trim((string)($_POST['approval'] ?? ''));
@@ -286,14 +285,14 @@ function r_admin(): void {
     $b = workspace_hero() . workspace_shortcuts() . '<h2>Where things stand</h2><div class="cards stats"><section class="statuscard"><h2>Cards requested</h2><p class="big">' . $nc . '</p></section>'
         . (can_any('finance', 'campaign') ? '<section class="statuscard"><h2>Donations recorded</h2><p class="big">' . gbp((int)one('select coalesce(sum(pence-refunded),0) n from donations')['n']) . '</p></section>' : '')
         . '<section class="statuscard"><h2>Needs attention</h2><p class="big">' . $na . '</p></section></div><div class="cards">'
-        . '<section class="statuscard"><h2>Campaign</h2><p>' . ['open' => 'Open for new cards', 'before' => 'Not open yet', 'closed' => 'Closed to new cards', 'locked' => 'Locked until launch decisions are approved'][$st] . '</p></section>'
+        . '<section class="statuscard"><h2>Campaign</h2><p>' . ['open' => 'Open for new cards', 'before' => 'Not open yet', 'closed' => 'Closed to new cards', 'locked' => 'Locked until payments and backups are proven'][$st] . '</p></section>'
         . '<section class="statuscard"><h2>Dispatch</h2><p>' . (setting('paused') === '1' ? '<strong>Paused</strong>' : 'Running') . '. ' . $c['queued'] . ' queued.</p></section>';
     $alerts = health_alerts();
     $b .= '<section class="statuscard"><h2>Alerts</h2><p>' . ($alerts ? '<strong>' . count($alerts) . ' need attention</strong>' : 'None found') . '</p><a href="/admin/health">System health</a></section></div>';
     if ($alerts) { // UX24-07: each exception names where to act; people without that role see who owns it, never the private detail
         $go = ['cron' => ['/admin/health', 'appadmin,rolesadmin', 'Application administrator'], 'backup' => ['/admin/health', 'appadmin,rolesadmin', 'Application administrator'], 'offsite' => ['/admin/health', 'appadmin,rolesadmin', 'Application administrator'], 'restore' => ['/admin/health', 'appadmin,rolesadmin', 'Application administrator'],
             'queue' => ['/admin/delivery', 'delivery,appadmin,rolesadmin', 'Delivery support'], 'failed' => ['/admin/delivery', 'delivery,appadmin,rolesadmin', 'Delivery support'], 'pay15' => ['/admin/finance', 'finance', 'Finance administrator'], 'pay24' => ['/admin/finance', 'finance', 'Finance administrator'], 'payexc' => ['/admin/finance', 'finance', 'Finance administrator'],
-            'complaint' => ['/admin/reports', 'complaints', 'Complaints reviewer'], 'abuse' => ['/admin/senders', 'complaints,rolesadmin', 'Complaints reviewer'], 'access' => ['/admin/access', 'rolesadmin', 'Restricted administrator'], 'launch' => ['/admin/launch', '', 'Campaign manager']];
+            'complaint' => ['/admin/reports', 'complaints', 'Complaints reviewer'], 'abuse' => ['/admin/senders', 'complaints,rolesadmin', 'Complaints reviewer'], 'access' => ['/admin/access', 'rolesadmin', 'Restricted administrator']];
         $b .= '<h2>Needs attention first</h2><ul class="tasks">';
         foreach ($alerts as $k => $a) { [$href, $roles, $owner] = $go[$k] ?? ['/admin/health', '', 'Application administrator']; $mine = $roles === '' || can_any(...explode(',', $roles));
             $b .= '<li>' . h($a) . ' ' . ($mine ? '<a class="btn alt" href="' . $href . '">Open</a>' : '<span class="note">Owner: ' . h($owner) . '</span>') . '</li>'; }
@@ -391,7 +390,7 @@ function r_admin_health(): void {
     $rows = [
         ['Scheduled queue job', $st((int)setting('last_queue'), 300), 'delivery'], ['Email provider', ['postmark' => 'Postmark. Last accepted send: ' . ((int)setting('last_mail_ok') ? when((int)setting('last_mail_ok')) : 'Unknown'), 'smtp' => 'Own mail account (SMTP). Last accepted send: ' . ((int)setting('last_mail_ok') ? when((int)setting('last_mail_ok')) : 'Unknown') . '. No bounce or delivery feedback with this option.', 'log' => 'Not sending: emails are only written to a local log'][mail_provider()] . ' <a href="/admin/mail">Email delivery settings</a>', 'delivery'],
         ['Payment provider (' . $env . ' mode)', env('STRIPE_SECRET') ? 'Configured. Last webhook: ' . ((int)setting('last_stripe_hook') ? when((int)setting('last_stripe_hook')) : 'Unknown') : 'Not configured: payments are simulated', 'finance'],
-        ['Backup', $st((int)setting('last_backup'), 129600), 'appadmin'], ['Campaign availability', ['open' => 'Open', 'before' => 'Not open yet', 'closed' => 'Closed', 'locked' => 'Locked (launch decisions open)'][campaign_state()], 'campaign'],
+        ['Backup', $st((int)setting('last_backup'), 129600), 'appadmin'], ['Campaign availability', ['open' => 'Open', 'before' => 'Not open yet', 'closed' => 'Closed', 'locked' => 'Locked (payments or backups not proven)'][campaign_state()], 'campaign'],
         ['Dispatch', setting('paused') === '1' ? 'Paused' : 'Running', 'delivery']];
     $full = can_any('appadmin', 'rolesadmin'); $b = '<h1>System health</h1><p class="note">Checked at ' . date('j M Y H:i:s', $now) . '. Missing or old evidence is shown as Unknown or Stale, never Healthy. This page shows no secrets or private messages.</p><div class="cards">';
     foreach ($rows as [$l, $v, $who]) if ($full || can($who) || ($who === 'campaign' && can('campaign'))) $b .= '<section class="statuscard"><h2>' . h($l) . '</h2><p>' . $v . '</p></section>';

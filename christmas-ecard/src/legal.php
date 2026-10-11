@@ -1,15 +1,12 @@
 <?php
 // FR-131 / FR-132: privacy notice, cookie statement, terms, acceptable use and safeguarding statement.
-// DRAFT wording: the Trustees must write or approve it (decision D-14). It is flagged as a draft on screen until D-14 is recorded as approved.
+// Wording to be written or approved by the Trustees.
 
-function legal_banner(): string {
-    return legal_approved() ? '' : '<p class="flash warn" role="note"><strong>Draft wording.</strong> The Trustees have not yet approved this page (decision D-14). Do not rely on it until they have.</p>';
-}
 function legal_owner(): string { return 'The 7th Swindon Scout Group (the Group)'; }
 
 function r_privacy(): void {
     $sup = h(support_email());
-    page('Privacy and cookies', legal_banner() . '<h1>Privacy and cookies</h1>
+    page('Privacy and cookies', '<h1>Privacy and cookies</h1>
 <p>' . h(legal_owner()) . ' runs this service. Contact us at <a href="mailto:' . $sup . '">' . $sup . '</a>. Last reviewed: ' . h(setting('legal_reviewed', 'not yet reviewed')) . '.</p>
 <h2>What we keep and why</h2>
 <ul>
@@ -36,7 +33,7 @@ function r_privacy(): void {
 
 function r_terms(): void {
     $sup = h(support_email());
-    page('Terms and safeguarding', legal_banner() . '<h1>Terms of use and safeguarding</h1>
+    page('Terms and safeguarding', '<h1>Terms of use and safeguarding</h1>
 <h2>Who can send</h2>
 <p>You must be 18 or over to create an account and send cards. If you are younger, ask a parent or carer to send the card for you.</p>
 <h2>Acceptable use</h2>
@@ -59,7 +56,7 @@ function r_accept_terms(): void {
         if (empty($_POST['accept'])) { flash('Please tick the box to continue.', 'err'); redirect('/accept-terms?next=' . urlencode((string)($_POST['next'] ?? ''))); }
         accept_terms((int)$u['id']); flash('Thank you.'); redirect(safe_next($_POST['next'] ?? ''));
     }
-    page('Accept the terms', legal_banner() . '<h1>Please accept the terms</h1><p>We have updated our <a href="/terms">terms of use and safeguarding statement</a> and <a href="/privacy">privacy notice</a>. Please accept them to carry on sending.</p><form method="post" class="stack">' . csrf() . '<input type="hidden" name="next" value="' . h($_GET['next'] ?? '') . '"><label class="opt"><input type="checkbox" name="accept" value="1" required> I am 18 or over and I accept the terms</label><button class="btn">Accept and continue</button></form>');
+    page('Accept the terms', '<h1>Please accept the terms</h1><p>We have updated our <a href="/terms">terms of use and safeguarding statement</a> and <a href="/privacy">privacy notice</a>. Please accept them to carry on sending.</p><form method="post" class="stack">' . csrf() . '<input type="hidden" name="next" value="' . h($_GET['next'] ?? '') . '"><label class="opt"><input type="checkbox" name="accept" value="1" required> I am 18 or over and I accept the terms</label><button class="btn">Accept and continue</button></form>');
 }
 
 /** Gate used before any submission or test send. Returns nothing; redirects away when the sender may not continue. */

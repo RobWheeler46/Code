@@ -74,13 +74,10 @@ putenv('BACKUP_COPY_DIR='); putenv('BACKUP_KEY=correct horse battery staple');
 backup_restore($r['zip'], 'correct horse battery staple', $t);
 
 // ---- hard gates cannot be overridden
-putenv('APP_ENV=production'); set_setting('launch_override', 'Trustees agreed');
-ok(campaign_state() === 'locked' && count(hard_gates_failing()) >= 4, 'production is locked by failing gates even with an override recorded');
-q("insert or replace into decisions(id,value,ref,status) values('D-14','ok','m1','approved'),('G-SEC','ok','pen test 1','approved'),('G-SUP','ok','test 1','approved')");
+putenv('APP_ENV=production');
+ok(campaign_state() === 'locked' && count(hard_gates_failing()) >= 2, 'production is locked by failing gates');
 putenv('STRIPE_SECRET=sk_test_x'); putenv('STRIPE_WEBHOOK_SECRET=whsec_x'); set_setting('last_stripe_hook', (string)time());
-ok(hard_gates_failing() === [], 'every gate passes once its evidence exists');
-ok(campaign_state() === 'open', 'with the gates passed, the recorded override covers the open decisions');
-set_setting('launch_override', ''); ok(campaign_state() === 'locked', 'without an override, open decisions still lock production');
+ok(hard_gates_failing() === [] && campaign_state() === 'open', 'every gate passes once its evidence exists');
 set_setting('last_restore_test', (string)(time() - 70 * 86400)); ok(in_array('recovery', hard_gates_failing()), 'an old restore rehearsal fails the recovery gate');
 putenv('APP_ENV=development'); putenv('STRIPE_SECRET='); putenv('STRIPE_WEBHOOK_SECRET=');
 

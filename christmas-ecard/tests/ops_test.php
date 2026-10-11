@@ -1,5 +1,5 @@
 <?php
-// php tests/ops_test.php : terms, suspension, row entry, alerts and launch readiness (FRD 2.1).
+// php tests/ops_test.php : terms, suspension, row entry, alerts (FRD 2.1).
 putenv('DB_PATH=' . sys_get_temp_dir() . '/ecard-op-' . getmypid() . '.sqlite'); putenv('POSTMARK_TOKEN=');
 require __DIR__ . '/../src/app.php';
 @mkdir(ROOT . '/data', 0775, true); @unlink(ROOT . '/data/outbox.log');
@@ -40,14 +40,7 @@ ok(alerts_tick($t0 + 7200) === 0, 'escalation happens once');
 set_setting('last_queue', (string)time()); alerts_tick(time());
 ok((int)one("select resolved_at from alerts where akey='cron'")['resolved_at'] > 0, 'alert resolves itself when the condition clears');
 
-// FR-135 launch readiness
-ok(launch_blockers() === 13, '13 required decisions open at start (3 conditional never block)');
-q("insert into decisions(id,value,ref,status) values('D-14','ok','minute 1','approved')"); ok(launch_blockers() === 12 && legal_approved(), 'approved decision with a reference clears one blocker');
-q("insert into decisions(id,value,ref,status) values('D-01','ok','','approved')"); ok(launch_blockers() === 12, 'approval without a reference does not count');
-q("insert into decisions(id,value,ref,status) values('D-11','','','open')"); ok(launch_blockers() === 12, 'conditional decisions never block');
-putenv('APP_ENV=production'); ok(campaign_state() === 'locked', 'production is locked while required decisions are open');
-set_setting('launch_override', 'Trustee chair agreed 10 Oct'); ok(campaign_state() === 'locked', 'an override alone cannot unlock production while hard gates fail (gates are tested in resilience_test)');
-set_setting('launch_override', ''); putenv('APP_ENV=development'); ok(campaign_state() === 'open', 'development is never locked');
+putenv('APP_ENV=development'); ok(campaign_state() === 'open', 'development is never locked');
 
 // FR-144 reminders
 q("insert into users(name,email,pass,verified,created,remind) values('Yes','yes@x.com','x',1,?,1),('No','no@x.com','x',1,?,0)", [time(), time()]);

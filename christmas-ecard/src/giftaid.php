@@ -1,11 +1,10 @@
 <?php
-// Gift Aid (FR-141, decision D-12). Off by default. Needs: the Treasurer's D-12 approval recorded, a charity name set, and the switch turned on.
+// Gift Aid (FR-141). Off by default. Needs a charity name and the switch turned on.
 // Declaration wording follows HMRC's model wording and is stored with every declaration. The Treasurer must confirm eligibility to claim.
 
 const GIFTAID_VERSION = 'GA-1';
 
-function giftaid_approved(): bool { $d = one("select status, ref from decisions where id='D-12'"); return $d && $d['status'] === 'approved' && trim((string)$d['ref']) !== ''; }
-function giftaid_on(): bool { return setting('giftaid_enabled') === '1' && trim(setting('giftaid_charity')) !== '' && giftaid_approved(); }
+function giftaid_on(): bool { return setting('giftaid_enabled') === '1' && trim(setting('giftaid_charity')) !== ''; }
 function giftaid_wording(): string {
     return 'I want to Gift Aid my donation of this amount, and any donations I make in the future or have made in the past 4 years, to ' . trim(setting('giftaid_charity'))
         . '. I am a UK taxpayer and understand that if I pay less Income Tax and/or Capital Gains Tax than the amount of Gift Aid claimed on all my donations in that tax year it is my responsibility to pay any difference.';
@@ -73,7 +72,7 @@ function r_admin_giftaid(): void {
         if ($do === 'withdraw') { q("update giftaid set status='withdrawn' where id=? and claimed_at is null", [(int)($_POST['id'] ?? 0)]); audit((int)$u['id'], 'giftaid_withdrawn', 'declaration ' . (int)($_POST['id'] ?? 0)); flash('Declaration withdrawn. It will not be claimed.'); redirect('/admin/giftaid'); }
     }
     $el = giftaid_eligible($from, $to); $sum = array_sum(array_column($el, 'amount'));
-    $b = '<h1>Gift Aid</h1><dl class="facts"><dt>Status</dt><dd>' . (giftaid_on() ? 'On' : 'Off') . '</dd><dt>Decision D-12</dt><dd>' . (giftaid_approved() ? 'Approved' : 'Not yet approved') . '</dd><dt>Charity name used in the declaration</dt><dd>' . h(setting('giftaid_charity') ?: '(not set)') . '</dd></dl>'
+    $b = '<h1>Gift Aid</h1><dl class="facts"><dt>Status</dt><dd>' . (giftaid_on() ? 'On' : 'Off') . '</dd><dt>Charity name used in the declaration</dt><dd>' . h(setting('giftaid_charity') ?: '(not set)') . '</dd></dl>'
         . '<p class="note">Donors are asked for their name and home address only if they tick Gift Aid. Turn the feature on under Campaign settings once the Treasurer has confirmed the Group can claim and approved the wording. Only unclaimed, undeclared-as-withdrawn donations still above zero after refunds are listed, using the amount after refunds.</p>'
         . '<h2>Ready to claim</h2><p><strong>' . count($el) . '</strong> declarations, <strong>' . gbp($sum) . '</strong> in donations. Estimated claim: <strong>' . gbp(intdiv($sum, 4)) . '</strong>.</p>';
     if ($el) $b .= '<p><a class="btn" href="/admin/giftaid?csv=1">Download the claim schedule (CSV)</a></p><form method="post" class="row">' . csrf() . '<input type="hidden" name="do" value="claimed"><label>HMRC claim reference or note<input name="batch" required maxlength="100"></label><button class="btn alt">Mark these as claimed</button></form><p class="note">Download first, submit to HMRC, then mark as claimed so they are not claimed twice.</p>';
