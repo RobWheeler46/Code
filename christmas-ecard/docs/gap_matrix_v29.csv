@@ -1,0 +1,37 @@
+ID,Requirement (short),Audited status,What exists today that could be reused,What is missing,Blocked by
+FR-189,Trustee only entry with flag; no index; server role and MFA,partial,"MFA enforced for every admin page (src/lib.php need_admin); role map; noindex and no-store headers now sent for every non public page (src/lib.php private_headers)","No trustee roles, no feature flag, no hidden route",D-T1 roles
+FR-190,Scoped member import with provenance and freshness,missing,Backup and audit patterns only,"No member data of any kind exists in this application, no importer, no source",D-T2 data source
+FR-191,Restricted fields; approved parent or carer email; exclude ineligible,missing,Email validation and suppression (src/core.php optouts),No member or guardian model,D-T2 data source and D-T3 routing
+FR-192,Draft batch with occasion campaign owner title purpose design schedule,missing,"Campaigns, occasions and pinned design versions (EC-01 to EC-06)",No batch tables,D-T1
+FR-193,Section filters with eligible and excluded counts and reasons,missing,none,No sections concept,D-T2
+FR-194,Allow listed merge fields with escaping,missing,Safe plain text rendering for sender messages (resolved_msg),No merge engine,none
+FR-195,Per member override and optional artwork choice with revisions,missing,Per recipient message override and revision check patterns,No per member item,none
+FR-196,Preview exactly matching final content and pinned artwork,partial,"Recipient preview and pinned version rendering (card_view with design_version_id)",No batch preview,none
+FR-197,Pre send checks (duplicates restricted unreviewed outdated unsafe),partial,"Duplicate address detection, opt outs, abuse limits for sender sends",Batch level checks,none
+FR-198,Two person approval of an immutable snapshot,missing,"Digest and revision patterns; launch override is single person","No approval object, no author versus approver rule",D-T4 approval rules
+FR-199,Explicit authorised dispatch; idempotent per member,partial,"queue_send and process_queue are idempotent per recipient; payment safe sending",Intent object and operator role,D-T1
+FR-200,No donation or sender onboarding in this journey,partial,Campaign donation mode none (EC-07),A route that uses it,none
+FR-201,Secure recipient links; exact snapshot; no roster disclosure,implemented,"Hashed unguessable tokens, one recipient per link, pinned art and wording (token_hash, art_ref, design_version_id)",Reuse for batches,none
+FR-202,Delivery status suppression bounces controlled retry,implemented,"Postmark events, hard bounce suppression, bounded retries, opt out (src/resilience.php, src/core.php)",Batch view of outcomes,none
+FR-203,Redacted audit of decisions and provenance,partial,"audit() with actor, no content; library entries checked for no emails or tokens",Batch decision events,none
+FR-204,Retention erasure and source reconciliation,partial,"purge job for cards, retention settings, account deletion",Member snapshot retention and reconciliation,D-T6 retention
+FR-205,Reuse of templates across occasions without auto send,missing,Design reuse in draft campaigns (EC-06),Template reuse for batches,none
+FR-206,Accessible mobile editor with all states,missing,Library editor patterns (error summary focus labels 375 px checked),No batch editor,none
+FR-207,Test send to authorised addresses and dry run,partial,Rehearsal tool with an allow list (src/admin3.php),Batch dry run,none
+FR-208,Readiness dashboard of batch states,missing,Admin Overview task list pattern,Batch states,none
+FR-209,Non public flagged section leader portal with MFA and assignments,partial,"MFA for administrators only; leaders are not admins today",Leader accounts and section assignments,D-T1 and D-T5 leaders
+FR-210,Server enforced row and field scope for rosters,missing,Group scope helper owner_group() and per user scoping of sender contacts,Section scope,D-T2 and D-T5
+FR-211,Only currently eligible members can receive proposals,missing,none,Eligibility source,D-T2
+FR-212,Leader drafts and submits suggested wording within limits,missing,Message length and validation rules for senders,Suggestion store,D-T5
+FR-213,Immutable submitted revisions with history and concurrency,partial,Design version immutability and revision checks (EC-04),Suggestion revisions,none
+FR-214,Trustee queue of submitted contributions,missing,none,Queue screen,none
+FR-215,Accept or request changes or decline with feedback,missing,none,Decision records,D-T1
+FR-216,Accepted suggestion copied to a Trustee owned draft never auto published,missing,none,Copy on accept transaction,none
+FR-217,Decisions invalidate approval; pending submissions block approval,missing,none,Approval digest,FR-198
+FR-218,Reassignment revokes access immediately,missing,none,Assignments with validity,D-T5
+FR-219,Audit of proposal transitions without content,partial,audit() records actor and ids,Events,none
+FR-220,Accessible status and feedback UI,missing,none,Screens,none
+FR-221,Contribution deadline and lock after dispatch,missing,Campaign closure and dispatch pause concepts,Deadline setting and locks,D-T7 deadlines
+FR-222,Expiry erasure and revalidation per policy,missing,purge job pattern,Rules,D-T6
+FR-223,Internal notification of a decision without member data,missing,Alert emails with no private content (FR-134),In app status,none
+FR-224,Trustee dashboard of section completion counts,missing,none,Counts,none

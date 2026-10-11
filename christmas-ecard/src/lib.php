@@ -68,6 +68,13 @@ function gbp(int $p): string { return '£' . number_format($p / 100, 2); }
 function base_url(): string { return rtrim(env('APP_URL', 'http://localhost:8060'), '/'); }
 function token(): string { return bin2hex(random_bytes(24)); }
 
+/** Search engines must never index, and browsers and proxies must never keep, anything that is not a public page: card links, accounts, drafts and every admin and private screen. */
+function private_headers(string $path): void {
+    if (in_array($path, ['/', '/help', '/privacy', '/terms'], true) || str_starts_with($path, '/art/') || str_starts_with($path, '/occasion/')) return;
+    header('X-Robots-Tag: noindex, nofollow, noarchive');
+    header('Cache-Control: private, no-store');
+}
+
 // ---- session, csrf, flash, rate limit
 function boot(): void {
     session_name('ecard');

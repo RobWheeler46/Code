@@ -20,6 +20,7 @@ function http(string $m, string $path, string $jar, ?array $post = null, array $
     global $port; $loc = ''; $ch = curl_init("http://127.0.0.1:$port$path");
     curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_COOKIEJAR => $jar, CURLOPT_COOKIEFILE => $jar, CURLOPT_FOLLOWLOCATION => false, CURLOPT_HEADERFUNCTION => function ($c, $h) use (&$loc) { if (stripos($h, 'location:') === 0) $loc = trim(substr($h, 9)); return strlen($h); }]);
     if ($m === 'POST') { curl_setopt($ch, CURLOPT_POST, true); curl_setopt($ch, CURLOPT_POSTFIELDS, $files ? $post + $files : http_build_query($post ?? [])); }
+    $GLOBALS['hdr'] = ''; curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($c, $h) use (&$loc) { if (stripos($h, 'location:') === 0) $loc = trim(substr($h, 9)); $GLOBALS['hdr'] .= $h; return strlen($h); });
     $b = (string)curl_exec($ch); $c = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch); return [$c, $b, $loc];
 }
 function tok(string $html): string { preg_match('/name="_c" value="([^"]+)"/', $html, $m); return $m[1] ?? ''; }
@@ -91,6 +92,12 @@ ok($c === 200 && str_contains($rv, 'Send my cards for free') && !str_contains($r
 ok($c === 302 && str_contains($l, '/review') && (new PDO('sqlite:' . $dbf))->query("select status from sends where id=$sid")->fetchColumn() === 'draft', 'a forged donation for a greeting only campaign is refused and nothing is started');
 [$c, , $l] = http('POST', '/review', $sj, ['_c' => tok($rv), 'id' => $sid, 'do' => 'send']);
 ok($c === 302 && in_array((new PDO('sqlite:' . $dbf))->query("select status from sends where id=$sid")->fetchColumn(), ['queued', 'sending', 'sent'], true) && !(new PDO('sqlite:' . $dbf))->query("select count(*) from donations")->fetchColumn(), 'the same sender can still send for free, with no donation recorded');
+
+// private pages are never indexed or cached; public pages are left alone
+http('GET', '/admin/library', $pub); ok(stripos($GLOBALS['hdr'], 'X-Robots-Tag: noindex') !== false && stripos($GLOBALS['hdr'], 'no-store') !== false, 'admin pages ask search engines not to index and browsers not to keep them');
+http('GET', '/c/' . str_repeat('a', 48), $anon); ok(stripos($GLOBALS['hdr'], 'X-Robots-Tag: noindex') !== false, 'a card link is never indexed');
+http('GET', '/login', $anon); ok(stripos($GLOBALS['hdr'], 'X-Robots-Tag: noindex') !== false, 'account pages are never indexed');
+http('GET', '/', $anon); ok(stripos($GLOBALS['hdr'], 'noindex') === false, 'the public home page can be found by search engines');
 
 // nothing private ends up in the change history
 $bad = 0; foreach ((new PDO('sqlite:' . $dbf))->query("select detail from audit where action like 'library_%'")->fetchAll(PDO::FETCH_COLUMN) as $dtl) if (preg_match('/@|[0-9a-f]{40,}|password|token/i', (string)$dtl)) $bad++;
