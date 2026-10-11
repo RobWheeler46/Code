@@ -258,3 +258,16 @@ img.art{display:block;width:100%;height:auto}
 .wscard span{color:#5c6470;font-size:.92rem}.wscard:hover{border-color:#024593}
 @media(min-width:791px){.wsmenu>summary{display:none}}
 @media(max-width:790px){.ws{grid-template-columns:1fr}.wsside{position:static}}
+
+/* v2.10 reference look: navy sidebar, hero panel, task cards */
+main:has(.ws){max-width:80rem}
+.wsside{background:#041f3d;border-color:#041f3d;color:#fff}.wsside .navgroup{color:#9fb3d1}.wsside a{color:#fff}.wsside a:hover{background:#0d3560}
+.wsside a[aria-current=page]{background:var(--yellow);color:#041f3d;font-weight:800}.wsside a[aria-current=true]{background:#0d3560;color:#fff}
+.wsside summary{color:#fff}.wsbrand{display:grid;grid-template-columns:2.6rem 1fr;column-gap:.7rem;margin:.3rem .3rem .6rem;padding-bottom:.7rem;border-bottom:1px solid #0d3560}
+.wsbrand span{grid-row:span 2;display:grid;place-items:center;width:2.6rem;height:2.6rem;border:2px solid var(--yellow);border-radius:50%;color:var(--yellow);font-weight:800;font-size:1.2rem}.wsbrand small{color:#9fb3d1}
+.wstop{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:.5rem}.wsrole{margin:0;padding:.25rem .8rem;background:#e7edf7;color:#024593;border-radius:999px;font-weight:700;font-size:.85rem}
+.wshero{background:linear-gradient(135deg,#041f3d,#024593);color:#fff;border-radius:16px;padding:1.6rem;margin:.6rem 0 1rem}.wshero h1{margin:.2em 0;max-width:30ch}.wshero p{max-width:60ch}
+.eyebrow{margin:0;text-transform:uppercase;letter-spacing:.08em;font-weight:800;font-size:.8rem;color:var(--yellow)}.wshero .btn.big{background:var(--yellow);border-color:var(--yellow);color:#041f3d}
+.wscard{position:relative;padding-right:2.4rem}.wscard::after{content:"→";position:absolute;top:.8rem;right:1rem;color:#5c6470}
+.tasks{list-style:none;padding:0;margin:0;background:#fff;border:1px solid var(--line);border-radius:12px}.tasks li{display:flex;flex-wrap:wrap;gap:.5rem 1rem;justify-content:space-between;align-items:center;padding:.8rem 1rem}.tasks li+li{border-top:1px solid var(--line)}
+@media(max-width:790px){.wshero{padding:1.2rem}}

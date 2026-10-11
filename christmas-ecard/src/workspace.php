@@ -69,8 +69,8 @@ function workspace_shell(string $title, string $body): never {
     $crumb = '<nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/admin">Overview</a></li>';
     if ($loc && $loc['href'] !== '/admin') { if ($loc['group'] !== 'Start') $crumb .= '<li>' . h($loc['group']) . '</li>'; $crumb .= '<li>' . ($loc['child'] ? '<a href="' . h($loc['href']) . '">' . h($loc['item']) . '</a>' : '<span aria-current="page">' . h($loc['item']) . '</span>') . '</li>'; if ($loc['child']) $crumb .= '<li><span aria-current="page">' . h($loc['child']) . '</span></li>'; }
     $crumb .= '</ol></nav>';
-    $who = '<p class="note">Signed in as ' . h($u['name']) . ' (' . h(implode(', ', array_map(fn($r) => ROLES[$r] ?? $r, array_filter(explode(',', (string)$u['roles'])))) ?: 'no roles') . ')</p>';
-    page($title, '<div class="ws"><aside class="wsside"><details class="wsmenu" open><summary>Workspace menu</summary>' . $nav . '</details></aside><div class="wsmain">' . $crumb . $who . $body . '</div></div>');
+    $who = '<p class="wsrole">' . h($u['name']) . ' · ' . h(implode(', ', array_map(fn($r) => ROLES[$r] ?? $r, array_filter(explode(',', (string)$u['roles'])))) ?: 'no roles') . '</p>';
+    page($title, '<div class="ws"><aside class="wsside"><p class="wsbrand"><span>7</span><strong>Volunteer workspace</strong><small>7th Swindon Scouts</small></p><details class="wsmenu" open><summary>Workspace menu</summary>' . $nav . '</details></aside><div class="wsmain"><div class="wstop">' . $crumb . $who . '</div>' . $body . '</div></div>');
 }
 
 function r_admin_platform(): void {
@@ -78,6 +78,12 @@ function r_admin_platform(): void {
     $b = '<h1>Platform controls</h1><p class="lead">Settings and tools for running the service. You see only the ones your roles allow.</p><ul class="wscards plain">';
     foreach (platform_links() as [$label, $href, $desc]) $b .= '<li><a class="wscard" href="' . h($href) . '"><strong>' . h($label) . '</strong><span>' . h($desc) . '</span></a></li>';
     admin_page('Platform controls', $b . '</ul>');
+}
+
+/** The overview's opening panel: the first task this person can do is the one big button. */
+function workspace_hero(): string {
+    $first = null; foreach (workspace_nav() as $items) foreach ($items as $i) if ($i[1] !== '/admin') { $first = $i; break 2; }
+    return '<section class="wshero"><p class="eyebrow">Your workspace</p><h1>Everything for your Christmas eCards, in one place</h1><p>Start with the task that needs attention. Only the tools your roles allow are shown.</p>' . ($first ? '<a class="btn big" href="' . h($first[1]) . '">' . h($first[0]) . ' &rarr;</a>' : '') . '</section>';
 }
 
 /** "What would you like to do?": a big link for every destination this person may use. */
