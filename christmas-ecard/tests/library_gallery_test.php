@@ -49,7 +49,7 @@ $_SESSION['hero'] = $target; ok(hero_for_session() !== '' && gallery_cards()[her
 
 // a draft whose design is later held back keeps its content and is steered to choose another
 $src = file_get_contents(__DIR__ . '/../src/app.php');
-ok(str_contains($src, 'no longer available. Pick another below. Your message and recipients are safe.') && str_contains($src, "redirect('/compose?id=' . (int)\$s['id'])"), 'compose and review keep a saved draft and ask for another design instead of discarding it');
+ok(str_contains($src, 'no longer available. Use Change design to pick another. Your message and recipients are safe.') && str_contains($src, "redirect('/compose?id=' . (int)\$s['id'])"), 'compose and review keep a saved draft and ask for another design instead of discarding it');
 
 exec('rmdir /s /q ' . escapeshellarg($work) . ' 2>nul'); if (is_dir($work)) exec('rm -rf ' . escapeshellarg($work));
 exit($GLOBALS['bad'] ?? 0);
