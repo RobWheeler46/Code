@@ -1,6 +1,6 @@
 ID,Requirement (short),Audited status,Evidence (verified in this repository),Tests today,Gap and proposed task
 FR-165,Upload artwork and create a draft design from admin,missing,"Designs are a hardcoded PHP array in src/cards.php cards(); images are files in public/assets deployed by upload. No upload route in src/app.php dispatch().",-,EC-02 EC-03
-FR-166,Validate uploads and make derivatives,missing,"No upload code. PHP gd is loaded locally; fileinfo is not. cPanel extensions UNVERIFIED.",-,EC-02: decode with GD (getimagesize plus imagecreatefrom*) because fileinfo may be absent
+FR-166,Validate uploads and make derivatives,partial,"No upload code. PHP gd is loaded locally; fileinfo is not. cPanel extensions UNVERIFIED.",-,EC-02: decode with GD (getimagesize plus imagecreatefrom*) because fileinfo may be absent [EC-02 built: src/uploads.php validates and makes derivatives; no admin screen yet]
 FR-167,Name alt text and rights confirmation before publish,partial,"Every design has a written description with the printed words (src/cards.php). Admin can edit descriptions (src/admin.php admin_designs_and_share). No rights or approval confirmation field.",tests/admin_test.php (descriptions),EC-03 EC-04: add rights and approval fields and block publish without them
 FR-168,Previews and thumbnail focus point,missing,"Thumbnails use fixed top crop in public/assets/style.css; no focal control; no admin preview of gallery or recipient view.",-,EC-03
 FR-169,Draft Published Held back Archived lifecycle with audit,partial,"enabled or disabled per design (setting), held back list in code ($heldBack in src/cards.php), changes audited via audit(). No Draft or Archived states.",tests/admin_test.php,EC-04
@@ -23,8 +23,8 @@ FR-185,Server side owner Group scoping,missing,"No Group dimension. Role checks 
 FR-186,Closed paused or blocked campaign cannot start new sending; clear fallback,partial,"campaign_state() blocks submission in src/app.php r_review with a clear message; compose and preparation stay allowed, which the current spec accepts. Existing links stay viewable until expiry.",tests/ops_test.php tests/smoke.php,EC-05 EC-07
 FR-187,Safe under failed processing concurrent edits retries rollback,partial,"Config edits use optimistic locking (cfg_version) in src/admin.php. No upload or draft flows to protect.",tests/admin_test.php,EC-02 EC-04
 FR-188,Per campaign optional donation behaviour; new occasion enables nothing implicitly,partial,"Donation always optional, free is the first choice on review (UX24-03). Gift Aid, recipient donation and Christmas Day delivery are off or unbuilt.",tests/ux24_test.php tests/giftaid_test.php,EC-07
-CAT-01,Upload valid PNG JPEG WebP,missing,No upload.,-,EC-02
-CAT-02,Reject executable renamed SVG corrupt oversize,missing,No upload.,-,EC-02
+CAT-01,Upload valid PNG JPEG WebP,partial,No upload.,-,EC-02 [EC-02 service level test passes (tests/uploads_test.php); needs the admin screen to be end to end]
+CAT-02,Reject executable renamed SVG corrupt oversize,partial,No upload.,-,EC-02 [EC-02 service level test passes for php, svg, gif, corrupt, truncated, empty, oversize, pixel bomb]
 CAT-03,Publish blocked without alt text or rights,missing,"Alt text exists in code; no publish gate.",-,EC-03 EC-04
 CAT-04,Flag year text for human review,missing,"No check. Pack says humans review. The held back Woggle card (2025) is handled by a code list today.",-,EC-04 (checklist item not automatic detection)
 CAT-05,Publish appears in gallery hero and direct start,partial,"Enabling a design does this today.",tests/admin_test.php,EC-04
@@ -34,8 +34,8 @@ CAT-08,Replace image publish v2 sent v1 still shows v1,partial,"Tested for the i
 CAT-09,Reorder respected across sessions,partial,"Order is stored in settings and applied to cards() (src/admin.php design_up and design_down). No test covers reordering.",-,EC-05: add a reorder test
 CAT-10,Crop and focal test at 320px,missing,"Fixed crop only; no automated visual check.",-,EC-03
 CAT-11,Concurrent edits detected,partial,"cfg_version conflict for settings; not for designs.",tests/admin_test.php,EC-04
-CAT-12,Failure during processing or publish leaves no half state,missing,No such flows.,-,EC-02 EC-04
-CAT-13,Restore includes assets and image references,partial,"backup_run bundles the database and data/art; restore rehearsal checks counts and artwork files (src/resilience.php). Master artwork in public/assets ships with the code, not the backup.",tests/resilience_test.php,EC-09
+CAT-12,Failure during processing or publish leaves no half state,partial,No such flows.,-,EC-02 EC-04 [EC-02: failed intake leaves nothing; publish side is EC-04]
+CAT-13,Restore includes assets and image references,partial,"backup_run bundles the database and data/art; restore rehearsal checks counts and artwork files (src/resilience.php). Master artwork in public/assets ships with the code, not the backup.",tests/resilience_test.php,EC-09 [EC-02: backup and restore include data/library]
 CAT-14,Publish then roll back to previous version for future use,missing,No versions.,-,EC-04
 CAT-15,Volunteer adds and publishes in five minutes unaided,missing,Not possible without upload; needs usability test with real artwork.,-,EC-09
 OCA-01,Christmas 2026 shows only enabled published designs,implemented,"Gallery and hero use enabled designs only.",tests/admin_test.php tests/resilience_test.php,-

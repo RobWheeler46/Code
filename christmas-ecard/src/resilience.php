@@ -88,6 +88,7 @@ function backup_run(): array {
         else {
             $names = ['ecard.sqlite']; $z->addFile($db, 'ecard.sqlite');
             foreach (glob(ROOT . '/data/art/*') ?: [] as $f) { $z->addFile($f, 'art/' . basename($f)); $names[] = 'art/' . basename($f); }
+            foreach (library_files() as $rel => $abs) { $z->addFile($abs, "library/$rel"); $names[] = "library/$rel"; } // uploaded originals and derivatives (EC-02)
             foreach ($names as $n) $z->setEncryptionName($n, ZipArchive::EM_AES_256, $key);
             $z->close(); $r['zip'] = $zip; @unlink($db); $r['plain'] = null;
             if (($dir = env('BACKUP_COPY_DIR')) !== '' && is_dir($dir) && @copy($zip, rtrim($dir, '/\\') . '/' . basename($zip))) $r['offsite'][] = 'copied to ' . $dir;
@@ -112,7 +113,7 @@ function backup_restore(string $zip, string $key, string $targetDir): array {
     if (!is_file($file)) return ['ok' => false, 'error' => 'The backup has no database in it.'];
     $p = new PDO('sqlite:' . $file); $ic = (string)$p->query('pragma integrity_check')->fetchColumn();
     $counts = []; foreach (['users', 'sends', 'recipients', 'donations'] as $t) $counts[$t] = (int)$p->query("select count(*) from $t")->fetchColumn();
-    $art = count(glob(rtrim($targetDir, '/\\') . '/art/*') ?: []);
+    $art = count(glob(rtrim($targetDir, '/\\') . '/art/*') ?: []) + count(glob(rtrim($targetDir, '/\\') . '/library/*/*') ?: []);
     $ok = $ic === 'ok';
     set_setting('last_restore_test', (string)time()); set_setting('last_restore_result', $ok ? 'ok: ' . json_encode($counts) . ", $art artwork files" : "failed: $ic");
     return ['ok' => $ok, 'integrity' => $ic, 'counts' => $counts, 'art' => $art, 'file' => $file];

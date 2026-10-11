@@ -205,6 +205,7 @@ function send_digests(): int {
 
 /** Retention: blank card content and recipient details once the retention period has passed; drop stale anonymous drafts. */
 function purge_old(): int {
+    if (function_exists('art_cleanup_tmp')) art_cleanup_tmp(); // interrupted uploads
     $cut = time() - 86400 * (int)setting('retention_days', '90');
     $ids = array_column(all("select id from sends where queued_at is not null and queued_at<? and message<>''", [$cut]), 'id');
     foreach ($ids as $id) {
