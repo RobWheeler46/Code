@@ -31,5 +31,5 @@ elseif ($c === "reset-demo") { // staging only: clears cards, donations and non-
 elseif ($c === "digest") echo send_digests() . " digests\n";
 elseif ($c === "remind") echo send_reminders() . " reminders\n";
 elseif ($c === "purge") echo purge_old() . " purged\n";
-elseif ($c === "admin" && isset($argv[2])) echo q("update users set is_admin=1, roles=? where email=?", [$argv[3] ?? implode(",", array_diff(array_keys(ROLES), array_keys(TG_ROLES), array_keys(SL_ROLES))), strtolower($argv[2])])->rowCount() ? "ok\n" : "no such user\n";
+elseif ($c === "admin" && isset($argv[2])) echo q("update users set is_admin=1, roles=? where email=?", [$argv[3] ?? implode(",", array_keys(ROLES)), strtolower($argv[2])])->rowCount() ? "ok\n" : "no such user\n";
 else echo "queue | alerts | alerts-daily | purge | remind | digest | backup | restore <backup.zip> [dir] | reset-demo | admin <email> [roles]\n";

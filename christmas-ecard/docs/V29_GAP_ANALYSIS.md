@@ -64,3 +64,7 @@ Read, not built. It only changes the per-member artwork choice inside the Truste
 - A draft whose design is no longer published keeps showing its artwork, but a replacement is required before dispatch.
 
 Nothing in the public sender journey changes. One possible reuse: the public compose page still picks a design from a plain dropdown, and the same thumbnail chooser would suit it. Not started.
+
+## Removed (11 October 2026)
+
+Decision: the service has registered users and administrators only. The Trustee greeting roles, the section leader role and screens, and the private feature switches were deleted from the code (commits 613e635 and earlier hold them if ever needed). Leftover role values on old user rows do nothing.

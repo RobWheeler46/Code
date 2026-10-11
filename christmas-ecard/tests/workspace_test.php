@@ -4,15 +4,14 @@ $work = sys_get_temp_dir() . '/ecard-ws-' . getmypid(); mkdir($work, 0775, true)
 putenv('DB_PATH=' . $dbf); putenv('POSTMARK_TOKEN='); putenv('SMTP_HOST=');
 require __DIR__ . '/../src/app.php';
 function ok($c, string $m): void { echo ($c ? 'PASS ' : 'FAIL ') . $m . "\n"; if (!$c) $GLOBALS['bad'] = 1; }
-$roles = ['campaign', 'delivery', 'complaints', 'finance', 'appadmin', 'rolesadmin', 'tgeditor']; $U = [];
+$roles = ['campaign', 'delivery', 'complaints', 'finance', 'appadmin', 'rolesadmin']; $U = [];
 foreach ($roles as $r) { $sec = b32e(random_bytes(10)); q("insert into users(name,email,pass,verified,created,terms_version,is_admin,roles,totp_secret) values(?,?,?,1,?,?,1,?,?)", ["u$r", "$r@x.com", password_hash('Test-pass-123', PASSWORD_DEFAULT), time(), TERMS_VERSION, $r, $sec]); $U[$r] = ["$r@x.com", $sec]; }
-set_setting('private_trustee_greetings', '1');
 // the expectation, written out again here on purpose (not read from the manifest): which roles may use which destination
 $six = ['campaign', 'appadmin', 'finance', 'delivery', 'complaints', 'rolesadmin'];
-$rules = ['/admin' => ['*'], '/private/trustee-greetings' => ['tgeditor'], '/admin/library' => ['campaign', 'rolesadmin'], '/admin/campaigns' => ['campaign', 'rolesadmin'], '/admin/campaign' => ['campaign', 'appadmin', 'finance', 'delivery', 'rolesadmin'],
+$rules = ['/admin' => ['*'], '/admin/library' => ['campaign', 'rolesadmin'], '/admin/campaigns' => ['campaign', 'rolesadmin'], '/admin/campaign' => ['campaign', 'appadmin', 'finance', 'delivery', 'rolesadmin'],
     '/admin/launch' => $six, '/admin/delivery' => ['delivery', 'appadmin', 'rolesadmin'], '/admin/reports' => ['complaints'], '/admin/senders' => ['complaints', 'rolesadmin'], '/admin/finance' => ['finance'], '/admin/giftaid' => ['finance'],
     '/admin/measures' => ['campaign', 'finance', 'appadmin', 'rolesadmin'], '/admin/platform' => $six, '/admin/app' => ['appadmin', 'campaign', 'delivery', 'rolesadmin'], '/admin/mail' => ['appadmin', 'rolesadmin'], '/admin/wording' => ['appadmin', 'rolesadmin'],
-    '/admin/email' => ['appadmin', 'rolesadmin'], '/admin/privacy' => ['rolesadmin', 'campaign', 'appadmin', 'finance', 'delivery'], '/admin/access' => ['rolesadmin'], '/admin/private-features' => ['rolesadmin'], '/admin/rehearsal' => ['appadmin', 'rolesadmin'],
+    '/admin/email' => ['appadmin', 'rolesadmin'], '/admin/privacy' => ['rolesadmin', 'campaign', 'appadmin', 'finance', 'delivery'], '/admin/access' => ['rolesadmin'], '/admin/rehearsal' => ['appadmin', 'rolesadmin'],
     '/admin/health' => $six, '/admin/audit' => $six];
 $port = random_int(19100, 19900); $proc = proc_open([PHP_BINARY, '-S', "127.0.0.1:$port", '-t', __DIR__ . '/../public', __DIR__ . '/../public/index.php'], [1 => ['file', $work . '/srv.log', 'w'], 2 => ['file', $work . '/srv.log', 'a']], $pipes, null, array_merge(getenv(), ['DB_PATH' => $dbf, 'POSTMARK_TOKEN' => '', 'SMTP_HOST' => '']));
 for ($i = 0; $i < 50 && !@fsockopen('127.0.0.1', $port); $i++) usleep(100000);
@@ -26,7 +25,7 @@ foreach ($roles as $r) {
     $jar = $jars[$r] = login($U[$r]); [$c, $page] = http('/admin', $jar); $menus[$r] = menu($page);
     $want = array_keys(array_filter($rules, fn($who) => in_array('*', $who, true) || in_array($r, $who, true)));
     // the menu shows destinations, platform tools are reached from Platform controls
-    $wantMenu = array_values(array_filter($want, fn($h) => !in_array($h, ['/admin/app', '/admin/mail', '/admin/wording', '/admin/email', '/admin/privacy', '/admin/access', '/admin/private-features', '/admin/rehearsal', '/admin/health', '/admin/audit'], true)));
+    $wantMenu = array_values(array_filter($want, fn($h) => !in_array($h, ['/admin/app', '/admin/mail', '/admin/wording', '/admin/email', '/admin/privacy', '/admin/access', '/admin/rehearsal', '/admin/health', '/admin/audit'], true)));
     $got = $menus[$r]; sort($wantMenu); sort($got);
     ok($c === 200 && $got === $wantMenu, "$r: the menu shows exactly " . count($wantMenu) . ' destinations (' . ($got === $wantMenu ? 'match' : 'got ' . implode(' ', $got) . ' wanted ' . implode(' ', $wantMenu)) . ')');
     foreach ($rules as $href => $who) {
@@ -44,8 +43,6 @@ ok($sc === $mm && str_contains($ov, 'What would you like to do?') && str_contain
 [, $pg] = http('/admin/library', $jars['campaign']); ok(str_contains($pg, 'aria-label="Breadcrumb"') && str_contains($pg, '<span aria-current="page">eCard Library</span>') && str_contains($pg, 'Cards and campaigns') && str_contains($pg, '<a href="/admin/library" aria-current="page">eCard Library</a>'), 'a page shows its breadcrumb and is marked as the current page in the menu');
 [, $pg] = http('/admin/mail', $j); ok(str_contains($pg, 'Platform controls') && str_contains($pg, '<span aria-current="page">Email delivery</span>') && str_contains($pg, '<a href="/admin/platform" aria-current="true">Platform controls</a>'), 'a tool inside Platform controls shows where it sits');
 ok(str_contains($pg, '<details class="wsmenu" open><summary>Workspace menu</summary>') && str_contains($pg, '<meta name="viewport"'), 'the menu is a disclosure that the page can close on a phone');
-// a Trustee role holder sees a minimal workspace
-[, $t] = http('/admin', $jars['tgeditor']); ok(menu($t) === ['/admin', '/private/trustee-greetings'] && !str_contains($t, 'Where things stand') && !str_contains($t, 'Donations recorded'), 'a Trustee role holder sees only Overview and the greetings entry, with no operational numbers');
 
 proc_terminate($proc); proc_close($proc);
 exec('rmdir /s /q ' . escapeshellarg($work) . ' 2>nul'); if (is_dir($work)) exec('rm -rf ' . escapeshellarg($work));

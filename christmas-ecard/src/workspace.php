@@ -2,17 +2,13 @@
 // The volunteer workspace (build pack v2.10): one shell, one navigation manifest, grouped by what people are trying to do. Every admin page uses it.
 // The manifest only decides what is SHOWN. Every route still checks the person's role on the server for itself.
 
-/** Any of the six administrator roles. The private Trustee greeting roles on their own do not count: those people get the greetings entry and nothing operational. */
+/** Any of the six administrator roles. */
 function ops_admin(): bool { return can_any('campaign', 'appadmin', 'finance', 'delivery', 'complaints', 'rolesadmin'); }
 
 /** [group => [[label, href, short description, allowed?]]] in display order. The single source for the menu, the overview shortcuts and the breadcrumbs. */
 function workspace_manifest(): array {
     return [
         'Start' => [['Overview', '/admin', 'Your tasks and what needs attention', fn() => true]],
-        'Member greetings' => [
-            ['Prepare and review cards', '/private/trustee-greetings', 'Individual greetings to Group members', fn() => pf_on('private_trustee_greetings') && tg_can()],
-            ['Suggest messages', '/private/section-suggestions', 'Wording for the members of your section', fn() => sl_on() && sl_can()],
-            ['Review suggestions', '/private/trustee-greetings/suggestions', 'Decide on suggestions from section leaders', fn() => sl_on() && sl_trustee_view()]],
         'Cards and campaigns' => [
             ['eCard Library', '/admin/library', 'Add, preview and publish card designs', fn() => can_any('campaign', 'rolesadmin')],
             ['Occasions and campaigns', '/admin/campaigns', 'Prepare draft campaigns and reuse designs', fn() => can_any('campaign', 'rolesadmin')],
@@ -38,7 +34,6 @@ function platform_manifest(): array {
         ['Email preview and test', '/admin/email', 'See the card email and send yourself one', fn() => can_any('appadmin', 'rolesadmin')],
         ['Privacy and retention', '/admin/privacy', 'How long cards and details are kept', fn() => can_any('rolesadmin', 'campaign', 'appadmin', 'finance', 'delivery')],
         ['Administrator access', '/admin/access', 'Invite administrators and give roles', fn() => can('rolesadmin')],
-        ['Private features', '/admin/private-features', 'Switches for Trustee greetings', fn() => can('rolesadmin')],
         ['Rehearsal', '/admin/rehearsal', 'Test cards to an allow list', fn() => can_any('appadmin', 'rolesadmin')],
         ['System health', '/admin/health', 'Email, payments, backups and scheduled jobs', fn() => ops_admin()],
         ['Change history', '/admin/audit', 'Who changed what, with export', fn() => ops_admin()],
