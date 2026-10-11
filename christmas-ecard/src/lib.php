@@ -53,6 +53,7 @@ function db(): PDO {
     $p->exec('create index if not exists rcpt_token_hash on recipients(token_hash)');
     $p->exec("update recipients set token_hash=sha256(token) where token_hash is null and token is not null and token not like 'gone-%'");
     $p->exec("update recipients set token=null where token_hash is not null and status in ('sent','failed','bounced')");
+    if (function_exists('library_migrate')) library_migrate($p);
     return $p;
 }
 function q(string $sql, array $a = []): PDOStatement { $s = db()->prepare($sql); $s->execute($a); return $s; }

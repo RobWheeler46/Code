@@ -19,6 +19,10 @@ elseif ($c === "restore") { // rehearsal: unpacks beside the live data, never ov
     if (!$r["ok"]) { echo "RESTORE FAILED: " . ($r["error"] ?? $r["integrity"] ?? "unknown") . "\n"; exit(1); }
     echo "restore ok into $dir\nintegrity: {$r['integrity']}\nrows: " . json_encode($r["counts"]) . "\nartwork files: {$r['art']}\n";
 }
+elseif ($c === "library-rollback") { echo implode("
+", library_rollback()) . "
+Now set LIBRARY_MIGRATE=off in .env so the tables are not recreated on the next request.
+"; }
 elseif ($c === "reset-demo") { // staging only: clears cards, donations and non-admin accounts
     if (env("APP_ENV", "development") === "production") { echo "Refused: this is production.\n"; exit(1); }
     foreach (["recipients", "sends", "donations", "reports", "optouts", "contacts", "groups", "contact_groups", "alerts"] as $t) db()->exec("delete from $t");

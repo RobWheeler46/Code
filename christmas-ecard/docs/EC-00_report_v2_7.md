@@ -47,3 +47,7 @@ ED-01 who may publish; ED-02 upload size, dimension and pixel limits (needs the 
 ## Not covered by this pass
 
 No live host inspection (cPanel PHP version and extensions, upload limits), no review of the unseen original FRD v2.0 and v2.1 beyond the merged baseline, and no security review. The pack requires independent review of uploads and permissions before EC-02 ships.
+
+## EC-01 status (11 October 2026)
+
+Built: `src/library.php` adds `occasions`, `campaigns`, `designs`, `design_versions` and `campaign_designs`, plus nullable `sends.campaign_id` and `sends.design_version_id`. On first start it imports the 12 existing designs plus the 10 drawn ones as version 1 of one Christmas campaign (with SHA-256 and pixel size for the illustrated images) and links every existing send to its design version. Nothing reads these tables yet, so Christmas behaviour is unchanged and the settings table stays the source of truth until EC-04. The imported published or held back state is a one-time copy and will drift if an admin changes a design before EC-04; that is intended and noted. Rollback: `php src/cli.php library-rollback`, then set `LIBRARY_MIGRATE=off`. Tested in `tests/library_migration_test.php` (9 checks: upgrade of an old database, idempotence, linking, rollback). Not verified: the real cPanel SQLite version (rollback drops columns, which needs SQLite 3.35 or later; the code leaves the harmless nullable columns if it cannot).

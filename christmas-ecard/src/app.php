@@ -10,6 +10,7 @@ require __DIR__ . '/admin2.php';
 require __DIR__ . '/admin3.php';
 require __DIR__ . '/giftaid.php';
 require __DIR__ . '/resilience.php';
+require __DIR__ . '/library.php';
 
 function post(): bool { return $_SERVER['REQUEST_METHOD'] === 'POST'; }
 function field(string $k, int $max = 200): string { return mb_substr(trim((string)($_POST[$k] ?? '')), 0, $max); }
