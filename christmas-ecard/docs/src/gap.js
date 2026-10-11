@@ -22,7 +22,7 @@ const R = [
   [87, 87, 'partial', 'src/admin.php r_admin_access', 'admin_test', 'No beneficiary change workflow.'],
   [88, 88, 'implemented', 'src/invites.php; src/admin.php r_admin_access', 'tests/invites_test.php', 'Invitation by email, role assignment, revocation, MFA enrolment on first use.'],
   [89, 94, 'implemented', 'src/admin.php, src/ops.php health_alerts', 'admin_test, ops_test', 'Audit export is not built (FR-159).'],
-  [95, 95, 'missing', '-', '-', 'Restore previous configuration (Should).'],
+  [95, 95, 'implemented', 'src/admin.php r_admin_config (restore), r_admin_audit', 'tests/restore_test.php', 'Restricted administrators restore earlier settings through the normal review.'],
   [96, 99, 'implemented', 'public/assets/style.css; src/app.php page(); email_html()', 'ops_test (email logo)', 'Contrast computed, not checked with an external tool.'],
   [100, 116, 'implemented', 'src/contacts.php', 'tests/contacts_test.php', ''],
   [117, 123, 'partial', 'src/admin.php; public/assets/style.css', 'admin_test', 'No assistive technology audit; nav grouped into five areas (UX24-07).'],

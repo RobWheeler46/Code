@@ -123,8 +123,8 @@ function cfg_input(string $key, array $f, string $val, ?string $err, bool $edit,
     return ($f[1] === 'bool' ? '<label class="opt">' . $in . ' ' . h($f[0]) . fe($err ? [$key => $err] : [], $key) . '</label>' : $lab . $in . fe($err ? [$key => $err] : [], $key) . '</label>');
 }
 /** Form values to display: proposed (kept after an error or conflict) or current effective ones, shown as form text. */
-function cfg_form_value(string $key, array $f): string {
-    $s = setting($key, $f['def']);
+function cfg_form_value(string $key, array $f): string { return cfg_stored_form($f, setting($key, $f['def'])); }
+function cfg_stored_form(array $f, string $s): string {
     return match ($f[1]) { 'money' => $s === '' ? '' : number_format((int)$s / 100, 2, '.', ''), 'amounts' => implode(', ', array_map(fn($p) => rtrim(rtrim(number_format((int)$p / 100, 2, '.', ''), '0'), '.'), array_filter(explode(',', $s), 'strlen'))), default => $s };
 }
 function privacy_impact(array $new): array {
@@ -151,6 +151,10 @@ function r_admin_config(string $area): void {
         }
         $reason = trim((string)($_POST['reason'] ?? '')); $ref = trim((string)($_POST['approval'] ?? ''));
         $diff = []; foreach ($spec['fields'] as $k => $f) if ($prop[$k] !== cfg_current($k, $f)) $diff[$k] = [cfg_current($k, $f), $prop[$k]];
+        $restoreOf = 0; if (!empty($_POST['restore_of'])) { // only a restricted administrator can restore, and only from a real earlier change to this same settings page
+            if (!can('rolesadmin') || !one('select 1 x from audit where id=? and action=?', [(int)$_POST['restore_of'], "config_$area"])) { flash('That restore is not allowed.', 'err'); redirect($path); }
+            $restoreOf = (int)$_POST['restore_of'];
+        }
         $confirmed = !empty($_POST['confirmed']);
         if (!$errs && !empty($spec['reason']) && $confirmed && ($reason === '' || $ref === '')) $errs['reason'] = 'A reason and an approval reference are needed.';
         if (!$errs && $confirmed && (string)($_POST['ver'] ?? '') !== setting('cfg_version', '0')) { // someone else saved first: keep what was typed
@@ -163,11 +167,12 @@ function r_admin_config(string $area): void {
             foreach ($diff as $k => [, $new]) set_setting($k, $new);
             set_setting('cfg_version', (string)((int)setting('cfg_version', '0') + 1));
             db()->commit();
-            audit((int)$u['id'], "config_$area", json_encode(['changes' => array_map(fn($d) => ['from' => $d[0], 'to' => $d[1]], $diff), 'reason' => $reason, 'approval' => $ref], JSON_UNESCAPED_UNICODE));
-            flash('Saved. These settings are now version ' . setting('cfg_version') . '.'); redirect($path);
+            audit((int)$u['id'], "config_$area", json_encode(['changes' => array_map(fn($d) => ['from' => $d[0], 'to' => $d[1]], $diff), 'reason' => $reason, 'approval' => $ref] + ($restoreOf ? ['restored_from' => $restoreOf] : []), JSON_UNESCAPED_UNICODE));
+            flash(($restoreOf ? 'Earlier values restored. ' : 'Saved. ') . 'These settings are now version ' . setting('cfg_version') . '.'); redirect($path);
         }
         $rows = ''; foreach ($diff as $k => [$old, $new]) $rows .= '<tr><th scope="row">' . h($spec['fields'][$k][0]) . '</th><td><span class="sr">Old value: </span>' . h(cfg_show($spec['fields'][$k], $old)) . '</td><td><span class="sr">New value: </span><strong>' . h(cfg_show($spec['fields'][$k], $new)) . '</strong></td></tr>';
         $hid = ''; foreach ($spec['fields'] as $k => $f) $hid .= '<input type="hidden" name="f_' . $k . '" value="' . h((string)($_POST['f_' . $k] ?? '')) . '">';
+        if ($restoreOf) $hid .= '<input type="hidden" name="restore_of" value="' . $restoreOf . '">';
         $impact = $area === 'privacy' ? '<h2>Impact</h2><ul>' . implode('', array_map(fn($l) => '<li>' . h($l) . '</li>', privacy_impact($prop))) . '</ul>' : '';
         admin_page('Review changes', '<h1>Review changes: ' . h($spec['title']) . '</h1><p>' . h($spec['when']) . '</p><table class="stacked"><tr><th>Setting</th><th>Old</th><th>New</th></tr>' . $rows . '</table>' . $impact
             . '<form method="post" class="stack">' . csrf() . $hid . '<input type="hidden" name="ver" value="' . h((string)($_POST['ver'] ?? setting('cfg_version', '0'))) . '"><input type="hidden" name="confirmed" value="1">'
@@ -175,7 +180,14 @@ function r_admin_config(string $area): void {
             . '<div class="row"><button class="btn">Confirm and save</button><a class="btn alt" href="' . $path . '">Cancel, change nothing</a></div></form>');
     }
     $old = $_SESSION['cfg_old'][$area] ?? null; $errs = $_SESSION['cfg_err'][$area] ?? []; unset($_SESSION['cfg_old'][$area], $_SESSION['cfg_err'][$area]);
-    $b = '<h1>' . h($spec['title']) . '</h1><p class="note">' . h($spec['when']) . ' Version ' . h(setting('cfg_version', '0')) . '.</p>' . (!$edit ? '<p class="flash warn">You can view these settings but not change them.</p>' : '') . '<form method="post" class="stack">' . csrf() . '<input type="hidden" name="ver" value="' . h(setting('cfg_version', '0')) . '">';
+    $restore = null; $restoreNote = '';
+    if (!empty($_GET['restore']) && can('rolesadmin') && !$old && ($ra = one('select * from audit where id=? and action=?', [(int)$_GET['restore'], "config_$area"])) && ($rd = json_decode((string)$ra['detail'], true)) && !empty($rd['changes'])) {
+        $restore = (int)$ra['id']; $old = ['restore_of' => (string)$restore]; // the form starts from today's values, with the earlier values put back
+        foreach ($spec['fields'] as $k => $f) $old['f_' . $k] = isset($rd['changes'][$k]) ? cfg_stored_form($f, (string)$rd['changes'][$k]['from']) : cfg_form_value($k, $f);
+        $restoreNote = '<div class="flash warn" role="status"><strong>Restoring earlier values.</strong> The form below holds the values from before the change made on ' . h(when((int)$ra['created'])) . '. Nothing is saved until you review and confirm. Restoring cannot undo emails already sent, payments already taken, links that have already expired or records that have been deleted, and it is recorded as a new change.</div>';
+    } elseif ($old && !empty($old['restore_of'])) { $restore = (int)$old['restore_of']; }
+    $b = $restoreNote . '<h1>' . h($spec['title']) . '</h1><p class="note">' . h($spec['when']) . ' Version ' . h(setting('cfg_version', '0')) . '.</p>' . (!$edit ? '<p class="flash warn">You can view these settings but not change them.</p>' : '') . '<form method="post" class="stack">' . csrf() . '<input type="hidden" name="ver" value="' . h(setting('cfg_version', '0')) . '">';
+    if ($restore) $b .= '<input type="hidden" name="restore_of" value="' . $restore . '">';
     foreach ($spec['fields'] as $k => $f) $b .= cfg_input($k, $f, $old ? (string)($old['f_' . $k] ?? '') : cfg_form_value($k, $f), $errs[$k] ?? null, $edit, $first);
     if ($area === 'privacy') $b .= '<p class="note">Changing a period shows the affected records first and needs a reason and approval reference.</p>';
     if ($area === 'wording') $b .= '<p class="note"><a href="/admin/email">Preview the email and send yourself a test</a> once you have saved.</p>';
@@ -421,7 +433,8 @@ function r_admin_audit(): void {
         $ok = false; foreach ($prefixes as $p) if ($p === '' || str_starts_with($x['action'], $p)) { $ok = true; break; }
         if (!$ok) continue; if (++$n > 100) break;
         $d = json_decode($x['detail'], true);
-        $b .= '<li><strong>' . h($x['action']) . '</strong> by ' . h($x['name'] ?? 'system') . ' at ' . when((int)$x['created']) . ($d && isset($d['changes']) ? ': ' . h(implode('; ', array_map(fn($k, $c) => "$k: {$c['from']} to {$c['to']}", array_keys($d['changes']), $d['changes']))) . ($d['reason'] ? ' (reason: ' . h($d['reason']) . ($d['approval'] ? ', ref ' . h($d['approval']) : '') . ')' : '') : ' ' . h($x['detail'])) . '</li>';
+        $rl = ''; if (can('rolesadmin') && preg_match('/^config_(campaign|app|privacy|wording)$/', $x['action']) && !empty(($dd = json_decode($x['detail'], true))['changes'])) $rl = ' <a href="/admin/' . substr($x['action'], 7) . '?restore=' . (int)$x['id'] . '">Restore the earlier values</a>';
+        $b .= '<li><strong>' . h($x['action']) . '</strong> by ' . h($x['name'] ?? 'system') . ' at ' . when((int)$x['created']) . ($d && isset($d['changes']) ? ': ' . h(implode('; ', array_map(fn($k, $c) => "$k: {$c['from']} to {$c['to']}", array_keys($d['changes']), $d['changes']))) . ($d['reason'] ? ' (reason: ' . h($d['reason']) . ($d['approval'] ? ', ref ' . h($d['approval']) : '') . ')' : '') : ' ' . h($x['detail'])) . $rl . '</li>';
     }
     admin_page('Change history', $b . '</ul>' . ($n ? '' : '<p>No entries yet.</p>'));
 }
