@@ -56,7 +56,7 @@ function r_admin_senders(): void {
 
 // ---------- S42 launch readiness
 function r_admin_launch(): void {
-    need_admin(); $edit = can('rolesadmin'); $have = array_column(all('select * from decisions'), null, 'id'); $env = env('APP_ENV', 'development');
+    need_admin(); if (!ops_admin()) fail(403, 'You do not have permission for that.'); $edit = can('rolesadmin'); $have = array_column(all('select * from decisions'), null, 'id'); $env = env('APP_ENV', 'development');
     $blockers = launch_blockers();
     $b = '<h1>Launch readiness</h1><dl class="facts"><dt>Environment</dt><dd><strong>' . h(strtoupper($env)) . '</strong>' . ($env === 'production' ? '' : ' (test mode, banner shown to everyone)') . '</dd><dt>Open launch decisions</dt><dd><strong>' . $blockers . '</strong></dd><dt>Campaign status</dt><dd>' . h(['open' => 'Open', 'before' => 'Not open yet', 'closed' => 'Closed', 'locked' => 'Locked until decisions are approved'][campaign_state()]) . '</dd><dt>Override</dt><dd>' . (setting('launch_override') !== '' ? 'Active: ' . h(setting('launch_override')) : 'None') . '</dd></dl>'
         . '<p class="note">In production the campaign stays locked while a required decision is Open, unless a restricted administrator records an override with a reason. Conditional decisions (D-11 to D-13) never block launch; record them as Deferred or Approved.</p>';

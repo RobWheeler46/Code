@@ -6,24 +6,7 @@ function can_any(string ...$roles): bool { foreach ($roles as $r) if (can($r)) r
 function adminbtn(string $do, int $id, string $label): string {
     return '<form method="post" class="inline">' . csrf() . '<input type="hidden" name="do" value="' . $do . '"><input type="hidden" name="id" value="' . $id . '"><button class="link">' . h($label) . '</button></form> ';
 }
-function admin_page(string $title, string $body): never {
-    $u = user();
-    $links = ['/admin' => ['Overview', true], '/admin/delivery' => ['Delivery', can_any('delivery', 'appadmin', 'rolesadmin')], '/admin/finance' => ['Finance', can('finance')],
-        '/admin/reports' => ['Reports', can('complaints')], '/admin/campaign' => ['Campaign settings', can_any('campaign', 'appadmin', 'finance', 'delivery', 'rolesadmin')],
-        '/admin/app' => ['Application settings', can_any('appadmin', 'campaign', 'delivery', 'rolesadmin')], '/admin/email' => ['Email and help', can_any('appadmin', 'rolesadmin')], '/admin/wording' => ['Email and help wording', can_any('appadmin', 'rolesadmin')], '/admin/mail' => ['Email delivery', can_any('appadmin', 'rolesadmin')],
-        '/admin/privacy' => ['Privacy and retention', can_any('rolesadmin', 'campaign', 'appadmin', 'finance', 'delivery')], '/admin/access' => ['Administrator access', can('rolesadmin')],
-        '/admin/senders' => ['Senders', can_any('complaints', 'rolesadmin')], '/admin/launch' => ['Launch readiness', true], '/admin/giftaid' => ['Gift Aid', can('finance')], '/admin/measures' => ['Measures', can_any('campaign', 'finance', 'appadmin', 'rolesadmin')], '/admin/rehearsal' => ['Rehearsal', can_any('appadmin', 'rolesadmin')], '/admin/library' => ['eCard Library', can_any('campaign', 'rolesadmin')], '/admin/campaigns' => ['Occasions and campaigns', can_any('campaign', 'rolesadmin')], '/admin/private-features' => ['Private features', can('rolesadmin')], '/private/trustee-greetings' => ['Trustee greetings', pf_on('private_trustee_greetings') && tg_can()], '/admin/health' => ['System health', true], '/admin/audit' => ['Change history', true]];
-    $here = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-    $groups = ['Overview' => ['/admin'], 'Cards and delivery' => ['/private/trustee-greetings', '/admin/delivery', '/admin/reports', '/admin/senders', '/admin/rehearsal'], 'Fundraising' => ['/admin/finance', '/admin/giftaid', '/admin/measures'],
-        'Campaign setup' => ['/admin/campaign', '/admin/library', '/admin/campaigns', '/admin/launch', '/admin/email', '/admin/wording', '/admin/privacy'], 'Administration' => ['/admin/app', '/admin/mail', '/admin/private-features', '/admin/access', '/admin/health', '/admin/audit']]; // five areas; each link still passes its own server side role check
-    $nav = '<nav class="adminmenu" aria-label="Administration"><details open><summary>Menu</summary>';
-    foreach ($groups as $g => $hrefs) {
-        $li = ''; foreach ($hrefs as $href) if ($links[$href][1]) $li .= '<li><a href="' . $href . '"' . ($href === $here ? ' aria-current="page"' : '') . '>' . h($links[$href][0]) . '</a></li>';
-        if ($li !== '') $nav .= '<p class="navgroup">' . h($g) . '</p><ul class="plain">' . $li . '</ul>';
-    }
-    $nav .= '</details></nav>';
-    page($title, $nav . '<p class="note">Signed in as ' . h($u['name']) . ' (' . h(implode(', ', array_map(fn($r) => ROLES[$r] ?? $r, array_filter(explode(',', $u['roles'])))) ?: 'no roles') . ')</p>' . $body);
-}
+function admin_page(string $title, string $body): never { workspace_shell($title, $body); } // one shell for every admin page (src/workspace.php)
 function role_names(string $csv): string { return implode(', ', array_map(fn($r) => ROLES[$r] ?? $r, array_filter(explode(',', $csv)))) ?: 'no roles'; }
 
 // ---------- configuration engine
@@ -39,7 +22,7 @@ function config_spec(string $area): array {
             'show_progress' => ['Show fundraising progress publicly', 'bool', 'def' => '0'],
             'giftaid_charity' => ['Charity name used in the Gift Aid declaration (as HMRC knows it)', 'text', 'max' => 100, 'def' => ''],
             'giftaid_enabled' => ['Offer Gift Aid on donations (needs decision D-12 approved)', 'bool', 'def' => '0']]],
-        'app' => ['edit' => ['appadmin', 'rolesadmin'], 'title' => 'Application settings', 'when' => 'Applies to new entries straight away. Existing drafts are kept; a draft above a new limit must be corrected before submission. Accepted batches are unchanged.', 'fields' => [
+        'app' => ['view' => ['appadmin', 'campaign', 'delivery', 'rolesadmin'], 'edit' => ['appadmin', 'rolesadmin'], 'title' => 'Application settings', 'when' => 'Applies to new entries straight away. Existing drafts are kept; a draft above a new limit must be corrected before submission. Accepted batches are unchanged.', 'fields' => [
             'max_recipients' => ['Recipients per card (1 to 20)', 'int', 'min' => 1, 'max' => 20, 'def' => '20'],
             'msg_max' => ['Greeting limit (characters)', 'int', 'min' => 50, 'max' => 2000, 'def' => '500'],
             'name_max' => ['Display name limit (characters)', 'int', 'min' => 10, 'max' => 100, 'def' => '60'],
@@ -53,7 +36,7 @@ function config_spec(string $area): array {
             'alert_escalate_emails' => ['Who receives an alert nobody acknowledged (emails)', 'emails', 'def' => ''],
             'alert_escalate_minutes' => ['Escalate unacknowledged alerts after (minutes)', 'int', 'min' => 5, 'max' => 1440, 'def' => '60'],
             'allow_urls' => ['Allow web addresses in messages (never clickable)', 'bool', 'def' => '0']]],
-        'wording' => ['edit' => ['appadmin', 'rolesadmin'], 'title' => 'Email and help wording', 'when' => 'Used by new emails and the Help page straight away. Emails already sent are not changed. The private link, the stop and report routes and the privacy link always stay in every email.', 'fields' => [
+        'wording' => ['view' => ['appadmin', 'rolesadmin'], 'edit' => ['appadmin', 'rolesadmin'], 'title' => 'Email and help wording', 'when' => 'Used by new emails and the Help page straight away. Emails already sent are not changed. The private link, the stop and report routes and the privacy link always stay in every email.', 'fields' => [
             'email_subject' => ['Subject of the card email ({sender} is the sender name)', 'tpl', 'max' => 100, 'allow' => ['{sender}'], 'need' => '{sender}', 'def' => '{sender} sent you a Christmas card'],
             'email_intro' => ['Opening line of the card email ({sender} is the sender name)', 'tpl', 'max' => 160, 'allow' => ['{sender}'], 'need' => '{sender}', 'def' => '{sender} has sent you a Christmas card.'],
             'email_button' => ['Words on the button in the email', 'tpl', 'max' => 30, 'allow' => [], 'def' => 'Open your card'],
@@ -138,7 +121,7 @@ function privacy_impact(array $new): array {
 
 function r_admin_config(string $area): void {
     $u = need_admin(); $spec = config_spec($area);
-    $edit = can_any(...$spec['edit']); $viewRoles = ['campaign', 'appadmin', 'finance', 'delivery', 'rolesadmin'];
+    $edit = can_any(...$spec['edit']); $viewRoles = $spec['view'] ?? ['campaign', 'appadmin', 'finance', 'delivery', 'rolesadmin']; // who may read the page; each area can narrow it
     if (!$edit && !can_any(...$viewRoles)) fail(403, 'You do not have permission for that.');
     $path = '/admin/' . $area; $first = true;
     if (post()) {
@@ -296,9 +279,11 @@ function r_admin_action(): void {
 
 // ---------- S30 overview
 function r_admin(): void {
-    $u = need_admin(); $st = campaign_state(); $c = admin_pause_counts();
+    $u = need_admin();
+    if (!ops_admin()) admin_page('Overview', '<h1>Volunteer workspace</h1>' . workspace_shortcuts() . '<p class="note">Only the tools your roles allow are shown here.</p>');
+    $st = campaign_state(); $c = admin_pause_counts();
     $nc = (int)one("select count(*) n from sends where is_test=0 and status not in ('draft','awaiting_payment')")['n']; $na = count(health_alerts());
-    $b = '<h1>Administration</h1><div class="cards stats"><section class="statuscard"><h2>Cards requested</h2><p class="big">' . $nc . '</p></section>'
+    $b = '<h1>Volunteer workspace</h1>' . workspace_shortcuts() . '<h2>Where things stand</h2><div class="cards stats"><section class="statuscard"><h2>Cards requested</h2><p class="big">' . $nc . '</p></section>'
         . (can_any('finance', 'campaign') ? '<section class="statuscard"><h2>Donations recorded</h2><p class="big">' . gbp((int)one('select coalesce(sum(pence-refunded),0) n from donations')['n']) . '</p></section>' : '')
         . '<section class="statuscard"><h2>Needs attention</h2><p class="big">' . $na . '</p></section></div><div class="cards">'
         . '<section class="statuscard"><h2>Campaign</h2><p>' . ['open' => 'Open for new cards', 'before' => 'Not open yet', 'closed' => 'Closed to new cards', 'locked' => 'Locked until launch decisions are approved'][$st] . '</p></section>'
@@ -322,7 +307,7 @@ function r_admin(): void {
         $d = one('select count(*) n, coalesce(sum(pence),0) gross, coalesce(sum(fee),0) fee, coalesce(sum(refunded),0) ref from donations'); $tgt = (int)setting('target_pence');
         $b .= '<h2>Fundraising</h2><p>Confirmed gross donations: <strong>' . gbp((int)$d['gross']) . '</strong> from ' . $d['n'] . ' donations (average ' . gbp($d['n'] ? intdiv((int)$d['gross'], (int)$d['n']) : 0) . '). Fees ' . gbp((int)$d['fee']) . ', refunds ' . gbp((int)$d['ref']) . ', net after both ' . gbp((int)($d['gross'] - $d['fee'] - $d['ref'])) . ($tgt ? '. Target ' . gbp($tgt) . ' (public progress counts gross minus refunds)' : '') . '.</p>';
     }
-    admin_page('Administration', $b);
+    admin_page('Overview', $b);
 }
 
 // ---------- delivery (S20)
@@ -401,7 +386,7 @@ function r_admin_email(): void {
 
 // ---------- S38 health
 function r_admin_health(): void {
-    need_admin(); $now = time(); $env = env('STRIPE_SECRET') ? (str_contains(env('STRIPE_SECRET'), '_live_') ? 'LIVE' : 'TEST') : 'SIMULATED';
+    need_admin(); if (!ops_admin()) fail(403, 'You do not have permission for that.'); $now = time(); $env = env('STRIPE_SECRET') ? (str_contains(env('STRIPE_SECRET'), '_live_') ? 'LIVE' : 'TEST') : 'SIMULATED';
     $st = fn(int $t, int $max) => !$t ? '<strong>Unknown</strong>' : ($now - $t > $max ? '<strong>Stale</strong> (' . when($t) . ')' : 'OK (' . when($t) . ')');
     $rows = [
         ['Scheduled queue job', $st((int)setting('last_queue'), 300), 'delivery'], ['Email provider', ['postmark' => 'Postmark. Last accepted send: ' . ((int)setting('last_mail_ok') ? when((int)setting('last_mail_ok')) : 'Unknown'), 'smtp' => 'Own mail account (SMTP). Last accepted send: ' . ((int)setting('last_mail_ok') ? when((int)setting('last_mail_ok')) : 'Unknown') . '. No bounce or delivery feedback with this option.', 'log' => 'Not sending: emails are only written to a local log'][mail_provider()] . ' <a href="/admin/mail">Email delivery settings</a>', 'delivery'],
@@ -433,7 +418,7 @@ function audit_prefixes(): array {
 function audit_allowed(string $action, array $prefixes): bool { foreach ($prefixes as $p) if ($p === '' || str_starts_with($action, $p)) return true; return false; }
 
 function r_admin_audit(): void {
-    need_admin(); $prefixes = audit_prefixes();
+    need_admin(); if (!ops_admin()) fail(403, 'You do not have permission for that.'); $prefixes = audit_prefixes();
     $b = '<h1>Change history</h1><p class="note">Append-only. You see the entries relevant to your roles.' . (can_any('appadmin', 'rolesadmin') ? ' <a href="/admin/audit/export">Export entries as a spreadsheet</a>' : '') . '</p><ul class="plain">'; $n = 0;
     foreach (all('select a.*, u.name from audit a left join users u on u.id=a.user_id order by a.id desc limit 300') as $x) {
         $ok = false; foreach ($prefixes as $p) if ($p === '' || str_starts_with($x['action'], $p)) { $ok = true; break; }

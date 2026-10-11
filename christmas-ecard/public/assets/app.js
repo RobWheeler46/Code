@@ -41,3 +41,5 @@ document.querySelectorAll('[data-skip]').forEach(function (b) { b.addEventListen
     f.querySelector('[data-total]').textContent = '£' + (t / 100).toFixed(2);
     f.querySelector('[data-send-btn]').textContent = d ? 'Donate and send my cards' : 'Send my cards for free'; }
   f.addEventListener('input', upd); f.addEventListener('change', upd); upd(); })();
+
+(function () { var m = document.querySelector('.wsmenu'); if (m && window.matchMedia && window.matchMedia('(max-width:790px)').matches) m.removeAttribute('open'); })();
