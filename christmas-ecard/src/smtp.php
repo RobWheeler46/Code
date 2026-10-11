@@ -24,7 +24,7 @@ function smtp_message(string $from, string $to, string $subject, string $text, ?
 
 /** Sends one email. Returns null when accepted, or an error that starts PERM: (do not retry) or UNKNOWN: (may have been sent), or plain text (try again later). */
 function smtp_send(string $from, string $to, string $subject, string $text, ?string $html = null, ?array $attach = null): ?string {
-    $host = env('SMTP_HOST'); $secure = strtolower(env('SMTP_SECURE', 'tls')); $port = (int)env('SMTP_PORT', $secure === 'ssl' ? '465' : '587');
+    $host = mail_cfg('SMTP_HOST'); $secure = strtolower(mail_cfg('SMTP_SECURE', 'tls')); $port = (int)mail_cfg('SMTP_PORT', $secure === 'ssl' ? '465' : '587');
     $me = parse_url(env('APP_URL', 'http://localhost'), PHP_URL_HOST) ?: 'localhost';
     $s = @stream_socket_client(($secure === 'ssl' ? 'ssl://' : 'tcp://') . $host . ':' . $port, $en, $es, 15);
     if (!$s) return 'The mail server could not be reached (' . smtp_clean((string)$es) . '). It will be tried again.';
@@ -39,10 +39,10 @@ function smtp_send(string $from, string $to, string $subject, string $text, ?str
         if (!@stream_socket_enable_crypto($s, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) { @fclose($s); return 'A secure connection to the mail server could not be made. It will be tried again.'; }
         [$c, $t] = $cmd('EHLO ' . $me); if ($c !== 250) return $fail($c, $t, 'ehlo');
     }
-    if (env('SMTP_USER') !== '') {
+    if (mail_cfg('SMTP_USER') !== '') {
         [$c, $t] = $cmd('AUTH LOGIN'); if ($c !== 334) return $fail($c, $t, 'auth');
-        [$c, $t] = $cmd(base64_encode(env('SMTP_USER'))); if ($c !== 334) return $fail($c, $t, 'auth');
-        [$c, $t] = $cmd(base64_encode(env('SMTP_PASS'))); if ($c !== 235) return $fail($c, 'The user name or password was not accepted. Check SMTP_USER and SMTP_PASS.', 'auth');
+        [$c, $t] = $cmd(base64_encode(mail_cfg('SMTP_USER'))); if ($c !== 334) return $fail($c, $t, 'auth');
+        [$c, $t] = $cmd(base64_encode(mail_cfg('SMTP_PASS'))); if ($c !== 235) return $fail($c, 'The user name or password was not accepted. Check the user name and password in Email delivery settings.', 'auth');
     }
     [$c, $t] = $cmd('MAIL FROM:<' . smtp_addr($from) . '>'); if ($c !== 250) return $fail($c, $t, 'mail');
     [$c, $t] = $cmd('RCPT TO:<' . smtp_addr($to) . '>'); if ($c !== 250 && $c !== 251) return $fail($c, $t, 'rcpt');

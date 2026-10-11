@@ -151,18 +151,27 @@ function totp_ok(string $secret, string $code): bool {
 }
 
 // ---- email (Postmark, or data/outbox.log when no token is set)
+/** Mail settings: what an administrator saved in Admin wins, otherwise the .env value. */
+function mail_cfg(string $k, string $d = ''): string { $s = setting('mail_' . strtolower($k)); return $s !== '' ? $s : env($k, $d); }
+/** postmark, smtp or log (write to a file, send nothing). Left on automatic it follows what is configured. */
+function mail_provider(): string {
+    $p = setting('mail_provider'); if (in_array($p, ['postmark', 'smtp', 'log'], true)) return $p;
+    return mail_cfg('POSTMARK_TOKEN') !== '' ? 'postmark' : (mail_cfg('SMTP_HOST') !== '' ? 'smtp' : 'log');
+}
 function mail_send(string $to, string $subject, string $text, array $meta = [], ?string $html = null, ?string $fromName = null, ?array $attachments = null): ?string {
-    $from = env('MAIL_FROM', 'cards@7thswindon.org.uk'); // always our own verified address, never the sender's
+    $from = mail_cfg('MAIL_FROM', 'cards@7thswindon.org.uk'); // always our own verified address, never the sender's
     if ($fromName) $from = '"' . trim(preg_replace('/[^\p{L}\p{N} .,\'&-]/u', '', $fromName)) . ' via 7th Swindon Scouts" <' . $from . '>';
-    if (!env('POSTMARK_TOKEN') && env('SMTP_HOST') !== '') return smtp_send($from, $to, $subject, $text, $html, $attachments); // the Group's own mail account (src/smtp.php)
-    if (!env('POSTMARK_TOKEN')) {
+    $prov = mail_provider();
+    if ($prov === 'smtp') return mail_cfg('SMTP_HOST') === '' ? 'Email is set to use your own mail account, but no mail server has been entered yet.' : smtp_send($from, $to, $subject, $text, $html, $attachments); // the Group's own mail account (src/smtp.php)
+    if ($prov === 'postmark' && mail_cfg('POSTMARK_TOKEN') === '') return 'Email is set to use Postmark, but no Postmark token has been entered yet.';
+    if ($prov === 'log') {
         @mkdir(ROOT . '/data', 0775, true);
         file_put_contents(ROOT . '/data/outbox.log', json_encode(['t' => date('c'), 'to' => $to, 'from' => $from, 'subject' => $subject, 'text' => $text, 'html' => $html !== null]) . "\n", FILE_APPEND);
         return null;
     }
     $ch = curl_init('https://api.postmarkapp.com/email');
     curl_setopt_array($ch, [CURLOPT_POST => 1, CURLOPT_RETURNTRANSFER => 1, CURLOPT_TIMEOUT => 20,
-        CURLOPT_HTTPHEADER => ['Accept: application/json', 'Content-Type: application/json', 'X-Postmark-Server-Token: ' . env('POSTMARK_TOKEN')],
+        CURLOPT_HTTPHEADER => ['Accept: application/json', 'Content-Type: application/json', 'X-Postmark-Server-Token: ' . mail_cfg('POSTMARK_TOKEN')],
         CURLOPT_POSTFIELDS => json_encode(array_filter(['From' => $from, 'To' => $to, 'Subject' => $subject, 'TextBody' => $text, 'HtmlBody' => $html, 'MessageStream' => env('POSTMARK_STREAM', 'outbound'), 'TrackOpens' => false, 'Metadata' => $meta ?: null, 'Attachments' => $attachments], fn($v) => $v !== null))]);
     $raw = curl_exec($ch); $r = json_decode((string)$raw, true);
     if (!is_array($r)) return 'UNKNOWN:Provider did not answer, so we cannot tell whether the email was accepted';

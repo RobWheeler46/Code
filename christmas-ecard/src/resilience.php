@@ -95,7 +95,7 @@ function backup_run(): array {
             foreach ($names as $n) $z->setEncryptionName($n, ZipArchive::EM_AES_256, $key);
             $z->close(); $r['zip'] = $zip; @unlink($db); $r['plain'] = null;
             if (($dir = env('BACKUP_COPY_DIR')) !== '' && is_dir($dir) && @copy($zip, rtrim($dir, '/\\') . '/' . basename($zip))) $r['offsite'][] = 'copied to ' . $dir;
-            if (($to = env('BACKUP_EMAIL')) !== '' && env('POSTMARK_TOKEN') !== '' && filesize($zip) < 9 * 1048576) {
+            if (($to = env('BACKUP_EMAIL')) !== '' && mail_provider() !== 'log' && filesize($zip) < 9 * 1048576) {
                 $err = mail_send($to, "Christmas cards backup $stamp", "Encrypted backup attached. It is useless without the backup key, which is not in this email. Keep it somewhere safe and do not forward it.", [], null, null, [['Name' => basename($zip), 'Content' => base64_encode((string)file_get_contents($zip)), 'ContentType' => 'application/zip']]);
                 if ($err === null) $r['offsite'][] = "emailed to $to"; else $r['warnings'][] = 'Emailing the backup failed: ' . $err;
             }
