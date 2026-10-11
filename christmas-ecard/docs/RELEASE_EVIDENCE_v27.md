@@ -42,9 +42,15 @@ Christmas sending, payments, recipient view and the earlier suites still pass (s
 | Security review of uploads and permissions | **Not done** |
 | Load or concurrency test | **Not done** |
 
+## Decisions recorded
+
+- ED-01 who may publish: confirmed by Rob on 11 October 2026. Restricted administrators only (the setting `library_publish_roles` can widen it later). This is the project owner confirming the default, not a recorded Trustee minute.
+- ED-02 upload limits: confirmed by Rob on 11 October 2026: 8 MB, 12 megapixels, 6000 pixels on the longest side, at least 800 wide.
+- "Woggle all the way": stays held back until the corrected picture is supplied (see below).
+
 ## Decisions still open (do not guess)
 
-ED-01 who may publish: the safe default is applied (restricted administrators only; change with the setting `library_publish_roles`). ED-02 upload limits: proposed 8 MB, 12 megapixels, 6000 pixels, at least 800 wide; approve or change. ED-03 how long old versions are kept: nothing is deleted today. ED-04 to ED-10 only matter when another occasion is proposed.
+ED-03 how long old versions are kept: nothing is deleted today. ED-04 to ED-10 only matter when another occasion is proposed.
 
 ## Deploying this build
 
@@ -61,6 +67,10 @@ ED-01 who may publish: the safe default is applied (restricted administrators on
 - Library: add a draft with a real picture; the preview shows gallery, full card, sender and recipient views; the page does not scroll sideways on a phone.
 - Publish the draft (as a restricted administrator), see it in the gallery, hold it back, and see it leave. Check the Change history shows each step.
 - Try the same as a campaign manager: the Publish button is replaced by "Only a publisher can publish".
+
+## Putting the corrected Woggle picture in
+
+In Admin > Campaign setup > eCard Library open "Woggle all the way" and choose Create new version. Upload the corrected picture, fix the printed words and the description so they match the new year, tick the rights and wording and year checks, and save. A restricted administrator then publishes version 2 and uses Put back in the gallery. Cards already sent with the old picture keep it.
 
 ## Volunteer test (CAT-15)
 
