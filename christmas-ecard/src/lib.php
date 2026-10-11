@@ -119,7 +119,9 @@ function need_login(): array {
 }
 // Private Trustee greeting roles. Kept apart from the administrator roles on purpose: no other role, including restricted administrator, includes them.
 const TG_ROLES = ['tgeditor' => 'Trustee greeting editor', 'tgreviewer' => 'Trustee greeting reviewer', 'tgapprover' => 'Trustee greeting approver', 'tgdispatch' => 'Private greeting dispatch operator'];
-const ROLES = ['campaign' => 'Campaign manager', 'appadmin' => 'Application administrator', 'finance' => 'Finance administrator', 'delivery' => 'Delivery support', 'complaints' => 'Complaints reviewer', 'rolesadmin' => 'Restricted administrator', ...TG_ROLES];
+// Section leaders (build pack v2.9) are also kept apart: no other role includes it, and it opens nothing operational.
+const SL_ROLES = ['slleader' => 'Section leader'];
+const ROLES = ['campaign' => 'Campaign manager', 'appadmin' => 'Application administrator', 'finance' => 'Finance administrator', 'delivery' => 'Delivery support', 'complaints' => 'Complaints reviewer', 'rolesadmin' => 'Restricted administrator', ...TG_ROLES, ...SL_ROLES];
 function can(string $role): bool { return in_array($role, explode(',', (string)(user()['roles'] ?? ''))); }
 function need_role(string $role): array { $u = need_admin(); if (!can($role)) fail(403, 'You do not have permission for that.'); return $u; }
 function need_admin(): array {

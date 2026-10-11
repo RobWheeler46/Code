@@ -90,6 +90,6 @@ function bootstrap_admin(int $uid): void {
     $want = strtolower(trim(env('ADMIN_EMAIL'))); if ($want === '') return;
     $u = one('select * from users where id=?', [$uid]); if (!$u || !$u['verified'] || strtolower((string)$u['email']) !== $want) return;
     if ((int)one("select count(*) n from users where is_admin=1 and (',' || roles || ',') like '%,rolesadmin,%'")['n'] > 0) return;
-    q('update users set is_admin=1, roles=? where id=?', [implode(',', array_diff(array_keys(ROLES), array_keys(TG_ROLES))), $uid]);
+    q('update users set is_admin=1, roles=? where id=?', [implode(',', array_diff(array_keys(ROLES), array_keys(TG_ROLES), array_keys(SL_ROLES))), $uid]);
     audit($uid, 'admin_bootstrap', "user $uid became the first restricted administrator");
 }

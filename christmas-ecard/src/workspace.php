@@ -9,7 +9,10 @@ function ops_admin(): bool { return can_any('campaign', 'appadmin', 'finance', '
 function workspace_manifest(): array {
     return [
         'Start' => [['Overview', '/admin', 'Your tasks and what needs attention', fn() => true]],
-        'Member greetings' => [['Prepare and review cards', '/private/trustee-greetings', 'Individual greetings to Group members', fn() => pf_on('private_trustee_greetings') && tg_can()]],
+        'Member greetings' => [
+            ['Prepare and review cards', '/private/trustee-greetings', 'Individual greetings to Group members', fn() => pf_on('private_trustee_greetings') && tg_can()],
+            ['Suggest messages', '/private/section-suggestions', 'Wording for the members of your section', fn() => sl_on() && sl_can()],
+            ['Review suggestions', '/private/trustee-greetings/suggestions', 'Decide on suggestions from section leaders', fn() => sl_on() && sl_trustee_view()]],
         'Cards and campaigns' => [
             ['eCard Library', '/admin/library', 'Add, preview and publish card designs', fn() => can_any('campaign', 'rolesadmin')],
             ['Occasions and campaigns', '/admin/campaigns', 'Prepare draft campaigns and reuse designs', fn() => can_any('campaign', 'rolesadmin')],

@@ -5,7 +5,7 @@
 
 const PRIVATE_FEATURES = [
     'private_trustee_greetings' => ['Trustee member greetings', 'Individual greetings to current Group members, sent to a parent or carer, with two person approval.', true],
-    'private_section_greetings' => ['Section leader suggestions', 'Leaders suggest wording for members of their own section. A Trustee decides. Not built yet.', false],
+    'private_section_greetings' => ['Section leader suggestions', 'Leaders suggest wording for members of their own section. A Trustee decides. Needs Trustee greetings to be on first.', true],
 ];
 
 function pf_on(string $key): bool { return setting($key) === '1'; }
@@ -21,7 +21,7 @@ function r_tg_console(): void {
     if (!$u || !$u['is_admin'] || !pf_on('private_trustee_greetings') || !tg_can($u)) fail(404, 'Page not found.');
     need_admin(); // second step
     $holders = fn($r) => array_column(all("select name from users where is_admin=1 and (',' || roles || ',') like ? order by name", ["%,$r,%"]), 'name');
-    $b = '<h1>Trustee greetings</h1><p class="flash warn" role="status">Not connected. No member data source has been approved, so there is nothing to show or send here yet.</p>'
+    $b = '<h1>Trustee greetings</h1>' . (pf_on('private_section_greetings') && sl_trustee_view() ? '<p><a class="btn alt" href="/private/trustee-greetings/suggestions">Section leader suggestions</a></p>' : '') . '<p class="flash warn" role="status">Not connected. No member data source has been approved, so there is nothing to show or send here yet.</p>'
         . '<section class="admincard"><h2>What has to be decided first</h2><ul><li>Who may write, review, approve and send, and whether a second person is required.</li><li>The authoritative member source and how its data reaches this service.</li><li>Whether cards go to parents or carers only, and how members aged 18 or over and District sections are handled.</li><li>The lawful basis, retention and deletion rules.</li></ul><p class="note">See docs/V29_GAP_ANALYSIS.md.</p></section>'
         . '<section class="admincard"><h2>Who holds a Trustee greeting role</h2><ul>';
     foreach (TG_ROLES as $k => $label) $b .= '<li>' . h($label) . ': ' . h(implode(', ', $holders($k)) ?: 'nobody') . '</li>';
@@ -47,6 +47,7 @@ function r_admin_private_features_save(): void {
     $u = need_admin(); if (!can('rolesadmin')) fail(403, 'You do not have permission for that.'); if (!post()) redirect('/admin/private-features');
     $k = (string)($_POST['feature'] ?? ''); $on = ($_POST['state'] ?? '') === 'on'; $why = field('reason', 200); $ref = field('reference', 100);
     if (!isset(PRIVATE_FEATURES[$k]) || !PRIVATE_FEATURES[$k][2]) fail(400, 'Unknown feature.');
+    if ($k === 'private_section_greetings' && $on && !pf_on('private_trustee_greetings')) fail(400, 'Switch on Trustee greetings first.');
     if ($why === '' || ($on && $ref === '')) { flash($on ? 'A reason and an approval reference are both needed.' : 'A reason is needed.', 'err'); redirect('/admin/private-features'); }
     set_setting($k, $on ? '1' : '0'); if ($on) { set_setting("pf_ref_$k", $ref); set_setting("pf_at_$k", (string)time()); }
     audit((int)$u['id'], 'private_feature_' . ($on ? 'on' : 'off'), "$k: $why" . ($on ? " (approval $ref)" : ''));
