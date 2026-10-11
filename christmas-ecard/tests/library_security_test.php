@@ -93,6 +93,12 @@ ok($c === 302 && str_contains($l, '/review') && (new PDO('sqlite:' . $dbf))->que
 [$c, , $l] = http('POST', '/review', $sj, ['_c' => tok($rv), 'id' => $sid, 'do' => 'send']);
 ok($c === 302 && in_array((new PDO('sqlite:' . $dbf))->query("select status from sends where id=$sid")->fetchColumn(), ['queued', 'sending', 'sent'], true) && !(new PDO('sqlite:' . $dbf))->query("select count(*) from donations")->fetchColumn(), 'the same sender can still send for free, with no donation recorded');
 
+// the QR code download
+[$c, $qb] = http('GET', '/admin/campaign-qr?ref=newsletter', $mgr); ok($c === 200 && str_starts_with($qb, '<svg') && stripos($GLOBALS['hdr'], 'attachment') !== false && str_contains($qb, 'ref=newsletter'), 'a campaign manager can download the QR code, with the promotion label');
+[$c] = http('GET', '/admin/campaign-qr', $plain); ok($c === 403, 'an ordinary sender cannot');
+[$c, , $l] = http('GET', '/admin/campaign-qr', $anon); ok($c === 302 && str_contains($l, '/login'), 'a signed out visitor is sent to sign in');
+[$c, $camp] = http('GET', '/admin/campaign', $mgr); ok($c === 200 && str_contains($camp, 'class="qrbox"') && !str_contains($camp, 'qrserver'), 'the campaign page shows the code made here and names no other website');
+
 // private pages are never indexed or cached; public pages are left alone
 http('GET', '/admin/library', $pub); ok(stripos($GLOBALS['hdr'], 'X-Robots-Tag: noindex') !== false && stripos($GLOBALS['hdr'], 'no-store') !== false, 'admin pages ask search engines not to index and browsers not to keep them');
 http('GET', '/c/' . str_repeat('a', 48), $anon); ok(stripos($GLOBALS['hdr'], 'X-Robots-Tag: noindex') !== false, 'a card link is never indexed');

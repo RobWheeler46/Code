@@ -243,3 +243,5 @@ img.art{display:block;width:100%;height:auto}
 .libfull{display:block;max-width:100%;height:auto;object-fit:contain}.libframes{display:flex;gap:1.2rem;flex-wrap:wrap;align-items:flex-start}.libframes figure{margin:0}.g-desk{width:14rem}.g-mob{width:9rem}
 .libpreview{display:grid;gap:1rem}.libcur{max-width:10rem;margin:.4rem 0}.libform input[type=file]{padding:.5rem 0}
 @media(max-width:480px){.libgrid{grid-template-columns:1fr 1fr}.libform .row{flex-direction:column}}
+
+.qrbox{max-width:220px;border:1px solid #d9e1ee;border-radius:8px;padding:.4rem;background:#fff}.qrbox svg{display:block;width:100%;height:auto}

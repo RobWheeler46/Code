@@ -174,7 +174,7 @@ function admin_designs_and_share(): string {
         $b .= '</div></li>';
     }
     $b .= '</ul><h2>Share the campaign</h2><p>Public link: <code>' . h(base_url() . '/') . '</code>. Add <code>?ref=newsletter</code> (letters, numbers, hyphens) to see which promotion works. It leads to the gallery and contains nothing private.</p>'
-        . '<p><a href="https://api.qrserver.com/v1/create-qr-code/?size=800x800&amp;format=png&amp;data=' . h(urlencode(base_url() . '/')) . '">Download QR code (PNG)</a></p><ul>';
+        . '<div class="qrbox">' . qr_svg(base_url() . '/', 200) . '</div><p><a href="/admin/campaign-qr" download>Download the QR code (SVG, prints at any size)</a></p><p class="note">Made here, so the address is not sent to any other website.</p><ul>';
     foreach (all("select coalesce(ref,'(no label)') r, count(*) n from sends where status not in ('draft') group by ref order by n desc") as $x) $b .= '<li>' . h($x['r']) . ': ' . $x['n'] . ' cards</li>';
     return $b . '</ul>';
 }
@@ -396,4 +396,12 @@ function r_admin_audit(): void {
         $b .= '<li><strong>' . h($x['action']) . '</strong> by ' . h($x['name'] ?? 'system') . ' at ' . when((int)$x['created']) . ($d && isset($d['changes']) ? ': ' . h(implode('; ', array_map(fn($k, $c) => "$k: {$c['from']} to {$c['to']}", array_keys($d['changes']), $d['changes']))) . ($d['reason'] ? ' (reason: ' . h($d['reason']) . ($d['approval'] ? ', ref ' . h($d['approval']) : '') . ')' : '') : ' ' . h($x['detail'])) . '</li>';
     }
     admin_page('Change history', $b . '</ul>' . ($n ? '' : '<p>No entries yet.</p>'));
+}
+
+/** The campaign QR code as a download. An optional promotion label, like the link itself, may only be letters, numbers and hyphens. */
+function r_admin_campaign_qr(): void {
+    need_admin(); if (!can_any('campaign', 'appadmin', 'finance', 'delivery', 'rolesadmin')) fail(403, 'You do not have permission for that.');
+    $ref = preg_match('/^[a-z0-9-]{1,30}$/', (string)($_GET['ref'] ?? '')) ? '?ref=' . $_GET['ref'] : '';
+    header('Content-Type: image/svg+xml'); header('Content-Disposition: attachment; filename="7th-swindon-christmas-cards-qr.svg"'); header('X-Content-Type-Options: nosniff');
+    echo qr_svg(base_url() . '/' . $ref, 1000); exit;
 }

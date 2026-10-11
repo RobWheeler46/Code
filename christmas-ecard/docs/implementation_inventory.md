@@ -42,7 +42,7 @@ All pass (contacts_test failed once with a stale temporary database name and pas
    - UX24-03 is now built (free button first, donation behind an expandable section) and needs UAT on wording.
    - UX24-07: the Overview now lists each exception with an Open link, or the owning role where the viewer lacks access.
    - UX24-11: the three stage progress bar exists but its wording around sign in and payment has not been tested.
-   - The campaign QR image is fetched from a third party service. The pack prefers local generation; that needs a QR library or a small generator and a privacy decision.
+   - The campaign QR code is now generated locally (src/qr.php), no third party service.
    - Recipient tokens: done in this pass (hash only after sending; existing sent rows migrate on first start).
    - No staging run, live Stripe or Postmark verification, assistive technology test, security review or load test. These are the release gates and cannot be satisfied by code.
    - The pack's FR to AC mapping for FR-001 to FR-145 is provisional because the original v2.0 and v2.1 acceptance wording was not in the pack. The merged baseline in `docs/FRD_baseline_v2_3.md` now supplies it, so the mapping can be reconciled against that file.

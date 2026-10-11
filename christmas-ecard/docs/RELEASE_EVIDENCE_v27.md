@@ -75,3 +75,7 @@ In Admin > Campaign setup > eCard Library open "Woggle all the way" and choose C
 ## Volunteer test (CAT-15)
 
 Give someone who has not used the screen the approved picture and the wording. Time how long it takes them to add the card, check the preview and have a publisher publish it, without help. Record problems. The target in the pack is five minutes with no critical errors.
+
+## Local QR code (11 October 2026)
+
+The campaign QR code is now made inside the application (`src/qr.php`, byte mode, error correction level M, versions 1 to 6, up to 106 characters) and shown and downloaded as an SVG from the campaign settings page, so the address is no longer sent to a third party website. Checked by decoding five different strings, across versions 1 to 6 and including accented and emoji text, with an independent QR reader (jsQR, loaded once for the check and not part of the application); all five decoded exactly. `tests/qr_test.php` (13 checks) pins the code for the campaign address and checks its structure; 4 more checks over HTTP cover the download and its permissions. Not tested: scanning a printed copy with real phones, which is worth doing once.
