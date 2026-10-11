@@ -154,6 +154,7 @@ function totp_ok(string $secret, string $code): bool {
 function mail_send(string $to, string $subject, string $text, array $meta = [], ?string $html = null, ?string $fromName = null, ?array $attachments = null): ?string {
     $from = env('MAIL_FROM', 'cards@7thswindon.org.uk'); // always our own verified address, never the sender's
     if ($fromName) $from = '"' . trim(preg_replace('/[^\p{L}\p{N} .,\'&-]/u', '', $fromName)) . ' via 7th Swindon Scouts" <' . $from . '>';
+    if (!env('POSTMARK_TOKEN') && env('SMTP_HOST') !== '') return smtp_send($from, $to, $subject, $text, $html, $attachments); // the Group's own mail account (src/smtp.php)
     if (!env('POSTMARK_TOKEN')) {
         @mkdir(ROOT . '/data', 0775, true);
         file_put_contents(ROOT . '/data/outbox.log', json_encode(['t' => date('c'), 'to' => $to, 'from' => $from, 'subject' => $subject, 'text' => $text, 'html' => $html !== null]) . "\n", FILE_APPEND);

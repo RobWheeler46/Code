@@ -18,6 +18,7 @@ require __DIR__ . '/private_features.php';
 require __DIR__ . '/qr.php';
 require __DIR__ . '/account.php';
 require __DIR__ . '/invites.php';
+require __DIR__ . '/smtp.php';
 
 function post(): bool { return $_SERVER['REQUEST_METHOD'] === 'POST'; }
 function field(string $k, int $max = 200): string { return mb_substr(trim((string)($_POST[$k] ?? '')), 0, $max); }

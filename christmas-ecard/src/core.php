@@ -149,6 +149,7 @@ function email_body(array $r, array $s): string {
 
 /** Sends queued recipients. The 'sending' claim stops two workers sending the same card and loses races with cancellation. */
 function process_queue(int $limit = 50): int {
+    if (!env('POSTMARK_TOKEN') && env('SMTP_HOST') !== '') $limit = min($limit, max(1, (int)env('SMTP_PER_RUN', '20'))); // ordinary mail accounts cap how many emails they send an hour
     if (setting('paused') === '1') return 0;
     if (campaign_state() === 'closed' && setting('closure_queue') === 'hold') return 0;
     $n = 0;

@@ -16,7 +16,8 @@ cat > dist/DEPLOY.md <<'EOF'
 2. In `app/`, copy `.env.example` to `.env` and fill it in (APP_URL, Postmark, Stripe). Make `app/data/` writable (755 or 775).
 3. Cron every 5 min: `php /home/USER/app/src/cli.php queue`. Daily: `php /home/USER/app/src/cli.php purge`.
 4. First administrator: put `ADMIN_EMAIL=you@example.com` in `.env`, then register on the site with that address and confirm it from the email. You become the first restricted administrator (it only works while there is none), and visiting /admin asks you to set up two step sign in. No default password exists. With a terminal you can instead run `php /home/USER/app/src/cli.php admin you@example.com` after registering.
-5. Add the Stripe and Postmark webhooks (see project README).
+5. Email: either set POSTMARK_TOKEN (best: gives bounce and delivery feedback), or for a first set up send through the Group mail account with SMTP_HOST, SMTP_PORT (587), SMTP_SECURE (tls), SMTP_USER, SMTP_PASS and MAIL_FROM in `.env`. SMTP has no bounce feedback. Use Admin > Email and help > send a test to check it.
+6. Add the Stripe and Postmark webhooks (see project README).
 Requires PHP 8.2+ with pdo_sqlite and curl.
 EOF
 (cd dist && powershell -NoProfile -Command "Compress-Archive -Path app,public_html,DEPLOY.md -DestinationPath ../christmas-ecard-deploy.zip -Force")
