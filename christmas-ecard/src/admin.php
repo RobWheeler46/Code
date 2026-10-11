@@ -424,11 +424,17 @@ function r_admin_health(): void {
 }
 
 // ---------- S39 change history
-function r_admin_audit(): void {
-    need_admin();
+/** Which change history entries a person's roles let them see: by the start of the action name. An empty string means everything. */
+function audit_prefixes(): array {
     $map = ['finance' => ['reconcile', 'finance_export', 'payment_mismatch', 'config_privacy'], 'delivery' => ['resend', 'dispatch_paused', 'dispatch_resumed', 'cancel', 'address_correction', 'email_test'], 'campaign' => ['config_campaign', 'design_', 'target'], 'complaints' => ['message_access', 'report_'], 'appadmin' => ['config_app', 'dispatch_', 'email_test'], 'rolesadmin' => ['']];
     $prefixes = []; foreach ($map as $r => $p) if (can($r)) $prefixes = array_merge($prefixes, $p);
-    $b = '<h1>Change history</h1><p class="note">Append-only. You see the entries relevant to your roles.</p><ul class="plain">'; $n = 0;
+    return $prefixes;
+}
+function audit_allowed(string $action, array $prefixes): bool { foreach ($prefixes as $p) if ($p === '' || str_starts_with($action, $p)) return true; return false; }
+
+function r_admin_audit(): void {
+    need_admin(); $prefixes = audit_prefixes();
+    $b = '<h1>Change history</h1><p class="note">Append-only. You see the entries relevant to your roles.' . (can_any('appadmin', 'rolesadmin') ? ' <a href="/admin/audit/export">Export entries as a spreadsheet</a>' : '') . '</p><ul class="plain">'; $n = 0;
     foreach (all('select a.*, u.name from audit a left join users u on u.id=a.user_id order by a.id desc limit 300') as $x) {
         $ok = false; foreach ($prefixes as $p) if ($p === '' || str_starts_with($x['action'], $p)) { $ok = true; break; }
         if (!$ok) continue; if (++$n > 100) break;
@@ -445,4 +451,43 @@ function r_admin_campaign_qr(): void {
     $ref = preg_match('/^[a-z0-9-]{1,30}$/', (string)($_GET['ref'] ?? '')) ? '?ref=' . $_GET['ref'] : '';
     header('Content-Type: image/svg+xml'); header('Content-Disposition: attachment; filename="7th-swindon-christmas-cards-qr.svg"'); header('X-Content-Type-Options: nosniff');
     echo qr_svg(base_url() . '/' . $ref, 1000); exit;
+}
+
+// ---------- FR-159: export of the change history
+const AUDIT_EXPORT_MAX = 10000;
+/** Makes an entry safe to hand over: addresses are partly hidden, and long hex strings (links, tokens, hashes) are removed. */
+function audit_mask(string $d): string {
+    $d = preg_replace_callback('/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/', fn($m) => acct_mask($m[0]), $d);
+    return preg_replace('/\b[0-9a-f]{24,}\b/i', '[removed]', $d);
+}
+function r_admin_audit_export(): void {
+    $u = need_admin(); if (!can_any('appadmin', 'rolesadmin')) fail(403, 'You do not have permission for that.');
+    $err = '';
+    if (post()) {
+        limit_for("auditexport:{$u['id']}", 5, 3600);
+        $f = (string)($_POST['from'] ?? ''); $t = (string)($_POST['to'] ?? ''); $why = field('reason', 200); $pre = preg_replace('/[^a-z_]/', '', strtolower((string)($_POST['action'] ?? '')));
+        $a = DateTime::createFromFormat('!Y-m-d', $f); $z = DateTime::createFromFormat('!Y-m-d', $t);
+        if (!$a || !$z || $a->format('Y-m-d') !== $f || $z->format('Y-m-d') !== $t) $err = 'Choose a start and an end date.';
+        elseif ($a > $z) $err = 'The start date must not be after the end date.';
+        elseif ($a->diff($z)->days > 366) $err = 'Choose a period of a year or less.';
+        elseif ($why === '') $err = 'Say why you are exporting this. It is recorded.';
+        if (!$err) {
+            $from = $a->getTimestamp(); $to = $z->getTimestamp() + 86399; $allowed = audit_prefixes(); $rows = [];
+            foreach (all('select a.*, u.name from audit a left join users u on u.id=a.user_id where a.created>=? and a.created<=? order by a.id limit ' . (AUDIT_EXPORT_MAX + 1), [$from, $to]) as $x)
+                if (audit_allowed($x['action'], $allowed) && ($pre === '' || str_starts_with($x['action'], $pre))) $rows[] = $x;
+            if (count($rows) > AUDIT_EXPORT_MAX) $err = 'That is more than ' . AUDIT_EXPORT_MAX . ' entries. Choose a shorter period.';
+            else {
+                audit((int)$u['id'], 'audit_export', json_encode(['from' => $f, 'to' => $t, 'filter' => $pre, 'rows' => count($rows), 'reason' => $why], JSON_UNESCAPED_UNICODE)); // recorded before anything is handed over
+                header('Content-Type: text/csv; charset=utf-8'); header('Content-Disposition: attachment; filename="change-history-' . $f . '-to-' . $t . '.csv"'); header('X-Content-Type-Options: nosniff');
+                $o = fopen('php://output', 'w'); fputcsv($o, ['id', 'time_uk', 'actor_id', 'actor', 'action', 'detail']);
+                foreach ($rows as $x) fputcsv($o, [(int)$x['id'], date('Y-m-d H:i:s', (int)$x['created']), (int)$x['user_id'], csv_text((string)($x['name'] ?? 'system')), csv_text((string)$x['action']), csv_text(audit_mask((string)$x['detail']))]);
+                fclose($o); exit;
+            }
+        }
+    }
+    admin_page('Export change history', '<h1>Export change history</h1><p>You get the entries your roles let you see, for the dates you choose, as a spreadsheet file. Email addresses are partly hidden and links and tokens are removed. Every export is recorded with its dates, the number of entries and your reason.</p>'
+        . ($err ? '<p class="flash err" role="alert">' . h($err) . '</p>' : '') . '<form method="post" class="stack">' . csrf()
+        . '<label>From<input type="date" name="from" required value="' . h((string)($_POST['from'] ?? date('Y-m-d', time() - 30 * 86400))) . '"></label><label>To<input type="date" name="to" required value="' . h((string)($_POST['to'] ?? date('Y-m-d'))) . '"></label>'
+        . '<label>Only actions starting with (optional, for example config_)<input name="action" maxlength="40" value="' . h((string)($_POST['action'] ?? '')) . '"></label>'
+        . '<label>Reason for the export<input name="reason" required maxlength="200" value="' . h((string)($_POST['reason'] ?? '')) . '"></label><button class="btn">Download</button> <a class="btn alt" href="/admin/audit">Back to change history</a></form>');
 }
