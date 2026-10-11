@@ -1,0 +1,49 @@
+# EC-00: source audit for build pack v2.7 (eCard Library and occasions)
+
+Date: 11 October 2026. Scope: read the repository and compare it with FR-165 to FR-188, CAT-01 to CAT-15 and OCA-01 to OCA-12. No application code was changed. Full row by row evidence is in `gap_matrix_v27.csv`. Anything I could not verify is labelled UNVERIFIED. Built, tested, reviewed and approved are separate claims; only "built" and "automated tests" are made here.
+
+## Result in one line
+
+Of the 51 items, 3 are implemented, 22 partial and 26 missing. The library (upload, versions, publishing) and every occasion or campaign feature are missing. What exists is a single Christmas campaign with a hardcoded set of twelve illustrated designs that managers can enable, disable, reorder and re-describe.
+
+## Verified findings by source path
+
+| Area | Finding | Path |
+|---|---|---|
+| Design catalogue | Designs are a hardcoded PHP array. Enabled state, order and descriptions are overrides held in the `settings` table. Images are files deployed with the code. | `src/cards.php` `cards()`; `src/admin.php` `admin_designs_and_share` |
+| Upload | None. No route accepts a file. | `src/app.php` `dispatch()` |
+| Image tooling | PHP `gd` is loaded on the dev machine; `fileinfo` is not. The cPanel host's extensions are UNVERIFIED. | `php -m` |
+| Versions | Not modelled. A card's picture is copied to `data/art/<design>-<sha12>.<ext>` when it leaves draft and its name is stored in `sends.art_ref`. The copy is served immutable at `/art/<name>`. Title and alt text of a sent card still come from the current catalogue. | `src/resilience.php` `freeze_art`, `r_art`; `src/cards.php` `card_art` |
+| Campaign | One implicit campaign in settings (name, dates, donation purpose, amounts, target). `campaign_state()` gives open, before, closed or locked. No campaigns table, no occasion, no `group_id` anywhere. | `src/admin.php` `config_spec`; `src/core.php`; `src/lib.php` SCHEMA |
+| Christmas wording | Hardcoded in about 79 places: cards 46, core 12, app 10, ops 6, admin 2, lib 2, resilience 1. Email subject and body are in `src/core.php`. | `grep -c Christmas src/*.php` |
+| Publishing authority | Design changes sit behind the campaign or restricted administrator role in the action permission map. There is no separate publisher or second approver. | `src/admin.php` `r_admin_action` |
+| Direct start and hero | Disabled or held back designs are rejected at the start route and excluded from the hero. | `src/app.php` `r_compose`; `src/cards.php` `hero_for_session` |
+| Audit | Changes to designs and settings are audited with actor. No version, approval or hold events exist because those concepts do not. | `src/lib.php` `audit()` |
+| Backup | Encrypted backup bundles the database and `data/art`. The master artwork in `public/assets` ships with the code and is not in the backup. | `src/resilience.php` `backup_run` |
+| Tests | Eight plain PHP scripts, all passing. Reordering designs and a finance user trying to publish have no test of their own. | `tests/` |
+
+## Conflicts and caveats
+
+1. The pack says FR-148 holds designs back "in code"; that is still true. A held back list lives in `src/cards.php`.
+2. The pack's schema suggests `design_versions`, `campaign_designs`, `design_drafts` and `design_audit`. This repo already has `sends.art_ref` and an `audit` table, so the new tables should extend those rather than duplicate them (the pack itself asks for reuse).
+3. FR-165 to FR-188 are numbered after FR-164 and the merged baseline (`docs/FRD_baseline_v2_3.md`) ends at FR-164, so numbering is free. They are still unapproved proposals.
+4. The pack says an uploaded SVG is not allowed. Today's drawn designs are PHP-generated SVG, not uploads, so there is no conflict.
+5. `fileinfo` is missing locally, so signature checks must use GD decoding rather than `finfo`. That should be confirmed on the real host first.
+
+## Proposed PR order (smallest first, each reversible)
+
+| PR | Content | Notes |
+|---|---|---|
+| EC-01 | Additive migration: `occasions`, `campaigns`, `designs`, `design_versions`, `campaign_designs`; `sends.campaign_id` and `design_version_id` nullable; import the twelve existing designs as version 1 of one Christmas 2026 campaign. | Pure additions. Rollback is dropping the new tables and columns; the old code path keeps working because nothing reads them yet. Needs ED-03 (retention) before anything is deleted. |
+| EC-02 | Upload service: GD decode, size and pixel caps, EXIF stripping, opaque file names outside the web root, quarantine then commit. | Needs ED-02 limits from the real artwork. Write CAT-01, 02, 10, 12 tests first. |
+| EC-03 | Library screen and editor in the existing admin (five area menu, Campaign setup). | Mobile and keyboard evidence required. |
+| EC-04 | Publish, hold, archive, version pinning (including alt text and title), rollback, concurrency. | Needs ED-01 (who can publish). Default: draft only until agreed. |
+| EC-05 to EC-09 | Campaign aware gallery, draft occasions, campaign scoped donations, scope helper, release evidence. | Do not enable any non-Christmas campaign. Needs ED-04 to ED-10. |
+
+## Decisions needed before coding past EC-01
+
+ED-01 who may publish; ED-02 upload size, dimension and pixel limits (needs the twelve real files measured: the current ones are webp, see `public/assets`); ED-03 retention of pinned versions; ED-08 approved wording for non-Christmas emails. ED-04 to ED-07, ED-09 and ED-10 only matter once a second occasion is proposed.
+
+## Not covered by this pass
+
+No live host inspection (cPanel PHP version and extensions, upload limits), no review of the unseen original FRD v2.0 and v2.1 beyond the merged baseline, and no security review. The pack requires independent review of uploads and permissions before EC-02 ships.
