@@ -12,7 +12,8 @@ Date: 11 October 2026. This is evidence, not approval. Each row records what has
 | Publishing, versions, rollback (EC-04) | Yes | `library_lifecycle_test` (44) | Browser pane: publish, public thumbnail, hold back | No | No | No |
 | Gallery, hero, order, featured (EC-05) | Yes | `library_gallery_test` (18) | HTTP: held back design, saved draft, direct link | No | No | No |
 | Sign in, roles, CSRF, scope, replay, upload abuse (EC-08) | Yes | `library_security_test` (27, real HTTP) | Same | No | No | No |
-| Other occasions and campaigns (EC-06, EC-07) | **Not built** | n/a | n/a | n/a | n/a | n/a |
+| Draft campaigns, design reuse, per campaign donations (EC-06, EC-07) | Yes, draft only | `campaigns_test` (23), plus 11 checks in `library_security_test` | HTTP: finance refused, no activation route, occasion route, greeting only review | No | No | No |
+| Dynamic occasion wording (FR-179, OCA-12) | **Not built** (needs ED-08 approved text) | n/a | n/a | n/a | n/a | n/a |
 
 Christmas sending, payments, recipient view and the earlier suites still pass (smoke, contacts, admin, operations, Gift Aid, resilience, UX, token hash).
 
@@ -34,7 +35,9 @@ Christmas sending, payments, recipient view and the earlier suites still pass (s
 | CAT-14 rollback | Passed |
 | CAT-15 volunteer adds and publishes in five minutes | **Not done**: needs a real volunteer and the real artwork |
 | OCA-01, 08, 10, 11 | Passed (OCA-11 only as a Group filter on the server, with one Group) |
-| OCA-02 to 05, 07, 09, 12 | Not applicable until other campaigns exist |
+| OCA-02 to 05, 09, 10 | Passed (draft campaigns only; none can go live) |
+| OCA-07 pause a campaign | Existing dispatch pause only; no per campaign pause |
+| OCA-12 thank you wording has no Christmas text | **Not built** |
 | Accessibility: keyboard, screen reader, zoom | **Not done** |
 | Security review of uploads and permissions | **Not done** |
 | Load or concurrency test | **Not done** |

@@ -12,7 +12,7 @@ probe($db, "q(\"insert into users(name,email,pass,verified,created) values('S','
 ok(probe($db, "echo count(array_filter(array_column(db()->query(\"pragma table_info(sends)\")->fetchAll(),'name'), fn(\$n)=>\$n==='campaign_id'));", 'off') === '0', 'with LIBRARY_MIGRATE=off nothing is added');
 // upgrade
 $r = json_decode(probe($db, "\$n = fn(\$t) => (int)db()->query(\"select count(*) from \$t\")->fetchColumn(); echo json_encode(['occ'=>\$n('occasions'),'camp'=>\$n('campaigns'),'des'=>\$n('designs'),'ver'=>\$n('design_versions'),'cd'=>\$n('campaign_designs'),'cards'=>count(cards()),'on'=>count(array_filter(cards(), fn(\$c)=>\$c['on'])),'pub'=>(int)db()->query(\"select count(*) from campaign_designs where state='published'\")->fetchColumn(),'hash'=>(int)db()->query(\"select count(*) from design_versions where sha256 is not null and width>0\")->fetchColumn(),'send'=>one('select campaign_id c, design_version_id v from sends where id=1'),'vslug'=>one('select d.slug s from design_versions v join designs d on d.id=v.design_id where v.id=(select design_version_id from sends where id=1)')['s']]);", 'on'), true);
-ok($r && $r['occ'] === 1 && $r['camp'] === 1, 'one occasion (Christmas) and one campaign are created');
+ok($r && $r['occ'] === 4 && $r['camp'] === 1, 'the occasion names (Christmas and three examples) and exactly one campaign, Christmas, are created');
 ok($r['des'] === $r['cards'] && $r['ver'] === $r['cards'] && $r['cd'] === $r['cards'], 'every existing design becomes a design, a version 1 and a campaign entry');
 ok($r['pub'] === $r['on'], 'published entries match the designs that are switched on today');
 ok($r['hash'] >= 12, 'the twelve illustrated designs record a SHA-256 and pixel size');

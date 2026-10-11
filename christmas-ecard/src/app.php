@@ -13,6 +13,7 @@ require __DIR__ . '/resilience.php';
 require __DIR__ . '/library.php';
 require __DIR__ . '/uploads.php';
 require __DIR__ . '/library_admin.php';
+require __DIR__ . '/campaigns.php';
 
 function post(): bool { return $_SERVER['REQUEST_METHOD'] === 'POST'; }
 function field(string $k, int $max = 200): string { return mb_substr(trim((string)($_POST[$k] ?? '')), 0, $max); }
@@ -303,6 +304,7 @@ function r_review(): void {
     if (post()) {
         $do = $_POST['do'] ?? '';
         if ($do === 'send') $do = ($_POST['mode'] ?? '') === 'donate' ? 'donate' : 'free'; // one button, the radio says which
+        if ($do === 'donate' && !campaign_allows($s, 'donation')) { flash('This campaign does not take donations. You can send your cards for free.', 'warn'); redirect("/review?id=$id"); }
         if ($do === 'check' && $pending) {
             $r = pay_check($s);
             if ($r === 'expired') { back_to_draft($id); redirect("/review?id=$id&recover=failed"); }
@@ -327,7 +329,7 @@ function r_review(): void {
         $pence = $pick === 'custom' ? (int)round((float)($_POST['custom'] ?? 0) * 100) : (int)$pick;
         if ($pence < 100 || $pence > 50000) { flash('Choose a donation amount between £1 and £500, or choose "Send cards for free".', 'err'); redirect("/review?id=$id"); }
         $ga = null;
-        if (giftaid_on() && !empty($_POST['giftaid'])) { [$ga, $gerr] = giftaid_validate($_POST); if ($gerr) { $_SESSION['ga_old'] = $_POST; flash(implode(' ', $gerr), 'err'); redirect("/review?id=$id"); } }
+        if (giftaid_on() && campaign_allows($s, 'giftaid') && !empty($_POST['giftaid'])) { [$ga, $gerr] = giftaid_validate($_POST); if ($gerr) { $_SESSION['ga_old'] = $_POST; flash(implode(' ', $gerr), 'err'); redirect("/review?id=$id"); } }
         // one submission intent: only the request that wins this update may start a checkout
         if (!q("update sends set donation=?, donation_note=?, status='awaiting_payment', updated=? where id=? and status='draft'", [$pence, empty($_POST['donation_note']) ? 0 : 1, time(), $id])->rowCount()) redirect("/review?id=$id");
         giftaid_save_pending($id, $ga); freeze_art($id);
@@ -358,15 +360,16 @@ function r_review(): void {
     } else {
         $rec = $_GET['recover'] ?? '';
         if ($rec === 'cancelled' || $rec === 'failed') $form .= '<p class="flash warn" role="status"><strong>' . ($rec === 'cancelled' ? 'Payment was cancelled.' : 'Payment did not go through.') . '</strong> Nothing was charged and your card and recipients are safe. You can try again, or choose to send for free. Cards are only sent when you press a send button below.</p>';
-        $form .= '<fieldset class="sendopts"><legend>How would you like to send?</legend>'
+        if (!campaign_allows($s, 'donation')) $form .= '<div class="row"><button class="btn big" name="do" value="send">Send my cards for free</button></div><p class="note">Sending is free.</p>';
+        else { $form .= '<fieldset class="sendopts"><legend>How would you like to send?</legend>'
             . '<label class="optcard"><input type="radio" name="mode" value="free"' . ($rec ? '' : ' checked') . '> <strong>Send for free</strong><span>Your cards are free to send. No payment needed.</span></label>'
             . '<label class="optcard"><input type="radio" name="mode" value="donate"' . ($rec ? ' checked' : '') . '> <strong>Make an optional donation</strong><span>' . h(setting('donation_purpose', 'Donations support 7th Swindon Scouts.')) . '</span></label>'
             . '<div class="donatebox"><p>One donation covers all ' . count($rs) . ' of your cards.</p><div class="chips">';
         foreach (array_map('intval', explode(',', setting('amounts_pence', '200,500,1000'))) as $a) $form .= '<label class="opt"><input type="radio" name="amount" value="' . $a . '"> ' . gbp($a) . '</label>';
         $form .= '<label class="opt"><input type="radio" name="amount" value="custom"> Other amount (£) <input type="number" name="custom" min="1" max="500" step="0.01" aria-label="Custom amount in pounds"></label></div>'
             . '<label class="opt"><input type="checkbox" name="donation_note" value="1"> Add a line to the cards saying they came with a donation to 7th Swindon Scouts (no amount is shown; only after payment is confirmed)</label>'
-            . giftaid_form_block() . '</div>'
-            . '<p class="total">Total <strong data-total>£0.00</strong></p><button class="btn big" name="do" value="send" data-send-btn>Send my cards for free</button><p class="note">Sending is always free. Nothing is charged unless you choose to donate.</p></fieldset>';
+            . (campaign_allows($s, 'giftaid') ? giftaid_form_block() : '') . '</div>'
+            . '<p class="total">Total <strong data-total>£0.00</strong></p><button class="btn big" name="do" value="send" data-send-btn>Send my cards for free</button><p class="note">Sending is always free. Nothing is charged unless you choose to donate.</p></fieldset>'; }
     }
     page('Review and send', $b . $form . '</form>');
 }
@@ -630,11 +633,12 @@ function r_account_delete(): void {
 function dispatch(string $path): void {
     $routes = ['/' => 'r_home', '/help' => 'r_help', '/register' => 'r_register', '/verify' => 'r_verify', '/resend-verification' => 'r_resend_verify', '/login' => 'r_login', '/logout' => 'r_logout', '/forgot' => 'r_forgot', '/reset' => 'r_reset',
         '/compose' => 'r_compose', '/preview' => 'r_preview', '/email-preview' => 'r_email_preview', '/review' => 'r_review', '/pay-cancelled' => 'r_pay_cancelled', '/return' => 'r_return', '/dev/pay' => 'r_dev_pay', '/dashboard' => 'r_dashboard', '/send' => 'r_send', '/prefs' => 'r_prefs', '/remind-off' => 'r_remind_off', '/privacy' => 'r_privacy', '/terms' => 'r_terms', '/accept-terms' => 'r_accept_terms', '/account/delete' => 'r_account_delete', '/contacts' => 'r_contacts', '/contacts/edit' => 'r_contact_edit', '/contacts/delete-all' => 'r_contacts_delete_all', '/contacts/pick' => 'r_pick', '/contacts/save' => 'r_save_contact', '/groups' => 'r_groups', '/discard' => 'r_discard', '/change-email' => 'r_change_email', '/copy' => 'r_copy',
-        '/mfa' => 'r_mfa', '/admin' => 'r_admin', '/admin/delivery' => 'r_admin_delivery', '/admin/finance' => 'r_admin_finance', '/admin/reports' => 'r_admin_reports', '/admin/campaign' => 'r_admin_campaign', '/admin/app' => 'r_admin_app', '/admin/email' => 'r_admin_email', '/admin/privacy' => 'r_admin_privacy', '/admin/access' => 'r_admin_access', '/admin/health' => 'r_admin_health', '/admin/audit' => 'r_admin_audit', '/admin/action' => 'r_admin_action', '/admin/senders' => 'r_admin_senders', '/admin/launch' => 'r_admin_launch', '/admin/measures' => 'r_admin_measures', '/admin/giftaid' => 'r_admin_giftaid', '/admin/rehearsal' => 'r_admin_rehearsal', '/admin/library' => 'r_admin_library', '/admin/library/edit' => 'r_admin_library_edit', '/admin/library/save' => 'r_admin_library_save', '/admin/library/discard' => 'r_admin_library_discard', '/admin/library/preview' => 'r_admin_library_preview', '/admin/library/action' => 'r_admin_library_action', '/admin/library/img' => 'r_admin_library_img', '/admin/export' => 'r_export', '/admin/message' => 'r_message', '/hooks/stripe' => 'r_stripe_hook', '/hooks/postmark' => 'r_postmark_hook'];
+        '/mfa' => 'r_mfa', '/admin' => 'r_admin', '/admin/delivery' => 'r_admin_delivery', '/admin/finance' => 'r_admin_finance', '/admin/reports' => 'r_admin_reports', '/admin/campaign' => 'r_admin_campaign', '/admin/app' => 'r_admin_app', '/admin/email' => 'r_admin_email', '/admin/privacy' => 'r_admin_privacy', '/admin/access' => 'r_admin_access', '/admin/health' => 'r_admin_health', '/admin/audit' => 'r_admin_audit', '/admin/action' => 'r_admin_action', '/admin/senders' => 'r_admin_senders', '/admin/launch' => 'r_admin_launch', '/admin/measures' => 'r_admin_measures', '/admin/giftaid' => 'r_admin_giftaid', '/admin/rehearsal' => 'r_admin_rehearsal', '/admin/library' => 'r_admin_library', '/admin/library/edit' => 'r_admin_library_edit', '/admin/library/save' => 'r_admin_library_save', '/admin/library/discard' => 'r_admin_library_discard', '/admin/library/preview' => 'r_admin_library_preview', '/admin/library/action' => 'r_admin_library_action', '/admin/campaigns' => 'r_admin_campaigns', '/admin/campaigns/create' => 'r_admin_campaigns_create', '/admin/campaigns/view' => 'r_admin_campaigns_view', '/admin/campaigns/action' => 'r_admin_campaigns_action', '/admin/library/img' => 'r_admin_library_img', '/admin/export' => 'r_export', '/admin/message' => 'r_message', '/hooks/stripe' => 'r_stripe_hook', '/hooks/postmark' => 'r_postmark_hook'];
     if (post() && !str_starts_with($path, '/hooks/')) check_csrf();
     if (preg_match('#^/c/([a-f0-9]+)(?:/(open|report))?$#', $path, $m)) r_card($m[1], $m[2] ?? '');
     if (preg_match('#^/art/([a-z0-9.-]+)$#', $path, $m)) r_art($m[1]);
     if (preg_match('#^/optout/([a-f0-9]+)$#', $path, $m)) r_optout($m[1]);
+    if (preg_match('#^/occasion/([a-z0-9-]{1,40})$#', $path, $m)) r_occasion($m[1]);
     if (isset($routes[$path])) $routes[$path]();
     fail(404, 'Page not found.');
 }

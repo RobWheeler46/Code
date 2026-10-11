@@ -21,6 +21,8 @@ create index if not exists cd_version on campaign_designs(published_version_id);
         if (!in_array(explode(' ', $def)[0], array_column($p->query("pragma table_info($t)")->fetchAll(), 'name'))) $p->exec("alter table $t add column $def");
     foreach (['original_key text', 'full_key text', 'thumb_key text', 'rights_confirmed int default 0', 'year_checked int default 0', 'rev int default 1', 'updated int', 'author_id int', 'published_at int', 'published_by int', 'pub_name text', 'pub_thumb text'] as $def)
         if (!in_array(explode(' ', $def)[0], array_column($p->query('pragma table_info(design_versions)')->fetchAll(), 'name'))) $p->exec("alter table design_versions add column $def");
+    foreach (['giftaid int not null default 1'] as $def) // existing campaigns keep today's behaviour; new draft campaigns are created with Gift Aid off
+        if (!in_array(explode(' ', $def)[0], array_column($p->query('pragma table_info(campaigns)')->fetchAll(), 'name'))) $p->exec("alter table campaigns add column $def");
     $p->exec('create index if not exists sends_campaign on sends(campaign_id)');
     if (function_exists('library_import')) library_import($p);
 }
@@ -29,12 +31,12 @@ create index if not exists cd_version on campaign_designs(published_version_id);
 function library_import(PDO $p): void {
     if (!function_exists('cards') || env('LIBRARY_MIGRATE', 'on') === 'off') return;
     $now = time();
-    if (!(int)$p->query('select count(*) from occasions')->fetchColumn()) $p->exec("insert into occasions(slug,label) values('christmas','Christmas')");
+    foreach (['christmas' => 'Christmas', 'birthday' => 'Birthday', 'thank-you' => 'Thank you', 'celebration' => 'Celebration'] as $slug => $label) $p->exec('insert or ignore into occasions(slug,label) values(' . $p->quote($slug) . ',' . $p->quote($label) . ')'); // a controlled list of names only; none of them is a campaign or goes live
     if (!(int)$p->query('select count(*) from campaigns')->fetchColumn()) {
         $name = (string)($p->query("select v from settings where k='campaign_name'")->fetchColumn() ?: 'Christmas 2026');
         $p->prepare("insert into campaigns(group_id,occasion_id,name,status,created) values(1,(select id from occasions where slug='christmas'),?, 'active', ?)")->execute([$name, $now]);
     }
-    $cid = (int)$p->query('select min(id) from campaigns')->fetchColumn();
+    $cid = (int)$p->query('select min(id) from campaigns')->fetchColumn(); // the first campaign is always Christmas
     $ins = [$p->prepare('insert or ignore into designs(slug,internal_name,category,created) values(?,?,?,?)'),
         $p->prepare('insert or ignore into design_versions(design_id,version_no,asset_key,sha256,width,height,title,description,alt_text,created) values((select id from designs where slug=?),1,?,?,?,?,?,?,?,?)'),
         $p->prepare("insert or ignore into campaign_designs(campaign_id,design_id,published_version_id,state,order_rank) values(?,(select id from designs where slug=?),(select v.id from design_versions v join designs d on d.id=v.design_id where d.slug=? and v.version_no=1),?,?)")];

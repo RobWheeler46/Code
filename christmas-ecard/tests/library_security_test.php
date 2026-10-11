@@ -70,6 +70,28 @@ ok($c === 302 && str_contains($l, '/admin/library/edit') && count(glob("$lib/*/*
 [$c] = http('POST', '/admin/library/save', $fin, ['_c' => tok($adm), 'id' => 0, 'name' => 'Fin', 'words' => 'x', 'alt' => 'A long enough description of the card.'], ['art' => new CURLFile(pic("$work/f.png", 9), 'image/png', 'f.png')]);
 ok($c === 403 && count(glob("$lib/*/*") ?: []) === $files, 'a finance administrator cannot upload');
 
+// EC-06 and EC-07 over HTTP: campaigns screens, the occasion route, and donations that follow the campaign
+[$c] = http('GET', '/admin/campaigns', $fin); ok($c === 403, 'finance administrator: the campaigns screen is refused');
+[$c, $cl] = http('GET', '/admin/campaigns', $mgr); ok($c === 200 && str_contains($cl, 'cannot make it live') || str_contains($cl, 'nothing here can make it live'), 'a campaign manager sees the campaigns screen, which says nothing can make a draft live');
+$ctok = tok($cl);
+[$c] = http('POST', '/admin/campaigns/create', $mgr, ['name' => 'No token', 'occasion' => 3, 'mode' => 'none']); ok($c === 403, 'creating a campaign without the CSRF token is refused');
+[$c, , $l] = http('POST', '/admin/campaigns/create', $mgr, ['_c' => $ctok, 'name' => 'Greeting only HTTP', 'occasion' => 3, 'mode' => 'none']); ok($c === 302 && str_contains($l, '/admin/campaigns/view'), 'a manager can create a draft campaign');
+$gcid = (int)(new PDO('sqlite:' . $dbf))->query("select id from campaigns where name='Greeting only HTTP'")->fetchColumn();
+[$c, $cv] = http('GET', '/admin/campaigns/view?id=' . $gcid, $mgr); ok($c === 200 && !str_contains($cv, 'Make live') && !str_contains($cv, 'Activate'), 'the draft campaign page has no way to make it live');
+[$c, , $l] = http('GET', '/occasion/christmas', $anon); ok($c === 302 && str_contains($l, '#gallery'), 'OCA-02: the Christmas occasion goes to the gallery');
+[$c, $ob] = http('GET', '/occasion/birthday', $anon); ok($c === 404 && str_contains($ob, 'Not open yet') && !str_contains($ob, 'compose?card='), 'OCA-02: another occasion shows a calm not open page with no gallery');
+[$c, $gal] = http('GET', '/', $anon); ok(!str_contains($gal, 'Greeting only HTTP'), 'a draft campaign never appears on the public site');
+// a sender whose card belongs to a greeting only campaign
+q("insert into users(name,email,pass,verified,created,terms_version) values('Sue','sue@x.com',?,1,?,?)", [password_hash('Test-pass-123', PASSWORD_DEFAULT), time(), TERMS_VERSION]); $sue = (int)db()->lastInsertId();
+q("insert into sends(user_id,card,sender_name,message,status,created,updated,campaign_id) values(?, 'pegs','Sue','Hello','draft',1,1,?)", [$sue, $gcid]); $sid = (int)db()->lastInsertId();
+q("insert into recipients(send_id,name,email,token,status) values(?, 'Gran','gran@x.com','tok1','draft')", [$sid]);
+$sj = login('sue@x.com', null); [$c, $rv] = http('GET', '/review?id=' . $sid, $sj);
+ok($c === 200 && str_contains($rv, 'Send my cards for free') && !str_contains($rv, 'optional donation') && !str_contains($rv, 'name="amount"'), 'OCA-09 over HTTP: a greeting only campaign shows free sending and no donation choices');
+[$c, , $l] = http('POST', '/review', $sj, ['_c' => tok($rv), 'id' => $sid, 'do' => 'donate', 'mode' => 'donate', 'amount' => '500']);
+ok($c === 302 && str_contains($l, '/review') && (new PDO('sqlite:' . $dbf))->query("select status from sends where id=$sid")->fetchColumn() === 'draft', 'a forged donation for a greeting only campaign is refused and nothing is started');
+[$c, , $l] = http('POST', '/review', $sj, ['_c' => tok($rv), 'id' => $sid, 'do' => 'send']);
+ok($c === 302 && in_array((new PDO('sqlite:' . $dbf))->query("select status from sends where id=$sid")->fetchColumn(), ['queued', 'sending', 'sent'], true) && !(new PDO('sqlite:' . $dbf))->query("select count(*) from donations")->fetchColumn(), 'the same sender can still send for free, with no donation recorded');
+
 // nothing private ends up in the change history
 $bad = 0; foreach ((new PDO('sqlite:' . $dbf))->query("select detail from audit where action like 'library_%'")->fetchAll(PDO::FETCH_COLUMN) as $dtl) if (preg_match('/@|[0-9a-f]{40,}|password|token/i', (string)$dtl)) $bad++;
 ok($bad === 0, 'library entries in the change history hold no email addresses, links or secrets');
