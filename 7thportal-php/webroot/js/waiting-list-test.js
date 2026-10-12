@@ -56,9 +56,9 @@ async function submit() {
     const head = d.simulated ? d.note
       : (d.ok ? `Created on the live waiting list (OSM id ${d.scoutid}). "${d.wrote}" - CHECK OSM AND DELETE IT.`
               : `Did not write (HTTP ${d.status || '?'}).${d.error ? ' ' + d.error : ''}`);
-    let body = head + (d.response !== undefined && d.response !== null ? '\n\n' + JSON.stringify(d.response, null, 2) : '');
-    if (d.custom && Object.keys(d.custom).length) body += '\n\nCustom fields:\n' + JSON.stringify(d.custom, null, 2);
-    out.textContent = body;
+    let text = head + (d.response !== undefined && d.response !== null ? '\n\n' + JSON.stringify(d.response, null, 2) : '');
+    if (d.custom && Object.keys(d.custom).length) text += '\n\nCustom fields:\n' + JSON.stringify(d.custom, null, 2);
+    out.textContent = text;
   } catch (e) {
     out.hidden = false;
     out.textContent = 'Request failed: ' + (e && e.message ? e.message : e) + (e && e.data ? '\n\n' + JSON.stringify(e.data, null, 2) : '');
