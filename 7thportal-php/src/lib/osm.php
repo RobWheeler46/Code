@@ -670,6 +670,48 @@ function osmGetSectionEvents(string $accessToken, string $sectionId): array
     }
 }
 
+// Full waiting-list read for an authorised admin: every member on the waiting section
+// with their details and Primary Contact 1 & 2 (name/email/phone from custom_data groups
+// 1 & 2 - the same column ids osmParseParentImport uses). Fetch-only read-through: the
+// caller returns this straight to an admin and NOTHING is written to the portal DB (Tier C
+// enquiry data stays in OSM). Never throws; returns {ok, count, members} or {ok:false}.
+function osmWaitingListMembers(string $accessToken, string $sectionId, ?string $termId): array
+{
+    $tid = $termId ?? '-1';
+    $r = osmRawData('POST', $accessToken, '/ext/members/contact/grid/', ['action' => 'getMembers'], ['section_id' => $sectionId, 'sectionid' => $sectionId, 'term_id' => $tid, 'termid' => $tid]);
+    if (empty($r['ok'])) {
+        $blocked = !empty($r['bodySnippet']) && stripos($r['bodySnippet'], 'blocked') !== false;
+        return ['ok' => false, 'blocked' => $blocked, 'error' => $blocked ? 'OSM temporarily blocked the request' : ($r['error'] ?? ('HTTP ' . ($r['status'] ?? '?')))];
+    }
+    $rows = $r['payload']['data'] ?? $r['items'] ?? [];
+    $pick = fn($cd, $k) => (isset($cd[$k]) && trim((string) $cd[$k]) !== '') ? trim((string) $cd[$k]) : '';
+    $members = [];
+    foreach ($rows as $m) {
+        if (!is_array($m)) continue;
+        $cd = $m['custom_data'] ?? [];
+        $contacts = [];
+        foreach (['1', '2'] as $grp) {
+            $g = $cd[$grp] ?? null;
+            if (!is_array($g)) continue;
+            $name = trim($pick($g, '2') . ' ' . $pick($g, '3'));
+            $email = $pick($g, '12') ?: $pick($g, '14');
+            $phone = $pick($g, '18') ?: $pick($g, '20');
+            if ($name === '' && $email === '' && $phone === '') continue;
+            $contacts[] = ['name' => $name, 'email' => $email, 'phone' => $phone];
+        }
+        $members[] = [
+            'name' => trim(($m['first_name'] ?? $m['firstname'] ?? '') . ' ' . ($m['last_name'] ?? $m['lastname'] ?? '')),
+            'dob' => $m['date_of_birth'] ?? $m['dob'] ?? null,
+            'age' => $m['age'] ?? null,
+            'started' => $m['started'] ?? $m['startdate'] ?? $m['joined'] ?? null,
+            'patrol' => $m['patrol'] ?? null,
+            'contacts' => $contacts,
+        ];
+    }
+    usort($members, fn($a, $b) => strcmp((string) ($a['started'] ?? ''), (string) ($b['started'] ?? ''))); // longest-waiting first
+    return ['ok' => true, 'count' => count($members), 'members' => $members];
+}
+
 // Shared OSM section sync: for each youth role, cache the member count plus the next
 // upcoming programme item and event into osm_sections (counts/titles only - never a
 // member row). Used by the admin-triggered sync and the scheduled cron sync. Stops the

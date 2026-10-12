@@ -197,6 +197,32 @@ $router->post('/api/admin/sections/sync', function ($params) {
     jsonResponse(['ok' => true, 'synced' => $out['synced'], 'total' => $out['total'], 'sections' => $out['results']]);
 });
 
+// Admin-only waiting-list view. A live read-through of the OSM waiting-list section
+// (type 'waiting', term -1) with full member details + Primary Contacts. Named enquiry
+// data (Tier C) is returned to the admin and NOTHING is stored in the portal; the access
+// is audited. Mirrors the existing admin member drill-down.
+$router->get('/api/admin/waiting-list', function ($params) {
+    $admin = requireAuth();
+    requireAdmin($admin);
+    $service = getServiceAccount() ?? $admin;
+    try { $token = ensureFreshToken($service); }
+    catch (Throwable $e) { jsonResponse(['available' => false, 'reason' => 'No usable OSM token - connect an OSM service account, or sign in with OSM.']); }
+    if ($token === 'demo') {
+        jsonResponse(['available' => true, 'source' => 'demo', 'count' => 2, 'members' => [
+            ['name' => 'Alex Rivers', 'dob' => '2018-05-03', 'age' => '8 / 2', 'started' => '2025-09-01', 'patrol' => 'Waiting List', 'contacts' => [['name' => 'Sam Rivers', 'email' => 'sam.rivers@example.com', 'phone' => '07700 900123']]],
+            ['name' => 'Jamie Brooks', 'dob' => '2019-02-11', 'age' => '7 / 5', 'started' => '2026-01-15', 'patrol' => 'Waiting List', 'contacts' => [['name' => 'Chris Brooks', 'email' => 'chris.brooks@example.com', 'phone' => '07700 900456']]],
+        ]]);
+    }
+    $roles = json_decode($service['osm_roles_json'] ?? '[]', true) ?: [];
+    $waitSid = null;
+    foreach ($roles as $r) { if (($r['section'] ?? '') === 'waiting') { $waitSid = (string) $r['sectionid']; break; } }
+    if (!$waitSid) jsonResponse(['available' => false, 'reason' => 'No OSM waiting list section is visible to the connected account.']);
+    $res = osmWaitingListMembers($token, $waitSid, '-1');
+    if (empty($res['ok'])) jsonResponse(['available' => false, 'reason' => $res['error'] ?? 'OSM did not return the waiting list.', 'blocked' => !empty($res['blocked'])]);
+    logAudit(['userId' => $admin['id'], 'action' => 'admin_waiting_list_view', 'entityType' => 'osm_section', 'entityId' => $waitSid, 'ipAddress' => clientIp(), 'details' => ['count' => $res['count']]]);
+    jsonResponse(['available' => true, 'source' => 'osm', 'count' => $res['count'], 'members' => $res['members']]);
+});
+
 // Scheduled (cron) OSM sync - no admin session, so it reads through the SERVICE account
 // and is gated by a secret key from .env (OSM_SYNC_CRON_KEY). Set up a cPanel cron to
 // curl this daily. Disabled (404) unless the key is configured; 403 on a bad/absent key.

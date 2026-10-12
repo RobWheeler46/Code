@@ -86,6 +86,11 @@ async function renderHealth() {
       <p class="muted">A per-section summary of badges awarded, counted from OSM. Aggregate counts only, no individual members. Any leader can view it; the refresh reads from OSM, so it is paced and saved rather than read live.</p>
       <a class="btn btn-secondary" href="/osm-badges.html">Open Badges Awarded</a>
     </div>
+    <div class="card">
+      <h2>Waiting List</h2>
+      <p class="muted">Everyone on the group's OSM waiting list with their details and contacts, longest-waiting first. Read live from OSM for administrators only; nothing is stored in 7thPortal and each view is audited.</p>
+      <a class="btn btn-secondary" href="/waiting-list.html">Open Waiting List</a>
+    </div>
     ${params.get('connected') ? '<div class="alert alert-success">OSM service connection updated.</div>' : ''}
     <div class="card">
       <h2>OSM connection</h2>
