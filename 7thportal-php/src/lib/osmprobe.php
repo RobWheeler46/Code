@@ -43,20 +43,21 @@ function osmProbeProgrammeEvents(array $actor, string $tokenSource = 'service'):
         if (($startup['sectionTypes'][$id] ?? '') === 'waiting') { $waitSid = (string) $id; break; }
     }
 
+    // OSM's /ext validators want un-underscored integer params (sectionid/termid), not
+    // section_id/term_id - send both spellings so naming is never the blocker. Waiting
+    // sections have no term, and the programme validator confirmed termid=-1 is valid.
+    $ids = fn($s, $t) => ['section_id' => $s, 'sectionid' => $s, 'term_id' => $t, 'termid' => $t];
     $candidates = [
-        ['label' => 'programme /ext getProgrammeSummary', 'method' => 'GET', 'path' => '/ext/programme/',        'query' => ['action' => 'getProgrammeSummary', 'section_id' => $sid, 'term_id' => $termId]],
-        ['label' => 'programme /v3 summary',              'method' => 'GET', 'path' => '/v3/programme/summary',   'query' => ['section_id' => $sid, 'term_id' => $termId]],
-        ['label' => 'events /ext get',                    'method' => 'GET', 'path' => '/ext/events/summary/',    'query' => ['action' => 'get', 'section_id' => $sid, 'term_id' => $termId]],
-        ['label' => 'events /ext getEvents',              'method' => 'GET', 'path' => '/ext/events/summary/',    'query' => ['action' => 'getEvents', 'section_id' => $sid, 'term_id' => $termId]],
-        ['label' => 'events /v3 list',                    'method' => 'GET', 'path' => '/v3/events/',             'query' => ['section_id' => $sid, 'term_id' => $termId]],
+        ['label' => 'programme /ext getProgrammeSummary', 'method' => 'GET', 'path' => '/ext/programme/',        'query' => ['action' => 'getProgrammeSummary'] + $ids($sid, $termId)],
+        ['label' => 'events /ext get',                    'method' => 'GET', 'path' => '/ext/events/summary/',    'query' => ['action' => 'get'] + $ids($sid, $termId)],
+        ['label' => 'events /ext getEvents',              'method' => 'GET', 'path' => '/ext/events/summary/',    'query' => ['action' => 'getEvents'] + $ids($sid, $termId)],
     ];
     // The waiting list is an OSM section (type 'waiting'), so read it like any other roster
-    // via the proven POST members grid - not a bespoke endpoint. Prospective members, so
-    // PII: key names only (pii flag suppresses values).
+    // via the proven POST members grid. Prospective members, so PII: key names only.
     if ($waitSid !== null) {
-        $wt = osmCurrentTermIdForSection($token, $waitSid);
-        $candidates[] = ['label' => 'waitinglist members grid (POST)', 'method' => 'POST', 'path' => '/ext/members/contact/grid/', 'query' => ['action' => 'getMembers'], 'body' => ['section_id' => $waitSid, 'term_id' => $wt], 'pii' => true];
-        $candidates[] = ['label' => 'waitinglist members list (GET)',  'method' => 'GET',  'path' => '/ext/members/contact/',      'query' => ['action' => 'getListOfMembers', 'section_id' => $waitSid, 'term_id' => $wt], 'pii' => true];
+        $wt = osmCurrentTermIdForSection($token, $waitSid) ?: '-1';
+        $candidates[] = ['label' => 'waitinglist members grid (POST)', 'method' => 'POST', 'path' => '/ext/members/contact/grid/', 'query' => ['action' => 'getMembers'], 'body' => $ids($waitSid, $wt), 'pii' => true];
+        $candidates[] = ['label' => 'waitinglist members list (GET)',  'method' => 'GET',  'path' => '/ext/members/contact/',      'query' => ['action' => 'getListOfMembers'] + $ids($waitSid, $wt), 'pii' => true];
     }
     $results = [];
     foreach ($candidates as $c) {
