@@ -50,7 +50,7 @@ async function submit() {
     const d = await Api.post('/api/admin/waiting-list/test-write', body);
     out.hidden = false;
     const head = d.simulated ? d.note
-      : (d.ok ? `Looks like it worked (HTTP ${d.status}). Wrote "${d.wrote}" - CHECK OSM AND DELETE IT.`
+      : (d.ok ? `Created on the live waiting list (OSM id ${d.scoutid}). "${d.wrote}" - CHECK OSM AND DELETE IT.`
               : `Did not write (HTTP ${d.status || '?'}).${d.error ? ' ' + d.error : ''}`);
     out.textContent = head + (d.response !== undefined && d.response !== null ? '\n\n' + JSON.stringify(d.response, null, 2) : '');
   } catch (e) {

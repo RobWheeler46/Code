@@ -246,12 +246,18 @@ $router->post('/api/admin/waiting-list/test-write', function ($params) {
     foreach ($roles as $r) { if (($r['section'] ?? '') === 'waiting') { $waitSid = (string) $r['sectionid']; break; } }
     if (!$waitSid) jsonResponse(['error' => 'No OSM waiting list section is visible to the connected account.'], 409);
     $res = osmWaitingListCreateMember($token, $waitSid, ['firstname' => $first, 'lastname' => $last, 'dob' => trim((string) ($b['dob'] ?? ''))]);
-    logAudit(['userId' => $admin['id'], 'action' => 'admin_waiting_list_test_write', 'entityType' => 'osm_section', 'entityId' => $waitSid, 'ipAddress' => clientIp(), 'details' => ['status' => $res['status'] ?? null, 'name' => $first . ' ' . $last]]);
+    // OSM's newMember returns {result:ok, scoutid} on success - not the item-list shape
+    // osmRawData's generic 'ok' looks for, so judge success by result/scoutid.
+    $payload = $res['payload'] ?? null;
+    $scoutid = is_array($payload) ? ($payload['scoutid'] ?? null) : null;
+    $created = is_array($payload) && (($payload['result'] ?? '') === 'ok' || !empty($scoutid));
+    logAudit(['userId' => $admin['id'], 'action' => 'admin_waiting_list_test_write', 'entityType' => 'osm_section', 'entityId' => $waitSid, 'ipAddress' => clientIp(), 'details' => ['status' => $res['status'] ?? null, 'created' => $created, 'scoutid' => $scoutid, 'name' => $first . ' ' . $last]]);
     jsonResponse([
-        'ok' => !empty($res['ok']),
+        'ok' => $created,
         'status' => $res['status'] ?? null,
         'wrote' => $first . ' ' . $last,
-        'response' => osmDiagnosticRedact($res['payload'] ?? $res['bodySnippet'] ?? null),
+        'scoutid' => $scoutid,
+        'response' => osmDiagnosticRedact($payload ?? $res['bodySnippet'] ?? null),
         'error' => $res['error'] ?? null,
     ]);
 });
