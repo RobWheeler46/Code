@@ -639,7 +639,8 @@ function osmGetSectionProgramme(string $accessToken, string $sectionId, $termId 
     try {
         $termId = $termId ?: osmCurrentTermIdForSection($accessToken, $sectionId);
         if (!$termId) return ['available' => true, 'items' => []];
-        $resp = osmGet($accessToken, '/ext/programme/', ['action' => 'getProgrammeSummary', 'section_id' => $sectionId, 'term_id' => $termId]);
+        // OSM's /ext validator wants un-underscored integer params (confirmed via the read probe).
+        $resp = osmGet($accessToken, '/ext/programme/', ['action' => 'getProgrammeSummary', 'sectionid' => $sectionId, 'termid' => $termId]);
         $items = osmPluckItemsList($resp);
         $mapped = array_map(fn($p) => [
             'date' => $p['meetingdate'] ?? $p['date'] ?? null,
@@ -655,7 +656,7 @@ function osmGetSectionProgramme(string $accessToken, string $sectionId, $termId 
 function osmGetSectionEvents(string $accessToken, string $sectionId): array
 {
     try {
-        $resp = osmGet($accessToken, '/ext/events/summary/', ['action' => 'get', 'section_id' => $sectionId]);
+        $resp = osmGet($accessToken, '/ext/events/summary/', ['action' => 'get', 'sectionid' => $sectionId]);
         $items = osmPluckItemsList($resp);
         $mapped = array_map(fn($e) => [
             'id' => (string) ($e['eventid'] ?? $e['id'] ?? ''),
