@@ -51,12 +51,16 @@ async function render() {
       ${c.email ? ` &middot; <a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : ''}
       ${c.phone ? ` &middot; <a href="tel:${esc(c.phone)}">${esc(c.phone)}</a>` : ''}
     </div>`).join('') || '<span class="muted">No contact on file</span>';
+    const extra = (m.extra || []).length
+      ? (m.extra || []).map((f) => `<div class="wl-contact"><span class="nm">${esc(f.label)}:</span> ${esc(f.value)}</div>`).join('')
+      : '<span class="muted">—</span>';
     return `<tr>
       <td><strong>${esc(m.name || '—')}</strong></td>
       <td>${m.dob ? esc(formatDate(m.dob)) : '—'}</td>
       <td>${esc(m.age || '—')}</td>
       <td>${m.started ? esc(formatDate(m.started)) : '—'}</td>
       <td>${contacts}</td>
+      <td>${extra}</td>
     </tr>`;
   }).join('');
 
@@ -65,7 +69,7 @@ async function render() {
       <button class="btn btn-secondary btn-sm" id="wl-fields">Show all OSM fields</button></p>
     <pre id="wl-fields-out" hidden style="overflow:auto;max-height:24rem;background:var(--surface-2,#f2eef7);padding:.8rem;border-radius:8px;font-size:.82rem;white-space:pre-wrap"></pre>
     <div class="wl-table-wrap"><table class="wl-table">
-      <thead><tr><th>Name</th><th>Date of birth</th><th>Age (y/m)</th><th>Waiting since</th><th>Contacts</th></tr></thead>
+      <thead><tr><th>Name</th><th>Date of birth</th><th>Age (y/m)</th><th>Waiting since</th><th>Contacts</th><th>Additional info</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>`;
   wireFields();

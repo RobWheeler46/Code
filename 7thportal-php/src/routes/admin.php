@@ -209,8 +209,8 @@ $router->get('/api/admin/waiting-list', function ($params) {
     catch (Throwable $e) { jsonResponse(['available' => false, 'reason' => 'No usable OSM token - connect an OSM service account, or sign in with OSM.']); }
     if ($token === 'demo') {
         jsonResponse(['available' => true, 'source' => 'demo', 'count' => 2, 'members' => [
-            ['name' => 'Alex Rivers', 'dob' => '2018-05-03', 'age' => '8 / 2', 'started' => '2025-09-01', 'patrol' => 'Waiting List', 'contacts' => [['name' => 'Sam Rivers', 'email' => 'sam.rivers@example.com', 'phone' => '07700 900123']]],
-            ['name' => 'Jamie Brooks', 'dob' => '2019-02-11', 'age' => '7 / 5', 'started' => '2026-01-15', 'patrol' => 'Waiting List', 'contacts' => [['name' => 'Chris Brooks', 'email' => 'chris.brooks@example.com', 'phone' => '07700 900456']]],
+            ['name' => 'Alex Rivers', 'dob' => '2018-05-03', 'age' => '8 / 2', 'started' => '2025-09-01', 'patrol' => 'Waiting List', 'contacts' => [['name' => 'Sam Rivers', 'email' => 'sam.rivers@example.com', 'phone' => '07700 900123']], 'extra' => [['label' => 'Preferred day', 'value' => 'Tuesday'], ['label' => 'Sibling in the Group?', 'value' => 'Yes - Robin Rivers (Cubs)']]],
+            ['name' => 'Jamie Brooks', 'dob' => '2019-02-11', 'age' => '7 / 5', 'started' => '2026-01-15', 'patrol' => 'Waiting List', 'contacts' => [['name' => 'Chris Brooks', 'email' => 'chris.brooks@example.com', 'phone' => '07700 900456']], 'extra' => [['label' => 'Adult volunteer help?', 'value' => 'Can help occasionally']]],
         ]]);
     }
     $roles = json_decode($service['osm_roles_json'] ?? '[]', true) ?: [];

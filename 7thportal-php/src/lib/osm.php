@@ -683,21 +683,40 @@ function osmWaitingListMembers(string $accessToken, string $sectionId, ?string $
         $blocked = !empty($r['bodySnippet']) && stripos($r['bodySnippet'], 'blocked') !== false;
         return ['ok' => false, 'blocked' => $blocked, 'error' => $blocked ? 'OSM temporarily blocked the request' : ($r['error'] ?? ('HTTP ' . ($r['status'] ?? '?')))];
     }
-    $rows = $r['payload']['data'] ?? $r['items'] ?? [];
+    $payload = $r['payload'] ?? [];
+    $rows = $payload['data'] ?? $r['items'] ?? [];
+    // Label map from meta.structure: which custom_data groups are contacts (Primary/
+    // Emergency contacts) vs other questions (Additional Information), and each column's
+    // human label - so any custom join-form question appears without hardcoding ids.
+    $groups = [];
+    foreach ($payload['meta']['structure'] ?? [] as $g) {
+        if (!is_array($g)) continue;
+        $gid = (string) ($g['group_id'] ?? '');
+        $name = (string) ($g['name'] ?? '');
+        $ident = (string) ($g['identifier'] ?? '');
+        $cols = [];
+        foreach ($g['columns'] ?? [] as $c) { if (is_array($c)) $cols[(string) ($c['column_id'] ?? '')] = (string) ($c['label'] ?? $c['varname'] ?? ('col ' . ($c['column_id'] ?? ''))); }
+        $groups[$gid] = ['name' => $name ?: ('Group ' . $gid), 'isContact' => (bool) preg_match('/contact|parent|carer|guardian|primary|emergency/i', $ident . ' ' . $name), 'cols' => $cols];
+    }
     $pick = fn($cd, $k) => (isset($cd[$k]) && trim((string) $cd[$k]) !== '') ? trim((string) $cd[$k]) : '';
     $members = [];
     foreach ($rows as $m) {
         if (!is_array($m)) continue;
-        $cd = $m['custom_data'] ?? [];
-        $contacts = [];
-        foreach (['1', '2'] as $grp) {
-            $g = $cd[$grp] ?? null;
+        $contacts = []; $extra = [];
+        foreach (($m['custom_data'] ?? []) as $gid => $g) {
             if (!is_array($g)) continue;
-            $name = trim($pick($g, '2') . ' ' . $pick($g, '3'));
-            $email = $pick($g, '12') ?: $pick($g, '14');
-            $phone = $pick($g, '18') ?: $pick($g, '20');
-            if ($name === '' && $email === '' && $phone === '') continue;
-            $contacts[] = ['name' => $name, 'email' => $email, 'phone' => $phone];
+            $gi = $groups[(string) $gid] ?? ['name' => 'Group ' . $gid, 'isContact' => false, 'cols' => []];
+            if ($gi['isContact']) {
+                $name = trim($pick($g, '2') . ' ' . $pick($g, '3'));
+                $email = $pick($g, '12') ?: $pick($g, '14');
+                $phone = $pick($g, '18') ?: $pick($g, '20');
+                if ($name !== '' || $email !== '' || $phone !== '') $contacts[] = ['name' => $name, 'email' => $email, 'phone' => $phone];
+            } else {
+                foreach ($g as $cid => $val) {
+                    $v = trim((string) $val);
+                    if ($v !== '') $extra[] = ['label' => $gi['cols'][(string) $cid] ?? ('col ' . $cid), 'value' => $v];
+                }
+            }
         }
         $members[] = [
             'name' => trim(($m['first_name'] ?? $m['firstname'] ?? '') . ' ' . ($m['last_name'] ?? $m['lastname'] ?? '')),
@@ -706,6 +725,7 @@ function osmWaitingListMembers(string $accessToken, string $sectionId, ?string $
             'started' => $m['started'] ?? $m['startdate'] ?? $m['joined'] ?? null,
             'patrol' => $m['patrol'] ?? null,
             'contacts' => $contacts,
+            'extra' => $extra,
         ];
     }
     usort($members, fn($a, $b) => strcmp((string) ($a['started'] ?? ''), (string) ($b['started'] ?? ''))); // longest-waiting first
