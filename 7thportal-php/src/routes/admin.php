@@ -223,6 +223,30 @@ $router->get('/api/admin/waiting-list', function ($params) {
     jsonResponse(['available' => true, 'source' => 'osm', 'count' => $res['count'], 'members' => $res['members']]);
 });
 
+// Staff "quick add" to the OSM waiting list. Admin-only, authenticated; creates the member
+// and writes the join-form answers + parent contact straight to OSM. Nothing is stored in
+// 7thPortal, and the action is audited.
+$router->post('/api/admin/waiting-list/add', function ($params) {
+    $admin = requireAuth();
+    requireAdmin($admin);
+    $b = requestBody();
+    $first = trim((string) ($b['firstname'] ?? ''));
+    $last = trim((string) ($b['lastname'] ?? ''));
+    if ($first === '' || $last === '') jsonResponse(['error' => 'The child\'s first and last name are required.'], 422);
+    $service = getServiceAccount() ?? $admin;
+    try { $token = ensureFreshToken($service); }
+    catch (Throwable $e) { jsonResponse(['error' => 'No usable OSM token - connect an OSM service account, or sign in with OSM.'], 400); }
+    if ($token === 'demo') { jsonResponse(['ok' => true, 'simulated' => true, 'warnings' => [], 'note' => 'Demo mode - nothing was written to OSM.']); return; }
+    $roles = json_decode($service['osm_roles_json'] ?? '[]', true) ?: [];
+    $waitSid = null;
+    foreach ($roles as $r) { if (($r['section'] ?? '') === 'waiting') { $waitSid = (string) $r['sectionid']; break; } }
+    if (!$waitSid) jsonResponse(['error' => 'No OSM waiting list section is visible to the connected account.'], 409);
+    $r = osmWaitingListAdd($token, $waitSid, $b);
+    logAudit(['userId' => $admin['id'], 'action' => 'admin_waiting_list_add', 'entityType' => 'osm_section', 'entityId' => $waitSid, 'ipAddress' => clientIp(), 'details' => ['ok' => !empty($r['ok']), 'scoutid' => $r['scoutid'] ?? null, 'warnings' => count($r['warnings'] ?? [])]]);
+    if (empty($r['ok'])) jsonResponse(['error' => $r['error'] ?? 'Could not add this person to the waiting list.'], 502);
+    jsonResponse(['ok' => true, 'scoutid' => $r['scoutid'], 'warnings' => $r['warnings'] ?? []]);
+});
+
 // TEST ONLY: create a member on the live OSM waiting list. Admin-only, requires an explicit
 // confirm, forces a clear TEST marker on the name, audits every attempt, and returns OSM's
 // raw (redacted) response so the write contract can be confirmed. A successful write creates

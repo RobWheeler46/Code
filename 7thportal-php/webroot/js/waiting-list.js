@@ -28,6 +28,7 @@ async function render() {
     title: 'Waiting List',
     crumbs: crumbs(),
     description: 'Everyone on the group’s OSM waiting list, longest-waiting first. Read live from OSM for administrators; nothing is stored in 7thPortal, and each view is audited.',
+    actions: '<a class="btn" href="waiting-list-add.html">Add someone</a>',
   });
 
   let d;

@@ -710,6 +710,44 @@ function osmWaitingListFieldMap(string $accessToken, string $sectionId): array
     return $out;
 }
 
+// Add a person to the OSM waiting list: create the member (name/dob/gender) then set the
+// join-form answers and Primary Contact 1 (parent) via custom-data writes - the full,
+// confirmed write path. Nothing is stored in 7thPortal. Returns {ok, scoutid, warnings[]}.
+function osmWaitingListAdd(string $token, string $sectionId, array $d): array
+{
+    $res = osmWaitingListCreateMember($token, $sectionId, [
+        'firstname' => $d['firstname'] ?? '', 'lastname' => $d['lastname'] ?? '',
+        'dob' => $d['dob'] ?? '', 'gender' => $d['gender'] ?? '',
+    ]);
+    $payload = $res['payload'] ?? null;
+    $scoutid = is_array($payload) ? ($payload['scoutid'] ?? null) : null;
+    if (!(is_array($payload) && (($payload['result'] ?? '') === 'ok' || !empty($scoutid))) || !$scoutid) {
+        return ['ok' => false, 'error' => $res['error'] ?? 'OSM did not create the member.', 'status' => $res['status'] ?? null];
+    }
+    $map = osmWaitingListFieldMap($token, $sectionId);
+    $warnings = [];
+    $set = function ($gid, $cid, $val, $label) use ($token, $sectionId, $scoutid, &$warnings) {
+        $val = trim((string) $val);
+        if ($val === '') return;
+        $u = osmWaitingListSetCustom($token, $sectionId, (string) $scoutid, (string) $gid, (string) $cid, $val);
+        if (!(is_array($u['payload'] ?? null) && (($u['payload']['status'] ?? false) === true))) $warnings[] = $label . ' may not have saved.';
+    };
+    // Join-form questions: resolve each by matching its label (they vary per group).
+    foreach (['day' => $d['prefDay'] ?? '', 'sibling' => $d['sibling'] ?? '', 'volunteer' => $d['volunteer'] ?? ''] as $kw => $val) {
+        if (trim((string) $val) === '') continue;
+        $f = null;
+        foreach ($map as $m) { if (stripos($m['label'], $kw) !== false) { $f = $m; break; } }
+        if ($f) $set($f['group_id'], $f['column_id'], $val, ucfirst($kw));
+        else $warnings[] = 'No waiting-list question matched "' . $kw . '".';
+    }
+    // Parent/carer -> Primary Contact 1 (group 1), standard contact column ids.
+    $set('1', '2', $d['parentFirst'] ?? '', 'Parent first name');
+    $set('1', '3', $d['parentLast'] ?? '', 'Parent last name');
+    $set('1', '12', $d['parentEmail'] ?? '', 'Parent email');
+    $set('1', '18', $d['parentPhone'] ?? '', 'Parent phone');
+    return ['ok' => true, 'scoutid' => $scoutid, 'warnings' => $warnings];
+}
+
 // TEST write for one custom_data value on a member. Candidate contract (to be confirmed
 // from OSM's response) - the custom-data save endpoint. Returns OSM's raw response.
 function osmWaitingListSetCustom(string $accessToken, string $sectionId, string $scoutId, string $groupId, string $columnId, string $value): array
