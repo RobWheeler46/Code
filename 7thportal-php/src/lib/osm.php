@@ -683,12 +683,42 @@ function osmWaitingListCreateMember(string $accessToken, string $sectionId, arra
         'firstname' => $f['firstname'] ?? '',
         'lastname' => $f['lastname'] ?? '',
         'dob' => $f['dob'] ?? '',
+        'gender' => $f['gender'] ?? '',
         'sectionid' => $sectionId,
         'section_id' => $sectionId,
         'startdate' => $f['startdate'] ?? gmdate('Y-m-d'),
         'startdate_g' => $f['startdate'] ?? gmdate('Y-m-d'),
     ], fn($v) => $v !== '' && $v !== null);
     return osmRawData('POST', $accessToken, '/ext/members/contact/actions/', ['action' => 'newMember'], $body);
+}
+
+// Flat list of the section's custom_data columns {group_id, group, column_id, label} from
+// meta.structure - so a write can resolve the numeric ids for a question by its label.
+function osmWaitingListFieldMap(string $accessToken, string $sectionId): array
+{
+    $r = osmRawData('POST', $accessToken, '/ext/members/contact/grid/', ['action' => 'getMembers'], ['section_id' => $sectionId, 'sectionid' => $sectionId, 'term_id' => '-1', 'termid' => '-1']);
+    $out = [];
+    foreach (($r['payload']['meta']['structure'] ?? []) as $g) {
+        if (!is_array($g)) continue;
+        $gid = (string) ($g['group_id'] ?? '');
+        $gname = (string) ($g['name'] ?? '');
+        foreach (($g['columns'] ?? []) as $c) {
+            if (!is_array($c)) continue;
+            $out[] = ['group_id' => $gid, 'group' => $gname, 'column_id' => (string) ($c['column_id'] ?? ''), 'label' => (string) ($c['label'] ?? $c['varname'] ?? '')];
+        }
+    }
+    return $out;
+}
+
+// TEST write for one custom_data value on a member. Candidate contract (to be confirmed
+// from OSM's response) - the custom-data save endpoint. Returns OSM's raw response.
+function osmWaitingListSetCustom(string $accessToken, string $sectionId, string $scoutId, string $groupId, string $columnId, string $value): array
+{
+    return osmRawData('POST', $accessToken, '/ext/customdata/', ['action' => 'updateColumn', 'section_id' => $sectionId, 'sectionid' => $sectionId], [
+        'associated_id' => $scoutId, 'associated_type' => 'member', 'context' => 'members',
+        'group_id' => $groupId, 'column_id' => $columnId, 'value' => $value,
+        'section_id' => $sectionId, 'sectionid' => $sectionId,
+    ]);
 }
 
 // Full waiting-list read for an authorised admin: every member on the waiting section

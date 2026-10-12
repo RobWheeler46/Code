@@ -245,19 +245,36 @@ $router->post('/api/admin/waiting-list/test-write', function ($params) {
     $waitSid = null;
     foreach ($roles as $r) { if (($r['section'] ?? '') === 'waiting') { $waitSid = (string) $r['sectionid']; break; } }
     if (!$waitSid) jsonResponse(['error' => 'No OSM waiting list section is visible to the connected account.'], 409);
-    $res = osmWaitingListCreateMember($token, $waitSid, ['firstname' => $first, 'lastname' => $last, 'dob' => trim((string) ($b['dob'] ?? ''))]);
+    $res = osmWaitingListCreateMember($token, $waitSid, ['firstname' => $first, 'lastname' => $last, 'dob' => trim((string) ($b['dob'] ?? '')), 'gender' => trim((string) ($b['gender'] ?? ''))]);
     // OSM's newMember returns {result:ok, scoutid} on success - not the item-list shape
     // osmRawData's generic 'ok' looks for, so judge success by result/scoutid.
     $payload = $res['payload'] ?? null;
     $scoutid = is_array($payload) ? ($payload['scoutid'] ?? null) : null;
     $created = is_array($payload) && (($payload['result'] ?? '') === 'ok' || !empty($scoutid));
-    logAudit(['userId' => $admin['id'], 'action' => 'admin_waiting_list_test_write', 'entityType' => 'osm_section', 'entityId' => $waitSid, 'ipAddress' => clientIp(), 'details' => ['status' => $res['status'] ?? null, 'created' => $created, 'scoutid' => $scoutid, 'name' => $first . ' ' . $last]]);
+
+    // If created, try to set the custom join-form answers: resolve each question's numeric
+    // group/column ids from the field structure by matching its label, then write the value.
+    $custom = [];
+    if ($created && $scoutid) {
+        $map = osmWaitingListFieldMap($token, $waitSid);
+        $find = function ($kw) use ($map) { foreach ($map as $f) { if (stripos($f['label'], $kw) !== false) return $f; } return null; };
+        foreach (['day' => $b['prefDay'] ?? '', 'sibling' => $b['sibling'] ?? '', 'volunteer' => $b['volunteer'] ?? ''] as $kw => $val) {
+            $val = trim((string) $val);
+            if ($val === '') continue;
+            $f = $find($kw);
+            if (!$f) { $custom[$kw] = ['matchedField' => null, 'note' => 'No waiting-list field label matched "' . $kw . '".']; continue; }
+            $u = osmWaitingListSetCustom($token, $waitSid, (string) $scoutid, $f['group_id'], $f['column_id'], $val);
+            $custom[$kw] = ['matchedField' => $f['group'] . ' > ' . $f['label'], 'status' => $u['status'] ?? null, 'response' => osmDiagnosticRedact($u['payload'] ?? $u['bodySnippet'] ?? null), 'error' => $u['error'] ?? null];
+        }
+    }
+    logAudit(['userId' => $admin['id'], 'action' => 'admin_waiting_list_test_write', 'entityType' => 'osm_section', 'entityId' => $waitSid, 'ipAddress' => clientIp(), 'details' => ['status' => $res['status'] ?? null, 'created' => $created, 'scoutid' => $scoutid, 'name' => $first . ' ' . $last, 'customAttempted' => array_keys($custom)]]);
     jsonResponse([
         'ok' => $created,
         'status' => $res['status'] ?? null,
         'wrote' => $first . ' ' . $last,
         'scoutid' => $scoutid,
         'response' => osmDiagnosticRedact($payload ?? $res['bodySnippet'] ?? null),
+        'custom' => $custom,
         'error' => $res['error'] ?? null,
     ]);
 });
