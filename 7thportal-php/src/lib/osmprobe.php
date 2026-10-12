@@ -37,6 +37,11 @@ function osmProbeProgrammeEvents(array $actor, string $tokenSource = 'service'):
     if ($sid === null) $sid = (string) array_key_first($startup['sections']);
     $type = $startup['sectionTypes'][$sid] ?? null;
     $termId = osmCurrentTermIdForSection($token, $sid);
+    // The waiting list is itself an OSM section (type 'waiting'); grab its id to read it.
+    $waitSid = null;
+    foreach ($startup['sections'] as $id => $name) {
+        if (($startup['sectionTypes'][$id] ?? '') === 'waiting') { $waitSid = (string) $id; break; }
+    }
 
     $candidates = [
         ['label' => 'programme /ext getProgrammeSummary', 'method' => 'GET', 'path' => '/ext/programme/',        'query' => ['action' => 'getProgrammeSummary', 'section_id' => $sid, 'term_id' => $termId]],
@@ -44,13 +49,15 @@ function osmProbeProgrammeEvents(array $actor, string $tokenSource = 'service'):
         ['label' => 'events /ext get',                    'method' => 'GET', 'path' => '/ext/events/summary/',    'query' => ['action' => 'get', 'section_id' => $sid, 'term_id' => $termId]],
         ['label' => 'events /ext getEvents',              'method' => 'GET', 'path' => '/ext/events/summary/',    'query' => ['action' => 'getEvents', 'section_id' => $sid, 'term_id' => $termId]],
         ['label' => 'events /v3 list',                    'method' => 'GET', 'path' => '/v3/events/',             'query' => ['section_id' => $sid, 'term_id' => $termId]],
-        // Waiting list = prospective members, so PII: these report field NAMES only, never
-        // values (pii flag below suppresses sampleItem). Endpoint names are unconfirmed
-        // guesses - the probe exists to find which, if any, the connection will serve.
-        ['label' => 'waitinglist /ext settings get', 'method' => 'GET',  'path' => '/ext/settings/waitinglist/',    'query' => ['action' => 'getWaitingList', 'section_id' => $sid, 'term_id' => $termId], 'pii' => true],
-        ['label' => 'waitinglist /ext members get',   'method' => 'GET',  'path' => '/ext/members/waitinglist/',      'query' => ['action' => 'get', 'section_id' => $sid, 'term_id' => $termId], 'pii' => true],
-        ['label' => 'waitinglist /ext grid POST',     'method' => 'POST', 'path' => '/ext/members/waitinglist/grid/', 'query' => ['action' => 'getMembers'], 'body' => ['section_id' => $sid, 'term_id' => $termId], 'pii' => true],
     ];
+    // The waiting list is an OSM section (type 'waiting'), so read it like any other roster
+    // via the proven POST members grid - not a bespoke endpoint. Prospective members, so
+    // PII: key names only (pii flag suppresses values).
+    if ($waitSid !== null) {
+        $wt = osmCurrentTermIdForSection($token, $waitSid);
+        $candidates[] = ['label' => 'waitinglist members grid (POST)', 'method' => 'POST', 'path' => '/ext/members/contact/grid/', 'query' => ['action' => 'getMembers'], 'body' => ['section_id' => $waitSid, 'term_id' => $wt], 'pii' => true];
+        $candidates[] = ['label' => 'waitinglist members list (GET)',  'method' => 'GET',  'path' => '/ext/members/contact/',      'query' => ['action' => 'getListOfMembers', 'section_id' => $waitSid, 'term_id' => $wt], 'pii' => true];
+    }
     $results = [];
     foreach ($candidates as $c) {
         $r = osmRawData($c['method'], $token, $c['path'], $c['query'], $c['body'] ?? []);
