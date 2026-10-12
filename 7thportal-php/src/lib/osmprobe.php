@@ -62,7 +62,7 @@ function osmProbeProgrammeEvents(array $actor, string $tokenSource = 'service'):
     foreach ($candidates as $c) {
         $r = osmRawData($c['method'], $token, $c['path'], $c['query'], $c['body'] ?? []);
         $payload = $r['payload'] ?? null;
-        $firstItem = is_array($r['items'] ?? null) ? ($r['items'][0] ?? null) : null;
+        $firstItem = is_array($r['items'] ?? null) ? (array_values($r['items'])[0] ?? null) : null; // grid rows are keyed by scout id, not a list
         $results[$c['label']] = [
             'path' => $c['path'],
             'status' => $r['status'],
