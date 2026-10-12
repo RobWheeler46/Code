@@ -5,6 +5,11 @@ cd "$(dirname "$0")/.."
 rm -rf dist && mkdir -p dist/app/data dist/public_html
 cp -r src dist/app/src
 cp .env.example dist/app/.env.example
+# version shown in the site footer: date, short commit, and -modified if src or public had uncommitted changes
+V=$(date +%Y.%m.%d)-$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
+[ -n "$(git status --porcelain src public 2>/dev/null)" ] && V="$V-modified"
+printf '%s' "$V" > dist/app/VERSION
+echo "Built version $V"
 cp -r public/assets dist/public_html/assets
 sed 's#/\.\./src/#/../app/src/#' public/index.php > dist/public_html/index.php
 printf 'Require all denied\n' > dist/app/data/.htaccess

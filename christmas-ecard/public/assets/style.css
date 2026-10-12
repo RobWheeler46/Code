@@ -271,3 +271,4 @@ main:has(.ws){max-width:80rem}
 .wscard{position:relative;padding-right:2.4rem}.wscard::after{content:"→";position:absolute;top:.8rem;right:1rem;color:#5c6470}
 .tasks{list-style:none;padding:0;margin:0;background:#fff;border:1px solid var(--line);border-radius:12px}.tasks li{display:flex;flex-wrap:wrap;gap:.5rem 1rem;justify-content:space-between;align-items:center;padding:.8rem 1rem}.tasks li+li{border-top:1px solid var(--line)}
 @media(max-width:790px){.wshero{padding:1.2rem}}
+.ver{color:#5c6470}

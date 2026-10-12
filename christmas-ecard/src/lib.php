@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 const ROOT = __DIR__ . '/..';
+/** The build stamp written by scripts/build-dist.sh, so you can tell which version is deployed. */
+function app_version(): string { $f = ROOT . '/VERSION'; return is_file($f) ? trim((string)file_get_contents($f)) : 'development'; }
 date_default_timezone_set('Europe/London'); // campaign dates and displayed times are UK local
 
 function env(string $k, string $d = ''): string {
@@ -209,6 +211,6 @@ function page(string $title, string $body, int $code = 200): never {
         . '<link rel="stylesheet" href="/assets/style.css"></head><body><a class="skip" href="#main">Skip to content</a>'
         . (env('APP_ENV', 'development') !== 'production' ? '<p class="envbanner" role="note">' . h(strtoupper(env('APP_ENV', 'development'))) . ' environment. Test mode: nothing here is real. Do not enter real details.</p>' : '') . '<header><a class="brand" href="/"><img src="/assets/brand/7th-swindon-circle-blue.png" alt="7th Swindon Scouts" width="64" height="64"><span>Christmas Cards</span></a><nav aria-label="Main">' . $nav . '</nav></header>'
         . '<main id="main">' . ($f ? '<p class="flash ' . h($f[0]) . '" role="' . ($f[0] === 'err' ? 'alert" tabindex="-1" data-focus' : 'status"') . '>' . h($f[1]) . '</p>' : '') . $body . '</main>'
-        . '<footer><img class="footlogo" src="/assets/brand/7th-swindon-circle-blue.png" alt="7th Swindon Scouts" width="56" height="56"><a href="/privacy">Privacy and cookies</a> &middot; <a href="/terms">Terms and safeguarding</a> &middot; <a href="/help">Help and FAQ</a><br>Sending is free' . (donations_enabled() ? '; donations are optional and support 7th Swindon Scouts' : '') . '. Cards stay viewable for ' . (int)setting('expiry_days', '60') . ' days after sending.</footer><script src="/assets/app.js"></script></body></html>';
+        . '<footer><img class="footlogo" src="/assets/brand/7th-swindon-circle-blue.png" alt="7th Swindon Scouts" width="56" height="56"><a href="/privacy">Privacy and cookies</a> &middot; <a href="/terms">Terms and safeguarding</a> &middot; <a href="/help">Help and FAQ</a><br>Sending is free' . (donations_enabled() ? '; donations are optional and support 7th Swindon Scouts' : '') . '. Cards stay viewable for ' . (int)setting('expiry_days', '60') . ' days after sending.<br><small class="ver">Version ' . h(app_version()) . '</small></footer><script src="/assets/app.js"></script></body></html>';
     exit;
 }
