@@ -61,11 +61,39 @@ async function render() {
   }).join('');
 
   box().innerHTML = `${demo ? demoBanner() : ''}
-    <p class="wl-meta"><strong>${members.length}</strong> on the waiting list.</p>
+    <p class="wl-meta"><strong>${members.length}</strong> on the waiting list.
+      <button class="btn btn-secondary btn-sm" id="wl-fields">Show all OSM fields</button></p>
+    <pre id="wl-fields-out" hidden style="overflow:auto;max-height:24rem;background:var(--surface-2,#f2eef7);padding:.8rem;border-radius:8px;font-size:.82rem;white-space:pre-wrap"></pre>
     <div class="wl-table-wrap"><table class="wl-table">
       <thead><tr><th>Name</th><th>Date of birth</th><th>Age (y/m)</th><th>Waiting since</th><th>Contacts</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>`;
+  wireFields();
+}
+
+// Lists every field OSM holds on the waiting-list grid (labelled, with masked samples),
+// so an admin can see what extra custom data exists beyond the columns shown above.
+function wireFields() {
+  const btn = document.getElementById('wl-fields');
+  const out = document.getElementById('wl-fields-out');
+  if (!btn || !out) return;
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    const orig = btn.textContent;
+    btn.textContent = 'Reading from OSM…';
+    try {
+      const d = await Api.get('/api/admin/waiting-list/fields');
+      out.hidden = false;
+      if (!d.available) { out.textContent = d.reason || 'Could not read the fields.'; return; }
+      out.textContent = (d.fields || []).map((f) => `${f.parentish ? '[contact] ' : ''}${f.path}  =  ${f.sample}`).join('\n') || 'No fields returned.';
+    } catch (e) {
+      out.hidden = false;
+      out.textContent = e.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = orig;
+    }
+  });
 }
 
 function demoBanner() {

@@ -420,7 +420,7 @@ function osmMaskDeep($node)
 function osmGridContactFields(string $accessToken, string $sectionId, ?string $termId): array
 {
     if (!$termId) return ['ok' => false, 'error' => 'No current OSM term for this section.'];
-    $r = osmRawData('POST', $accessToken, '/ext/members/contact/grid/', ['action' => 'getMembers'], ['section_id' => $sectionId, 'term_id' => $termId]);
+    $r = osmRawData('POST', $accessToken, '/ext/members/contact/grid/', ['action' => 'getMembers'], ['section_id' => $sectionId, 'sectionid' => $sectionId, 'term_id' => $termId, 'termid' => $termId]);
     if (!$r['ok']) {
         $blocked = $r['bodySnippet'] && stripos($r['bodySnippet'], 'blocked') !== false;
         return ['ok' => false, 'blocked' => $blocked, 'error' => $blocked ? 'OSM temporarily blocked the request' : ($r['error'] ?? ('HTTP ' . $r['status']))];
