@@ -62,10 +62,10 @@ $router->get('/api/leader/dashboard', function ($params) {
     // a server, and a per-section members+programme+events burst on every dashboard
     // load was the main trigger, so section detail is opened in OSM directly.
     $termsData = json_decode($user['osm_terms_json'] ?? '[]', true) ?: [];
-    // Cached OSM member counts (from the admin's deliberate sync) - read from the
-    // DB only, so the dashboard itself never calls OSM.
+    // Cached OSM member counts + next programme/event (from the admin's deliberate
+    // sync) - read from the DB only, so the dashboard itself never calls OSM.
     $osmCounts = [];
-    foreach (dbAll("SELECT osm_section_id, active_count, last_synced_at FROM osm_sections WHERE sync_status = 'ok' AND active_count IS NOT NULL") as $o) {
+    foreach (dbAll("SELECT osm_section_id, active_count, last_synced_at, next_programme_json, next_event_json FROM osm_sections WHERE sync_status = 'ok' AND active_count IS NOT NULL") as $o) {
         $osmCounts[$o['osm_section_id']] = $o;
     }
     $sections = array_map(function ($role) use ($termsData, $osmCounts) {
@@ -85,6 +85,9 @@ $router->get('/api/leader/dashboard', function ($params) {
             // Cached OSM member count + when it was last synced (no live OSM call).
             'memberCount' => $count ? (int) $count['active_count'] : null,
             'memberCountSyncedAt' => $count['last_synced_at'] ?? null,
+            // Cached next programme item + next event (from the same sync, no live call).
+            'nextProgrammeItem' => $count && !empty($count['next_programme_json']) ? json_decode($count['next_programme_json'], true) : null,
+            'nextEvent' => $count && !empty($count['next_event_json']) ? json_decode($count['next_event_json'], true) : null,
         ];
     }, $roles);
 

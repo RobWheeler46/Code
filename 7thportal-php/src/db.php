@@ -400,7 +400,9 @@ CREATE TABLE IF NOT EXISTS osm_sections (
   synced_by INTEGER REFERENCES users(id),
   sync_status TEXT NOT NULL DEFAULT 'ok' CHECK(sync_status IN ('ok','error')),
   sync_error TEXT,
-  source TEXT NOT NULL DEFAULT 'osm'
+  source TEXT NOT NULL DEFAULT 'osm',
+  next_programme_json TEXT,
+  next_event_json TEXT
 );
 
 CREATE TABLE IF NOT EXISTS section_capacity (
@@ -1775,6 +1777,12 @@ if ($qmiSql && !str_contains($qmiSql, 'permit_confirmed')) {
 $osmSecSql = dbGet("SELECT sql FROM sqlite_master WHERE type='table' AND name='osm_sections'")['sql'] ?? '';
 if ($osmSecSql && !str_contains($osmSecSql, 'source')) {
     db()->exec("ALTER TABLE osm_sections ADD COLUMN source TEXT NOT NULL DEFAULT 'osm'");
+}
+// Migration: osm_sections caches the next programme item + next event per section
+// (synced alongside the count) so the leader dashboard shows them without a live call.
+if ($osmSecSql && !str_contains($osmSecSql, 'next_programme_json')) {
+    db()->exec("ALTER TABLE osm_sections ADD COLUMN next_programme_json TEXT");
+    db()->exec("ALTER TABLE osm_sections ADD COLUMN next_event_json TEXT");
 }
 // Migration: pp_submissions gained guest attribution (FRD v2.4 s13.8) - guest
 // scores are owned by a service user but carry the link id and unverified name.

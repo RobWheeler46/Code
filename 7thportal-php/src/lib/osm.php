@@ -661,7 +661,7 @@ function osmGetSectionEvents(string $accessToken, string $sectionId): array
         $mapped = array_map(fn($e) => [
             'id' => (string) ($e['eventid'] ?? $e['id'] ?? ''),
             'name' => $e['name'] ?? 'Event',
-            'date' => $e['startdate'] ?? $e['date'] ?? null,
+            'date' => $e['startdate_g'] ?? $e['startdate'] ?? $e['date'] ?? null, // startdate_g is ISO; startdate is dd/mm/yyyy
             'location' => $e['location'] ?? null,
         ], $items);
         return ['available' => true, 'items' => $mapped];

@@ -205,6 +205,22 @@ $router->post('/api/admin/sections/sync', function ($params) {
                      active_count = excluded.active_count, last_synced_at = excluded.last_synced_at, synced_by = excluded.synced_by, sync_status = 'ok', sync_error = NULL",
                 [$sid, $r['sectionname'] ?? '', $r['section'] ?? null, $res['count'], $admin['id']]);
             dbRun('INSERT OR IGNORE INTO section_snapshots (osm_section_id, active_count, snapshot_date) VALUES (?, ?, ?)', [$sid, $res['count'], $today]);
+            // Cache the next upcoming programme item + event too (counts/titles only, no
+            // member data), so the leader dashboard shows them without a live OSM call.
+            $soonest = function (array $items) use ($today) {
+                $up = array_values(array_filter($items, fn($x) => !empty($x['date']) && $x['date'] >= $today));
+                usort($up, fn($a, $b) => strcmp((string) $a['date'], (string) $b['date']));
+                return $up[0] ?? null;
+            };
+            $prog = osmGetSectionProgramme($token, $sid, $tid);
+            $ev = osmGetSectionEvents($token, $sid);
+            $np = !empty($prog['available']) ? $soonest($prog['items']) : null;
+            $ne = !empty($ev['available']) ? $soonest($ev['items']) : null;
+            dbRun("UPDATE osm_sections SET next_programme_json = ?, next_event_json = ? WHERE osm_section_id = ?", [
+                $np ? json_encode(['date' => $np['date'], 'title' => $np['title'] ?? 'Meeting']) : null,
+                $ne ? json_encode(['date' => $ne['date'], 'name' => $ne['name'] ?? 'Event', 'location' => $ne['location'] ?? null]) : null,
+                $sid,
+            ]);
             $synced++; $results[] = ['section' => $r['sectionname'] ?? $sid, 'count' => $res['count']];
         } else {
             dbRun("INSERT INTO osm_sections (osm_section_id, section_name, section_type, active_count, last_synced_at, synced_by, sync_status, sync_error)
