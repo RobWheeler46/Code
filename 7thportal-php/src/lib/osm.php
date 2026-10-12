@@ -670,6 +670,55 @@ function osmGetSectionEvents(string $accessToken, string $sectionId): array
     }
 }
 
+// Shared OSM section sync: for each youth role, cache the member count plus the next
+// upcoming programme item and event into osm_sections (counts/titles only - never a
+// member row). Used by the admin-triggered sync and the scheduled cron sync. Stops the
+// moment a count read is blocked, so OSM is never hammered. $actorId is the user the sync
+// runs as (an admin, or the service account for cron).
+function osmSyncSections(string $token, array $roles, array $terms, ?int $actorId): array
+{
+    $today = gmdate('Y-m-d');
+    $youth = array_values(array_filter($roles, fn($r) => in_array($r['section'] ?? null, OSM_YOUTH_SECTION_TYPES, true)));
+    $soonest = function (array $items) use ($today) {
+        $up = array_values(array_filter($items, fn($x) => !empty($x['date']) && $x['date'] >= $today));
+        usort($up, fn($a, $b) => strcmp((string) $a['date'], (string) $b['date']));
+        return $up[0] ?? null;
+    };
+    $synced = 0; $results = [];
+    foreach ($youth as $r) {
+        $sid = (string) $r['sectionid'];
+        $term = osmCurrentTermFromData($terms, $sid);
+        $tid = $term && ($term['termId'] ?? '') !== '' ? $term['termId'] : null;
+        $res = osmGridMemberCount($token, $sid, $tid);
+        if (!empty($res['ok'])) {
+            dbRun("INSERT INTO osm_sections (osm_section_id, section_name, section_type, active_count, last_synced_at, synced_by, sync_status, sync_error)
+                   VALUES (?, ?, ?, ?, datetime('now'), ?, 'ok', NULL)
+                   ON CONFLICT(osm_section_id) DO UPDATE SET section_name = excluded.section_name, section_type = excluded.section_type,
+                     active_count = excluded.active_count, last_synced_at = excluded.last_synced_at, synced_by = excluded.synced_by, sync_status = 'ok', sync_error = NULL",
+                [$sid, $r['sectionname'] ?? '', $r['section'] ?? null, $res['count'], $actorId]);
+            dbRun('INSERT OR IGNORE INTO section_snapshots (osm_section_id, active_count, snapshot_date) VALUES (?, ?, ?)', [$sid, $res['count'], $today]);
+            $prog = osmGetSectionProgramme($token, $sid, $tid);
+            $ev = osmGetSectionEvents($token, $sid);
+            $np = !empty($prog['available']) ? $soonest($prog['items']) : null;
+            $ne = !empty($ev['available']) ? $soonest($ev['items']) : null;
+            dbRun("UPDATE osm_sections SET next_programme_json = ?, next_event_json = ? WHERE osm_section_id = ?", [
+                $np ? json_encode(['date' => $np['date'], 'title' => $np['title'] ?? 'Meeting']) : null,
+                $ne ? json_encode(['date' => $ne['date'], 'name' => $ne['name'] ?? 'Event', 'location' => $ne['location'] ?? null]) : null,
+                $sid,
+            ]);
+            $synced++; $results[] = ['section' => $r['sectionname'] ?? $sid, 'count' => $res['count']];
+        } else {
+            dbRun("INSERT INTO osm_sections (osm_section_id, section_name, section_type, active_count, last_synced_at, synced_by, sync_status, sync_error)
+                   VALUES (?, ?, ?, NULL, datetime('now'), ?, 'error', ?)
+                   ON CONFLICT(osm_section_id) DO UPDATE SET last_synced_at = excluded.last_synced_at, synced_by = excluded.synced_by, sync_status = 'error', sync_error = excluded.sync_error",
+                [$sid, $r['sectionname'] ?? '', $r['section'] ?? null, $actorId, substr($res['error'] ?? 'failed', 0, 200)]);
+            $results[] = ['section' => $r['sectionname'] ?? $sid, 'error' => $res['error'] ?? 'failed'];
+            if (!empty($res['blocked'])) break; // stop the moment OSM blocks - never hammer
+        }
+    }
+    return ['synced' => $synced, 'total' => count($youth), 'results' => $results];
+}
+
 function osmGetMemberBadgeProgress(string $accessToken, ?string $sectionType, string $sectionId, $termId, string $memberId): array
 {
     try {

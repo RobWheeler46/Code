@@ -190,49 +190,29 @@ $router->post('/api/admin/sections/sync', function ($params) {
     if ($last && (time() - strtotime($last . ' UTC')) < 60) jsonResponse(['error' => 'Just synced - wait a minute before syncing OSM again.'], 429);
     try { $token = ensureFreshToken($me); } catch (Throwable $e) { jsonResponse(['error' => 'No usable OSM token - sign in with OSM, then sync.'], 400); }
     if ($token === 'demo') jsonResponse(['error' => 'Demo mode - a live OSM sync needs a real OSM sign-in.'], 400);
-    $roles = array_values(array_filter(json_decode($me['osm_roles_json'] ?? '[]', true) ?: [], fn($r) => in_array($r['section'] ?? null, OSM_YOUTH_SECTION_TYPES, true)));
+    $roles = json_decode($me['osm_roles_json'] ?? '[]', true) ?: [];
     $terms = json_decode($me['osm_terms_json'] ?? '[]', true) ?: [];
-    $today = gmdate('Y-m-d'); $synced = 0; $results = [];
-    foreach ($roles as $r) {
-        $sid = (string) $r['sectionid'];
-        $term = osmCurrentTermFromData($terms, $sid);
-        $tid = $term && ($term['termId'] ?? '') !== '' ? $term['termId'] : null;
-        $res = osmGridMemberCount($token, $sid, $tid);
-        if (!empty($res['ok'])) {
-            dbRun("INSERT INTO osm_sections (osm_section_id, section_name, section_type, active_count, last_synced_at, synced_by, sync_status, sync_error)
-                   VALUES (?, ?, ?, ?, datetime('now'), ?, 'ok', NULL)
-                   ON CONFLICT(osm_section_id) DO UPDATE SET section_name = excluded.section_name, section_type = excluded.section_type,
-                     active_count = excluded.active_count, last_synced_at = excluded.last_synced_at, synced_by = excluded.synced_by, sync_status = 'ok', sync_error = NULL",
-                [$sid, $r['sectionname'] ?? '', $r['section'] ?? null, $res['count'], $admin['id']]);
-            dbRun('INSERT OR IGNORE INTO section_snapshots (osm_section_id, active_count, snapshot_date) VALUES (?, ?, ?)', [$sid, $res['count'], $today]);
-            // Cache the next upcoming programme item + event too (counts/titles only, no
-            // member data), so the leader dashboard shows them without a live OSM call.
-            $soonest = function (array $items) use ($today) {
-                $up = array_values(array_filter($items, fn($x) => !empty($x['date']) && $x['date'] >= $today));
-                usort($up, fn($a, $b) => strcmp((string) $a['date'], (string) $b['date']));
-                return $up[0] ?? null;
-            };
-            $prog = osmGetSectionProgramme($token, $sid, $tid);
-            $ev = osmGetSectionEvents($token, $sid);
-            $np = !empty($prog['available']) ? $soonest($prog['items']) : null;
-            $ne = !empty($ev['available']) ? $soonest($ev['items']) : null;
-            dbRun("UPDATE osm_sections SET next_programme_json = ?, next_event_json = ? WHERE osm_section_id = ?", [
-                $np ? json_encode(['date' => $np['date'], 'title' => $np['title'] ?? 'Meeting']) : null,
-                $ne ? json_encode(['date' => $ne['date'], 'name' => $ne['name'] ?? 'Event', 'location' => $ne['location'] ?? null]) : null,
-                $sid,
-            ]);
-            $synced++; $results[] = ['section' => $r['sectionname'] ?? $sid, 'count' => $res['count']];
-        } else {
-            dbRun("INSERT INTO osm_sections (osm_section_id, section_name, section_type, active_count, last_synced_at, synced_by, sync_status, sync_error)
-                   VALUES (?, ?, ?, NULL, datetime('now'), ?, 'error', ?)
-                   ON CONFLICT(osm_section_id) DO UPDATE SET last_synced_at = excluded.last_synced_at, synced_by = excluded.synced_by, sync_status = 'error', sync_error = excluded.sync_error",
-                [$sid, $r['sectionname'] ?? '', $r['section'] ?? null, $admin['id'], substr($res['error'] ?? 'failed', 0, 200)]);
-            $results[] = ['section' => $r['sectionname'] ?? $sid, 'error' => $res['error'] ?? 'failed'];
-            if (!empty($res['blocked'])) break; // stop the moment OSM blocks - never hammer
-        }
-    }
-    logAudit(['userId' => $admin['id'], 'action' => 'admin_osm_section_sync', 'ipAddress' => clientIp(), 'details' => ['synced' => $synced, 'total' => count($roles)]]);
-    jsonResponse(['ok' => true, 'synced' => $synced, 'total' => count($roles), 'sections' => $results]);
+    $out = osmSyncSections($token, $roles, $terms, (int) $admin['id']);
+    logAudit(['userId' => $admin['id'], 'action' => 'admin_osm_section_sync', 'ipAddress' => clientIp(), 'details' => ['synced' => $out['synced'], 'total' => $out['total']]]);
+    jsonResponse(['ok' => true, 'synced' => $out['synced'], 'total' => $out['total'], 'sections' => $out['results']]);
+});
+
+// Scheduled (cron) OSM sync - no admin session, so it reads through the SERVICE account
+// and is gated by a secret key from .env (OSM_SYNC_CRON_KEY). Set up a cPanel cron to
+// curl this daily. Disabled (404) unless the key is configured; 403 on a bad/absent key.
+$router->get('/api/cron/osm-sync', function ($params) {
+    $key = trim((string) env('OSM_SYNC_CRON_KEY'));
+    if ($key === '') jsonResponse(['error' => 'Scheduled sync is not configured.'], 404);
+    if (!hash_equals($key, (string) queryParam('key'))) jsonResponse(['error' => 'Invalid key.'], 403);
+    $svc = getServiceAccount();
+    if (!$svc) jsonResponse(['error' => 'No OSM service account connected.'], 409);
+    try { $token = ensureFreshToken($svc); } catch (Throwable $e) { jsonResponse(['error' => 'OSM token refresh failed.'], 502); }
+    if ($token === 'demo') jsonResponse(['error' => 'Service account is in demo mode.'], 409);
+    $roles = json_decode($svc['osm_roles_json'] ?? '[]', true) ?: [];
+    $terms = json_decode($svc['osm_terms_json'] ?? '[]', true) ?: [];
+    $out = osmSyncSections($token, $roles, $terms, (int) $svc['id']);
+    logAudit(['userId' => (int) $svc['id'], 'action' => 'osm_section_sync_cron', 'ipAddress' => clientIp(), 'details' => ['synced' => $out['synced'], 'total' => $out['total']]]);
+    jsonResponse(['ok' => true, 'synced' => $out['synced'], 'total' => $out['total']]);
 });
 
 $router->get('/api/admin/sections/capacity/settings', function ($params) {
