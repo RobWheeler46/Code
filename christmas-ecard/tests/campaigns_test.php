@@ -3,6 +3,7 @@
 $work = sys_get_temp_dir() . '/ecard-cp-' . getmypid(); mkdir($work, 0775, true);
 putenv('DB_PATH=' . $work . '/t.sqlite'); putenv('LIBRARY_DIR=' . $work . '/library'); putenv('POSTMARK_TOKEN=');
 require __DIR__ . '/../src/app.php';
+set_setting('donations_enabled', '1');
 function ok($c, string $m): void { echo ($c ? 'PASS ' : 'FAIL ') . $m . "\n"; if (!$c) $GLOBALS['bad'] = 1; }
 function mkuser(string $n, string $roles): int { q("insert into users(name,email,pass,verified,created,is_admin,roles) values(?,?,?,1,?,1,?)", [$n, "$n@x.com", 'x', time(), $roles]); return (int)db()->lastInsertId(); }
 $pub = mkuser('pub', 'rolesadmin'); $mgr = mkuser('mgr', 'campaign'); $fin = mkuser('fin', 'finance');
@@ -50,5 +51,8 @@ foreach (['r_admin_campaigns', 'r_admin_campaigns_create', 'r_admin_campaigns_vi
     $rf = new ReflectionFunction($fn); $body = implode('', array_slice(file($rf->getFileName()), $rf->getStartLine() - 1, $rf->getEndLine() - $rf->getStartLine() + 1));
     ok(str_contains($body, 'need_admin(') && str_contains($body, 'lib_role()'), "$fn requires a signed in administrator with the campaign or restricted administrator role");
 }
+set_setting('donations_enabled', '0'); ok(!donations_enabled() && !campaign_allows($send(null), 'donation') && !campaign_allows($send(null), 'giftaid') && !campaign_allows($send($xmas), 'donation'), 'the site wide switch turns donations and Gift Aid off for every campaign');
+set_setting('donations_enabled', ''); ok(!donations_enabled(), 'donations are off unless the switch was turned on');
+file_put_contents($work . '/home.php', '<?php require ' . var_export(realpath(__DIR__ . '/../src/app.php'), true) . '; r_home();'); $home = (string)shell_exec('php ' . escapeshellarg($work . '/home.php')); ok(str_contains($home, 'Pick a design') && !str_contains($home, 'Every card helps local Scouting') && !str_contains($home, 'onation'), 'the home page and footer say nothing about donating while it is off');
 exec('rmdir /s /q ' . escapeshellarg($work) . ' 2>nul'); if (is_dir($work)) exec('rm -rf ' . escapeshellarg($work));
 exit($GLOBALS['bad'] ?? 0);

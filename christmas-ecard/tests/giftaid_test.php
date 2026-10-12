@@ -2,6 +2,7 @@
 // php tests/giftaid_test.php : Gift Aid rules (FR-141).
 putenv('DB_PATH=' . sys_get_temp_dir() . '/ecard-ga-' . getmypid() . '.sqlite'); putenv('POSTMARK_TOKEN=');
 require __DIR__ . '/../src/app.php';
+set_setting('donations_enabled', '1');
 @mkdir(ROOT . '/data', 0775, true); @unlink(ROOT . '/data/outbox.log');
 function ok($c, string $m): void { echo ($c ? 'PASS ' : 'FAIL ') . $m . "\n"; if (!$c) $GLOBALS['bad'] = 1; }
 q("insert into users(name,email,pass,verified,created,terms_version) values('Sam','sam@x.com','x',1,?,?)", [time(), TERMS_VERSION]);

@@ -15,7 +15,10 @@ function campaign_for_send(array $s): array {
     $c = !empty($s['campaign_id']) ? campaign_row((int)$s['campaign_id']) : null;
     return $c ?: (campaign_row(lib_campaign()) ?? ['donation_mode' => 'optional', 'giftaid' => 1]);
 }
+/** The site wide donations switch (Campaign settings). Off until the Trustees are ready: no donation option, no Gift Aid and no public fundraising wording. */
+function donations_enabled(): bool { return setting('donations_enabled') === '1'; }
 function campaign_allows(array $s, string $what): bool {
+    if (!donations_enabled()) return false;
     $c = campaign_for_send($s);
     return match ($what) { 'donation' => ($c['donation_mode'] ?? 'optional') === 'optional', 'giftaid' => ($c['donation_mode'] ?? 'optional') === 'optional' && !empty($c['giftaid']), default => false };
 }

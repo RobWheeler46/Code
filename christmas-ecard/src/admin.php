@@ -16,6 +16,7 @@ function config_spec(string $area): array {
             'campaign' => ['Campaign name', 'text', 'max' => 60, 'def' => 'Christmas 2026'],
             'opens' => ['Sending opens (UK time)', 'datetime', 'def' => ''], 'closes' => ['Sending closes (UK time)', 'datetime', 'def' => ''],
             'closure_queue' => ['Cards already queued when sending closes', 'choice', 'opts' => ['send' => 'Still send them', 'hold' => 'Hold them for review'], 'def' => 'send'],
+            'donations_enabled' => ['Take donations (leave off until the Trustees are ready; sending cards stays free either way)', 'bool', 'def' => '0'],
             'donation_purpose' => ['Approved purpose of donations', 'text', 'max' => 300, 'def' => ''],
             'target_pence' => ['Fundraising target in pounds (blank for none)', 'money', 'def' => ''],
             'amounts_pence' => ['Suggested donation amounts in pounds, comma separated (up to 5, £1 to £500)', 'amounts', 'def' => '200,500,1000'],

@@ -46,14 +46,14 @@ function progress(): int { return (int)one('select coalesce(sum(pence-refunded),
 function r_home(): void {
     if (preg_match('/^[a-z0-9-]{1,30}$/', (string)($_GET['ref'] ?? ''))) $_SESSION['ref'] = $_GET['ref']; // promotion source label only, never a person
     $st = campaign_state();
-    $b = '<section class="hero"><div><p class="eyebrow">7th Swindon Scouts Christmas cards</p><h1>Send a little Christmas cheer, Scout style</h1><p class="lead">Pick a design, write your message and we will email a private card to your friends and family. Sending is free, and a donation is optional.</p><p><a class="btn big" href="#gallery">Choose a card</a> <a class="btn ghost" href="#how">How it works</a></p></div><div class="heroart" aria-hidden="true">' . (($hero = hero_for_session()) ? card_art($hero) : '') . '</div></section>';
+    $b = '<section class="hero"><div><p class="eyebrow">7th Swindon Scouts Christmas cards</p><h1>Send a little Christmas cheer, Scout style</h1><p class="lead">Pick a design, write your message and we will email a private card to your friends and family. Sending is free' . (donations_enabled() ? ', and a donation is optional' : '') . '.</p><p><a class="btn big" href="#gallery">Choose a card</a> <a class="btn ghost" href="#how">How it works</a></p></div><div class="heroart" aria-hidden="true">' . (($hero = hero_for_session()) ? card_art($hero) : '') . '</div></section>';
     if ($st === 'locked') $b .= '<p class="flash warn">Sending is not open yet. You can prepare a card now.</p>';
     if ($st === 'before') $b .='<p class="flash warn">Sending opens on ' . h(date('j F Y \a\t H:i', strtotime(setting('opens')))) . '. You can prepare a card now.</p>';
     if ($st === 'closed') $b .= '<p class="flash warn">This year\'s card sending has closed. Cards already sent stay viewable until they expire.</p>';
     $t = (int)setting('target_pence');
-    if (setting('show_progress') === '1' && $t) $b .= '<p class="progress">Raised so far: <strong>' . gbp(progress()) . '</strong> of ' . gbp($t) . ' target (confirmed donations, after refunds).</p>';
+    if (donations_enabled() && setting('show_progress') === '1' && $t) $b .= '<p class="progress">Raised so far: <strong>' . gbp(progress()) . '</strong> of ' . gbp($t) . ' target (confirmed donations, after refunds).</p>';
     $b .= '<h2 id="how">How it works</h2><ol class="how"><li><b>1</b><strong>Choose a design</strong>Illustrated Scout themed cards, from tents to campfires.</li><li><b>2</b><strong>Write your message</strong>Add up to ' . max_recipients() . ' people. Give anyone a personal note if you like.</li><li><b>3</b><strong>We send each card</strong>Everyone gets their own private link and opens a Christmas envelope.</li></ol>'
-        . '<section class="cause"><h2>Every card helps local Scouting</h2><p>' . h(setting('donation_purpose') ?: 'Any donation goes straight to 7th Swindon Scouts.') . '</p><p>Sending is always free. You never have to donate, and a donation never changes how your card looks.</p></section>'
+        . (!donations_enabled() ? '' : '<section class="cause"><h2>Every card helps local Scouting</h2><p>' . h(setting('donation_purpose') ?: 'Any donation goes straight to 7th Swindon Scouts.') . '</p><p>Sending is always free. You never have to donate, and a donation never changes how your card looks.</p></section>')
         . '<h2 id="gallery">Pick a design</h2><div class="grid">';
     foreach (gallery_cards() as $id => $c)
         $b .= '<a class="tile" href="/compose?card=' . h($id) . '">' . card_art($id, true) . '<span>' . h($c['title']) . '</span><em class="tjoke">' . h($c['joke']) . '</em></a>';
@@ -63,12 +63,12 @@ function r_home(): void {
 function r_help(): void {
     $e = h(support_email());
     $faq = [
-        'Is it really free?' => 'Yes. Sending is always free. A donation is optional and goes to 7th Swindon Scouts. ' . setting('donation_purpose', 'Donations support 7th Swindon Scouts.'),
+        'Is it really free?' => 'Yes. Sending is always free.' . (donations_enabled() ? ' A donation is optional and goes to 7th Swindon Scouts. ' . setting('donation_purpose', 'Donations support 7th Swindon Scouts.') : ''),
         'I did not get the verification email' => 'Check your spam or junk folder, then sign in and ask for it again. If the address was wrong, register again with the right one.',
         'My recipient did not get their card' => 'Open "My cards" to see each card\'s status. If it shows Failed, correct the address and send again. Ask the recipient to check spam.',
         'What do the statuses mean?' => implode(' ', array_map(fn($k, $v) => "$k: $v", array_keys(STATUS_HELP), STATUS_HELP)),
         'How long does a card last?' => 'A card link works for ' . expiry_days() . ' days after it is sent.',
-        'I have a question about a donation' => "Email $e and quote the reference from your receipt.",
+        ...(donations_enabled() ? ['I have a question about a donation' => "Email $e and quote the reference from your receipt."] : []),
         'How do you decide a card was viewed?' => 'A card counts as Viewed only when the recipient deliberately presses Open your card. Opening the email, or a security scanner fetching the link, does not count. If someone reads the card without that step we cannot tell, so it shows as not confirmed. Viewed never means we know who read it.',
         'Can I delete my account?' => 'Yes, from the bottom of My cards. It cancels cards that have not started sending, deletes your saved contacts and groups, and switches off the links of the cards you sent. Finance records and opt-out records are kept separately.',
         'I received a card I do not want' => 'Open the card and use "Report this card", or use the "stop cards" link at the bottom of the email.',
