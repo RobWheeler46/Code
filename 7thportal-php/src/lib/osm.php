@@ -15,7 +15,9 @@
 // get right. Slower per-request, not less correct.
 
 const OSM_BASE = 'https://www.onlinescoutmanager.co.uk';
-const OSM_SCOPES = 'section:member:read section:programme:read section:event:read section:badge:read';
+// section:member:write is needed only for the waiting-list test-write tool; adding it here
+// means a re-authorisation grants write access to member data - review before relying on it.
+const OSM_SCOPES = 'section:member:read section:member:write section:programme:read section:event:read section:badge:read';
 const OSM_YOUTH_SECTION_TYPES = ['squirrels', 'beavers', 'cubs', 'scouts', 'explorers'];
 const OSM_BADGE_TYPE_NAMES = [1 => 'Challenge', 2 => 'Activity', 3 => 'Staged', 4 => 'Core'];
 
@@ -668,6 +670,25 @@ function osmGetSectionEvents(string $accessToken, string $sectionId): array
     } catch (Throwable $e) {
         return ['available' => false, 'items' => [], 'error' => $e->getMessage()];
     }
+}
+
+// TEST write: create a member on the waiting section via the actions endpoint (discovered
+// from community plugins: POST /ext/members/contact/actions/?action=newMember). Requires
+// the section:member:write scope + a re-authorised connection. Returns OSM's RAW response
+// (status/payload) so the exact contract can be confirmed empirically - OSM's validation
+// errors guide the parameters, exactly like the read probe did. Never throws.
+function osmWaitingListCreateMember(string $accessToken, string $sectionId, array $f): array
+{
+    $body = array_filter([
+        'firstname' => $f['firstname'] ?? '',
+        'lastname' => $f['lastname'] ?? '',
+        'dob' => $f['dob'] ?? '',
+        'sectionid' => $sectionId,
+        'section_id' => $sectionId,
+        'startdate' => $f['startdate'] ?? gmdate('Y-m-d'),
+        'startdate_g' => $f['startdate'] ?? gmdate('Y-m-d'),
+    ], fn($v) => $v !== '' && $v !== null);
+    return osmRawData('POST', $accessToken, '/ext/members/contact/actions/', ['action' => 'newMember'], $body);
 }
 
 // Full waiting-list read for an authorised admin: every member on the waiting section

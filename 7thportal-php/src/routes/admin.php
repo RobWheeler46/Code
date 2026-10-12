@@ -223,6 +223,39 @@ $router->get('/api/admin/waiting-list', function ($params) {
     jsonResponse(['available' => true, 'source' => 'osm', 'count' => $res['count'], 'members' => $res['members']]);
 });
 
+// TEST ONLY: create a member on the live OSM waiting list. Admin-only, requires an explicit
+// confirm, forces a clear TEST marker on the name, audits every attempt, and returns OSM's
+// raw (redacted) response so the write contract can be confirmed. A successful write creates
+// a REAL record in OSM that the admin must then delete there.
+$router->post('/api/admin/waiting-list/test-write', function ($params) {
+    $admin = requireAuth();
+    requireAdmin($admin);
+    $b = requestBody();
+    if (empty($b['confirm'])) jsonResponse(['error' => 'Tick the confirmation - this writes a real record to the live OSM waiting list.'], 422);
+    $first = trim((string) ($b['firstname'] ?? ''));
+    $last = trim((string) ($b['lastname'] ?? ''));
+    if ($first === '' || $last === '') jsonResponse(['error' => 'First and last name are required.'], 422);
+    // Force an unmistakable test marker so any created record is obviously disposable.
+    if (stripos($first . ' ' . $last, 'TEST') === false) $first = 'ZZTEST ' . $first;
+    $service = getServiceAccount() ?? $admin;
+    try { $token = ensureFreshToken($service); }
+    catch (Throwable $e) { jsonResponse(['error' => 'No usable OSM token - connect an OSM service account, or sign in with OSM.'], 400); }
+    if ($token === 'demo') { jsonResponse(['ok' => true, 'simulated' => true, 'note' => 'Demo mode - nothing was written. On live this POSTs newMember to the waiting section.']); return; }
+    $roles = json_decode($service['osm_roles_json'] ?? '[]', true) ?: [];
+    $waitSid = null;
+    foreach ($roles as $r) { if (($r['section'] ?? '') === 'waiting') { $waitSid = (string) $r['sectionid']; break; } }
+    if (!$waitSid) jsonResponse(['error' => 'No OSM waiting list section is visible to the connected account.'], 409);
+    $res = osmWaitingListCreateMember($token, $waitSid, ['firstname' => $first, 'lastname' => $last, 'dob' => trim((string) ($b['dob'] ?? ''))]);
+    logAudit(['userId' => $admin['id'], 'action' => 'admin_waiting_list_test_write', 'entityType' => 'osm_section', 'entityId' => $waitSid, 'ipAddress' => clientIp(), 'details' => ['status' => $res['status'] ?? null, 'name' => $first . ' ' . $last]]);
+    jsonResponse([
+        'ok' => !empty($res['ok']),
+        'status' => $res['status'] ?? null,
+        'wrote' => $first . ' ' . $last,
+        'response' => osmDiagnosticRedact($res['payload'] ?? $res['bodySnippet'] ?? null),
+        'error' => $res['error'] ?? null,
+    ]);
+});
+
 // Admin-only: every field OSM holds on the waiting-list grid, labelled via meta.structure
 // (top-level + all custom_data groups/columns), with MASKED samples - so an admin can see
 // what extra data exists without exposing raw PII. Read-through, nothing stored.
