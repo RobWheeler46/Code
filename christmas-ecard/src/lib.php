@@ -72,6 +72,12 @@ function gbp(int $p): string { return '£' . number_format($p / 100, 2); }
 function base_url(): string { return rtrim(env('APP_URL', 'http://localhost:8060'), '/'); }
 /** Anything but an explicit APP_ENV=development (or staging) is production, so a missing line fails safe. */
 function app_env(): string { return env('APP_ENV', 'production'); }
+/** The picture and words shown when the site link is shared (WhatsApp, Facebook and so on). The same for every page, so a private card link reveals nothing. */
+function share_tags(): string {
+    $t = 'Send a little Christmas cheer, Scout style'; $d = 'Free Christmas eCards from 7th Swindon Scouts. Pick a design, write a message and send a private card to friends and family.'; $i = base_url() . '/assets/share.jpg';
+    return '<meta name="description" content="' . h($d) . '"><meta property="og:type" content="website"><meta property="og:site_name" content="7th Swindon Scouts Christmas eCards"><meta property="og:title" content="' . h($t) . '"><meta property="og:description" content="' . h($d) . '">'
+        . '<meta property="og:image" content="' . h($i) . '"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Two Scout themed Christmas cards beside the words Send a little Christmas cheer, Scout style"><meta name="twitter:card" content="summary_large_image">';
+}
 function token(): string { return bin2hex(random_bytes(24)); }
 
 /** Search engines must never index, and browsers and proxies must never keep, anything that is not a public page: card links, accounts, drafts and every admin and private screen. */
@@ -212,6 +218,7 @@ function page(string $title, string $body, int $code = 200): never {
     } else $nav .= '<a href="/login">Sign in</a><a href="/register">Register</a>';
     echo '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">'
         . '<title>' . h($title) . ' | 7th Swindon Scouts Christmas Cards</title>'
+        . share_tags()
         . '<link rel="stylesheet" href="/assets/style.css"></head><body><a class="skip" href="#main">Skip to content</a>'
         . (app_env() !== 'production' ? '<p class="envbanner" role="note">' . h(strtoupper(app_env())) . ' environment. Test mode: nothing here is real. Do not enter real details.</p>' : '') . '<header><a class="brand" href="/"><img src="/assets/brand/7th-swindon-circle-blue.png" alt="7th Swindon Scouts" width="64" height="64"><span>Christmas Cards</span></a><nav aria-label="Main">' . $nav . '</nav></header>'
         . '<main id="main">' . ($f ? '<p class="flash ' . h($f[0]) . '" role="' . ($f[0] === 'err' ? 'alert" tabindex="-1" data-focus' : 'status"') . '>' . h($f[1]) . '</p>' : '') . $body . '</main>'

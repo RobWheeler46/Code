@@ -17,4 +17,6 @@ preg_match_all("/\$a\['([a-z0-9]+)'\]/", file_get_contents(__DIR__ . '/../src/op
 $missing = array_filter(array_unique($ak[1]), fn($k) => !str_contains($adm, "'$k' => ['/admin"));
 ok(!$missing, 'UX24-07: every alert type on the Overview says where to act (' . implode(',', $missing) . ')');
 ok(str_contains($app, "if (\$do === 'send') \$do = (\$_POST['mode'] ?? '') === 'donate'"),'the single send button maps the chosen option to the existing free or donate paths');
+$sh = __DIR__ . '/../public/assets/share.jpg'; $sz = is_file($sh) ? getimagesize($sh) : [0, 0];
+ok($sz[0] === 1200 && $sz[1] === 630 && filesize($sh) < 400000 && str_contains(share_tags(), 'og:image') && str_contains(share_tags(), '/assets/share.jpg'), 'the share preview image is 1200 by 630, small, and linked from every page');
 exit($GLOBALS['bad'] ?? 0);
