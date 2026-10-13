@@ -169,7 +169,7 @@ function r_admin_config(string $area): void {
     if ($area === 'privacy') $b .= '<p class="note">Changing a period shows the affected records first and needs a reason and approval reference.</p>';
     if ($area === 'wording') $b .= '<p class="note"><a href="/admin/email">Preview the email and send yourself a test</a> once you have saved.</p>';
     if ($area === 'campaign') $b .= '<p class="note">Free sending is always available. Payments cannot be made mandatory here.</p>';
-    admin_page($spec['title'], $b . ($edit ? '<button class="btn">Review changes</button>' : '') . '</form>' . ($area === 'site' ? admin_designs_and_share() : ''));
+    admin_page($spec['title'], $b . ($edit ? '<button class="btn">Review changes</button>' : '') . '</form>' . ($area === 'site' ? admin_share_block() : ''));
 }
 function r_admin_site(): void { r_admin_config('site'); }
 function r_admin_wording(): void { r_admin_config('wording'); }
@@ -177,18 +177,27 @@ function r_admin_app(): void { r_admin_config('app'); }
 function r_admin_privacy(): void { r_admin_config('privacy'); }
 
 // ---------- S32 designs (order, enable, accessible description) and sharing the site
-function admin_designs_and_share(): string {
-    $edit = can_any('campaign', 'rolesadmin'); $b = '<h2>Approved card designs</h2><p class="note">Changes apply to new cards. Cards already submitted keep the artwork they were sent with.</p><ul class="plain">';
+/** Order, show or hide, and describe the cards: its own page, linked from the eCard Library. */
+function r_admin_designs(): void {
+    need_admin(); if (!can_any('campaign', 'rolesadmin')) fail(403, 'You do not have permission for that.');
+    admin_page('Order and visibility', admin_designs_list());
+}
+function admin_designs_list(): string {
+    $edit = can_any('campaign', 'rolesadmin'); $b = '<h1>Order and visibility</h1><p class="lead">Choose the order cards appear in, hide or show a card, and write the description read aloud to people using a screen reader. Changes apply to new cards. Cards already sent keep the artwork they were sent with. To add or publish a design, use the <a href="/admin/library">eCard Library</a>.</p><ul class="plain">';
     $ids = array_keys(cards()); $n = count($ids);
     foreach ($ids as $i => $id) {
         $c = cards()[$id];
         $b .= '<li class="designrow">' . card_art($id) . '<div><strong>' . h($c['title']) . '</strong> ' . ($c['on'] ? '' : '<span class="pill">Disabled</span>');
-        if ($edit) $b .= '<form method="post" action="/admin/action" class="stack">' . csrf() . '<input type="hidden" name="back" value="/admin/site"><input type="hidden" name="card" value="' . h($id) . '"><label>Accessible description<input name="desc" maxlength="200" value="' . h(setting("desc_$id")) . '" placeholder="' . h($c['title']) . '"></label><div class="row">'
+        if ($edit) $b .= '<form method="post" action="/admin/action" class="stack">' . csrf() . '<input type="hidden" name="back" value="/admin/designs"><input type="hidden" name="card" value="' . h($id) . '"><label>Accessible description<input name="desc" maxlength="200" value="' . h(setting("desc_$id")) . '" placeholder="' . h($c['title']) . '"></label><div class="row">'
             . '<button class="btn alt" name="do" value="design_desc">Save description</button><button class="btn alt" name="do" value="design">' . ($c['on'] ? 'Disable' : 'Enable') . '</button>'
             . ($i > 0 ? '<button class="btn alt" name="do" value="design_up">Move up</button>' : '') . ($i < $n - 1 ? '<button class="btn alt" name="do" value="design_down">Move down</button>' : '') . '</div></form>';
         $b .= '</div></li>';
     }
-    $b .= '</ul><h2>Share the site</h2><p>Public link: <code>' . h(base_url() . '/') . '</code>. Add <code>?ref=newsletter</code> (letters, numbers, hyphens) to see which promotion works. It leads to the gallery and contains nothing private.</p>'
+    return $b . '</ul>';
+}
+/** The public link, the QR code and which promotions brought cards. */
+function admin_share_block(): string {
+    $b = '<h2>Share the site</h2><p>Public link: <code>' . h(base_url() . '/') . '</code>. Add <code>?ref=newsletter</code> (letters, numbers, hyphens) to see which promotion works. It leads to the gallery and contains nothing private.</p>'
         . '<div class="qrbox">' . qr_svg(base_url() . '/', 200) . '</div><p><a href="/admin/qr" download>Download the QR code (SVG, prints at any size)</a></p><p class="note">Made here, so the address is not sent to any other website.</p><ul>';
     foreach (all("select coalesce(ref,'(no label)') r, count(*) n from sends where status not in ('draft') group by ref order by n desc") as $x) $b .= '<li>' . h($x['r']) . ': ' . $x['n'] . ' cards</li>';
     return $b . '</ul>';
@@ -275,33 +284,30 @@ function r_admin_action(): void {
 function r_admin(): void {
     $u = need_admin();
     if (!ops_admin()) admin_page('Overview', workspace_hero() . workspace_shortcuts() . '<p class="note">Only the tools your roles allow are shown here.</p>');
-    $c = admin_pause_counts();
-    $nc = (int)one("select count(*) n from sends where is_test=0 and status not in ('draft','awaiting_payment')")['n']; $na = count(health_alerts());
-    $b = workspace_hero() . workspace_shortcuts() . '<h2>Where things stand</h2><div class="cards stats"><section class="statuscard"><h2>Cards requested</h2><p class="big">' . $nc . '</p></section>'
-        . (can_any('finance', 'campaign') ? '<section class="statuscard"><h2>Donations recorded</h2><p class="big">' . gbp((int)one('select coalesce(sum(pence-refunded),0) n from donations')['n']) . '</p></section>' : '')
-        . '<section class="statuscard"><h2>Needs attention</h2><p class="big">' . $na . '</p></section></div><div class="cards">'
-        . '<section class="statuscard"><h2>Sending</h2><p>' . (sending_state() === 'open' ? 'Open for new cards' : 'Locked until payments are proven') . '</p>' . (($why = sending_block_reason()) ? '<p class="note">' . h($why) . '</p>' : '') . '</section>'
-        . '<section class="statuscard"><h2>Dispatch</h2><p>' . (setting('paused') === '1' ? '<strong>Paused</strong>' : 'Running') . '. ' . $c['queued'] . ' queued.</p></section>';
-    $alerts = health_alerts();
-    $b .= '<section class="statuscard"><h2>Alerts</h2><p>' . ($alerts ? '<strong>' . count($alerts) . ' need attention</strong>' : 'None found') . '</p><a href="/admin/health">System health</a></section></div>';
-    if ($alerts) { // UX24-07: each exception names where to act; people without that role see who owns it, never the private detail
-        $go = ['cron' => ['/admin/health', 'appadmin,rolesadmin', 'Administrator'], 'backup' => ['/admin/health', 'appadmin,rolesadmin', 'Administrator'], 'offsite' => ['/admin/health', 'appadmin,rolesadmin', 'Administrator'], 'restore' => ['/admin/health', 'appadmin,rolesadmin', 'Administrator'],
-            'queue' => ['/admin/delivery', 'delivery,appadmin,rolesadmin', 'Administrator'], 'failed' => ['/admin/delivery', 'delivery,appadmin,rolesadmin', 'Administrator'], 'pay15' => ['/admin/finance', 'finance', 'Administrator'], 'pay24' => ['/admin/finance', 'finance', 'Administrator'], 'payexc' => ['/admin/finance', 'finance', 'Administrator'],
-            'complaint' => ['/admin/reports', 'complaints', 'Administrator'], 'abuse' => ['/admin/senders', 'complaints,rolesadmin', 'Administrator'], 'access' => ['/admin/access', 'rolesadmin', 'Owner']];
-        $b .= '<h2>Needs attention first</h2><ul class="tasks">';
-        foreach ($alerts as $k => $a) { [$href, $roles, $owner] = $go[$k] ?? ['/admin/health', '', 'Administrator']; $mine = $roles === '' || can_any(...explode(',', $roles));
-            $b .= '<li>' . h($a) . ' ' . ($mine ? '<a class="btn alt" href="' . $href . '">Open</a>' : '<span class="note">Owner: ' . h($owner) . '</span>') . '</li>'; }
+    $c = admin_pause_counts(); $alerts = health_alerts();
+    $nc = (int)one("select count(*) n from sends where is_test=0 and status not in ('draft','awaiting_payment')")['n'];
+    $b = '<h1>Overview</h1>';
+    if ($alerts) { // each exception names where to act; people without that level see who owns it, never the private detail
+        $go = ['cron' => ['/admin/health', 'Administrator'], 'queue' => ['/admin/delivery', 'Administrator'], 'failed' => ['/admin/delivery', 'Administrator'], 'pay15' => ['/admin/finance', 'Administrator'], 'pay24' => ['/admin/finance', 'Administrator'], 'payexc' => ['/admin/finance', 'Administrator'],
+            'complaint' => ['/admin/reports', 'Administrator'], 'abuse' => ['/admin/senders', 'Administrator'], 'access' => ['/admin/access', 'Owner']];
+        $b .= '<h2>Needs attention</h2><ul class="tasks">';
+        foreach ($alerts as $k => $a) { [$href, $owner] = $go[$k] ?? ['/admin/health', 'Administrator']; $mine = $owner === 'Owner' ? can('owner') : true;
+            $b .= '<li><span>' . h($a) . '</span> ' . ($mine ? '<a class="btn alt" href="' . $href . '">Open</a>' : '<span class="note">Ask an owner</span>') . '</li>'; }
         $b .= '</ul>';
-    } else $b .= '<p class="note">Nothing needs attention right now.</p>';
+    } else $b .= '<p class="flash" role="status">Nothing needs attention right now.</p>';
+    $b .= '<h2>Where things stand</h2><div class="cards stats"><section class="statuscard"><h2>Cards requested</h2><p class="big">' . $nc . '</p></section>'
+        . '<section class="statuscard"><h2>Sending</h2><p>' . (sending_state() === 'open' ? 'Open for new cards' : 'Locked until payments are proven') . '</p>' . (($why = sending_block_reason()) ? '<p class="note">' . h($why) . '</p>' : '') . '</section>'
+        . '<section class="statuscard"><h2>Dispatch</h2><p>' . (setting('paused') === '1' ? '<strong>Paused</strong>' : 'Running') . '. ' . $c['queued'] . ' queued.</p></section>'
+        . (donations_enabled() ? '<section class="statuscard"><h2>Donations recorded</h2><p class="big">' . gbp((int)one('select coalesce(sum(pence-refunded),0) n from donations')['n']) . '</p></section>' : '') . '</div>';
     $rc = []; foreach (all('select r.* from recipients r join sends s on s.id=r.send_id where s.is_test=0') as $r) { $k = rstatus($r); $rc[$k] = ($rc[$k] ?? 0) + 1; }
     $b .= '<h2>Card activity</h2><p>' . h(implode(', ', array_map(fn($k, $v) => "$v $k", array_keys($rc), $rc)) ?: 'Nothing sent yet.') . '</p><ul>';
     foreach (all("select card, count(*) n from sends where is_test=0 and status not in ('draft','awaiting_payment') group by card order by n desc") as $x) $b .= '<li>' . h(cards()[$x['card']]['title'] ?? $x['card']) . ': ' . $x['n'] . '</li>';
     $b .= '</ul>';
-    if (can_any('finance', 'campaign')) {
+    if (donations_enabled()) {
         $d = one('select count(*) n, coalesce(sum(pence),0) gross, coalesce(sum(fee),0) fee, coalesce(sum(refunded),0) ref from donations');
         $b .= '<h2>Fundraising</h2><p>Confirmed gross donations: <strong>' . gbp((int)$d['gross']) . '</strong> from ' . $d['n'] . ' donations (average ' . gbp($d['n'] ? intdiv((int)$d['gross'], (int)$d['n']) : 0) . '). Fees ' . gbp((int)$d['fee']) . ', refunds ' . gbp((int)$d['ref']) . ', net after both ' . gbp((int)($d['gross'] - $d['fee'] - $d['ref'])) . '.</p>';
     }
-    admin_page('Overview', $b);
+    admin_page('Overview', $b . workspace_shortcuts());
 }
 
 // ---------- delivery (S20)

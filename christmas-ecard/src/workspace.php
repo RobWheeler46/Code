@@ -8,24 +8,27 @@ function ops_admin(): bool { return can_any('campaign', 'appadmin', 'finance', '
 /** [group => [[label, href, short description, allowed?]]] in display order. The single source for the menu, the overview shortcuts and the breadcrumbs. */
 function workspace_manifest(): array {
     return [
-        'Start' => [['Overview', '/admin', 'Your tasks and what needs attention', fn() => true]],
+        'Start' => [['Overview', '/admin', 'What needs doing and how things stand', fn() => true],
+            ['Measures', '/admin/measures', 'Counts and progress, with small numbers hidden', fn() => can_any('campaign', 'finance', 'appadmin', 'rolesadmin')]],
         'Cards' => [
             ['eCard Library', '/admin/library', 'Add, preview and publish card designs', fn() => can_any('campaign', 'rolesadmin')],
-            ['Site settings', '/admin/site', 'Donations, card design order, the site link and QR code', fn() => can_any('campaign', 'appadmin', 'finance', 'delivery', 'rolesadmin')]],
+            ['Order and visibility', '/admin/designs', 'Put the cards in order and hide or show them', fn() => can_any('campaign', 'rolesadmin')],
+            ['Site settings', '/admin/site', 'Donations, Gift Aid, the site link and QR code', fn() => can_any('campaign', 'appadmin', 'finance', 'delivery', 'rolesadmin')]],
         'Support and delivery' => [
             ['Delivery issues', '/admin/delivery', 'Failed and unconfirmed cards, resend, pause', fn() => can_any('delivery', 'appadmin', 'rolesadmin')],
             ['Reports and complaints', '/admin/reports', 'Cards reported by recipients', fn() => can('complaints')],
             ['Senders', '/admin/senders', 'Suspend or reinstate a sender', fn() => can_any('complaints', 'rolesadmin')]],
         'Fundraising' => [
             ['Donations and payments', '/admin/finance', 'Reconcile payments, refunds and exports', fn() => can('finance')],
-            ['Gift Aid', '/admin/giftaid', 'Declarations and the claim schedule (owners only)', fn() => can('owner')],
-            ['Measures', '/admin/measures', 'Counts and progress, with small numbers hidden', fn() => can_any('campaign', 'finance', 'appadmin', 'rolesadmin')]],
+            ['Gift Aid', '/admin/giftaid', 'Declarations and the claim schedule (owners only)', fn() => can('owner')]],
         'Administration' => [['Platform controls', '/admin/platform', 'Settings, email, access, health and history', fn() => ops_admin()]],
     ];
 }
 /** The tools inside Platform controls, so the menu stays one level deep. */
 function platform_manifest(): array {
     return [
+        ['System health', '/admin/health', 'Email, payments, backups and scheduled jobs', fn() => ops_admin()],
+        ['Change history', '/admin/audit', 'Who changed what, with export', fn() => ops_admin()],
         ['Application settings', '/admin/app', 'Limits, alerts and message rules', fn() => can_any('appadmin', 'campaign', 'delivery', 'rolesadmin')],
         ['Email delivery', '/admin/mail', 'How email is sent, logins and a test email (owners only)', fn() => can('owner')],
         ['Email and help wording', '/admin/wording', 'Subject, opening line, button and Help questions', fn() => can_any('appadmin', 'rolesadmin')],
@@ -33,8 +36,6 @@ function platform_manifest(): array {
         ['Privacy and retention', '/admin/privacy', 'How long cards and details are kept', fn() => can_any('rolesadmin', 'campaign', 'appadmin', 'finance', 'delivery')],
         ['Administrator access', '/admin/access', 'Invite administrators and choose owners (owners only)', fn() => can('owner')],
         ['Rehearsal', '/admin/rehearsal', 'Test cards to an allow list', fn() => can_any('appadmin', 'rolesadmin')],
-        ['System health', '/admin/health', 'Email, payments, backups and scheduled jobs', fn() => ops_admin()],
-        ['Change history', '/admin/audit', 'Who changed what, with export', fn() => ops_admin()],
     ];
 }
 

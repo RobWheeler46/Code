@@ -9,7 +9,7 @@ $roles = ['admin', 'owner']; $U = [];
 foreach ($roles as $r) { $sec = b32e(random_bytes(10)); q("insert into users(name,email,pass,verified,created,terms_version,is_admin,roles,totp_secret) values(?,?,?,1,?,?,1,?,?)", ["u$r", "$r@x.com", password_hash('Test-pass-123', PASSWORD_DEFAULT), time(), TERMS_VERSION, $r, $sec]); $U[$r] = ["$r@x.com", $sec]; }
 // the expectation, written out again here on purpose (not read from the manifest): which roles may use which destination
 $both = ['admin', 'owner']; $ownerOnly = ['owner'];
-$rules = ['/admin' => ['*'], '/admin/library' => $both, '/admin/site' => $both, '/admin/delivery' => $both, '/admin/reports' => $both, '/admin/senders' => $both, '/admin/finance' => $both, '/admin/giftaid' => $ownerOnly,
+$rules = ['/admin' => ['*'], '/admin/library' => $both, '/admin/designs' => $both, '/admin/site' => $both, '/admin/delivery' => $both, '/admin/reports' => $both, '/admin/senders' => $both, '/admin/finance' => $both, '/admin/giftaid' => $ownerOnly,
     '/admin/measures' => $both, '/admin/platform' => $both, '/admin/app' => $both, '/admin/mail' => $ownerOnly, '/admin/wording' => $both, '/admin/email' => $both, '/admin/privacy' => $both, '/admin/access' => $ownerOnly, '/admin/rehearsal' => $both,
     '/admin/health' => $both, '/admin/audit' => $both];
 $port = random_int(19100, 19900); $proc = proc_open([PHP_BINARY, '-S', "127.0.0.1:$port", '-t', __DIR__ . '/../public', __DIR__ . '/../public/index.php'], [1 => ['file', $work . '/srv.log', 'w'], 2 => ['file', $work . '/srv.log', 'a']], $pipes, null, array_merge(getenv(), ['DB_PATH' => $dbf, 'POSTMARK_TOKEN' => '', 'SMTP_HOST' => '']));
@@ -42,6 +42,14 @@ ok($sc === $mm && str_contains($ov, 'What would you like to do?') && str_contain
 [, $pg] = http('/admin/library', $jars['admin']); ok(str_contains($pg, 'aria-label="Breadcrumb"') && str_contains($pg, '<span aria-current="page">eCard Library</span>') && str_contains($pg, 'Cards') && str_contains($pg, '<a href="/admin/library" aria-current="page">eCard Library</a>'), 'a page shows its breadcrumb and is marked as the current page in the menu');
 [, $pg] = http('/admin/mail', $jars['owner']); ok(str_contains($pg, 'Platform controls') && str_contains($pg, '<span aria-current="page">Email delivery</span>') && str_contains($pg, '<a href="/admin/platform" aria-current="true">Platform controls</a>'), 'a tool inside Platform controls shows where it sits');
 ok(str_contains($pg, '<details class="wsmenu" open><summary>Workspace menu</summary>') && str_contains($pg, '<meta name="viewport"'), 'the menu is a disclosure that the page can close on a phone');
+
+// v2.11 restructure: tasks first, designs and site settings separated, readable menu
+[, $ov] = http('/admin', $jars['admin']); ok(strpos($ov, 'Needs attention') !== false && strpos($ov, 'Nothing needs attention') === false ? strpos($ov, 'Needs attention') < strpos($ov, 'Where things stand') : strpos($ov, 'Nothing needs attention') < strpos($ov, 'Where things stand'), 'the Overview starts with what needs doing, then how things stand');
+ok(strpos($ov, 'Where things stand') < strpos($ov, 'What would you like to do?') && !str_contains($ov, 'Your workspace'), 'and the list of tools comes last, without a banner in the way');
+[, $site] = http('/admin/site', $jars['admin']); ok(str_contains($site, 'Share the site') && !str_contains($site, 'Approved card designs') && !str_contains($site, 'Accessible description'), 'Site settings holds settings and sharing, not the long list of designs');
+[$c, $des] = http('/admin/designs', $jars['admin']); ok($c === 200 && str_contains($des, 'Order and visibility') && str_contains($des, 'Accessible description') && str_contains($des, 'value="/admin/designs"'), 'Order and visibility is its own page, and its buttons return to it');
+$css = file_get_contents(__DIR__ . '/../public/assets/style.css'); ok(str_contains($css, 'main .wsside a:not(.btn):not(.tile){color:#fff}') && str_contains($css, '.wsside nav{display:block}'), 'the menu links are white on the navy panel and the groups stack');
+ok(!isset(health_alerts()['backup']) && !isset(health_alerts()['offsite']) && !isset(health_alerts()['restore']), 'the Overview no longer lists backup warnings');
 
 proc_terminate($proc); proc_close($proc);
 exec('rmdir /s /q ' . escapeshellarg($work) . ' 2>nul'); if (is_dir($work)) exec('rm -rf ' . escapeshellarg($work));

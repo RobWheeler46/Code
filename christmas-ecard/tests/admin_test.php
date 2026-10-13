@@ -30,7 +30,7 @@ $before = (int)one("select count(*) c from recipients where status='sent'")['c']
 ok((int)one("select count(*) c from recipients where status='sent'")['c'] === $before + 2 && one("select status from recipients where token='t3'")['status'] === 'queued', 'backed-off delivery waits for its retry time');
 
 // FR-125/130: health shows Unknown/Stale rather than Healthy
-$al = health_alerts(); ok(count(array_filter($al, fn($x) => str_contains($x, 'Unknown'))) >= 2, 'never-run job and backup show Unknown');
+$al = health_alerts(); ok(count(array_filter($al, fn($x) => str_contains($x, 'Unknown'))) >= 1 && !isset($al['backup']) && !isset($al['offsite']) && !isset($al['restore']), 'a never-run job shows Unknown, and backups no longer raise alerts');
 set_setting('last_queue', (string)(time() - 3600)); ok(count(array_filter(health_alerts(), fn($x) => str_contains($x, 'Stale'))) >= 1, 'old evidence shows Stale');
 set_setting('last_queue', (string)time()); set_setting('last_backup', (string)time());
 q("insert into sends(user_id,card,sender_name,message,status,donation,created,updated) values(1,'santa','Sam','x','awaiting_payment',500,?,?)", [time(), time() - 1000]);

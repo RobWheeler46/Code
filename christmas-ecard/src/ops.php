@@ -38,19 +38,16 @@ function parse_rows(array $names, array $emails, array $msgs): array {
 
 // ---- alerts (FR-134): keyed so each condition notifies once, escalates once, and clears itself when resolved
 function health_alerts(): array {
-    $a = []; $now = time(); $hb = (int)setting('last_queue'); $bk = (int)setting('last_backup');
+    $a = []; $now = time(); $hb = (int)setting('last_queue');
     if (!$hb) $a['cron'] = 'Scheduled job: Unknown (it has never reported).'; elseif ($now - $hb > 300) $a['cron'] = 'Scheduled job is Stale: last ran ' . when($hb) . '.';
-    if (!$bk) $a['backup'] = 'Backup: Unknown (no backup recorded).'; elseif ($now - $bk > 129600) $a['backup'] = 'Backup is Stale: last ' . when($bk) . '.';
     $p = (int)one("select count(*) c from sends where status='awaiting_payment' and updated<?", [$now - 900])['c'];
-    if ($p) $a['pay15'] = "$p payment attempts have been pending over 15 minutes (not failed; investigate).";
+    if ($p) $a['pay15'] = $p . ($p === 1 ? ' payment attempt has' : ' payment attempts have') . ' been pending over 15 minutes (not failed; investigate).';
     $o = (int)one("select count(*) c from sends where status='awaiting_payment' and updated<?", [$now - 86400])['c'];
     if ($o) $a['pay24'] = "$o payment attempts pending over 24 hours: escalate to the Treasurer.";
     $f = (int)one("select count(*) c from recipients where status in ('failed','bounced')")['c'];
-    if ($f) $a['failed'] = "$f deliveries have failed and need correction.";
+    if ($f) $a['failed'] = $f . ($f === 1 ? ' delivery has failed and needs correction.' : ' deliveries have failed and need correction.');
     $q = one("select min(s.queued_at) t from recipients r join sends s on s.id=r.send_id where r.status='queued'");
     if ($q && $q['t'] && $now - (int)$q['t'] > 900 && setting('paused') !== '1') $a['queue'] = 'Queue is stalled: the oldest queued card has waited since ' . when((int)$q['t']) . '.';
-    $of = (int)setting('last_offsite'); if (!$of) $a['offsite'] = 'Off-server backup: Unknown (none recorded).'; elseif ($now - $of > 129600) $a['offsite'] = 'Off-server backup is Stale: last ' . when($of) . '.';
-    $rt = (int)setting('last_restore_test'); if (!$rt) $a['restore'] = 'Restore rehearsal: never done.'; elseif (!str_starts_with((string)setting('last_restore_result'), 'ok')) $a['restore'] = 'The last restore rehearsal failed: ' . setting('last_restore_result') . '.';
     $ex = payment_exceptions(); if ($ex['events'] || $ex['orphans']) $a['payexc'] = count($ex['events']) + count($ex['orphans']) . ' payment exceptions need finance review.';
     $cm = (int)one("select count(*) c from bounces where kind='complaint' and at>?", [$now - 86400])['c']; if ($cm) $a['complaint'] = "$cm spam complaints in the last day.";
     $rl = (int)one("select count(*) c from audit where action in ('rate_limited','honeypot') and created>?", [$now - 3600])['c']; if ($rl >= 20) $a['abuse'] = "$rl blocked or suspicious attempts in the last hour.";
