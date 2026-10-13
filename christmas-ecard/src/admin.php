@@ -405,6 +405,8 @@ function r_admin_health(): void {
         }
         $b .= '</ul><p class="note">Alerts are emailed to the people named under Application settings. This page is the second route: check it at least daily while the campaign is live.</p>';
     }
+    $due = (int)one("select count(*) n from recipients where status='queued' and tries=0 and next_at>?", [$now])['n'];
+    if ($due) $b .= '<h2>Scheduled cards</h2><p>' . $due . ' recipient' . ($due === 1 ? ' is' : 's are') . ' waiting for a chosen time.' . ($now - (int)setting('last_queue') > 900 ? ' <strong>The scheduled job has not run for over 15 minutes, so they could be late. Set up the timer address below.</strong>' : ' The scheduled job is running.') . '</p>';
     if (can_any('appadmin', 'rolesadmin')) $b .= '<h2>Scheduled work without cPanel</h2><p>Sending queued cards, alert emails and the daily clean up also run by themselves after visitors use the site (at most once a minute). For quiet periods, give a free timer service such as cron-job.org this address and ask it to open it every 5 minutes:</p><p><code>' . h(base_url() . '/hooks/tick?k=' . tick_key()) . '</code></p><p class="note">Anyone with this address can trigger the same safe jobs, nothing more. Real cron jobs still work and are fine alongside it.</p>';
     admin_page('System health', $b);
 }

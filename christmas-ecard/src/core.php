@@ -57,13 +57,37 @@ function rstatus(array $r): string {
     if (in_array($r['status'], ['failed', 'bounced'])) return 'Failed';
     if ($r['status'] === 'sent') return time() - (int)$r['sent_at'] > 172800 ? 'Delivery unconfirmed' : 'Sent'; // 48h without a provider delivery event
     if ($r['status'] === 'sending') return 'Delivery unconfirmed';
+    if ($r['status'] === 'queued' && (int)$r['tries'] === 0 && (int)$r['next_at'] > time()) return 'Scheduled';
     return $r['status'] === 'draft' ? 'Draft' : 'Queued';
 }
 const STATUS_HELP = [
-    'Queued' => 'Accepted and waiting to be sent.', 'Sent' => 'Accepted by the email service; inbox delivery is not confirmed.',
+    'Queued' => 'Accepted and waiting to be sent.', 'Scheduled' => 'Waiting for the date and time you chose. You can cancel until then.', 'Sent' => 'Accepted by the email service; inbox delivery is not confirmed.',
     'Delivered' => 'The email service confirmed delivery. This does not prove the card was read.', 'Viewed' => 'The recipient opened the card themselves.',
     'Failed' => 'The email could not be delivered. Correct the address to try again.', 'Delivery unconfirmed' => 'We have no delivery confirmation yet.',
     'Cancelled' => 'Cancelled before it was sent.'];
+
+// ---- scheduled sending: a card can be held until a chosen time (at least an hour ahead, at most 90 days), then goes through the same queue
+const SCHEDULE_MIN = 3600, SCHEDULE_MAX = 86400 * 90;
+/** Ready made times: [key => [label, timestamp]], only those still ahead. */
+function schedule_presets(): array {
+    $y = (int)date('Y'); $o = [];
+    foreach (['eve' => ['Christmas Eve, 6pm', "$y-12-24 18:00"], 'day' => ['Christmas Day, 8am', "$y-12-25 08:00"]] as $k => [$l, $t]) { $ts = (int)strtotime($t); if ($ts >= time() + SCHEDULE_MIN && $ts <= time() + SCHEDULE_MAX) $o[$k] = [$l, $ts]; }
+    return $o;
+}
+/** The chosen delivery time from the review form: 0 for now, a timestamp, or false when it is not allowed. */
+function schedule_parse(array $in): int|false {
+    $w = (string)($in['when'] ?? 'now'); if ($w === 'now') return 0;
+    if ($w === 'custom') { $v = trim((string)($in['when_custom'] ?? '')); $ts = preg_match('/^\d{4}-\d\d-\d\dT\d\d:\d\d$/', $v) ? strtotime($v) : false; }
+    else $ts = schedule_presets()[$w][1] ?? false;
+    return ($ts && $ts >= time() + SCHEDULE_MIN && $ts <= time() + SCHEDULE_MAX) ? (int)$ts : false;
+}
+function schedule_picker(): string {
+    $b = '<fieldset class="sendopts"><legend>When should the cards arrive?</legend><label class="optcard"><input type="radio" name="when" value="now" checked> <strong>As soon as possible</strong><span>They are sent straight away.</span></label>';
+    foreach (schedule_presets() as $k => [$l, $ts]) $b .= '<label class="optcard"><input type="radio" name="when" value="' . h($k) . '"> <strong>' . h($l) . '</strong><span>' . h(date('l j F', $ts)) . '. You can cancel until then.</span></label>';
+    $b .= '<label class="optcard"><input type="radio" name="when" value="custom"> <strong>Choose a date and time</strong><span>At least an hour from now, and within 90 days.</span><input type="datetime-local" name="when_custom" min="' . date('Y-m-d\TH:i', time() + SCHEDULE_MIN) . '" max="' . date('Y-m-d\TH:i', time() + SCHEDULE_MAX) . '" aria-label="Date and time"></label>'
+        . '<p class="note">Scheduled cards are held until then, so the recipients\' email addresses are kept until they are sent. Sending closes for new cards on the campaign closing date, but a card already scheduled normally still goes.</p></fieldset>';
+    return $b;
+}
 
 function card_link(array $r): string { return base_url() . '/c/' . $r['token']; }
 function expiry_ts(array $r): int { return (int)$r['sent_at'] + 86400 * expiry_days(); }
@@ -103,9 +127,10 @@ function cancel_recipient(int $rid): bool { return (bool)q("update recipients se
 function queue_send(int $sid): bool {
     db()->beginTransaction();
     $go = q("update sends set status='queued', queued_at=? where id=? and status in ('draft','awaiting_payment')", [time(), $sid])->rowCount();
-    if ($go) q("update recipients set status='queued' where send_id=? and status='draft'", [$sid]);
+    $at = (int)(one('select send_at from sends where id=?', [$sid])['send_at'] ?? 0);
+    if ($go) q("update recipients set status='queued', next_at=? where send_id=? and status='draft'", [$at > time() ? $at : 0, $sid]);
     db()->commit();
-    if ($go) { freeze_art($sid); process_queue(); }
+    if ($go) { freeze_art($sid); if ($at <= time()) process_queue(); }
     return (bool)$go;
 }
 
