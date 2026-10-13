@@ -127,7 +127,7 @@ function backup_restore(string $zip, string $key, string $targetDir): array {
 function hard_gates(): array {
     return [
         'mfa' => ['Two-step sign in required for every administrator action', true, 'Built in: every admin page and action checks it.'],
-        'payments' => ['Payment events are verified and reconciled', env('STRIPE_SECRET') !== '' && env('STRIPE_WEBHOOK_SECRET') !== '' && (int)setting('last_stripe_hook') > 0, 'Set the Stripe keys and webhook secret, then receive one signed test event.'],
+        'payments' => ['Payment events are verified and reconciled (only needed while donations are on)', !donations_enabled() || env('STRIPE_SECRET') !== '' && env('STRIPE_WEBHOOK_SECRET') !== '' && (int)setting('last_stripe_hook') > 0, 'Set the Stripe keys and webhook secret, then receive one signed test event.'],
     ];
 }
 function hard_gates_failing(): array { return array_keys(array_filter(hard_gates(), fn($g) => !$g[1])); }
