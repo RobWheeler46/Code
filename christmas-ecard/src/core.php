@@ -92,10 +92,12 @@ function schedule_parse(array $in): int|false {
     return ($ts && $ts >= time() + SCHEDULE_MIN && $ts <= time() + SCHEDULE_MAX) ? (int)$ts : false;
 }
 function schedule_picker(array $s): string {
-    $b = '<fieldset class="sendopts"><legend>When should the cards arrive?</legend><label class="optcard"><input type="radio" name="when" value="now" checked> <strong>As soon as possible</strong><span>They are sent straight away.</span></label>';
-    foreach (occasion_of($s)[0] === 'christmas' ? schedule_presets() : [] as $k => [$l, $ts]) $b .= '<label class="optcard"><input type="radio" name="when" value="' . h($k) . '"> <strong>' . h($l) . '</strong><span>' . h(date('l j F', $ts)) . '. You can cancel until then.</span></label>';
-    $b .= '<label class="optcard"><input type="radio" name="when" value="custom"> <strong>Choose a date and time</strong><span>At least an hour from now, and within 90 days.</span><input type="datetime-local" name="when_custom" min="' . date('Y-m-d\TH:i', time() + SCHEDULE_MIN) . '" max="' . date('Y-m-d\TH:i', time() + SCHEDULE_MAX) . '" aria-label="Date and time"></label>'
-        . '<p class="note">Scheduled cards are held until then, so the recipients\' email addresses are kept until they are sent.</p></fieldset>';
+    // one compact drop down; the date and time box appears only when "Choose a date and time" is picked
+    $b = '<fieldset class="sendopts when"><legend>When should the cards arrive?</legend><label>Delivery<select name="when"><option value="now" selected>As soon as possible</option>';
+    foreach (occasion_of($s)[0] === 'christmas' ? schedule_presets() : [] as $k => [$l, $ts]) $b .= '<option value="' . h($k) . '">' . h($l) . ' (' . h(date('D j M', $ts)) . ')</option>';
+    $b .= '<option value="custom">Choose a date and time</option></select></label>'
+        . '<label class="whencustom">Date and time (at least an hour from now, within 90 days)<input type="datetime-local" name="when_custom" min="' . date('Y-m-d\TH:i', time() + SCHEDULE_MIN) . '" max="' . date('Y-m-d\TH:i', time() + SCHEDULE_MAX) . '"></label>'
+        . '<p class="note">A scheduled card can be cancelled until it is sent. Its recipients\' email addresses are kept until then.</p></fieldset>';
     return $b;
 }
 

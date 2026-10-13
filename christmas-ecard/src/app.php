@@ -257,7 +257,7 @@ function r_compose(): void {
     $from = $old['sender_name'] ?? $s['sender_name'] ?? ($u['name'] ?? ''); $msg = $old['message'] ?? $s['message'] ?? '';
     $saved = $s ? '<p class="note" role="status">Draft saved at ' . date('H:i', (int)$s['updated']) . '.</p>' : '<p class="note">Not saved yet. Use Save draft to keep your work' . ($u ? '.' : ' (you will register before sending).') . '</p>';
     page('Write your card', steps(2) . $gone . '<h1>Write something wonderful</h1><p class="lead">Your message and everyone you are sending it to, together in one place.</p>' . ($u ? '' : '<p class="note">You can prepare your card now. Before it is sent you will create a free account and verify your email, and your card will wait for you.</p>')
-        . '<div class="two"><div class="card preview" aria-label="Live preview">' . card_art($card) . '<p class="center"><a class="btn alt" href="/#gallery">Change design</a></p><div class="inner"><p class="msg" data-preview-msg>' . nl2br(h($msg)) . '</p><p class="from">With love from<br><strong data-preview-from>' . h($from) . '</strong></p></div></div><form method="post" class="stack" data-dirty-warn>' . csrf()
+        . '<div class="two cmp"><div class="card preview compact" aria-label="Live preview">' . card_art($card) . '<p class="cardname"><strong>' . h(cards()[$card]['title'] ?? '') . '</strong></p><p class="center"><a class="btn alt" href="/#gallery">Change design</a></p><div class="inner"><p class="msg" data-preview-msg>' . nl2br(h($msg)) . '</p><p class="from">With love from<br><strong data-preview-from>' . h($from) . '</strong></p></div></div><form method="post" class="stack" data-dirty-warn>' . csrf()
         . '<input type="hidden" name="card" value="' . h($card) . '">'
         . '<label>From (your name or family name)<input name="sender_name" maxlength="' . (name_max() + 20) . '" data-max="' . name_max() . '" value="' . h($from) . '"' . fa($errs, 'sender_name', $f) . '><small class="count">Up to ' . name_max() . ' characters</small>' . fe($errs, 'sender_name') . '</label>'
         . '<label>Your message<textarea name="message" rows="5" data-max="' . msg_max() . '"' . fa($errs, 'message', $f) . '>' . h($msg) . '</textarea><small class="count">Up to ' . msg_max() . ' characters</small>' . fe($errs, 'message') . '</label>'
@@ -368,13 +368,17 @@ function r_review(): void {
         q('update sends set stripe_session=? where id=?', [$r['id'], $id]);
         redirect($r['url']);
     }
-    $list = implode('', array_map(fn($r) => '<li><strong>' . h($r['name']) . '</strong> (' . h($r['email']) . ')' . (trim((string)$r['own_msg']) !== '' ? ' <span class="pill">Personal message</span>' : '') . ' <form method="post" action="/contacts/save" class="inline">' . csrf() . '<input type="hidden" name="rid" value="' . $r['id'] . '"><input type="hidden" name="back" value="/review?id=' . $r['send_id'] . '"><button class="link">Save to address book</button></form><blockquote>' . nl2br(h(resolved_msg($r, $s))) . '</blockquote></li>', $rs));
+    $list = implode('', array_map(fn($r) => '<li><strong>' . h($r['name']) . '</strong> (' . h($r['email']) . ')' . (trim((string)$r['own_msg']) !== '' ? ' <span class="pill">Personal message</span>' : '') . ' <form method="post" action="/contacts/save" class="inline">' . csrf() . '<input type="hidden" name="rid" value="' . $r['id'] . '"><input type="hidden" name="back" value="/review?id=' . $r['send_id'] . '"><button class="link">Save to address book</button></form>' . (trim((string)$r['own_msg']) !== '' ? '<blockquote>' . nl2br(h(resolved_msg($r, $s))) . '</blockquote>' : '') . '</li>', $rs));
     $state = sending_state();
     $b = steps(3) . '<h1>Review and send</h1>';
     if (!$u['verified']) $b .= '<p class="flash warn">Verify your email (see the link we sent) before you can send. <form method="post" action="/resend-verification" class="inline">' . csrf() . '<button class="link">Send it again</button></form></p>';
     if ($state !== 'open') $b .= '<p class="flash warn">Card sending is ' . 'not open yet' . ', so you cannot submit this card. Your draft is saved.' . (($u = user()) && $u['is_admin'] && ($why = sending_block_reason()) ? '<br><small><strong>Administrator note:</strong> ' . h($why) . '</small>' : '') . '</p>';
     if (setting('paused') === '1') $b .= '<p class="note">Sending is briefly paused. Cards you submit will be queued and go out when it resumes.</p>';
-    $b .= card_view($s['card'], $rs[0]['name'] ?? 'Friend', $rs ? resolved_msg($rs[0], $s) : $s['message'], $s['sender_name']) . '<h2>Sending to ' . count($rs) . ' ' . (count($rs) === 1 ? 'person' : 'people') . '</h2><p class="note">From: ' . h($s['sender_name']) . '. Each person sees the greeting shown here for them.</p><ul class="rlist">' . $list . '</ul><p><a href="/compose?id=' . $id . '">Edit card, message or recipients</a> &middot; <a href="/email-preview?id=' . $id . '">Preview the email</a></p>';
+    // a small card beside the details, the message once, and the full card only if asked for
+    $left = '<div class="card preview compact">' . card_art($s['card'], true) . '<p class="cardname"><strong>' . h(cards()[$s['card']]['title'] ?? '') . '</strong><br><small>From ' . h($s['sender_name']) . '</small></p><p class="center"><a href="/compose?id=' . $id . '">Edit message or recipients</a></p>'
+        . '<blockquote class="yourmsg">' . nl2br(h($s['message'])) . '</blockquote><details><summary>See the full card</summary>' . card_view($s['card'], $rs[0]['name'] ?? 'Friend', $rs ? resolved_msg($rs[0], $s) : $s['message'], $s['sender_name']) . '</details></div>';
+    // a short list is open; a long one is folded so the delivery choice and the Send button stay near the top
+    $mid = '<details class="rcpts"' . (count($rs) <= 3 ? ' open' : '') . '><summary><strong>Sending to ' . count($rs) . ' ' . (count($rs) === 1 ? 'person' : 'people') . '</strong></summary><ul class="rlist">' . $list . '</ul><p class="note"><a href="/email-preview?id=' . $id . '">Preview the email</a></p></details>';
     $rep = repeats_for($s);
     $form = '<form method="post" class="stack">' . csrf() . '<input type="hidden" name="id" value="' . $id . '">';
     if ($rep) $form .= '<p class="flash warn">You have already sent a card to: ' . h(implode(', ', $rep)) . '.</p><label class="opt"><input type="checkbox" name="repeat_ok" value="1"> Send to them again on purpose</label>';
@@ -397,7 +401,7 @@ function r_review(): void {
             . (giftaid_on() ? giftaid_form_block() : '') . '</div>'
             . '<p class="total">Total <strong data-total>£0.00</strong></p><button class="btn big" name="do" value="send" data-send-btn>Send my cards for free</button><p class="note">Sending is always free. Nothing is charged unless you choose to donate.</p></fieldset>'; }
     }
-    page('Review and send', $b . $form . '</form>');
+    page('Review and send', $b . '<div class="two cmp">' . $left . '<div>' . $mid . $form . '</form></div></div>');
 }
 
 function r_return(): void {

@@ -285,3 +285,25 @@ main .wsside a[aria-current=page]:not(.btn):not(.tile){background:var(--yellow);
 @media(max-width:790px){.wsside{max-height:none;overflow:visible}}
 .crumbs{display:block}
 .crumbs ol{align-items:baseline}.crumbs a{display:inline;min-height:0}
+
+/* send journey: a smaller card beside the fields, a compact strip on a phone */
+.cmp{display:grid;gap:1.5rem;grid-template-columns:minmax(0,1fr)}
+@media(min-width:760px){.cmp{grid-template-columns:minmax(0,15rem) minmax(0,1fr)}.cmp>.preview{position:sticky;top:1rem;align-self:start}}
+.preview.compact{margin:0;max-width:none}.preview.compact .cardname{margin:.5rem 1rem 0;font-size:.95rem}.preview.compact .center{margin:.4rem 1rem .8rem}
+.preview.compact .inner{padding:.8rem 1rem}.preview.compact .msg{font-size:1rem}
+.yourmsg{margin:.3rem 0 1rem;padding:.6rem 1rem;border-left:4px solid var(--line);background:#fff}
+.rlist{padding-left:1.1rem}
+@media(max-width:759px){
+ .cmp>.preview.compact{display:grid;grid-template-columns:5.5rem minmax(0,1fr);grid-template-rows:auto auto;column-gap:1rem;align-items:center;padding:.6rem;border-radius:12px}
+ .cmp>.preview.compact>.art,.cmp>.preview.compact>img{grid-column:1;grid-row:1/3;width:5.5rem;max-width:none;height:auto;aspect-ratio:auto;border-radius:8px}
+ .cmp>.preview.compact .cardname{grid-column:2;grid-row:1;margin:0;align-self:end}
+ .cmp>.preview.compact .center{grid-column:2;grid-row:2;margin:.3rem 0 0;text-align:left;align-self:start}
+ .cmp>.preview.compact .inner{display:none}
+}
+.when select,.when input[type=datetime-local]{min-height:44px;width:100%;max-width:24rem;padding:.4rem .8rem;border:2px solid #9bb0cf;border-radius:8px;font:inherit;background:#fff}.when .note{margin:.4rem 0 0}
+@supports selector(:has(*)){.when .whencustom{display:none}.when:has(option[value=custom]:checked) .whencustom{display:block}}
+@media(max-width:759px){.cmp>.preview.compact>.yourmsg,.cmp>.preview.compact>details{grid-column:1/-1}.cmp>.preview.compact>.yourmsg{margin:.8rem 0 .4rem}.cmp>.preview.compact>details{margin:.2rem 0}}
+.preview.compact .yourmsg{margin:.6rem 1rem;font-size:1rem}.preview.compact details{margin:.2rem 1rem .8rem}
+.rcpts{margin:0 0 1rem;background:#fff;border:1px solid var(--line);border-radius:12px;padding:.4rem 1rem}.rcpts summary{min-height:44px;display:flex;align-items:center;cursor:pointer}.when{background:none}
+@media(max-width:759px){.cmp{gap:1rem}}
+.cmp form.stack{max-width:none}

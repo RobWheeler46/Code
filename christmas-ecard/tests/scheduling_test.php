@@ -34,7 +34,7 @@ function http(string $path, string $jar, ?array $post = null): array { global $p
 function tok(string $h): string { preg_match('/name="_c" value="([^"]+)"/', $h, $m); return $m[1] ?? ''; }
 $jar = tempnam(sys_get_temp_dir(), 'jar'); [, $b] = http('/login', $jar); http('/login', $jar, ['_c' => tok($b), 'email' => 'sam@x.example', 'password' => 'Test-pass-123']);
 [$s4, $r4] = mk(0); [, $page] = http("/review?id=$s4", $jar);
-ok(str_contains($page, 'When should the cards arrive?') && str_contains($page, 'name="when" value="now"'), 'the review screen shows the delivery choice');
+ok(str_contains($page, 'When should the cards arrive?') && str_contains($page, '<select name="when"><option value="now" selected>'), 'the review screen shows the delivery choice');
 $go = fn(array $f) => http("/review?id=$s4", $jar, ['_c' => tok($page), 'id' => $s4, 'do' => 'send', 'mode' => 'free'] + $f);
 $go(['when' => 'custom', 'when_custom' => date('Y-m-d\TH:i', time() + 600)]); ok(one('select status from sends where id=?', [$s4])['status'] === 'draft', 'too soon: the card stays a draft and nothing is queued');
 $want = date('Y-m-d\TH:i', time() + 86400 * 5); $go(['when' => 'custom', 'when_custom' => $want]); $row = one('select * from sends where id=?', [$s4]); $rec = one('select * from recipients where id=?', [$r4]);
