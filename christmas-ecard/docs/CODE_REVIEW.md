@@ -66,3 +66,9 @@ The codebase is in good shape for its size. Every database call I looked at uses
 2. Items 7 and 9 (faster, steadier database).
 3. Items 11, 13, 14 and 16 (tidying).
 4. Item 10 only if you plan to keep changing the app a lot; it is mechanical but touches a lot of lines.
+
+## Status after the follow up (13 October 2026)
+
+Done: 1, 2 (still accepts the old `?k=` form until you move the webhook), 4, 5, 6 (security items); 7 (migrations now run once per deployed build, remembered in `settings.schema_stamp`; a development copy with no build stamp always runs them); 13 and 14 (README and the unused "Last reviewed" line cleaned up); 16 (older gap analysis moved to `docs/archive/`); 17 (inline styles removed, the page policy no longer allows them; the HTML in emails still uses inline styles, which email needs and the policy does not cover).
+Deliberately not done: 9 (WAL mode: the manual "copy the data folder" backup would then miss recent changes unless the `-wal` file is copied too, which is easy to get wrong); 11 (one permission helper: 20 mechanical edits for little gain, the role by route test already catches mistakes); 8, 10, 12, 18, 19, 20, 21 (larger or optional, see above); 3 (a Trustee decision); 15 (your decision: the backup warnings on the health page).
+Also built since the review: sending queued cards without cron (`src/scheduler.php`), the donations switch, the version stamp and the share preview image.

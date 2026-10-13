@@ -181,7 +181,7 @@ function library_use_version(int $did, int $vid, int $uid): array {
 // ---------- screens
 function lib_thumb(array $r, string $cls = ''): string {
     $src = lib_img($r); if (!$src) return '<div class="libnone">No picture</div>';
-    return '<img class="libimg ' . $cls . '" src="' . h($src) . '" alt="' . h($r['alt_text'] ?: $r['title']) . '" loading="lazy" style="object-position:50% ' . (int)$r['focus'] . '%">';
+    return '<img class="libimg ' . $cls . '" src="' . h($src) . '" alt="' . h($r['alt_text'] ?: $r['title']) . '" loading="lazy" fp' . (int)$r['focus'] . '">';
 }
 
 function r_admin_library(): void {

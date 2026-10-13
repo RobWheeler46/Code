@@ -7,7 +7,7 @@ function legal_owner(): string { return 'The 7th Swindon Scout Group (the Group)
 function r_privacy(): void {
     $sup = h(support_email());
     page('Privacy and cookies', '<h1>Privacy and cookies</h1>
-<p>' . h(legal_owner()) . ' runs this service. Contact us at <a href="mailto:' . $sup . '">' . $sup . '</a>. Last reviewed: ' . h(setting('legal_reviewed', 'not yet reviewed')) . '.</p>
+<p>' . h(legal_owner()) . ' runs this service. Contact us at <a href="mailto:' . $sup . '">' . $sup . '</a>.</p>
 <h2>What we keep and why</h2>
 <ul>
 <li><strong>Your account:</strong> your name, email address and a protected form of your password, so you can sign in and so we can check you before cards are sent.</li>

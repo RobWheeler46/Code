@@ -5,3 +5,4 @@ dist/
 artwork-incoming/
 cj*.txt
 *.tmp.js
+VERSION
