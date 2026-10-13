@@ -11,12 +11,10 @@ $src = ''; foreach (glob(__DIR__ . '/../src/*.php') as $f) $src .= file_get_cont
 ok(!str_contains($src, 'Christmas Cards') && !str_contains($src, 'Christmas cards service') && !str_contains($src, 'Christmas eCards'), 'no old Christmas only service name is left in the code');
 
 // a Christmas send and a birthday send read correctly
-$t = time(); q("insert into users(id,name,email,pass,verified,created) values(1,'Sam','s@x.example','x',1,?)", [$t]);
-$xmas = ['sender_name' => 'The Smiths', 'id' => 0]; ok(card_word($xmas) === 'Christmas card', 'a card with no campaign is a Christmas card');
-$bday = (int)one("select id from occasions where slug='birthday'")['id']; $thanks = (int)one("select id from occasions where slug='thank-you'")['id'];
-q("insert into campaigns(group_id,occasion_id,name,status,donation_mode,giftaid,revision,created) values(1,?,'Birthday','draft','none',0,1,?)", [$bday, $t]); $cb = (int)db()->lastInsertId();
-q("insert into campaigns(group_id,occasion_id,name,status,donation_mode,giftaid,revision,created) values(1,?,'Thanks','draft','none',0,1,?)", [$thanks, $t]); $ct = (int)db()->lastInsertId();
-$b = ['sender_name' => 'The Smiths', 'campaign_id' => $cb]; $th = ['sender_name' => 'The Smiths', 'campaign_id' => $ct];
+$t = time(); $xmas = ['sender_name' => 'The Smiths', 'card' => 'pegs'];
+ok(card_word($xmas) === 'Christmas card', 'a Christmas design gives a Christmas card');
+q("insert into designs(slug,internal_name,category,created) values('bd-test','Birthday test','birthday',?),('ty-test','Thanks test','thank-you',?)", [$t, $t]);
+$b = ['sender_name' => 'The Smiths', 'card' => 'bd-test']; $th = ['sender_name' => 'The Smiths', 'card' => 'ty-test'];
 ok(card_word($b) === 'birthday card' && card_word($th) === 'thank you card', 'a birthday card is a birthday card and a thank you card is a thank you card');
 ok(email_subject($xmas) === 'The Smiths sent you a Christmas card' && email_subject($b) === 'The Smiths sent you a birthday card', 'the email subject names the occasion');
 ok(tpl_text(email_intro(), $th) === 'The Smiths has sent you a thank you card.', 'the opening line names the occasion');

@@ -6,7 +6,7 @@ $adm = file_get_contents(__DIR__ . '/../src/admin.php');
 // v2.10: one workspace manifest feeds the menu, the overview shortcuts and the breadcrumbs (role by role checks are in tests/workspace_test.php)
 putenv('DB_PATH=' . sys_get_temp_dir() . '/ux24-' . getmypid() . '.sqlite'); require __DIR__ . '/../src/app.php';
 $m = workspace_manifest(); $hrefs = []; foreach ($m as $items) foreach ($items as $i) $hrefs[] = $i[1]; foreach (platform_manifest() as $c) $hrefs[] = $c[1];
-ok(array_keys($m) === ['Start', 'Cards and campaigns', 'Support and delivery', 'Fundraising', 'Administration'], 'the workspace menu is grouped by what people do');
+ok(array_keys($m) === ['Start', 'Cards', 'Support and delivery', 'Fundraising', 'Administration'], 'the workspace menu is grouped by what people do');
 ok(count($hrefs) === count(array_unique($hrefs)) && !array_filter($hrefs, fn($h) => !preg_match('#^/(admin|private)/?#', $h)), 'no destination appears twice, and all are admin or private routes');
 ok(str_contains($adm, 'function admin_page(string $title, string $body): never { workspace_shell($title, $body); }'), 'every admin page uses the one shell');
 @unlink(env('DB_PATH'));

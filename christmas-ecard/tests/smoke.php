@@ -67,11 +67,7 @@ ok(repeats_for(one('select * from sends where id=?', [$rp])) === ['a@x.com'], 'r
 set_setting('paused', '1'); $q1 = mk_send(1, 'draft', 0, [['I', 'i@x.com']]); queue_send($q1);
 ok(one('select status from recipients where send_id=?', [$q1])['status'] === 'queued', 'emergency pause holds dispatch');
 set_setting('paused', '0');
-set_setting('opens', date('Y-m-d\TH:i', time() + 3600)); ok(campaign_state() === 'before', 'campaign not yet open');
-set_setting('opens', ''); set_setting('closes', date('Y-m-d\TH:i', time() - 3600)); ok(campaign_state() === 'closed', 'campaign closed');
-set_setting('closure_queue', 'hold'); ok(process_queue() === 0, 'closure with "hold" keeps accepted work queued');
-set_setting('closure_queue', 'send'); ok(process_queue() === 1, 'closure with "send" still dispatches accepted work');
-set_setting('closes', ''); ok(campaign_state() === 'open' && date_default_timezone_get() === 'Europe/London', 'open again; UK time zone');
+ok(process_queue() === 1, 'accepted work is dispatched'); ok(sending_state() === 'open' && date_default_timezone_get() === 'Europe/London', 'sending is open; UK time zone');
 
 // FR-048 / AC-26: formula injection
 ok(csv_text('=HYPERLINK("x")') === "'=HYPERLINK(\"x\")" && csv_text('+1') === "'+1" && csv_text('Sam') === 'Sam', 'csv_text neutralises formulas');

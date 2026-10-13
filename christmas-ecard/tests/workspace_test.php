@@ -9,7 +9,7 @@ $roles = ['campaign', 'delivery', 'complaints', 'finance', 'appadmin', 'rolesadm
 foreach ($roles as $r) { $sec = b32e(random_bytes(10)); q("insert into users(name,email,pass,verified,created,terms_version,is_admin,roles,totp_secret) values(?,?,?,1,?,?,1,?,?)", ["u$r", "$r@x.com", password_hash('Test-pass-123', PASSWORD_DEFAULT), time(), TERMS_VERSION, $r, $sec]); $U[$r] = ["$r@x.com", $sec]; }
 // the expectation, written out again here on purpose (not read from the manifest): which roles may use which destination
 $six = ['campaign', 'appadmin', 'finance', 'delivery', 'complaints', 'rolesadmin'];
-$rules = ['/admin' => ['*'], '/admin/library' => ['campaign', 'rolesadmin'], '/admin/campaigns' => ['campaign', 'rolesadmin'], '/admin/campaign' => ['campaign', 'appadmin', 'finance', 'delivery', 'rolesadmin'],
+$rules = ['/admin' => ['*'], '/admin/library' => ['campaign', 'rolesadmin'], '/admin/site' => ['campaign', 'appadmin', 'finance', 'delivery', 'rolesadmin'],
     '/admin/delivery' => ['delivery', 'appadmin', 'rolesadmin'], '/admin/reports' => ['complaints'], '/admin/senders' => ['complaints', 'rolesadmin'], '/admin/finance' => ['finance'], '/admin/giftaid' => ['finance'],
     '/admin/measures' => ['campaign', 'finance', 'appadmin', 'rolesadmin'], '/admin/platform' => $six, '/admin/app' => ['appadmin', 'campaign', 'delivery', 'rolesadmin'], '/admin/mail' => ['appadmin', 'rolesadmin'], '/admin/wording' => ['appadmin', 'rolesadmin'],
     '/admin/email' => ['appadmin', 'rolesadmin'], '/admin/privacy' => ['rolesadmin', 'campaign', 'appadmin', 'finance', 'delivery'], '/admin/access' => ['rolesadmin'], '/admin/rehearsal' => ['appadmin', 'rolesadmin'],
@@ -41,7 +41,7 @@ ok(!array_diff(['/admin/app', '/admin/mail', '/admin/wording', '/admin/health', 
 [, $ov] = http('/admin', $j); preg_match_all('#class="wscard" href="([^"]+)"#', $ov, $sc); $m = $menus['appadmin']; $sc = $sc[1]; sort($sc); $mm = array_values(array_diff($m, ['/admin'])); sort($mm);
 ok($sc === $mm && str_contains($ov, 'What would you like to do?') && str_contains($ov, 'Where things stand'), 'the overview shortcuts are the same destinations as the menu');
 // breadcrumbs and current page
-[, $pg] = http('/admin/library', $jars['campaign']); ok(str_contains($pg, 'aria-label="Breadcrumb"') && str_contains($pg, '<span aria-current="page">eCard Library</span>') && str_contains($pg, 'Cards and campaigns') && str_contains($pg, '<a href="/admin/library" aria-current="page">eCard Library</a>'), 'a page shows its breadcrumb and is marked as the current page in the menu');
+[, $pg] = http('/admin/library', $jars['campaign']); ok(str_contains($pg, 'aria-label="Breadcrumb"') && str_contains($pg, '<span aria-current="page">eCard Library</span>') && str_contains($pg, 'Cards') && str_contains($pg, '<a href="/admin/library" aria-current="page">eCard Library</a>'), 'a page shows its breadcrumb and is marked as the current page in the menu');
 [, $pg] = http('/admin/mail', $j); ok(str_contains($pg, 'Platform controls') && str_contains($pg, '<span aria-current="page">Email delivery</span>') && str_contains($pg, '<a href="/admin/platform" aria-current="true">Platform controls</a>'), 'a tool inside Platform controls shows where it sits');
 ok(str_contains($pg, '<details class="wsmenu" open><summary>Workspace menu</summary>') && str_contains($pg, '<meta name="viewport"'), 'the menu is a disclosure that the page can close on a phone');
 

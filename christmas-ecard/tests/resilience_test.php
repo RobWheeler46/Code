@@ -76,11 +76,11 @@ backup_restore($r['zip'], 'correct horse battery staple', $t);
 
 // ---- hard gates cannot be overridden
 putenv('APP_ENV=production');
-ok(campaign_state() === 'open', 'with donations off, production is not locked by the payment gate');
+ok(sending_state() === 'open', 'with donations off, production is not locked by the payment gate');
 set_setting('donations_enabled', '1');
-ok(campaign_state() === 'locked' && in_array('payments', hard_gates_failing()), 'production is locked while the payment gate fails');
+ok(sending_state() === 'locked' && in_array('payments', hard_gates_failing()), 'production is locked while the payment gate fails');
 putenv('STRIPE_SECRET=sk_test_x'); putenv('STRIPE_WEBHOOK_SECRET=whsec_x'); set_setting('last_stripe_hook', (string)time());
-ok(hard_gates_failing() === [] && campaign_state() === 'open', 'every gate passes once its evidence exists');
+ok(hard_gates_failing() === [] && sending_state() === 'open', 'every gate passes once its evidence exists');
 ok(!in_array('recovery', array_keys(hard_gates())), 'a missing backup or restore rehearsal no longer locks production');
 putenv('APP_ENV=development'); putenv('STRIPE_SECRET='); putenv('STRIPE_WEBHOOK_SECRET=');
 

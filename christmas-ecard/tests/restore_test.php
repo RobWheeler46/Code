@@ -23,34 +23,34 @@ function change(string $jar, string $area, array $over, array $extra = []): arra
 $root = login($U['root']); $camp = login($U['camp']);
 
 // two changes to the campaign page
-change($root, 'campaign', ['campaign' => 'Alpha', 'target_pence' => '500', 'amounts_pence' => '3, 6']); $first = (int)lastAudit('config_campaign')['id'];
-ok(st('campaign') === 'Alpha' && st('target_pence') === '50000' && st('amounts_pence') === '300,600', 'setup: the first change is saved');
-change($root, 'campaign', ['campaign' => 'Beta']); ok(st('campaign') === 'Beta', 'setup: and a later one');
-[, $hist] = http('GET', '/admin/audit', $root); ok(str_contains($hist, '/admin/campaign?restore=' . $first), 'a restricted administrator sees "Restore the earlier values" in the change history');
+change($root, 'site', ['giftaid_charity' => 'Alpha Scouts', 'amounts_pence' => '3, 6']); $first = (int)lastAudit('config_site')['id'];
+ok(st('giftaid_charity') === 'Alpha Scouts' && st('amounts_pence') === '300,600', 'setup: the first change is saved');
+change($root, 'site', ['giftaid_charity' => 'Beta Scouts']); ok(st('giftaid_charity') === 'Beta Scouts', 'setup: and a later one');
+[, $hist] = http('GET', '/admin/audit', $root); ok(str_contains($hist, '/admin/site?restore=' . $first), 'a restricted administrator sees "Restore the earlier values" in the change history');
 [, $hist2] = http('GET', '/admin/audit', $camp); ok(!str_contains($hist2, 'restore='), 'a campaign manager does not');
 
 // the restore form
-[$c, $form] = http('GET', '/admin/campaign?restore=' . $first, $root);
+[$c, $form] = http('GET', '/admin/site?restore=' . $first, $root);
 ok($c === 200 && str_contains($form, 'Restoring earlier values') && str_contains($form, 'cannot undo emails already sent') && str_contains($form, 'name="restore_of" value="' . $first . '"'), 'it explains what restoring cannot undo and carries the restore marker');
-ok(preg_match('/name="f_campaign" value="Christmas 2026"/', $form) && preg_match('/name="f_target_pence" value=""/', $form) && preg_match('/name="f_amounts_pence" value="2, 5, 10"/', $form), 'the form starts with the values from before that change (including money and amounts)');
-ok(st('campaign') === 'Beta', 'and nothing is saved by looking');
-[, $cf] = http('GET', '/admin/campaign?restore=' . $first, $camp); ok(!str_contains($cf, 'Restoring earlier values') && preg_match('/name="f_campaign" value="Beta"/', $cf), 'a campaign manager asking for it just sees the current settings');
+ok(preg_match('/name="f_giftaid_charity" value=""/', $form) && preg_match('/name="f_amounts_pence" value="2, 5, 10"/', $form), 'the form starts with the values from before that change (including money and amounts)');
+ok(st('giftaid_charity') === 'Beta', 'and nothing is saved by looking');
+[, $cf] = http('GET', '/admin/site?restore=' . $first, $camp); ok(!str_contains($cf, 'Restoring earlier values') && preg_match('/name="f_giftaid_charity" value="Beta Scouts"/', $cf), 'a campaign manager asking for it just sees the current settings');
 
 // through the normal review and confirmation
-$post = ['reason' => 'Put it back', 'restore_of' => $first, 'f_campaign' => 'Christmas 2026', 'f_opens' => '', 'f_closes' => '', 'f_closure_queue' => 'send', 'f_donation_purpose' => '', 'f_target_pence' => '', 'f_amounts_pence' => '2, 5, 10', 'f_show_progress' => '0', 'f_giftaid_charity' => '', 'f_giftaid_enabled' => '0'];
-[, $pg] = http('GET', '/admin/campaign', $root); [$c, $rv] = http('POST', '/admin/campaign', $root, ['_c' => tok($pg)] + $post);
-ok($c === 200 && str_contains($rv, 'Review changes') && str_contains($rv, 'Beta') && str_contains($rv, 'Christmas 2026') && str_contains($rv, 'name="restore_of"') && st('campaign') === 'Beta', 'saving shows old and new values first and still changes nothing');
-$ver = st('cfg_version'); [$c] = http('POST', '/admin/campaign', $root, ['_c' => tok($rv), 'confirmed' => 1, 'ver' => $ver] + $post);
-$a = lastAudit('config_campaign'); $d = json_decode($a['detail'], true);
-ok($c === 302 && st('campaign') === 'Christmas 2026' && st('target_pence') === '' && st('amounts_pence') === '200,500,1000' && (int)st('cfg_version') === (int)$ver + 1, 'confirming restores the earlier values as a new configuration version');
-ok(($d['restored_from'] ?? 0) === $first && isset($d['changes']['campaign']), 'the change history records it as a restore of that earlier change');
+$post = ['reason' => 'Put it back', 'restore_of' => $first, 'f_donations_enabled' => '0', 'f_amounts_pence' => '2, 5, 10', 'f_giftaid_charity' => '', 'f_giftaid_enabled' => '0'];
+[, $pg] = http('GET', '/admin/site', $root); [$c, $rv] = http('POST', '/admin/site', $root, ['_c' => tok($pg)] + $post);
+ok($c === 200 && str_contains($rv, 'Review changes') && str_contains($rv, 'Beta Scouts') && str_contains($rv, 'name="restore_of"') && st('giftaid_charity') === 'Beta', 'saving shows old and new values first and still changes nothing');
+$ver = st('cfg_version'); [$c] = http('POST', '/admin/site', $root, ['_c' => tok($rv), 'confirmed' => 1, 'ver' => $ver] + $post);
+$a = lastAudit('config_site'); $d = json_decode($a['detail'], true);
+ok($c === 302 && st('giftaid_charity') === '' && st('amounts_pence') === '200,500,1000' && (int)st('cfg_version') === (int)$ver + 1, 'confirming restores the earlier values as a new configuration version');
+ok(($d['restored_from'] ?? 0) === $first && isset($d['changes']['giftaid_charity']), 'the change history records it as a restore of that earlier change');
 
 // forged and wrong restores
-$before = st('campaign'); [, $cp] = http('GET', '/admin/campaign', $camp);
-$forge = $post; $forge['f_campaign'] = 'Forged'; [$c] = http('POST', '/admin/campaign', $camp, ['_c' => tok($cp)] + $forge); ok(st('campaign') === $before, 'a campaign manager cannot use the restore marker (nothing changes)');
-[$c] = http('POST', '/admin/campaign', $root, ['_c' => tok($pg)] + ['restore_of' => 999999] + $post); ok(st('campaign') === $before, 'a restore marker that is not a real earlier change is refused');
+$before = st('giftaid_charity'); [, $cp] = http('GET', '/admin/site', $camp);
+$forge = $post; $forge['f_giftaid_charity'] = 'Forged'; [$c] = http('POST', '/admin/site', $camp, ['_c' => tok($cp)] + $forge); ok(st('giftaid_charity') === $before, 'a campaign manager cannot use the restore marker (nothing changes)');
+[$c] = http('POST', '/admin/site', $root, ['_c' => tok($pg)] + ['restore_of' => 999999] + $post); ok(st('giftaid_charity') === $before, 'a restore marker that is not a real earlier change is refused');
 change($root, 'app', ['small_n' => '6']); $appChange = (int)lastAudit('config_app')['id'];
-$p2 = $post; $p2['restore_of'] = $appChange; $p2['f_campaign'] = 'Cross'; [$c] = http('POST', '/admin/campaign', $root, ['_c' => tok($pg)] + $p2); ok(st('campaign') === $before, 'a change from another settings page cannot be used here');
+$p2 = $post; $p2['restore_of'] = $appChange; $p2['f_giftaid_charity'] = 'Cross'; [$c] = http('POST', '/admin/site', $root, ['_c' => tok($pg)] + $p2); ok(st('giftaid_charity') === $before, 'a change from another settings page cannot be used here');
 
 // a page that needs a reason and an approval reference still does
 change($root, 'privacy', ['expiry_days' => '30'], ['approval' => 'Minute 5']); $priv = (int)lastAudit('config_privacy')['id']; $pdoSt = fn() => st('expiry_days');

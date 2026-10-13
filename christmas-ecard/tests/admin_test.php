@@ -6,12 +6,10 @@ require __DIR__ . '/../src/app.php';
 function ok($c, string $m): void { echo ($c ? 'PASS ' : 'FAIL ') . $m . "\n"; if (!$c) $GLOBALS['bad'] = 1; }
 q("insert into users(name,email,pass,verified,created) values('Sam','sam@x.com','x',1,?)", [time()]);
 
-$app = config_spec('app')['fields']; $cam = config_spec('campaign')['fields'];
+$app = config_spec('app')['fields']; $cam = config_spec('site')['fields'];
 ok(cfg_validate($app['max_recipients'], '21')[1] !== null && cfg_validate($app['max_recipients'], '0')[1] !== null && cfg_validate($app['max_recipients'], '12') === ['12', null], 'recipient limit bounded 1 to 20');
 ok(cfg_validate($app['msg_max'], '-5')[1] !== null && cfg_validate($app['msg_max'], 'abc')[1] !== null, 'negative and non-numeric limits rejected');
 ok(cfg_validate($cam['amounts_pence'], '2, 5, 10') === ['200,500,1000', null] && cfg_validate($cam['amounts_pence'], '0')[1] !== null && cfg_validate($cam['amounts_pence'], '9999')[1] !== null && cfg_validate($cam['amounts_pence'], '1,2,3,4,5,6')[1] !== null, 'suggested amounts: £1 to £500, at most five');
-ok(cfg_validate($cam['target_pence'], '-1')[1] !== null && cfg_validate($cam['target_pence'], '500') === ['50000', null] && cfg_validate($cam['target_pence'], '') === ['', null], 'target: no negatives, blank allowed');
-ok(cfg_validate($cam['opens'], '2026-13-45T99:99')[1] !== null && cfg_validate($cam['opens'], '2026-11-01T00:00')[1] === null, 'dates validated');
 ok(max_recipients() === 20, 'default ceiling 20'); set_setting('max_recipients', '99'); ok(max_recipients() === 20, 'stored value cannot push the ceiling above 20'); set_setting('max_recipients', '5'); ok(max_recipients() === 5, 'lower ceiling honoured');
 set_setting('max_recipients', '20');
 
