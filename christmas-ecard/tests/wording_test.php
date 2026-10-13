@@ -31,8 +31,8 @@ $q = ['sender_name' => "Eve\r\nBcc: x@y.z"]; ok(!preg_match('/[\r\n]/', email_su
 set_setting('email_subject', ''); set_setting('email_intro', ''); set_setting('email_button', ''); ok(email_subject(['sender_name' => 'A']) === 'A sent you a Christmas card', 'blank settings fall back to the defaults');
 
 // admin page and Help over HTTP
-function mk(string $n, string $roles): array { $sec = b32e(random_bytes(10)); q("insert into users(name,email,pass,verified,created,terms_version,is_admin,roles,totp_secret) values(?,?,?,1,?,?,1,?,?)", [$n, "$n@x.com", password_hash('Test-pass-123', PASSWORD_DEFAULT), time(), TERMS_VERSION, $roles, $sec]); return ["$n@x.com", $sec]; }
-$U = ['app' => mk('app', 'appadmin'), 'fin' => mk('fin', 'finance')];
+function mk(string $n, string $roles, int $admin = 1): array { $sec = b32e(random_bytes(10)); q("insert into users(name,email,pass,verified,created,terms_version,is_admin,roles,totp_secret) values(?,?,?,1,?,?,?,?,?)", [$n, "$n@x.com", password_hash('Test-pass-123', PASSWORD_DEFAULT), time(), TERMS_VERSION, $admin, $roles, $sec]); return ["$n@x.com", $sec]; }
+$U = ['app' => mk('app', 'appadmin'), 'fin' => mk('fin', '', 0)];
 $port = random_int(19100, 19900); $proc = proc_open([PHP_BINARY, '-S', "127.0.0.1:$port", '-t', __DIR__ . '/../public', __DIR__ . '/../public/index.php'], [1 => ['file', $work . '/srv.log', 'w'], 2 => ['file', $work . '/srv.log', 'a']], $pipes, null, array_merge(getenv(), ['DB_PATH' => $dbf]));
 for ($i = 0; $i < 50 && !@fsockopen('127.0.0.1', $port); $i++) usleep(100000);
 function http(string $m, string $path, string $jar, ?array $post = null): array { global $port; $loc = ''; $ch = curl_init("http://127.0.0.1:$port$path"); curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_COOKIEJAR => $jar, CURLOPT_COOKIEFILE => $jar, CURLOPT_FOLLOWLOCATION => false, CURLOPT_HEADERFUNCTION => function ($c, $h) use (&$loc) { if (stripos($h, 'location:') === 0) $loc = trim(substr($h, 9)); return strlen($h); }]); if ($m === 'POST') { curl_setopt($ch, CURLOPT_POST, true); curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($post ?? [])); } $b = (string)curl_exec($ch); $c = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch); return [$c, $b, $loc]; }
@@ -42,14 +42,14 @@ function st(string $k): string { return (string)(new PDO('sqlite:' . $GLOBALS['d
 $app = login($U['app']); $fin = login($U['fin']);
 [$c, $page] = http('GET', '/admin/wording', $app); ok($c === 200 && str_contains($page, 'email_subject') && str_contains($page, 'Preview the email'), 'an application administrator sees the wording page');
 [, $fp] = http('GET', '/admin/wording', $fin); [$c, $fb] = http('POST', '/admin/wording', $fin, ['_c' => tok($fp) ?: tok(http('GET', '/admin', $fin)[1]), 'f_email_subject' => 'Hacked {sender}', 'f_email_intro' => '{sender} hi', 'f_email_button' => 'Go', 'f_support_email' => '', 'f_help_extra' => '', 'confirmed' => 1, 'ver' => '0']);
-ok($c === 403 && st('email_subject') === '', 'a finance administrator cannot change the wording');
+ok($c === 403 && st('email_subject') === '', 'someone who is not an administrator cannot change the wording');
 $post = ['_c' => tok($page), 'f_email_subject' => 'A Christmas greeting from {sender}', 'f_email_intro' => '{sender} sent you a Christmas card.', 'f_email_button' => 'Open your card', 'f_support_email' => 'Cards.Help@Example.org', 'f_help_extra' => "Can I use my phone?\nYes. The site works on phones <b>and</b> tablets."];
 [$c, $rev] = http('POST', '/admin/wording', $app, $post); ok($c === 200 && str_contains($rev, 'Review changes') && st('email_subject') === '', 'saving first shows old and new values and changes nothing');
 [$c] = http('POST', '/admin/wording', $app, $post + ['confirmed' => 1, 'ver' => st('cfg_version') ?: '0']); ok($c === 302 && st('email_subject') === 'A Christmas greeting from {sender}' && st('support_email') === 'cards.help@example.org', 'confirming saves it');
 ok((int)(new PDO('sqlite:' . $dbf))->query("select count(*) from audit where action='config_wording'")->fetchColumn() === 1, 'the change is in the change history');
 $anon = tempnam(sys_get_temp_dir(), 'jar'); [$c, $help] = http('GET', '/help', $anon);
 ok($c === 200 && str_contains($help, 'Can I use my phone?') && str_contains($help, 'tablets') && !str_contains($help, '<b>and</b>') && str_contains($help, 'cards.help@example.org'), 'the Help page shows the extra question as plain text and the new support address');
-[$c, $bad] = http('POST', '/admin/wording', $app, ['_c' => tok($page), 'f_email_subject' => 'No name here', 'f_email_intro' => '{sender} x', 'f_email_button' => 'Go', 'f_support_email' => '', 'f_help_extra' => '']);
+[$c, $badpg] = http('POST', '/admin/wording', $app, ['_c' => tok($page), 'f_email_subject' => 'No name here', 'f_email_intro' => '{sender} x', 'f_email_button' => 'Go', 'f_support_email' => '', 'f_help_extra' => '']);
 ok($c === 302 && st('email_subject') === 'A Christmas greeting from {sender}', 'invalid wording is refused and the saved wording stays');
 
 proc_terminate($proc); proc_close($proc);
