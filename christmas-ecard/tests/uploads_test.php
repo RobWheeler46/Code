@@ -1,4 +1,5 @@
 <?php
+putenv('APP_ENV=development');
 // php tests/uploads_test.php : EC-02 safe artwork intake (CAT-01, CAT-02, CAT-10 sizes, CAT-12 failure leaves nothing)
 $work = sys_get_temp_dir() . '/ecard-up-' . getmypid(); mkdir($work, 0775, true);
 putenv('DB_PATH=' . $work . '/t.sqlite'); putenv('LIBRARY_DIR=' . $work . '/library'); putenv('POSTMARK_TOKEN=');

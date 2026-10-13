@@ -1,4 +1,5 @@
 <?php
+putenv('APP_ENV=development');
 // php tests/invites_test.php : administrator invitations over real HTTP (FR-088)
 $work = sys_get_temp_dir() . '/ecard-iv-' . getmypid(); mkdir($work, 0775, true); $dbf = $work . '/t.sqlite';
 putenv('DB_PATH=' . $dbf); putenv('POSTMARK_TOKEN=');

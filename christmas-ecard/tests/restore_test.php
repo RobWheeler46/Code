@@ -1,4 +1,5 @@
 <?php
+putenv('APP_ENV=development');
 // php tests/restore_test.php : restoring earlier settings goes through the normal review, confirmation and audit, for restricted administrators only (FR-095)
 $work = sys_get_temp_dir() . '/ecard-rs-' . getmypid(); mkdir($work, 0775, true); $dbf = $work . '/t.sqlite';
 putenv('DB_PATH=' . $dbf); putenv('POSTMARK_TOKEN=');

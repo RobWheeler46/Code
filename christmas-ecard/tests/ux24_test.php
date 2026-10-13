@@ -1,4 +1,5 @@
 <?php
+putenv('APP_ENV=development');
 // php tests/ux24_test.php : UX24-06 skip control and UX24-07 five area admin navigation (source level checks)
 function ok($c, string $m): void { echo ($c ? 'PASS ' : 'FAIL ') . $m . "\n"; if (!$c) $GLOBALS['bad'] = 1; }
 $adm = file_get_contents(__DIR__ . '/../src/admin.php');

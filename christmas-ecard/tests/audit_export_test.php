@@ -1,4 +1,5 @@
 <?php
+putenv('APP_ENV=development');
 // php tests/audit_export_test.php : exporting the change history (FR-159): role scoped, time scoped, masked, logged
 $work = sys_get_temp_dir() . '/ecard-ae-' . getmypid(); mkdir($work, 0775, true); $dbf = $work . '/t.sqlite';
 putenv('DB_PATH=' . $dbf); putenv('POSTMARK_TOKEN=');

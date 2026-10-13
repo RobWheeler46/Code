@@ -1,4 +1,5 @@
 <?php
+putenv('APP_ENV=development');
 // php tests/bootstrap_admin_test.php : ADMIN_EMAIL makes the first confirmed owner of that address the first restricted administrator, once
 putenv('DB_PATH=' . sys_get_temp_dir() . '/ecard-ba-' . getmypid() . '.sqlite'); putenv('POSTMARK_TOKEN=');
 require __DIR__ . '/../src/app.php';

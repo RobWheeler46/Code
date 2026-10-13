@@ -1,4 +1,5 @@
 <?php
+putenv('APP_ENV=development');
 // php tests/mailconfig_test.php : email delivery settings in Admin, with a real test email through a pretend SMTP server
 $work = sys_get_temp_dir() . '/ecard-mc-' . getmypid(); mkdir($work, 0775, true); $dbf = $work . '/t.sqlite'; $log = $work . '/mail.log'; $smtp = random_int(20100, 20900);
 putenv('DB_PATH=' . $dbf); putenv('POSTMARK_TOKEN='); putenv('SMTP_HOST=');

@@ -54,6 +54,7 @@ function db(): PDO {
     // Private card links are kept only as a SHA-256 hash once mailed, so a copy of the database cannot open anyone's card.
     $p->sqliteCreateFunction('sha256', fn($v) => hash('sha256', (string)$v), 1);
     $p->exec('create index if not exists rcpt_token_hash on recipients(token_hash)');
+    foreach (['verify_token', 'reset_token'] as $col) $p->exec("update users set $col=sha256($col) where $col is not null and $col<>'' and length($col)<>64");
     $p->exec("update recipients set token_hash=sha256(token) where token_hash is null and token is not null and token not like 'gone-%'");
     $p->exec("update recipients set token=null where token_hash is not null and status in ('sent','failed','bounced')");
     if (function_exists('library_migrate')) library_migrate($p);
@@ -69,6 +70,8 @@ function audit(?int $uid, string $action, string $detail = ''): void { q('insert
 function h(?string $s): string { return htmlspecialchars((string)$s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 function gbp(int $p): string { return '£' . number_format($p / 100, 2); }
 function base_url(): string { return rtrim(env('APP_URL', 'http://localhost:8060'), '/'); }
+/** Anything but an explicit APP_ENV=development (or staging) is production, so a missing line fails safe. */
+function app_env(): string { return env('APP_ENV', 'production'); }
 function token(): string { return bin2hex(random_bytes(24)); }
 
 /** Search engines must never index, and browsers and proxies must never keep, anything that is not a public page: card links, accounts, drafts and every admin and private screen. */
@@ -81,6 +84,7 @@ function private_headers(string $path): void {
 // ---- session, csrf, flash, rate limit
 function boot(): void {
     session_name('ecard');
+    ini_set('session.use_strict_mode', '1'); ini_set('session.gc_maxlifetime', '86400'); // an id the server did not issue is refused; idle sessions last a day, not the host's default of 24 minutes
     session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax', 'secure' => !empty($_SERVER['HTTPS'])]);
     session_start();
     $_SESSION['csrf'] ??= bin2hex(random_bytes(16));
@@ -209,7 +213,7 @@ function page(string $title, string $body, int $code = 200): never {
     echo '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">'
         . '<title>' . h($title) . ' | 7th Swindon Scouts Christmas Cards</title>'
         . '<link rel="stylesheet" href="/assets/style.css"></head><body><a class="skip" href="#main">Skip to content</a>'
-        . (env('APP_ENV', 'development') !== 'production' ? '<p class="envbanner" role="note">' . h(strtoupper(env('APP_ENV', 'development'))) . ' environment. Test mode: nothing here is real. Do not enter real details.</p>' : '') . '<header><a class="brand" href="/"><img src="/assets/brand/7th-swindon-circle-blue.png" alt="7th Swindon Scouts" width="64" height="64"><span>Christmas Cards</span></a><nav aria-label="Main">' . $nav . '</nav></header>'
+        . (app_env() !== 'production' ? '<p class="envbanner" role="note">' . h(strtoupper(app_env())) . ' environment. Test mode: nothing here is real. Do not enter real details.</p>' : '') . '<header><a class="brand" href="/"><img src="/assets/brand/7th-swindon-circle-blue.png" alt="7th Swindon Scouts" width="64" height="64"><span>Christmas Cards</span></a><nav aria-label="Main">' . $nav . '</nav></header>'
         . '<main id="main">' . ($f ? '<p class="flash ' . h($f[0]) . '" role="' . ($f[0] === 'err' ? 'alert" tabindex="-1" data-focus' : 'status"') . '>' . h($f[1]) . '</p>' : '') . $body . '</main>'
         . '<footer><img class="footlogo" src="/assets/brand/7th-swindon-circle-blue.png" alt="7th Swindon Scouts" width="56" height="56"><a href="/privacy">Privacy and cookies</a> &middot; <a href="/terms">Terms and safeguarding</a> &middot; <a href="/help">Help and FAQ</a><br>Sending is free' . (donations_enabled() ? '; donations are optional and support 7th Swindon Scouts' : '') . '. Cards stay viewable for ' . (int)setting('expiry_days', '60') . ' days after sending.<br><small class="ver">Version ' . h(app_version()) . '</small></footer><script src="/assets/app.js"></script></body></html>';
     exit;

@@ -14,7 +14,7 @@ cp -r public/assets dist/public_html/assets
 sed 's#/\.\./src/#/../app/src/#' public/index.php > dist/public_html/index.php
 printf 'Require all denied\n' > dist/app/data/.htaccess
 printf 'Require all denied\n' > dist/app/src/.htaccess
-printf 'RewriteEngine On\nRewriteCond %%{REQUEST_FILENAME} !-f\nRewriteRule ^ index.php [L]\nHeader always set Strict-Transport-Security "max-age=31536000"\n' > dist/public_html/.htaccess
+printf 'RewriteEngine On\nRewriteRule .* - [E=HTTP_AUTHORIZATION:%%{HTTP:Authorization}]\nRewriteCond %%{REQUEST_FILENAME} !-f\nRewriteRule ^ index.php [L]\nHeader always set Strict-Transport-Security "max-age=31536000"\n' > dist/public_html/.htaccess
 cat > dist/DEPLOY.md <<'EOF'
 # Deploy (cPanel)
 1. Upload `app/` to your home directory, next to (not inside) public_html. Upload `public_html/` contents to the subdomain's document root.

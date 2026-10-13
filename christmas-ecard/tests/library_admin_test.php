@@ -1,4 +1,5 @@
 <?php
+putenv('APP_ENV=development');
 // php tests/library_admin_test.php : EC-03 eCard Library drafts (CAT-03 gating info, CAT-06 role guard, CAT-11 conflict, discard rules)
 $work = sys_get_temp_dir() . '/ecard-la-' . getmypid(); mkdir($work, 0775, true);
 putenv('DB_PATH=' . $work . '/t.sqlite'); putenv('LIBRARY_DIR=' . $work . '/library'); putenv('POSTMARK_TOKEN=');

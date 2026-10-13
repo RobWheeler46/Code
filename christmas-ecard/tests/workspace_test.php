@@ -1,4 +1,5 @@
 <?php
+putenv('APP_ENV=development');
 // php tests/workspace_test.php : ADM-07 the volunteer workspace role by role: what each role is shown, and what each role can actually open
 $work = sys_get_temp_dir() . '/ecard-ws-' . getmypid(); mkdir($work, 0775, true); $dbf = $work . '/t.sqlite';
 putenv('DB_PATH=' . $dbf); putenv('POSTMARK_TOKEN='); putenv('SMTP_HOST=');

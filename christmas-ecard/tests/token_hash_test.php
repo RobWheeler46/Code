@@ -1,4 +1,5 @@
 <?php
+putenv('APP_ENV=development');
 // php tests/token_hash_test.php : mailed card links are stored only as a hash (build pack hardening)
 putenv('DB_PATH=' . sys_get_temp_dir() . '/ecard-th-' . getmypid() . '.sqlite'); putenv('POSTMARK_TOKEN='); putenv('APP_URL=https://cards.example.org');
 require __DIR__ . '/../src/app.php';

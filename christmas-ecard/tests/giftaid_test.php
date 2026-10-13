@@ -1,4 +1,5 @@
 <?php
+putenv('APP_ENV=development');
 // php tests/giftaid_test.php : Gift Aid rules (FR-141).
 putenv('DB_PATH=' . sys_get_temp_dir() . '/ecard-ga-' . getmypid() . '.sqlite'); putenv('POSTMARK_TOKEN=');
 require __DIR__ . '/../src/app.php';

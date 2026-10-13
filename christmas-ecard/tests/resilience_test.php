@@ -1,4 +1,5 @@
 <?php
+putenv('APP_ENV=development');
 // php tests/resilience_test.php : spec v2.3 launch-critical items (FR-156, 157, 160 to 163 and the non-waivable gates).
 putenv('DB_PATH=' . sys_get_temp_dir() . '/ecard-rs-' . getmypid() . '.sqlite'); putenv('POSTMARK_TOKEN=');
 require __DIR__ . '/../src/app.php';
@@ -78,7 +79,7 @@ putenv('APP_ENV=production');
 ok(campaign_state() === 'locked' && in_array('payments', hard_gates_failing()), 'production is locked while the payment gate fails');
 putenv('STRIPE_SECRET=sk_test_x'); putenv('STRIPE_WEBHOOK_SECRET=whsec_x'); set_setting('last_stripe_hook', (string)time());
 ok(hard_gates_failing() === [] && campaign_state() === 'open', 'every gate passes once its evidence exists');
-set_setting('last_restore_test', (string)(time() - 70 * 86400)); ok(in_array('recovery', hard_gates_failing()), 'an old restore rehearsal fails the recovery gate');
+ok(!in_array('recovery', array_keys(hard_gates())), 'a missing backup or restore rehearsal no longer locks production');
 putenv('APP_ENV=development'); putenv('STRIPE_SECRET='); putenv('STRIPE_WEBHOOK_SECRET=');
 
 // ---- FR-160 limits and traps

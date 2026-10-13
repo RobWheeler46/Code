@@ -71,11 +71,19 @@ function support_ref(array $r): string { return 'R-' . $r['id']; } // exposes no
 
 // ---- campaign window (Europe/London); blank = unrestricted
 function campaign_state(): string {
-    if (env('APP_ENV', 'development') === 'production' && hard_gates_failing()) return 'locked'; // payment and backup evidence
+    if (app_env() === 'production' && hard_gates_failing()) return 'locked'; // payment and backup evidence
     $o = setting('opens'); $c = setting('closes');
     if ($o && time() < strtotime($o)) return 'before';
     if ($c && time() >= strtotime($c)) return 'closed';
     return 'open';
+}
+
+/** Why sending is not open, in plain words. Only shown to administrators, because it names internal set up. */
+function campaign_block_reason(): string {
+    $st = campaign_state(); if ($st === 'open') return '';
+    if ($st === 'before') return 'Sending opens on ' . date('j F Y a	 H:i', strtotime(setting('opens'))) . ' (Admin, Campaign settings).';
+    if ($st === 'closed') return 'Sending closed on ' . date('j F Y a	 H:i', strtotime(setting('closes'))) . ' (Admin, Campaign settings).';
+    return 'Production is locked until these pass: ' . implode('; ', array_map(fn($k) => hard_gates()[$k][0] . ' (' . hard_gates()[$k][2] . ')', hard_gates_failing())) . '.';
 }
 
 // ---- opt-outs (user_id 0 = every sender). Checked at dispatch, retry and resend.

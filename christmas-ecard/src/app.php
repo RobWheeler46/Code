@@ -88,7 +88,7 @@ function r_register(): void {
         if (!$n || !filter_var($e, FILTER_VALIDATE_EMAIL) || strlen($p) < 10) { flash('Please give your name, a valid email and a password of at least 10 characters.', 'err'); redirect('/register'); }
         if (one('select 1 from users where email=?', [$e])) { flash('That email is already registered. Try signing in.', 'err'); redirect('/login'); }
         $t = token();
-        q('insert into users(name,email,pass,verify_token,created,terms_version,terms_at,remind) values(?,?,?,?,?,?,?,?)', [$n, $e, password_hash($p, PASSWORD_DEFAULT), $t, time(), TERMS_VERSION, time(), empty($_POST['remind']) ? 0 : 1]);
+        q('insert into users(name,email,pass,verify_token,created,terms_version,terms_at,remind) values(?,?,?,sha256(?),?,?,?,?)', [$n, $e, password_hash($p, PASSWORD_DEFAULT), $t, time(), TERMS_VERSION, time(), empty($_POST['remind']) ? 0 : 1]);
         $uid = (int)db()->lastInsertId(); $keep = $_SESSION['drafts'] ?? [];
         session_regenerate_id(true); $_SESSION['uid'] = $uid; $_SESSION['drafts'] = $keep; claim_drafts($uid);
         mail_send($e, 'Confirm your email for 7th Swindon Scouts Christmas Cards', "Hello $n,\n\nPlease confirm your email address. We will take you back to your saved card.\n" . base_url() . "/verify?t=$t\n");
@@ -99,7 +99,7 @@ function r_register(): void {
 }
 
 function r_verify(): void {
-    $u = one('select * from users where verify_token=? and verify_token<>\'\'', [(string)($_GET['t'] ?? '')]);
+    $u = one('select * from users where verify_token=sha256(?) and verify_token<>\'\'', [(string)($_GET['t'] ?? '')]);
     if (!$u) { flash('That verification link is not valid. Sign in to request a new one.', 'err'); redirect('/dashboard'); }
     q("update users set verified=1, verify_token='' where id=?", [$u['id']]);
     bootstrap_admin((int)$u['id']);
@@ -111,7 +111,7 @@ function r_verify(): void {
 function r_resend_verify(): void {
     $u = need_login(); limit('resendv', 3, 3600);
     if (!$u['verified']) {
-        $t = token(); q('update users set verify_token=? where id=?', [$t, $u['id']]);
+        $t = token(); q('update users set verify_token=sha256(?) where id=?', [$t, $u['id']]);
         mail_send($u['email'], 'Confirm your email', "Please confirm your email address:\n" . base_url() . "/verify?t=$t\n");
     }
     flash('Verification email sent to ' . $u['email'] . '. If that address is wrong, register again with the correct one.'); redirect('/dashboard');
@@ -138,7 +138,7 @@ function r_forgot(): void {
         limit('forgot', 5, 3600); limit_for('forgot:' . strtolower(field('email')), 3, 3600);
         if ($u = one('select * from users where email=?', [strtolower(field('email'))])) {
             $t = token();
-            q('update users set reset_token=?, reset_exp=? where id=?', [$t, time() + 3600, $u['id']]);
+            q('update users set reset_token=sha256(?), reset_exp=? where id=?', [$t, time() + 3600, $u['id']]);
             mail_send($u['email'], 'Reset your password', "Reset your password (valid for one hour):\n" . base_url() . "/reset?t=$t\n");
         }
         flash('If that email is registered, a reset link is on its way.'); redirect('/login');
@@ -148,7 +148,7 @@ function r_forgot(): void {
 
 function r_reset(): void {
     $t = (string)($_GET['t'] ?? $_POST['t'] ?? '');
-    $u = $t === '' ? null : one('select * from users where reset_token=? and reset_exp>?', [$t, time()]);
+    $u = $t === '' ? null : one('select * from users where reset_token=sha256(?) and reset_exp>?', [$t, time()]);
     if (!$u) { flash('That reset link has expired.', 'err'); redirect('/forgot'); }
     if (post()) {
         $p = (string)($_POST['password'] ?? '');
@@ -355,7 +355,7 @@ function r_review(): void {
     $state = campaign_state();
     $b = steps(3) . '<h1>Review and send</h1>';
     if (!$u['verified']) $b .= '<p class="flash warn">Verify your email (see the link we sent) before you can send. <form method="post" action="/resend-verification" class="inline">' . csrf() . '<button class="link">Send it again</button></form></p>';
-    if ($state !== 'open') $b .= '<p class="flash warn">Card sending is ' . (in_array($state, ['before', 'locked']) ? 'not open yet' : 'closed') . ', so you cannot submit this card. Your draft is saved.</p>';
+    if ($state !== 'open') $b .= '<p class="flash warn">Card sending is ' . (in_array($state, ['before', 'locked']) ? 'not open yet' : 'closed') . ', so you cannot submit this card. Your draft is saved.' . (($u = user()) && $u['is_admin'] && ($why = campaign_block_reason()) ? '<br><small><strong>Administrator note:</strong> ' . h($why) . '</small>' : '') . '</p>';
     if (setting('paused') === '1') $b .= '<p class="note">Sending is briefly paused. Cards you submit will be queued and go out when it resumes.</p>';
     $b .= card_view($s['card'], $rs[0]['name'] ?? 'Friend', $rs ? resolved_msg($rs[0], $s) : $s['message'], $s['sender_name']) . '<h2>Sending to ' . count($rs) . ' ' . (count($rs) === 1 ? 'person' : 'people') . '</h2><p class="note">From: ' . h($s['sender_name']) . '. Each person sees the greeting shown here for them.</p><ul class="rlist">' . $list . '</ul><p><a href="/compose?id=' . $id . '">Edit card, message or recipients</a> &middot; <a href="/email-preview?id=' . $id . '">Preview the email</a></p>';
     $rep = repeats_for($s);
@@ -414,7 +414,11 @@ function r_stripe_hook(): void {
 }
 
 function r_postmark_hook(): void {
-    if (!env('POSTMARK_HOOK_KEY') || !hash_equals(env('POSTMARK_HOOK_KEY'), (string)($_GET['k'] ?? ''))) { http_response_code(403); exit; }
+    // The key belongs in the webhook's Basic Auth password (Postmark: https://user:KEY@host/hooks/postmark), which web server logs do not record. ?k= is the old way and still works.
+    $given = (string)($_SERVER['PHP_AUTH_PW'] ?? '');
+    if ($given === '' && preg_match('/^Basic (.+)$/i', (string)($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? ''), $m)) { $cred = explode(':', (string)base64_decode($m[1]), 2); $given = $cred[1] ?? ''; }
+    if ($given === '') $given = (string)($_GET['k'] ?? '');
+    if (!env('POSTMARK_HOOK_KEY') || !hash_equals(env('POSTMARK_HOOK_KEY'), $given)) { http_response_code(403); exit; }
     $e = json_decode((string)file_get_contents('php://input'), true) ?: [];
     exit(postmark_handle_event($e));
 }
@@ -597,7 +601,7 @@ function r_change_email(): void { // wrong-address correction before verificatio
         limit('chgmail', 5, 3600);
         $e = strtolower(field('email'));
         if (!filter_var($e, FILTER_VALIDATE_EMAIL) || one('select 1 from users where email=? and id<>?', [$e, $u['id']])) { flash('That email cannot be used. Check it and try again.', 'err'); redirect('/dashboard'); }
-        $t = token(); q('update users set email=?, verify_token=? where id=?', [$e, $t, $u['id']]);
+        $t = token(); q('update users set email=?, verify_token=sha256(?) where id=?', [$e, $t, $u['id']]);
         mail_send($e, 'Confirm your email', "Please confirm your email address. We will take you back to your saved card.\n" . base_url() . "/verify?t=$t\n");
         flash('Email changed to ' . $e . '. We have sent a new verification link there.');
     }

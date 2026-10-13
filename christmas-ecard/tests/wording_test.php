@@ -1,4 +1,5 @@
 <?php
+putenv('APP_ENV=development');
 // php tests/wording_test.php : editable email and help wording (FR-085): constrained, escaped, and never able to remove the fixed parts
 $work = sys_get_temp_dir() . '/ecard-wd-' . getmypid(); mkdir($work, 0775, true); $dbf = $work . '/t.sqlite';
 putenv('DB_PATH=' . $dbf); putenv('POSTMARK_TOKEN=');

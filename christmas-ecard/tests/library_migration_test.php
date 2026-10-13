@@ -1,4 +1,5 @@
 <?php
+putenv('APP_ENV=development');
 // php tests/library_migration_test.php : EC-01 additive tables, import of the existing designs, upgrade of an old database, rollback
 $db = sys_get_temp_dir() . '/ecard-lib-' . getmypid() . '.sqlite'; @unlink($db);
 function ok($c, string $m): void { echo ($c ? 'PASS ' : 'FAIL ') . $m . "\n"; if (!$c) $GLOBALS['bad'] = 1; }

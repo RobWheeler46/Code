@@ -1,4 +1,5 @@
 <?php
+putenv('APP_ENV=development');
 // php tests/library_gallery_test.php : EC-05 what senders can choose, in what order, and the home page hero (OCA-01, CAT-07, CAT-09, FR-171)
 $work = sys_get_temp_dir() . '/ecard-lg-' . getmypid(); mkdir($work, 0775, true); $dbf = $work . '/t.sqlite';
 putenv('DB_PATH=' . $dbf); putenv('LIBRARY_DIR=' . $work . '/library'); putenv('POSTMARK_TOKEN=');

@@ -1,4 +1,5 @@
 <?php
+putenv('APP_ENV=development');
 // php tests/account_test.php : the account page over real HTTP: name, email change with confirmation, password change, preferences
 $work = sys_get_temp_dir() . '/ecard-ac-' . getmypid(); mkdir($work, 0775, true); $dbf = $work . '/t.sqlite';
 putenv('DB_PATH=' . $dbf); putenv('POSTMARK_TOKEN=');

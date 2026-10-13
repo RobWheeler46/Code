@@ -1,4 +1,5 @@
 <?php
+putenv('APP_ENV=development');
 // php tests/smoke.php : runs core logic against a throwaway DB.
 putenv('DB_PATH=' . sys_get_temp_dir() . '/ecard-test-' . getmypid() . '.sqlite');
 putenv('POSTMARK_TOKEN=');

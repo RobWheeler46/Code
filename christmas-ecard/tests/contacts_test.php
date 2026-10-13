@@ -1,4 +1,5 @@
 <?php
+putenv('APP_ENV=development');
 // php tests/contacts_test.php : address book and group rules (FR-100 to FR-116).
 putenv('DB_PATH=' . sys_get_temp_dir() . '/ecard-ct-' . getmypid() . '.sqlite');
 require __DIR__ . '/../src/app.php';

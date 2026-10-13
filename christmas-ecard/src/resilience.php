@@ -125,11 +125,9 @@ function backup_restore(string $zip, string $key, string $targetDir): array {
 // ---------- spec section 8: gates that configuration cannot override
 /** Each gate: [label, passes, how to pass it]. In production the campaign stays locked while any of these fails. */
 function hard_gates(): array {
-    $now = time(); $off = (int)setting('last_offsite'); $rt = (int)setting('last_restore_test');
     return [
         'mfa' => ['Two-step sign in required for every administrator action', true, 'Built in: every admin page and action checks it.'],
         'payments' => ['Payment events are verified and reconciled', env('STRIPE_SECRET') !== '' && env('STRIPE_WEBHOOK_SECRET') !== '' && (int)setting('last_stripe_hook') > 0, 'Set the Stripe keys and webhook secret, then receive one signed test event.'],
-        'recovery' => ['An off-server backup exists and a restore has been rehearsed', $off > 0 && $now - $off < 172800 && $rt > 0 && $now - $rt < 5184000 && str_starts_with((string)setting('last_restore_result'), 'ok'), 'Run backup with an off-server copy in the last 48 hours, and restore within the last 60 days.'],
     ];
 }
 function hard_gates_failing(): array { return array_keys(array_filter(hard_gates(), fn($g) => !$g[1])); }

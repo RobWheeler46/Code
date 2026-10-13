@@ -286,7 +286,7 @@ function r_admin(): void {
     $b = workspace_hero() . workspace_shortcuts() . '<h2>Where things stand</h2><div class="cards stats"><section class="statuscard"><h2>Cards requested</h2><p class="big">' . $nc . '</p></section>'
         . (can_any('finance', 'campaign') ? '<section class="statuscard"><h2>Donations recorded</h2><p class="big">' . gbp((int)one('select coalesce(sum(pence-refunded),0) n from donations')['n']) . '</p></section>' : '')
         . '<section class="statuscard"><h2>Needs attention</h2><p class="big">' . $na . '</p></section></div><div class="cards">'
-        . '<section class="statuscard"><h2>Campaign</h2><p>' . ['open' => 'Open for new cards', 'before' => 'Not open yet', 'closed' => 'Closed to new cards', 'locked' => 'Locked until payments and backups are proven'][$st] . '</p></section>'
+        . '<section class="statuscard"><h2>Campaign</h2><p>' . ['open' => 'Open for new cards', 'before' => 'Not open yet', 'closed' => 'Closed to new cards', 'locked' => 'Locked until payments are proven'][$st] . '</p>' . (($why = campaign_block_reason()) ? '<p class="note">' . h($why) . '</p>' : '') . '</section>'
         . '<section class="statuscard"><h2>Dispatch</h2><p>' . (setting('paused') === '1' ? '<strong>Paused</strong>' : 'Running') . '. ' . $c['queued'] . ' queued.</p></section>';
     $alerts = health_alerts();
     $b .= '<section class="statuscard"><h2>Alerts</h2><p>' . ($alerts ? '<strong>' . count($alerts) . ' need attention</strong>' : 'None found') . '</p><a href="/admin/health">System health</a></section></div>';
@@ -391,7 +391,7 @@ function r_admin_health(): void {
     $rows = [
         ['Scheduled queue job', $st((int)setting('last_queue'), 300), 'delivery'], ['Email provider', ['postmark' => 'Postmark. Last accepted send: ' . ((int)setting('last_mail_ok') ? when((int)setting('last_mail_ok')) : 'Unknown'), 'smtp' => 'Own mail account (SMTP). Last accepted send: ' . ((int)setting('last_mail_ok') ? when((int)setting('last_mail_ok')) : 'Unknown') . '. No bounce or delivery feedback with this option.', 'log' => 'Not sending: emails are only written to a local log'][mail_provider()] . ' <a href="/admin/mail">Email delivery settings</a>', 'delivery'],
         ['Payment provider (' . $env . ' mode)', env('STRIPE_SECRET') ? 'Configured. Last webhook: ' . ((int)setting('last_stripe_hook') ? when((int)setting('last_stripe_hook')) : 'Unknown') : 'Not configured: payments are simulated', 'finance'],
-        ['Backup', $st((int)setting('last_backup'), 129600), 'appadmin'], ['Campaign availability', ['open' => 'Open', 'before' => 'Not open yet', 'closed' => 'Closed', 'locked' => 'Locked (payments or backups not proven)'][campaign_state()], 'campaign'],
+        ['Backup', $st((int)setting('last_backup'), 129600), 'appadmin'], ['Campaign availability', ['open' => 'Open', 'before' => 'Not open yet', 'closed' => 'Closed', 'locked' => 'Locked (payments not proven)'][campaign_state()], 'campaign'],
         ['Dispatch', setting('paused') === '1' ? 'Paused' : 'Running', 'delivery']];
     $full = can_any('appadmin', 'rolesadmin'); $b = '<h1>System health</h1><p class="note">Checked at ' . date('j M Y H:i:s', $now) . '. Missing or old evidence is shown as Unknown or Stale, never Healthy. This page shows no secrets or private messages.</p><div class="cards">';
     foreach ($rows as [$l, $v, $who]) if ($full || can($who) || ($who === 'campaign' && can('campaign'))) $b .= '<section class="statuscard"><h2>' . h($l) . '</h2><p>' . $v . '</p></section>';

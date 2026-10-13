@@ -24,7 +24,7 @@ elseif ($c === "library-rollback") { echo implode("
 Now set LIBRARY_MIGRATE=off in .env so the tables are not recreated on the next request.
 "; }
 elseif ($c === "reset-demo") { // staging only: clears cards, donations and non-admin accounts
-    if (env("APP_ENV", "development") === "production") { echo "Refused: this is production.\n"; exit(1); }
+    if (app_env() === "production") { echo "Refused: this is production.\n"; exit(1); }
     foreach (["recipients", "sends", "donations", "reports", "optouts", "contacts", "groups", "contact_groups", "alerts"] as $t) db()->exec("delete from $t");
     db()->exec("delete from users where is_admin=0"); echo "Demo data cleared.\n";
 }

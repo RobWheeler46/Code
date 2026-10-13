@@ -1,4 +1,5 @@
 <?php
+putenv('APP_ENV=development');
 // php tests/admin_test.php : configuration validation, delivery recovery, health evidence (FR-081 to FR-095, FR-124 to FR-130).
 putenv('DB_PATH=' . sys_get_temp_dir() . '/ecard-ad-' . getmypid() . '.sqlite'); putenv('POSTMARK_TOKEN=');
 require __DIR__ . '/../src/app.php';

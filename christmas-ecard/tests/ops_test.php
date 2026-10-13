@@ -1,4 +1,5 @@
 <?php
+putenv('APP_ENV=development');
 // php tests/ops_test.php : terms, suspension, row entry, alerts (FRD 2.1).
 putenv('DB_PATH=' . sys_get_temp_dir() . '/ecard-op-' . getmypid() . '.sqlite'); putenv('POSTMARK_TOKEN=');
 require __DIR__ . '/../src/app.php';
@@ -40,7 +41,9 @@ ok(alerts_tick($t0 + 7200) === 0, 'escalation happens once');
 set_setting('last_queue', (string)time()); alerts_tick(time());
 ok((int)one("select resolved_at from alerts where akey='cron'")['resolved_at'] > 0, 'alert resolves itself when the condition clears');
 
-putenv('APP_ENV=development'); ok(campaign_state() === 'open', 'development is never locked');
+putenv('APP_ENV=development'); ok(campaign_state() === 'open' && campaign_block_reason() === '', 'development is never locked');
+set_setting('opens', date('Y-m-dTH:i', time() + 86400 * 3)); ok(campaign_state() === 'before' && str_contains(campaign_block_reason(), 'Sending opens on'), 'a future opening date is named as the reason'); set_setting('opens', '');
+putenv('APP_ENV=production'); ok(campaign_state() === 'locked' && str_contains(campaign_block_reason(), 'Production is locked until'), 'a production lock names the gates that fail'); putenv('APP_ENV=development');
 
 // FR-144 reminders
 q("insert into users(name,email,pass,verified,created,remind) values('Yes','yes@x.com','x',1,?,1),('No','no@x.com','x',1,?,0)", [time(), time()]);

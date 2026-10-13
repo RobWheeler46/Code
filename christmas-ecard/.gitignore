@@ -3,3 +3,5 @@ data/
 dist/
 *.tmp
 artwork-incoming/
+cj*.txt
+*.tmp.js

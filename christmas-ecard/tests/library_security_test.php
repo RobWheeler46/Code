@@ -1,4 +1,5 @@
 <?php
+putenv('APP_ENV=development');
 // php tests/library_security_test.php : EC-08 the library over real HTTP: sign in, two step, roles, CSRF, confirmation, replay, Group scope, upload abuse
 $work = sys_get_temp_dir() . '/ecard-ls-' . getmypid(); mkdir($work, 0775, true); $dbf = $work . '/t.sqlite'; $lib = $work . '/library';
 putenv('DB_PATH=' . $dbf); putenv('LIBRARY_DIR=' . $lib); putenv('POSTMARK_TOKEN='); putenv('APP_URL=http://127.0.0.1');

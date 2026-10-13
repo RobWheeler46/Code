@@ -1,4 +1,5 @@
 <?php
+putenv('APP_ENV=development');
 // php tests/smtp_test.php : sending through the Group's own mail account, against a pretend SMTP server. TLS needs the openssl extension and is not tested here.
 $work = sys_get_temp_dir() . '/ecard-smtp-' . getmypid(); mkdir($work); $log = $work . '/mail.log'; $port = random_int(20100, 20900);
 putenv('DB_PATH=' . $work . '/t.sqlite'); putenv('POSTMARK_TOKEN='); putenv('SMTP_HOST=127.0.0.1'); putenv("SMTP_PORT=$port"); putenv('SMTP_SECURE=none'); putenv('SMTP_USER=cards@7thswindon.org.uk'); putenv('SMTP_PASS=secret-pass'); putenv('MAIL_FROM=cards@7thswindon.org.uk'); putenv('APP_URL=https://card.7thswindon.org.uk');
