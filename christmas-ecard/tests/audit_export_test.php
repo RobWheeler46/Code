@@ -6,7 +6,7 @@ putenv('DB_PATH=' . $dbf); putenv('POSTMARK_TOKEN=');
 require __DIR__ . '/../src/app.php';
 function ok($c, string $m): void { echo ($c ? 'PASS ' : 'FAIL ') . $m . "\n"; if (!$c) $GLOBALS['bad'] = 1; }
 function mk(string $n, string $roles): array { $sec = b32e(random_bytes(10)); q("insert into users(name,email,pass,verified,created,terms_version,is_admin,roles,totp_secret) values(?,?,?,1,?,?,1,?,?)", [$n, "$n@x.com", password_hash('Test-pass-123', PASSWORD_DEFAULT), time(), TERMS_VERSION, $roles, $sec]); return ["$n@x.com", $sec]; }
-$U = ['root' => mk('root', 'rolesadmin'), 'app' => mk('app', 'appadmin'), 'camp' => mk('camp', 'campaign'), 'fin' => mk('fin', 'finance')];
+$U = ['root' => mk('root', 'rolesadmin'), 'app' => mk('app', 'appadmin'), 'camp' => mk('camp', 'campaign'), 'fin' => mk('fin', 'finance'), 'own2' => mk('own2', 'owner')];
 $yday = time() - 86400; $old = time() - 40 * 86400; $tok = str_repeat('ab12', 10);
 $seed = [['config_app', '{"changes":{"alert_emails":{"from":"","to":"ops.team@example.org"}},"reason":"x"}', $yday], ['resend', "recipient 5 link $tok", $yday], ['config_campaign', '=1+1', $yday], ['dispatch_paused', 'reason: test', $yday], ['config_app', 'old entry', $old]];
 foreach ($seed as [$a, $d, $t]) q('insert into audit(user_id,action,detail,created) values(1,?,?,?)', [$a, $d, $t]);
@@ -17,11 +17,11 @@ function tok(string $h): string { preg_match('/name="_c" value="([^"]+)"/', $h, 
 function login(array $u): string { $j = tempnam(sys_get_temp_dir(), 'jar'); [, $b] = http('GET', '/login', $j); http('POST', '/login', $j, ['_c' => tok($b), 'email' => $u[0], 'password' => 'Test-pass-123']); [, $m] = http('GET', '/mfa', $j); http('POST', '/mfa', $j, ['_c' => tok($m), 'code' => totp($u[1], time())]); return $j; }
 function doexport(string $jar, array $o = []): array { [, $p] = http('GET', '/admin/audit/export', $jar); return http('POST', '/admin/audit/export', $jar, array_merge(['_c' => tok($p), 'from' => date('Y-m-d', time() - 2 * 86400), 'to' => date('Y-m-d'), 'reason' => 'Annual review', 'action' => ''], $o)); }
 function csv(string $b): array { $f = fopen('php://memory', 'r+'); fwrite($f, $b); rewind($f); $r = []; while (($x = fgetcsv($f, 0, ',', '"', '\\')) !== false) $r[] = $x; return $r; }
-$root = login($U['root']); $app = login($U['app']); $camp = login($U['camp']); $fin = login($U['fin']);
+$root = login($U['root']); $app = login($U['app']); $camp = login($U['camp']); $fin = login($U['fin']); $own2 = login($U['own2']);
 
-foreach (['camp' => $camp, 'fin' => $fin] as $w => $j) { [$c] = http('GET', '/admin/audit/export', $j); [$c2] = doexport($j); ok($c === 403 && $c2 === 403, "a $w role cannot reach or use the export"); }
-[$c, $pg] = http('GET', '/admin/audit', $root); ok(str_contains($pg, '/admin/audit/export'), 'the change history offers the export to restricted administrators');
-[, $pg] = http('GET', '/admin/audit', $camp); ok(!str_contains($pg, '/admin/audit/export'), 'and not to a campaign manager');
+foreach (['app' => $app, 'camp' => $camp, 'fin' => $fin] as $w => $j) { [$c] = http('GET', '/admin/audit/export', $j); [$c2] = doexport($j); ok($c === 403 && $c2 === 403, "a $w role cannot reach or use the export (only an owner can)"); }
+[$c, $pg] = http('GET', '/admin/audit', $root); ok(str_contains($pg, '/admin/audit/export'), 'the change history offers the export to owners');
+[, $pg] = http('GET', '/admin/audit', $camp); ok(!str_contains($pg, '/admin/audit/export'), 'and not to an administrator');
 
 // checks that refuse before anything is handed over
 $none = fn() => (int)(new PDO('sqlite:' . $dbf))->query("select count(*) from audit where action='audit_export'")->fetchColumn();
@@ -39,10 +39,7 @@ ok(str_contains($b, "'=1+1") && !preg_match('/(^|,)"?=1\+1/m', $b), 'a cell that
 $a = (new PDO('sqlite:' . $dbf))->query("select * from audit where action='audit_export'")->fetch(PDO::FETCH_ASSOC); $d = json_decode($a['detail'], true);
 ok($none() === 1 && $d['rows'] === count($rows) - 1 && $d['reason'] === 'Annual review' && $d['filter'] === '' && !preg_match('/@|[0-9a-f]{24}/', $a['detail']), 'the export is logged with its dates, size and reason, and no content');
 
-// scope: an application administrator sees only their part
-[$c, $b] = doexport($app); $acts = array_column(array_slice(csv($b), 1), 4);
-ok($c === 200 && $acts && !array_diff($acts, ['config_app', 'dispatch_paused']) && !in_array('resend', $acts, true) && !str_contains($b, '=1+1'), 'an application administrator gets only the entries their roles allow');
-[$c, $b] = doexport($app, ['action' => 'dispatch_']); $acts = array_column(array_slice(csv($b), 1), 4); ok($acts === ['dispatch_paused'], 'the action filter narrows it');
+[$c, $b] = doexport($own2, ['action' => 'dispatch_']); $acts = array_column(array_slice(csv($b), 1), 4); ok($acts === ['dispatch_paused'], 'the action filter narrows it');
 
 // slow it down
 $last = 0; for ($i = 0; $i < 4; $i++) [$last] = doexport($root); 

@@ -59,8 +59,11 @@ function db(): PDO {
         if (!in_array(explode(' ', $def)[0], array_column($p->query("pragma table_info($t)")->fetchAll(), 'name'))) $p->exec("alter table $t add column $def");
     }
     $p->exec('create index if not exists rcpt_token_hash on recipients(token_hash)');
-    $p->exec("update users set roles=case when (',' || roles || ',') like '%,rolesadmin,%' or (',' || roles || ',') like '%,owner,%' then 'owner' else 'admin' end where is_admin=1 and roles<>'' and roles not in ('admin','owner')");
-    $p->exec("update admin_invites set roles=case when (',' || roles || ',') like '%,rolesadmin,%' or (',' || roles || ',') like '%,owner,%' then 'owner' else 'admin' end where roles not in ('admin','owner')");
+    // the older six roles become the two levels: rolesadmin (or owner) is an owner, any other older role is an administrator. Rows already on the new names are left alone.
+    $old = "(',' || roles || ',') like '%,campaign,%' or (',' || roles || ',') like '%,appadmin,%' or (',' || roles || ',') like '%,finance,%' or (',' || roles || ',') like '%,delivery,%' or (',' || roles || ',') like '%,complaints,%' or (',' || roles || ',') like '%,rolesadmin,%'";
+    $own = "(',' || roles || ',') like '%,rolesadmin,%' or (',' || roles || ',') like '%,owner,%'";
+    $p->exec("update users set roles=case when $own then 'owner' else 'admin' end where is_admin=1 and ($old)");
+    $p->exec("update admin_invites set roles=case when $own then 'owner' else 'admin' end where $old");
     foreach (['verify_token', 'reset_token'] as $col) $p->exec("update users set $col=sha256($col) where $col is not null and $col<>'' and length($col)<>64");
     $p->exec("update recipients set token_hash=sha256(token) where token_hash is null and token is not null and token not like 'gone-%'");
     $p->exec("update recipients set token=null where token_hash is not null and status in ('sent','failed','bounced')");

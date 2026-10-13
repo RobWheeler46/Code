@@ -6,7 +6,7 @@ putenv('DB_PATH=' . $dbf); putenv('POSTMARK_TOKEN='); putenv('SMTP_HOST=');
 require __DIR__ . '/../src/app.php';
 function ok($c, string $m): void { echo ($c ? 'PASS ' : 'FAIL ') . $m . "\n"; if (!$c) $GLOBALS['bad'] = 1; }
 function mk(string $n, string $roles): array { $sec = b32e(random_bytes(10)); q("insert into users(name,email,pass,verified,created,terms_version,is_admin,roles,totp_secret) values(?,?,?,1,?,?,1,?,?)", [$n, "$n@x.com", password_hash('Test-pass-123', PASSWORD_DEFAULT), time(), TERMS_VERSION, $roles, $sec]); return ["$n@x.com", $sec]; }
-$U = ['app' => mk('app', 'appadmin'), 'fin' => mk('fin', 'finance')];
+$U = ['app' => mk('app', 'owner'), 'fin' => mk('fin', 'finance')];
 $fake = proc_open([PHP_BINARY, __DIR__ . '/fake_smtp.php', (string)$smtp, $log], [1 => ['file', $work . '/s.out', 'w'], 2 => ['file', $work . '/s.out', 'a']], $p1);
 $port = random_int(19100, 19900); $proc = proc_open([PHP_BINARY, '-S', "127.0.0.1:$port", '-t', __DIR__ . '/../public', __DIR__ . '/../public/index.php'], [1 => ['file', $work . '/srv.log', 'w'], 2 => ['file', $work . '/srv.log', 'a']], $pipes, null, array_merge(getenv(), ['DB_PATH' => $dbf, 'POSTMARK_TOKEN' => '', 'SMTP_HOST' => '']));
 for ($i = 0; $i < 50 && !(@fsockopen('127.0.0.1', $port) && @fsockopen('127.0.0.1', $smtp)); $i++) usleep(100000);

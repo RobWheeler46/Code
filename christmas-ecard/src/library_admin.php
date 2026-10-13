@@ -5,10 +5,10 @@
 const LIB_STATES = ['published' => 'Published', 'held_back' => 'Held back', 'draft' => 'Draft', 'archived' => 'Archived'];
 
 function lib_role(): void { if (!can_any('campaign', 'rolesadmin')) fail(403, 'You do not have permission for that.'); }
-/** Checked again inside every action, by user id, so a forged request cannot skip it. Publishing needs an administrator unless the setting library_publish_roles says owner. */
+/** Checked again inside every action, by user id, so a forged request cannot skip it. Publishing needs an owner (the public sign off) unless the setting library_publish_roles says otherwise; anything else needs an administrator. */
 function lib_user_can(int $uid, string $act): bool {
     $u = one('select roles, is_admin from users where id=?', [$uid]); if (!$u || !$u['is_admin']) return false;
-    $need = $act === 'publish' ? (array_filter(explode(',', setting('library_publish_roles', 'admin'))) ?: ['owner']) : ['admin'];
+    $need = $act === 'publish' ? (array_filter(explode(',', setting('library_publish_roles', 'owner'))) ?: ['owner']) : ['admin'];
     foreach ($need as $n) if (role_ok((string)$u['roles'], $n)) return true;
     return false;
 }

@@ -84,7 +84,7 @@ ok((int)one('select user_id from sends where id=?', [$anon])['user_id'] === 2, '
 
 // roles
 $_SESSION['uid'] = 2; q("update users set roles='finance,complaints' where id=2");
-ok(can('finance') && !can('delivery'), 'role check');
+ok(can('finance') && can('delivery') && !can('owner'), 'an administrator has the day to day access but is not an owner');
 
 
 // ---- v1.2

@@ -353,7 +353,7 @@ function r_admin_access(): void {
     foreach (all('select * from users where is_admin=1 order by name') as $x) $b .= '<tr><td>' . h($x['name']) . ' ' . h($x['email']) . '</td><td>' . h(role_names($x['roles'])) . '</td><td>' . ($x['last_login'] ? when((int)$x['last_login']) : 'Unknown') . '</td><td>' . ($x['totp_secret'] ? 'Set up' : '<strong>Not set up</strong>') . '</td></tr>';
     $b .= '</table><form method="post" action="/admin/action" class="inline">' . csrf() . '<input type="hidden" name="do" value="access_review"><input type="hidden" name="back" value="/admin/access"><button class="btn alt">Record that I reviewed this list</button></form></section>';
     $b .= invites_panel();
-    $b .= '<h2>Access for people who already have an account</h2><p class="note">An administrator can do everything day to day. An owner can also invite people, change this list, set up email sending and see Gift Aid donor details. Keep owners to one or two people.</p>';
+    $b .= '<h2>Access for people who already have an account</h2><p class="note">An administrator can do everything day to day. An owner can also publish card designs, invite people, change this list, set up email sending and see Gift Aid donor details. Keep owners to one or two people.</p>';
     $rows = all("select * from users where is_admin=1 or roles<>'' order by name"); $rows[] = ['email' => '', 'roles' => '', 'name' => 'Give roles to a registered user by email', 'totp_secret' => null, 'verified' => 1];
     foreach ($rows as $x) {
         $have = explode(',', $x['roles']);
@@ -401,7 +401,7 @@ function r_admin_health(): void {
     }
     $due = (int)one("select count(*) n from recipients where status='queued' and tries=0 and next_at>?", [$now])['n'];
     if ($due) $b .= '<h2>Scheduled cards</h2><p>' . $due . ' recipient' . ($due === 1 ? ' is' : 's are') . ' waiting for a chosen time.' . ($now - (int)setting('last_queue') > 900 ? ' <strong>The scheduled job has not run for over 15 minutes, so they could be late. Set up the timer address below.</strong>' : ' The scheduled job is running.') . '</p>';
-    if (can_any('appadmin', 'rolesadmin')) $b .= '<h2>Scheduled work without cPanel</h2><p>Sending queued cards, alert emails and the daily clean up also run by themselves after visitors use the site (at most once a minute). For quiet periods, give a free timer service such as cron-job.org this address and ask it to open it every 5 minutes:</p><p><code>' . h(base_url() . '/hooks/tick?k=' . tick_key()) . '</code></p><p class="note">Anyone with this address can trigger the same safe jobs, nothing more. Real cron jobs still work and are fine alongside it.</p>';
+    if (can('owner')) $b .= '<h2>Scheduled work without cPanel</h2><p>Sending queued cards, alert emails and the daily clean up also run by themselves after visitors use the site (at most once a minute). For quiet periods, give a free timer service such as cron-job.org this address and ask it to open it every 5 minutes:</p><p><code>' . h(base_url() . '/hooks/tick?k=' . tick_key()) . '</code></p><p class="note">Anyone with this address can trigger the same safe jobs, nothing more. Real cron jobs still work and are fine alongside it.</p>';
     admin_page('System health', $b);
 }
 
@@ -416,7 +416,7 @@ function audit_allowed(string $action, array $prefixes): bool { foreach ($prefix
 
 function r_admin_audit(): void {
     need_admin(); if (!ops_admin()) fail(403, 'You do not have permission for that.'); $prefixes = audit_prefixes();
-    $b = '<h1>Change history</h1><p class="note">Append-only. You see the entries relevant to your roles.' . (can_any('appadmin', 'rolesadmin') ? ' <a href="/admin/audit/export">Export entries as a spreadsheet</a>' : '') . '</p><ul class="plain">'; $n = 0;
+    $b = '<h1>Change history</h1><p class="note">Append-only. You see the entries relevant to your roles.' . (can('owner') ? ' <a href="/admin/audit/export">Export entries as a spreadsheet</a>' : '') . '</p><ul class="plain">'; $n = 0;
     foreach (all('select a.*, u.name from audit a left join users u on u.id=a.user_id order by a.id desc limit 300') as $x) {
         $ok = false; foreach ($prefixes as $p) if ($p === '' || str_starts_with($x['action'], $p)) { $ok = true; break; }
         if (!$ok) continue; if (++$n > 100) break;
@@ -443,7 +443,7 @@ function audit_mask(string $d): string {
     return preg_replace('/\b[0-9a-f]{24,}\b/i', '[removed]', $d);
 }
 function r_admin_audit_export(): void {
-    $u = need_admin(); if (!can_any('appadmin', 'rolesadmin')) fail(403, 'You do not have permission for that.');
+    $u = need_admin(); if (!can('owner')) fail(403, 'You do not have permission for that.');
     $err = '';
     if (post()) {
         limit_for("auditexport:{$u['id']}", 5, 3600);

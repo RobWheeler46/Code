@@ -7,7 +7,7 @@ require __DIR__ . '/../src/app.php';
 function ok($c, string $m): void { echo ($c ? 'PASS ' : 'FAIL ') . $m . "\n"; if (!$c) $GLOBALS['bad'] = 1; }
 function pic(string $to, int $r = 0): string { $im = imagecreatetruecolor(1060, 1484); imagefilledrectangle($im, 0, 0, 1060, 1484, imagecolorallocate($im, $r, 60, 140)); imagepng($im, $to); imagedestroy($im); return $to; }
 function mkuser(string $n, string $roles): int { q("insert into users(name,email,pass,verified,created,is_admin,roles) values(?,?,?,1,?,1,?)", [$n, "$n@x.com", 'x', time(), $roles]); return (int)db()->lastInsertId(); }
-$pub = mkuser('pub', 'rolesadmin'); $mgr = mkuser('mgr', 'campaign'); $fin = mkuser('fin', 'finance');
+$pub = mkuser('pub', 'rolesadmin'); $mgr = mkuser('mgr', 'campaign'); $fin = mkuser('fin', '', 0);
 $good = ['name' => 'Snowy', 'words' => 'Snowy Christmas', 'alt' => 'Scouts in the snow. The words say: Snowy Christmas.', 'rights' => '1', 'year' => '1', 'focus' => '0'];
 
 $before = array_keys(gallery_cards());
@@ -34,7 +34,7 @@ $after = array_keys(gallery_cards()); $pos = array_search($b, $after);
 ok(design_move($b, -1, $mgr, true) && array_search($b, array_keys(gallery_cards())) === $pos - 1, 'moving among visible designs skips one that is held back');
 function lib_row_by_slug(string $s): array { foreach (lib_rows() as $r) if ($r['slug'] === $s) return $r; return []; }
 ok(!library_order((int)lib_row_by_slug($a)['did'], 'move_up', $mgr)['ok'], 'a held back design cannot be moved');
-ok(!library_order((int)lib_row_by_slug($pubs[3])['did'], 'move_up', $fin)['ok'], 'a finance user cannot reorder designs');
+ok(!library_order((int)lib_row_by_slug($pubs[3])['did'], 'move_up', $fin)['ok'], 'a non administrator cannot reorder designs');
 
 // featured hero
 $target = array_keys(gallery_cards())[2]; $tid = (int)lib_row_by_slug($target)['did'];
