@@ -28,6 +28,8 @@ $h = page_for($work, '$_GET["occasion"] = "christmas";'); ok(tiles($h) === $xmas
 $h = page_for($work, '$_GET["occasion"] = "celebration";'); ok(tiles($h) === $xmas + 3, 'an occasion with no cards, or a made up one, falls back to showing everything');
 $h = page_for($work, '$_GET["occasion"] = "<script>";'); ok(tiles($h) === $xmas + 3 && !str_contains($h, '<script>'), 'odd input is ignored and never printed');
 
+$h = page_for($work, ''); ok(str_contains($h, '<noscript><button class="btn alt">Show</button></noscript>') && str_contains($h, 'data-autosubmit'), 'the Show button is only there when scripts are off; otherwise choosing an occasion applies it');
+
 // the library: an occasion can be chosen, and the thumbnail focus class is on the picture
 $lib = file_get_contents(__DIR__ . '/../src/library_admin.php');
 ok(str_contains($lib, "name=\"occasion\"") && str_contains($lib, 'update designs set internal_name=?, category=?'), 'the card editor has an Occasion choice that is saved');

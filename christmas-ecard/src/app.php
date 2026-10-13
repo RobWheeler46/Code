@@ -56,7 +56,7 @@ function occasion_filter(string $want): string {
     $o = gallery_occasions(); if (count($o) < 2) return '';
     $b = '<form method="get" action="/#gallery" class="gfilter"><label for="gocc">Show cards for</label><select id="gocc" name="occasion" data-autosubmit><option value="">All occasions</option>';
     foreach ($o as $slug => $label) $b .= '<option value="' . h($slug) . '"' . ($want === $slug ? ' selected' : '') . '>' . h($label) . '</option>';
-    return $b . '</select><button class="btn alt">Show</button></form>';
+    return $b . '</select><noscript><button class="btn alt">Show</button></noscript></form>';
 }
 function r_home(): void {
     if (preg_match('/^[a-z0-9-]{1,30}$/', (string)($_GET['ref'] ?? ''))) $_SESSION['ref'] = $_GET['ref']; // promotion source label only, never a person
