@@ -43,15 +43,30 @@ function gone_page(array $r, string $title, string $why): never {
 }
 
 // ---------- public
+/** The occasions that have at least one card on show: [slug => label]. */
+function gallery_occasions(): array {
+    $n = []; foreach (gallery_cards() as $c) $n[$c['cat'] ?? 'christmas'] = 1;
+    try { $all = array_column(all('select slug, label from occasions order by id'), 'label', 'slug'); } catch (Throwable $e) { $all = ['christmas' => 'Christmas']; }
+    return array_intersect_key($all, $n);
+}
+/** The occasion asked for in the address, or '' for all. Anything that is not an occasion with cards on show is ignored. */
+function occasion_wanted(): string { $w = (string)($_GET['occasion'] ?? ''); return isset(gallery_occasions()[$w]) ? $w : ''; }
+/** Links above the gallery, only when there is more than one occasion to choose from. */
+function occasion_filter(string $want): string {
+    $o = gallery_occasions(); if (count($o) < 2) return '';
+    $b = '<nav aria-label="Show cards for" class="filters"><a href="/#gallery"' . ($want === '' ? ' aria-current="true"' : '') . '>All</a>';
+    foreach ($o as $slug => $label) $b .= '<a href="/?occasion=' . h($slug) . '#gallery"' . ($want === $slug ? ' aria-current="true"' : '') . '>' . h($label) . '</a>';
+    return $b . '</nav>';
+}
 function r_home(): void {
     if (preg_match('/^[a-z0-9-]{1,30}$/', (string)($_GET['ref'] ?? ''))) $_SESSION['ref'] = $_GET['ref']; // promotion source label only, never a person
-    $st = sending_state();
+    $st = sending_state(); $want = occasion_wanted();
     $b = '<section class="hero"><div><p class="eyebrow">' . h(SITE_NAME) . '</p><h1>Send a card, Scout style</h1><p class="lead">Pick a design, write your message and we will email a private card to your friends and family. Sending is free' . (donations_enabled() ? ', and a donation is optional' : '') . '.</p><p><a class="btn big" href="#gallery">Choose a card</a> <a class="btn ghost" href="#how">How it works</a></p></div><div class="heroart" aria-hidden="true">' . (($hero = hero_for_session()) ? card_art($hero) : '') . '</div></section>';
     if ($st === 'locked') $b .= '<p class="flash warn">Sending is not open yet. You can prepare a card now.</p>';
     $b .= '<h2 id="how">How it works</h2><ol class="how"><li><b>1</b><strong>Choose a design</strong>Illustrated Scout themed cards, from tents to campfires.</li><li><b>2</b><strong>Write your message</strong>Add up to ' . max_recipients() . ' people. Give anyone a personal note if you like.</li><li><b>3</b><strong>We send each card</strong>Everyone gets their own private link and opens an envelope.</li></ol>'
         . (!donations_enabled() ? '' : '<section class="cause"><h2>Every card helps local Scouting</h2><p>' . h(DONATION_PURPOSE) . '</p><p>Sending is always free. You never have to donate, and a donation never changes how your card looks.</p></section>')
-        . '<h2 id="gallery">Pick a design</h2><div class="grid">';
-    foreach (gallery_cards() as $id => $c)
+        . '<h2 id="gallery">Pick a design</h2>' . occasion_filter($want) . '<div class="grid">';
+    foreach (array_filter(gallery_cards(), fn($c) => $want === '' || ($c['cat'] ?? 'christmas') === $want) as $id => $c)
         $b .= '<a class="tile" href="/compose?card=' . h($id) . '">' . card_art($id, true) . '<span>' . h($c['title']) . '</span><em class="tjoke">' . h($c['joke']) . '</em></a>';
     page('Choose a card', $b . '</div>');
 }

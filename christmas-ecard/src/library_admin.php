@@ -16,7 +16,7 @@ function lib_campaign(): int { return (int)one('select min(id) i from campaigns 
 
 /** One row per design: its newest version and its state in the campaign. Imported designs take their on or off state from cards(). */
 function lib_rows(string $status = ''): array {
-    $rows = all('select d.id did, d.slug, d.internal_name, v.id vid, v.version_no, v.title, v.description, v.alt_text, v.full_key, v.thumb_key, v.rights_confirmed, v.year_checked, v.rev, v.updated, v.created vcreated, v.published_at, v.pub_name,
+    $rows = all('select d.id did, d.slug, d.internal_name, d.category, v.id vid, v.version_no, v.title, v.description, v.alt_text, v.full_key, v.thumb_key, v.rights_confirmed, v.year_checked, v.rev, v.updated, v.created vcreated, v.published_at, v.pub_name,
         cd.published_version_id pub_vid, cd.state, cd.thumb_focus_y
         from designs d join design_versions v on v.id=(select max(id) from design_versions where design_id=d.id)
         left join campaign_designs cd on cd.design_id=d.id and cd.campaign_id=? where d.owner_group_id=? order by coalesce(cd.order_rank, 9999), d.id', [lib_campaign(), owner_group()]);
@@ -69,19 +69,20 @@ function library_save(array $in, ?string $tmp, int $uid): array {
     if ($tmp && !$e) { $r = art_store($tmp); if (!$r['ok']) $e['art'] = implode(' ', $r['errors']); else $asset = $r['asset']; }
     elseif ($tmp) { $chk = art_validate($tmp); if (!$chk['ok']) $e['art'] = implode(' ', $chk['errors']); }
     if ($e) return ['ok' => false, 'errors' => $e];
+    $occ = (string)(one('select slug from occasions where slug=?', [(string)($in['occasion'] ?? '')])['slug'] ?? ($row['category'] ?? 'christmas'));
     $rights = empty($in['rights']) ? 0 : 1; $year = empty($in['year']) ? 0 : 1; $focus = max(0, min(100, (int)($in['focus'] ?? 0))); $now = time();
     $p = db(); $old = $row ? one('select original_key, full_key, thumb_key from design_versions where id=?', [$row['vid']]) : null; $p->beginTransaction();
     try {
         if (!$did) {
             $slug = 'd' . bin2hex(random_bytes(5));
-            q('insert into designs(slug,internal_name,category,created) values(?,?,?,?)', [$slug, $name, 'christmas', $now]); $did = (int)$p->lastInsertId();
+            q('insert into designs(slug,internal_name,category,created) values(?,?,?,?)', [$slug, $name, $occ, $now]); $did = (int)$p->lastInsertId();
             q('insert into design_versions(design_id,version_no,asset_key,sha256,width,height,title,description,alt_text,original_key,full_key,thumb_key,rights_confirmed,year_checked,rev,updated,author_id,created) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?)',
                 [$did, 1, $asset['original_key'], $asset['sha256'], $asset['width'], $asset['height'], $name, $words, $alt, $asset['original_key'], $asset['full_key'], $asset['thumb_key'], $rights, $year, $now, $uid, $now]);
             $rank = (int)one('select coalesce(max(order_rank),0)+1 n from campaign_designs where campaign_id=?', [lib_campaign()])['n'];
             q("insert into campaign_designs(campaign_id,design_id,state,order_rank,thumb_focus_y) values(?,?, 'draft', ?, ?)", [lib_campaign(), $did, $rank, $focus]);
             audit($uid, 'library_draft_created', "design $did: $name");
         } else {
-            q('update designs set internal_name=? where id=?', [$name, $did]);
+            q('update designs set internal_name=?, category=? where id=?', [$name, $occ, $did]);
             q('update design_versions set title=?, description=?, alt_text=?, rights_confirmed=?, year_checked=?, rev=rev+1, updated=? where id=?', [$name, $words, $alt, $rights, $year, $now, $row['vid']]);
             if ($asset) q('update design_versions set asset_key=?, sha256=?, width=?, height=?, original_key=?, full_key=?, thumb_key=? where id=?', [$asset['original_key'], $asset['sha256'], $asset['width'], $asset['height'], $asset['original_key'], $asset['full_key'], $asset['thumb_key'], $row['vid']]);
             q('update campaign_designs set thumb_focus_y=? where campaign_id=? and design_id=?', [$focus, lib_campaign(), $did]);
@@ -181,7 +182,7 @@ function library_use_version(int $did, int $vid, int $uid): array {
 // ---------- screens
 function lib_thumb(array $r, string $cls = ''): string {
     $src = lib_img($r); if (!$src) return '<div class="libnone">No picture</div>';
-    return '<img class="libimg ' . $cls . '" src="' . h($src) . '" alt="' . h($r['alt_text'] ?: $r['title']) . '" loading="lazy" fp' . (int)$r['focus'] . '">';
+    return '<img class="libimg ' . $cls . ' fp' . (int)$r['focus'] . '" src="' . h($src) . '" alt="' . h($r['alt_text'] ?: $r['title']) . '" loading="lazy">';
 }
 
 function r_admin_library(): void {
@@ -213,6 +214,7 @@ function r_admin_library_edit(): void {
         . '<label>Picture (PNG, JPEG or WebP, up to ' . round(art_limits()['max_bytes'] / 1048576) . ' MB, at least ' . art_limits()['min_width'] . ' pixels wide)<input id="f-art" type="file" name="art" accept="image/png,image/jpeg,image/webp"' . fa($errs, 'art', $f) . '>' . fe($errs, 'art') . '</label></section>'
         . '<section class="admincard"><h2>2. Details and accessibility</h2>'
         . '<label>Card name<input id="f-name" name="name" maxlength="80" value="' . $v('name', $r['internal_name'] ?? '') . '"' . fa($errs, 'name', $f) . '>' . fe($errs, 'name') . '</label>'
+        . '<label>Occasion<select name="occasion">' . implode('', array_map(fn($o) => '<option value="' . h($o['slug']) . '"' . ($o['slug'] === (string)($old['occasion'] ?? $r['category'] ?? 'christmas') ? ' selected' : '') . '>' . h($o['label']) . '</option>', all('select slug, label from occasions order by id'))) . '</select></label>'
         . '<label>Words printed on the card<input id="f-words" name="words" maxlength="200" value="' . $v('words', $r['description'] ?? '') . '"' . fa($errs, 'words', $f) . '>' . fe($errs, 'words') . '</label>'
         . '<label>Description for screen readers (include the words on the card and what the picture shows)<textarea id="f-alt" name="alt" rows="4" maxlength="800"' . fa($errs, 'alt', $f) . '>' . $v('alt', $r['alt_text'] ?? '') . '</textarea>' . fe($errs, 'alt') . '</label>'
         . '<label class="opt"><input type="checkbox" name="rights" value="1"' . (($old ? !empty($old['rights']) : !empty($r['rights_confirmed'])) ? ' checked' : '') . '> I confirm the Group has the right to use this artwork</label>'

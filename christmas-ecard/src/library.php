@@ -70,12 +70,12 @@ function library_rollback(): array {
 /** Designs whose published version has its own picture (new designs and replaced artwork) are added to, or override, the fixed design list. */
 function library_cards_overlay(array $out): array {
     try {
-        $rows = db()->query("select d.slug, v.id vid, v.title, v.description joke, v.alt_text, v.pub_name, v.pub_thumb, cd.state from campaign_designs cd join designs d on d.id=cd.design_id
+        $rows = db()->query("select d.slug, d.category, v.id vid, v.title, v.description joke, v.alt_text, v.pub_name, v.pub_thumb, cd.state from campaign_designs cd join designs d on d.id=cd.design_id
             join design_versions v on v.id=cd.published_version_id where v.pub_name is not null and d.owner_group_id=1 and cd.campaign_id=(select min(id) from campaigns)")->fetchAll();
     } catch (Throwable $e) { return $out; }
     foreach ($rows as $r) {
         $slug = $r['slug'];
-        $e = ['title' => $r['title'], 'joke' => $r['joke'], 'a' => '#0b2a5c', 'b' => '#041f3d', 'desc' => $r['alt_text'], 'baked' => true, 'art' => $r['pub_name'], 'thumb' => $r['pub_thumb'] ?: $r['pub_name'], 'lib' => (int)$r['vid'],
+        $e = ['title' => $r['title'], 'joke' => $r['joke'], 'a' => '#0b2a5c', 'b' => '#041f3d', 'desc' => $r['alt_text'], 'baked' => true, 'art' => $r['pub_name'], 'thumb' => $r['pub_thumb'] ?: $r['pub_name'], 'lib' => (int)$r['vid'], 'cat' => (string)($r['category'] ?: 'christmas'),
             'on' => isset($out[$slug]) ? $out[$slug]['on'] : ($r['state'] === 'published' && setting("off_$slug") !== '1')];
         $out[$slug] = $e;
     }
