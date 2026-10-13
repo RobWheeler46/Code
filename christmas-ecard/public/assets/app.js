@@ -43,3 +43,5 @@ document.querySelectorAll('[data-skip]').forEach(function (b) { b.addEventListen
   f.addEventListener('input', upd); f.addEventListener('change', upd); upd(); })();
 
 (function () { var m = document.querySelector('.wsmenu'); if (m && window.matchMedia && window.matchMedia('(max-width:790px)').matches) m.removeAttribute('open'); })();
+
+document.querySelectorAll('[data-autosubmit]').forEach(function (s) { s.addEventListener('change', function () { s.form.submit(); }); });
