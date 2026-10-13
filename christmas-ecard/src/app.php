@@ -51,22 +51,35 @@ function gallery_occasions(): array {
 }
 /** The occasion asked for in the address, or '' for all. Anything that is not an occasion with cards on show is ignored. */
 function occasion_wanted(): string { $w = (string)($_GET['occasion'] ?? ''); return isset(gallery_occasions()[$w]) ? $w : ''; }
-/** Links above the gallery, only when there is more than one occasion to choose from. */
-function occasion_filter(string $want): string {
-    $o = gallery_occasions(); if (count($o) < 2) return '';
-    $b = '<nav aria-label="Show cards for" class="filters"><a href="/#gallery"' . ($want === '' ? ' aria-current="true"' : '') . '>All</a>';
-    foreach ($o as $slug => $label) $b .= '<a href="/?occasion=' . h($slug) . '#gallery"' . ($want === $slug ? ' aria-current="true"' : '') . '>' . h($label) . '</a>';
+/** The words typed in the search box, trimmed and kept short. */
+function search_wanted(): string { return mb_substr(trim(preg_replace('/\s+/u', ' ', (string)($_GET['q'] ?? ''))), 0, 60); }
+/** Does a card match every word typed? Looks at its title, the line under it and its description. */
+function card_matches(array $c, string $q): bool {
+    if ($q === '') return true; $hay = mb_strtolower(($c['title'] ?? '') . ' ' . ($c['joke'] ?? '') . ' ' . ($c['desc'] ?? ''));
+    foreach (explode(' ', mb_strtolower($q)) as $w) if ($w !== '' && !str_contains($hay, $w)) return false;
+    return true;
+}
+/** The search box and, when there is more than one occasion to choose from, links for each occasion. Both are plain page addresses, so they work without scripts and can be shared. */
+function occasion_filter(string $want, string $q = ''): string {
+    $qs = fn(string $occ) => '/?' . http_build_query(array_filter(['occasion' => $occ, 'q' => $q], fn($v) => $v !== '')) . '#gallery';
+    $b = '<form method="get" action="/#gallery" role="search" class="gsearch"><label for="gq">Search the cards</label><input id="gq" type="search" name="q" maxlength="60" value="' . h($q) . '" placeholder="For example camp or mince pies">' . ($want !== '' ? '<input type="hidden" name="occasion" value="' . h($want) . '">' : '') . '<button class="btn alt">Search</button>' . ($q !== '' ? ' <a href="' . h('/' . ($want !== '' ? '?occasion=' . $want : '') . '#gallery') . '">Clear</a>' : '') . '</form>';
+    $o = gallery_occasions(); if (count($o) < 2) return $b;
+    $b .= '<nav aria-label="Show cards for" class="filters"><a href="' . h($q === '' ? '/#gallery' : '/?' . http_build_query(['q' => $q]) . '#gallery') . '"' . ($want === '' ? ' aria-current="true"' : '') . '>All</a>';
+    foreach ($o as $slug => $label) $b .= '<a href="' . h($qs($slug)) . '"' . ($want === $slug ? ' aria-current="true"' : '') . '>' . h($label) . '</a>';
     return $b . '</nav>';
 }
 function r_home(): void {
     if (preg_match('/^[a-z0-9-]{1,30}$/', (string)($_GET['ref'] ?? ''))) $_SESSION['ref'] = $_GET['ref']; // promotion source label only, never a person
-    $st = sending_state(); $want = occasion_wanted();
+    $st = sending_state(); $want = occasion_wanted(); $sq = search_wanted();
     $b = '<section class="hero"><div><p class="eyebrow">' . h(SITE_NAME) . '</p><h1>Send a card, Scout style</h1><p class="lead">Pick a design, write your message and we will email a private card to your friends and family. Sending is free' . (donations_enabled() ? ', and a donation is optional' : '') . '.</p><p><a class="btn big" href="#gallery">Choose a card</a> <a class="btn ghost" href="#how">How it works</a></p></div><div class="heroart" aria-hidden="true">' . (($hero = hero_for_session()) ? card_art($hero) : '') . '</div></section>';
     if ($st === 'locked') $b .= '<p class="flash warn">Sending is not open yet. You can prepare a card now.</p>';
     $b .= '<h2 id="how">How it works</h2><ol class="how"><li><b>1</b><strong>Choose a design</strong>Illustrated Scout themed cards, from tents to campfires.</li><li><b>2</b><strong>Write your message</strong>Add up to ' . max_recipients() . ' people. Give anyone a personal note if you like.</li><li><b>3</b><strong>We send each card</strong>Everyone gets their own private link and opens an envelope.</li></ol>'
         . (!donations_enabled() ? '' : '<section class="cause"><h2>Every card helps local Scouting</h2><p>' . h(DONATION_PURPOSE) . '</p><p>Sending is always free. You never have to donate, and a donation never changes how your card looks.</p></section>')
-        . '<h2 id="gallery">Pick a design</h2>' . occasion_filter($want) . '<div class="grid">';
-    foreach (array_filter(gallery_cards(), fn($c) => $want === '' || ($c['cat'] ?? 'christmas') === $want) as $id => $c)
+        . '<h2 id="gallery">Pick a design</h2>' . occasion_filter($want, $sq);
+    $show = array_filter(gallery_cards(), fn($c) => ($want === '' || ($c['cat'] ?? 'christmas') === $want) && card_matches($c, $sq));
+    if ($want !== '' || $sq !== '') $b .= '<p class="note" role="status">' . ($show ? count($show) . ($show && count($show) === 1 ? ' card' : ' cards') . ' shown.' : 'No cards match' . ($sq !== '' ? ' "' . h($sq) . '"' : '') . '. <a href="/#gallery">Show all cards</a>') . '</p>';
+    $b .= '<div class="grid">';
+    foreach ($show as $id => $c)
         $b .= '<a class="tile" href="/compose?card=' . h($id) . '">' . card_art($id, true) . '<span>' . h($c['title']) . '</span><em class="tjoke">' . h($c['joke']) . '</em></a>';
     page('Choose a card', $b . '</div>');
 }

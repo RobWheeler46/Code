@@ -28,6 +28,17 @@ $h = page_for($work, '$_GET["occasion"] = "christmas";'); ok(tiles($h) === $xmas
 $h = page_for($work, '$_GET["occasion"] = "celebration";'); ok(tiles($h) === $xmas + 3, 'an occasion with no cards, or a made up one, falls back to showing everything');
 $h = page_for($work, '$_GET["occasion"] = "<script>";'); ok(tiles($h) === $xmas + 3 && !str_contains($h, '<script>'), 'odd input is ignored and never printed');
 
+// search
+$h = page_for($work, ''); ok(str_contains($h, 'role="search"') && str_contains($h, 'name="q"'), 'the gallery has a search box');
+$h = page_for($work, '$_GET["q"] = "bday-a";'); ok(tiles($h) === 1 && str_contains($h, 'Card bday-a') && str_contains($h, '1 card shown'), 'searching finds the card whose title matches and says how many');
+$h = page_for($work, '$_GET["q"] = "alt bday";'); ok(tiles($h) === 2, 'every word typed has to match, in any order and in any letter case (here the description of the two birthday cards)');
+$h = page_for($work, '$_GET["q"] = "MINCE";'); ok(tiles($h) >= 1 && tiles($h) < $xmas + 3, 'the words printed in a card description are searched too, ignoring capital letters');
+$h = page_for($work, '$_GET["q"] = "zzzzqq";'); ok(tiles($h) === 0 && str_contains($h, 'No cards match') && str_contains($h, 'Show all cards'), 'a search with no match says so and offers all cards again');
+$h = page_for($work, '$_GET["q"] = "<script>alert(1)</script>";'); ok(!str_contains($h, '<script>alert') && str_contains($h, '&lt;script&gt;'), 'what was typed is shown safely');
+$h = page_for($work, '$_GET["q"] = "bday"; $_GET["occasion"] = "thank-you";'); ok(tiles($h) === 0, 'a search and an occasion together both have to match');
+$h = page_for($work, '$_GET["q"] = "card"; $_GET["occasion"] = "birthday";'); ok(tiles($h) === 2 && str_contains($h, 'name="occasion" value="birthday"') && str_contains($h, 'q=card'), 'the occasion links keep the search words and the search keeps the occasion');
+$h = page_for($work, '$_GET["q"] = str_repeat("a", 500);'); ok(!str_contains($h, str_repeat('a', 61)), 'a very long search is cut short');
+
 // the library: an occasion can be chosen, and the thumbnail focus class is on the picture
 $lib = file_get_contents(__DIR__ . '/../src/library_admin.php');
 ok(str_contains($lib, "name=\"occasion\"") && str_contains($lib, 'update designs set internal_name=?, category=?'), 'the card editor has an Occasion choice that is saved');
