@@ -5,12 +5,12 @@
 const LIB_STATES = ['published' => 'Published', 'held_back' => 'Held back', 'draft' => 'Draft', 'archived' => 'Archived'];
 
 function lib_role(): void { if (!can_any('campaign', 'rolesadmin')) fail(403, 'You do not have permission for that.'); }
-/** Checked again inside every action, by user id, so a forged request cannot skip it. 'publish' roles are decision ED-01; the safe default is restricted administrators only. */
+/** Checked again inside every action, by user id, so a forged request cannot skip it. Publishing needs an administrator unless the setting library_publish_roles says owner. */
 function lib_user_can(int $uid, string $act): bool {
     $u = one('select roles, is_admin from users where id=?', [$uid]); if (!$u || !$u['is_admin']) return false;
-    $roles = array_filter(explode(',', (string)$u['roles']));
-    $need = $act === 'publish' ? (array_filter(explode(',', setting('library_publish_roles', 'rolesadmin'))) ?: ['rolesadmin']) : ['campaign', 'rolesadmin'];
-    return (bool)array_intersect($roles, $need);
+    $need = $act === 'publish' ? (array_filter(explode(',', setting('library_publish_roles', 'admin'))) ?: ['owner']) : ['admin'];
+    foreach ($need as $n) if (role_ok((string)$u['roles'], $n)) return true;
+    return false;
 }
 function lib_campaign(): int { return (int)one('select min(id) i from campaigns where group_id=?', [owner_group()])['i']; }
 

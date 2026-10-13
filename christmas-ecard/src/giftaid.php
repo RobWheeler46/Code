@@ -52,7 +52,7 @@ function giftaid_eligible(string $from = '2000-01-01', string $to = '2999-12-31'
 }
 
 function r_admin_giftaid(): void {
-    $u = need_role('finance');
+    $u = need_role('owner');
     $from = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['from'] ?? $_POST['from'] ?? '') ? ($_GET['from'] ?? $_POST['from']) : '2000-01-01'; $to = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['to'] ?? $_POST['to'] ?? '') ? ($_GET['to'] ?? $_POST['to']) : '2999-12-31';
     if (isset($_GET['csv'])) {
         $rows = giftaid_eligible($from, $to); if (!$rows) page('Nothing to claim', '<h1>Nothing to claim</h1><p>No unclaimed Gift Aid donations in that range.</p><p><a class="btn" href="/admin/giftaid">Back</a></p>');

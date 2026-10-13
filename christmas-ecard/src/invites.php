@@ -1,5 +1,5 @@
 <?php
-// FR-088: restricted administrators invite people to be administrators by email. An invitation is for one email address and a fixed set
+// FR-088: owners invite people to be administrators by email. An invitation is for one email address and a fixed set
 // of roles, works once and for seven days, and is accepted only by a signed in, verified account with that same address. The two step
 // sign in is then set up the first time the new administrator opens Admin. Revoking is immediate.
 
@@ -8,10 +8,10 @@ const INVITE_DAYS = 7;
 function invite_roles(array $in): array { return array_values(array_intersect(array_keys(ROLES), array_map('strval', $in))); }
 function invite_pending(): array { return all('select i.*, u.name inviter from admin_invites i left join users u on u.id=i.invited_by where i.accepted_at is null and i.revoked_at is null and i.expires>? order by i.created desc', [time()]); }
 
-/** Creates an invitation and emails the link. Returns ['ok'=>bool,'error'=>?,'id'=>?]. Needs the restricted administrator role, checked here as well as on the screen. */
+/** Creates an invitation and emails the link. Returns ['ok'=>bool,'error'=>?,'id'=>?]. Needs the owner role, checked here as well as on the screen. */
 function invite_create(string $email, array $roles, int $uid, bool $resendOf = false): array {
     $by = one('select * from users where id=?', [$uid]);
-    if (!$by || !$by['is_admin'] || !in_array('rolesadmin', explode(',', (string)$by['roles']), true)) return ['ok' => false, 'error' => 'Only a restricted administrator can invite people.'];
+    if (!$by || !$by['is_admin'] || !role_ok((string)$by['roles'], 'owner')) return ['ok' => false, 'error' => 'Only an owner can invite people.'];
     $email = strtolower(trim($email)); $roles = invite_roles($roles);
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) return ['ok' => false, 'error' => 'Enter a valid email address.'];
     if (!$roles) return ['ok' => false, 'error' => 'Choose at least one role.'];
@@ -27,7 +27,7 @@ function invite_create(string $email, array $roles, int $uid, bool $resendOf = f
 }
 
 function invite_revoke(int $id, int $uid): bool {
-    $by = one('select roles, is_admin from users where id=?', [$uid]); if (!$by || !$by['is_admin'] || !in_array('rolesadmin', explode(',', (string)$by['roles']), true)) return false;
+    $by = one('select roles, is_admin from users where id=?', [$uid]); if (!$by || !$by['is_admin'] || !role_ok((string)$by['roles'], 'owner')) return false;
     $n = q('update admin_invites set revoked_at=? where id=? and accepted_at is null and revoked_at is null', [time(), $id])->rowCount();
     if ($n) audit($uid, 'admin_invite_revoked', "invite $id"); return (bool)$n;
 }
@@ -83,13 +83,13 @@ function r_invite(): void {
     page('Invitation', '<h1>Accept the invitation</h1><p>You are signed in as <strong>' . h($u['email']) . '</strong>. Accepting gives this account these roles: <strong>' . h(role_names($i['roles'])) . '</strong>. You will be asked to set up two step sign in.</p><form method="post" class="stack">' . csrf() . '<input type="hidden" name="t" value="' . h($t) . '"><button class="btn">Accept and continue</button> <a class="btn alt" href="/dashboard">Not now</a></form>');
 }
 
-/** First time set up without a terminal: the person who registers and confirms the address in ADMIN_EMAIL becomes the first restricted administrator.
- *  It only works while there is no restricted administrator at all, needs the address to be confirmed (so the mailbox owner), has no default password,
+/** First time set up without a terminal: the person who registers and confirms the address in ADMIN_EMAIL becomes the first owner.
+ *  It only works while there is no owner at all, needs the address to be confirmed (so the mailbox owner), has no default password,
  *  and the two step sign in is then set up the first time they open Admin. After that it does nothing. */
 function bootstrap_admin(int $uid): void {
     $want = strtolower(trim(env('ADMIN_EMAIL'))); if ($want === '') return;
     $u = one('select * from users where id=?', [$uid]); if (!$u || !$u['verified'] || strtolower((string)$u['email']) !== $want) return;
-    if ((int)one("select count(*) n from users where is_admin=1 and (',' || roles || ',') like '%,rolesadmin,%'")['n'] > 0) return;
-    q('update users set is_admin=1, roles=? where id=?', [implode(',', array_keys(ROLES)), $uid]);
-    audit($uid, 'admin_bootstrap', "user $uid became the first restricted administrator");
+    if ((int)one("select count(*) n from users where is_admin=1 and ((',' || roles || ',') like '%,owner,%' or (',' || roles || ',') like '%,rolesadmin,%')")['n'] > 0) return;
+    q('update users set is_admin=1, roles=? where id=?', ['owner', $uid]);
+    audit($uid, 'admin_bootstrap', "user $uid became the first owneristrator");
 }

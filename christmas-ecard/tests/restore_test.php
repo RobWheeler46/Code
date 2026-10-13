@@ -33,13 +33,13 @@ change($root, 'site', ['giftaid_charity' => 'Beta Scouts']); ok(st('giftaid_char
 [$c, $form] = http('GET', '/admin/site?restore=' . $first, $root);
 ok($c === 200 && str_contains($form, 'Restoring earlier values') && str_contains($form, 'cannot undo emails already sent') && str_contains($form, 'name="restore_of" value="' . $first . '"'), 'it explains what restoring cannot undo and carries the restore marker');
 ok(preg_match('/name="f_giftaid_charity" value=""/', $form) && preg_match('/name="f_amounts_pence" value="2, 5, 10"/', $form), 'the form starts with the values from before that change (including money and amounts)');
-ok(st('giftaid_charity') === 'Beta', 'and nothing is saved by looking');
+ok(st('giftaid_charity') === 'Beta Scouts', 'and nothing is saved by looking');
 [, $cf] = http('GET', '/admin/site?restore=' . $first, $camp); ok(!str_contains($cf, 'Restoring earlier values') && preg_match('/name="f_giftaid_charity" value="Beta Scouts"/', $cf), 'a campaign manager asking for it just sees the current settings');
 
 // through the normal review and confirmation
 $post = ['reason' => 'Put it back', 'restore_of' => $first, 'f_donations_enabled' => '0', 'f_amounts_pence' => '2, 5, 10', 'f_giftaid_charity' => '', 'f_giftaid_enabled' => '0'];
 [, $pg] = http('GET', '/admin/site', $root); [$c, $rv] = http('POST', '/admin/site', $root, ['_c' => tok($pg)] + $post);
-ok($c === 200 && str_contains($rv, 'Review changes') && str_contains($rv, 'Beta Scouts') && str_contains($rv, 'name="restore_of"') && st('giftaid_charity') === 'Beta', 'saving shows old and new values first and still changes nothing');
+ok($c === 200 && str_contains($rv, 'Review changes') && str_contains($rv, 'Beta Scouts') && str_contains($rv, 'name="restore_of"') && st('giftaid_charity') === 'Beta Scouts', 'saving shows old and new values first and still changes nothing');
 $ver = st('cfg_version'); [$c] = http('POST', '/admin/site', $root, ['_c' => tok($rv), 'confirmed' => 1, 'ver' => $ver] + $post);
 $a = lastAudit('config_site'); $d = json_decode($a['detail'], true);
 ok($c === 302 && st('giftaid_charity') === '' && st('amounts_pence') === '200,500,1000' && (int)st('cfg_version') === (int)$ver + 1, 'confirming restores the earlier values as a new configuration version');

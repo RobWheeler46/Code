@@ -46,7 +46,7 @@ function mail_test_send(array $user): array {
 }
 
 function r_admin_mail(): void {
-    $u = need_admin(); if (!can_any('appadmin', 'rolesadmin')) fail(403, 'You do not have permission for that.');
+    $u = need_admin(); if (!can('owner')) fail(403, 'You do not have permission for that.');
     $errs = $_SESSION['mail_errs'] ?? []; $old = $_SESSION['mail_old'] ?? null; unset($_SESSION['mail_errs'], $_SESSION['mail_old']);
     if (post()) {
         limit_for("mailcfg:{$u['id']}", 20, 3600);

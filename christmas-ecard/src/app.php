@@ -622,7 +622,7 @@ function r_account_delete(): void {
         limit('acctdel', 5, 3600);
         if (!password_verify((string)($_POST['password'] ?? ''), $u['pass'])) { flash('That password is not right, so nothing was deleted.', 'err'); redirect('/account/delete'); }
         if ($c['pending']) { flash('You have a payment waiting. Resolve it from My cards first.', 'warn'); redirect('/account/delete'); }
-        if ($u['is_admin']) { flash('Ask a restricted administrator to remove your admin roles first.', 'warn'); redirect('/account/delete'); }
+        if ($u['is_admin']) { flash('Ask an owner to remove your administrator access first.', 'warn'); redirect('/account/delete'); }
         if (empty($_POST['confirmed'])) { flash('Please tick the box to confirm.', 'err'); redirect('/account/delete'); }
         db()->beginTransaction();
         q("update recipients set status='cancelled', error='Account closed' where send_id in ($in) and status='queued'");   // unclaimed only

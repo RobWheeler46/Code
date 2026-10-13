@@ -59,6 +59,8 @@ function db(): PDO {
         if (!in_array(explode(' ', $def)[0], array_column($p->query("pragma table_info($t)")->fetchAll(), 'name'))) $p->exec("alter table $t add column $def");
     }
     $p->exec('create index if not exists rcpt_token_hash on recipients(token_hash)');
+    $p->exec("update users set roles=case when (',' || roles || ',') like '%,rolesadmin,%' or (',' || roles || ',') like '%,owner,%' then 'owner' else 'admin' end where is_admin=1 and roles<>'' and roles not in ('admin','owner')");
+    $p->exec("update admin_invites set roles=case when (',' || roles || ',') like '%,rolesadmin,%' or (',' || roles || ',') like '%,owner,%' then 'owner' else 'admin' end where roles not in ('admin','owner')");
     foreach (['verify_token', 'reset_token'] as $col) $p->exec("update users set $col=sha256($col) where $col is not null and $col<>'' and length($col)<>64");
     $p->exec("update recipients set token_hash=sha256(token) where token_hash is null and token is not null and token not like 'gone-%'");
     $p->exec("update recipients set token=null where token_hash is not null and status in ('sent','failed','bounced')");
@@ -135,8 +137,15 @@ function need_login(): array {
     if (!$u) { flash('Please sign in or register to continue.', 'warn'); redirect('/login?next=' . urlencode($_SERVER['REQUEST_URI'])); }
     return $u;
 }
-const ROLES = ['campaign' => 'Card manager', 'appadmin' => 'Application administrator', 'finance' => 'Finance administrator', 'delivery' => 'Delivery support', 'complaints' => 'Complaints reviewer', 'rolesadmin' => 'Restricted administrator'];
-function can(string $role): bool { return in_array($role, explode(',', (string)(user()['roles'] ?? ''))); }
+// Two levels. An owner manages administrators, the email login, Gift Aid donor details and earlier settings; an administrator does everything else.
+const ROLES = ['admin' => 'Administrator', 'owner' => 'Owner'];
+/** Does this list of roles allow this level? 'owner' (and the older name 'rolesadmin') needs an owner. Any other name in the code means any administrator, so the older names (campaign, appadmin, finance, delivery, complaints) still work as aliases. */
+function role_ok(string $roles, string $role): bool {
+    $have = array_filter(explode(',', $roles)); $owner = (bool)array_intersect($have, ['owner', 'rolesadmin']);
+    if ($role === 'owner' || $role === 'rolesadmin') return $owner;
+    return $owner || (bool)array_intersect($have, ['admin', 'campaign', 'appadmin', 'finance', 'delivery', 'complaints']);
+}
+function can(string $role): bool { return role_ok((string)(user()['roles'] ?? ''), $role); }
 function need_role(string $role): array { $u = need_admin(); if (!can($role)) fail(403, 'You do not have permission for that.'); return $u; }
 function need_admin(): array {
     $u = need_login();

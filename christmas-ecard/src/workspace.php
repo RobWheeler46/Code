@@ -18,7 +18,7 @@ function workspace_manifest(): array {
             ['Senders', '/admin/senders', 'Suspend or reinstate a sender', fn() => can_any('complaints', 'rolesadmin')]],
         'Fundraising' => [
             ['Donations and payments', '/admin/finance', 'Reconcile payments, refunds and exports', fn() => can('finance')],
-            ['Gift Aid', '/admin/giftaid', 'Declarations and the claim schedule', fn() => can('finance')],
+            ['Gift Aid', '/admin/giftaid', 'Declarations and the claim schedule (owners only)', fn() => can('owner')],
             ['Measures', '/admin/measures', 'Counts and progress, with small numbers hidden', fn() => can_any('campaign', 'finance', 'appadmin', 'rolesadmin')]],
         'Administration' => [['Platform controls', '/admin/platform', 'Settings, email, access, health and history', fn() => ops_admin()]],
     ];
@@ -27,11 +27,11 @@ function workspace_manifest(): array {
 function platform_manifest(): array {
     return [
         ['Application settings', '/admin/app', 'Limits, alerts and message rules', fn() => can_any('appadmin', 'campaign', 'delivery', 'rolesadmin')],
-        ['Email delivery', '/admin/mail', 'How email is sent, logins and a test email', fn() => can_any('appadmin', 'rolesadmin')],
+        ['Email delivery', '/admin/mail', 'How email is sent, logins and a test email (owners only)', fn() => can('owner')],
         ['Email and help wording', '/admin/wording', 'Subject, opening line, button and Help questions', fn() => can_any('appadmin', 'rolesadmin')],
         ['Email preview and test', '/admin/email', 'See the card email and send yourself one', fn() => can_any('appadmin', 'rolesadmin')],
         ['Privacy and retention', '/admin/privacy', 'How long cards and details are kept', fn() => can_any('rolesadmin', 'campaign', 'appadmin', 'finance', 'delivery')],
-        ['Administrator access', '/admin/access', 'Invite administrators and give roles', fn() => can('rolesadmin')],
+        ['Administrator access', '/admin/access', 'Invite administrators and choose owners (owners only)', fn() => can('owner')],
         ['Rehearsal', '/admin/rehearsal', 'Test cards to an allow list', fn() => can_any('appadmin', 'rolesadmin')],
         ['System health', '/admin/health', 'Email, payments, backups and scheduled jobs', fn() => ops_admin()],
         ['Change history', '/admin/audit', 'Who changed what, with export', fn() => ops_admin()],

@@ -128,7 +128,7 @@ function r_admin_config(string $area): void {
         }
         $reason = trim((string)($_POST['reason'] ?? '')); $ref = trim((string)($_POST['approval'] ?? ''));
         $diff = []; foreach ($spec['fields'] as $k => $f) if ($prop[$k] !== cfg_current($k, $f)) $diff[$k] = [cfg_current($k, $f), $prop[$k]];
-        $restoreOf = 0; if (!empty($_POST['restore_of'])) { // only a restricted administrator can restore, and only from a real earlier change to this same settings page
+        $restoreOf = 0; if (!empty($_POST['restore_of'])) { // only an owner can restore, and only from a real earlier change to this same settings page
             if (!can('rolesadmin') || !one('select 1 x from audit where id=? and action=?', [(int)$_POST['restore_of'], "config_$area"])) { flash('That restore is not allowed.', 'err'); redirect($path); }
             $restoreOf = (int)$_POST['restore_of'];
         }
@@ -263,8 +263,8 @@ function r_admin_action(): void {
             $e = strtolower(field('email')); $t = one('select * from users where email=?', [$e]);
             if (!$t) { flash('No registered user with that email.', 'err'); redirect('/admin/access'); }
             $new = array_values(array_intersect(array_keys(ROLES), (array)($_POST['roles'] ?? [])));
-            $others = (int)one("select count(*) c from users where id<>? and is_admin=1 and (',' || roles || ',') like '%,rolesadmin,%'", [$t['id']])['c'];
-            if (!in_array('rolesadmin', $new) && !$others && in_array('rolesadmin', explode(',', $t['roles']))) { flash('There must always be at least one restricted administrator.', 'err'); redirect('/admin/access'); }
+            $others = (int)one("select count(*) c from users where id<>? and is_admin=1 and ((',' || roles || ',') like '%,owner,%' or (',' || roles || ',') like '%,rolesadmin,%')", [$t['id']])['c'];
+            if (!role_ok(implode(',', $new), 'owner') && !$others && role_ok((string)$t['roles'], 'owner')) { flash('There must always be at least one owner.', 'err'); redirect('/admin/access'); }
             q('update users set roles=?, is_admin=? where id=?', [implode(',', $new), $new ? 1 : 0, $t['id']]);
             audit($uid, 'role_change', "$e: [{$t['roles']}] -> [" . implode(',', $new) . ']'); break;
     }
@@ -285,11 +285,11 @@ function r_admin(): void {
     $alerts = health_alerts();
     $b .= '<section class="statuscard"><h2>Alerts</h2><p>' . ($alerts ? '<strong>' . count($alerts) . ' need attention</strong>' : 'None found') . '</p><a href="/admin/health">System health</a></section></div>';
     if ($alerts) { // UX24-07: each exception names where to act; people without that role see who owns it, never the private detail
-        $go = ['cron' => ['/admin/health', 'appadmin,rolesadmin', 'Application administrator'], 'backup' => ['/admin/health', 'appadmin,rolesadmin', 'Application administrator'], 'offsite' => ['/admin/health', 'appadmin,rolesadmin', 'Application administrator'], 'restore' => ['/admin/health', 'appadmin,rolesadmin', 'Application administrator'],
-            'queue' => ['/admin/delivery', 'delivery,appadmin,rolesadmin', 'Delivery support'], 'failed' => ['/admin/delivery', 'delivery,appadmin,rolesadmin', 'Delivery support'], 'pay15' => ['/admin/finance', 'finance', 'Finance administrator'], 'pay24' => ['/admin/finance', 'finance', 'Finance administrator'], 'payexc' => ['/admin/finance', 'finance', 'Finance administrator'],
-            'complaint' => ['/admin/reports', 'complaints', 'Complaints reviewer'], 'abuse' => ['/admin/senders', 'complaints,rolesadmin', 'Complaints reviewer'], 'access' => ['/admin/access', 'rolesadmin', 'Restricted administrator']];
+        $go = ['cron' => ['/admin/health', 'appadmin,rolesadmin', 'Administrator'], 'backup' => ['/admin/health', 'appadmin,rolesadmin', 'Administrator'], 'offsite' => ['/admin/health', 'appadmin,rolesadmin', 'Administrator'], 'restore' => ['/admin/health', 'appadmin,rolesadmin', 'Administrator'],
+            'queue' => ['/admin/delivery', 'delivery,appadmin,rolesadmin', 'Administrator'], 'failed' => ['/admin/delivery', 'delivery,appadmin,rolesadmin', 'Administrator'], 'pay15' => ['/admin/finance', 'finance', 'Administrator'], 'pay24' => ['/admin/finance', 'finance', 'Administrator'], 'payexc' => ['/admin/finance', 'finance', 'Administrator'],
+            'complaint' => ['/admin/reports', 'complaints', 'Administrator'], 'abuse' => ['/admin/senders', 'complaints,rolesadmin', 'Administrator'], 'access' => ['/admin/access', 'rolesadmin', 'Owner']];
         $b .= '<h2>Needs attention first</h2><ul class="tasks">';
-        foreach ($alerts as $k => $a) { [$href, $roles, $owner] = $go[$k] ?? ['/admin/health', '', 'Application administrator']; $mine = $roles === '' || can_any(...explode(',', $roles));
+        foreach ($alerts as $k => $a) { [$href, $roles, $owner] = $go[$k] ?? ['/admin/health', '', 'Administrator']; $mine = $roles === '' || can_any(...explode(',', $roles));
             $b .= '<li>' . h($a) . ' ' . ($mine ? '<a class="btn alt" href="' . $href . '">Open</a>' : '<span class="note">Owner: ' . h($owner) . '</span>') . '</li>'; }
         $b .= '</ul>';
     } else $b .= '<p class="note">Nothing needs attention right now.</p>';
@@ -310,7 +310,7 @@ function r_admin_delivery(): void {
     $c = admin_pause_counts(); $hb = (int)setting('last_queue'); $paused = setting('paused') === '1';
     $b = '<h1>Delivery</h1><p>Queued: ' . $c['queued'] . '. Being sent: ' . $c['claimed'] . '. Last scheduled run: ' . ($hb ? when($hb) . (time() - $hb > 900 ? ' <strong>(stale: check cron)</strong>' : '') : '<strong>Unknown</strong> (never run)') . '. Dispatch is <strong>' . ($paused ? 'paused' : 'running') . '</strong>.</p>';
     if (can_any('appadmin', 'rolesadmin')) $b .= '<form method="post" action="/admin/action" class="inline">' . csrf() . '<input type="hidden" name="do" value="pause"><input type="hidden" name="back" value="/admin/delivery"><button class="btn alt">' . ($paused ? 'Resume dispatch' : 'Pause dispatch') . '</button></form>';
-    else $b .= '<p class="note">Only application and restricted administrators can pause or resume dispatch.</p>';
+    else $b .= '<p class="note">Only administrators can pause or resume dispatch.</p>';
     $b .= '<h2>Needs attention</h2><table class="stacked"><tr><th>Recipient</th><th>Status</th><th>Detail</th><th></th></tr>';
     foreach (all("select * from recipients where status in ('failed','bounced','sending') or (status='sent' and delivered_at is null and sent_at<?) order by id desc limit 50", [time() - 172800]) as $r)
         $b .= '<tr><td>' . h($r['email']) . '</td><td>' . rstatus($r) . '</td><td>' . h($r['error']) . '</td><td>' . adminbtn('resend', (int)$r['id'], 'Resend with a fresh link') . '</td></tr>';
@@ -348,12 +348,12 @@ function r_admin_reports(): void {
 // ---------- S37 access
 function r_admin_access(): void {
     need_role('rolesadmin');
-    $b = '<h1>Administrator access</h1><p class="note">Only restricted administrators can change this. Every change is audited and takes effect on the person\'s next request. Roles do not grant access to private address books or donor records unless listed.</p>';
+    $b = '<h1>Administrator access</h1><p class="note">Only an owner can change this. Every change is audited and takes effect on the person\'s next request. Roles do not grant access to private address books or donor records unless listed.</p>';
     $rv = (int)setting('access_review_at'); $b .= '<section class="admincard"><h2>Access review</h2><p>Last reviewed: <strong>' . ($rv ? when($rv) : 'never') . '</strong>. Review who has access at least every 90 days (placeholder until the Trustees set it).</p><table class="stacked"><tr><th>Administrator</th><th>Roles</th><th>Last signed in</th><th>Two-step</th></tr>';
     foreach (all('select * from users where is_admin=1 order by name') as $x) $b .= '<tr><td>' . h($x['name']) . ' ' . h($x['email']) . '</td><td>' . h(role_names($x['roles'])) . '</td><td>' . ($x['last_login'] ? when((int)$x['last_login']) : 'Unknown') . '</td><td>' . ($x['totp_secret'] ? 'Set up' : '<strong>Not set up</strong>') . '</td></tr>';
     $b .= '</table><form method="post" action="/admin/action" class="inline">' . csrf() . '<input type="hidden" name="do" value="access_review"><input type="hidden" name="back" value="/admin/access"><button class="btn alt">Record that I reviewed this list</button></form></section>';
     $b .= invites_panel();
-    $b .= '<h2>Roles for people who already have an account</h2>';
+    $b .= '<h2>Access for people who already have an account</h2><p class="note">An administrator can do everything day to day. An owner can also invite people, change this list, set up email sending and see Gift Aid donor details. Keep owners to one or two people.</p>';
     $rows = all("select * from users where is_admin=1 or roles<>'' order by name"); $rows[] = ['email' => '', 'roles' => '', 'name' => 'Give roles to a registered user by email', 'totp_secret' => null, 'verified' => 1];
     foreach ($rows as $x) {
         $have = explode(',', $x['roles']);
