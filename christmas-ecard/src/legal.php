@@ -17,7 +17,7 @@ function r_privacy(): void {
 <li><strong>Stop requests:</strong> if someone asks not to get cards, we keep their email address so we do not send them any. We never use it for marketing.</li>
 <li><strong>Records of what happened:</strong> a log of important actions, for security and to resolve problems.</li>
 <li><strong>Gift Aid (only if you tick the box):</strong> your name, home address and declaration, so the Group can claim Gift Aid from HMRC. Kept apart from your cards, seen only by finance volunteers, and kept for as long as the rules for claims require (the Treasurer will confirm the period).</li>
-<li><strong>Yearly reminder (only if you tick the box):</strong> we email you once a year when the service reopens. You can stop it in one click from that email or in My cards. We send no other marketing.</li>
+<li><strong>Yearly reminder (only if you tick the box):</strong> we email you once a year to remind you that Christmas cards can be sent. You can stop it in one click from that email or in My cards. We send no other marketing.</li>
 </ul>
 <h2>Who sees it</h2>
 <p>We use an email provider to send cards and a payment provider to take donations. Group volunteers with the right role can see what they need to run the service. The people you send cards to see your message and your display name, never your account email.</p>

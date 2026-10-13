@@ -36,6 +36,16 @@ function abuse_check(string $text): ?string {
     return null;
 }
 
+/** Greeting examples for the compose page, by occasion. */
+function starters(array $s): array {
+    return match (occasion_of($s)[0]) {
+        'christmas' => STARTERS,
+        'birthday' => ['Happy birthday! Hope your day is full of fun and cake.', 'Wishing you a wonderful birthday and a brilliant year ahead.', 'Happy birthday from all of us. Have an adventure of a day!'],
+        'thank-you' => ['Thank you so much. It really meant a lot.', 'Just a note to say a big thank you for everything you did.', 'Thank you for being such a good friend.'],
+        'celebration' => ['Congratulations! We are so pleased for you.', 'Well done, and many congratulations on your news.', 'Wishing you every happiness. Time to celebrate!'],
+        default => ['Thinking of you and sending lots of love.', 'Hope you are well and having a lovely time.', 'Sending you warm wishes.'],
+    };
+}
 const STARTERS = [
     'Wishing you a very merry Christmas and a happy, healthy New Year.',
     'Merry Christmas! Thinking of you and sending lots of love this festive season.',
@@ -78,12 +88,12 @@ function schedule_presets(): array {
 function schedule_parse(array $in): int|false {
     $w = (string)($in['when'] ?? 'now'); if ($w === 'now') return 0;
     if ($w === 'custom') { $v = trim((string)($in['when_custom'] ?? '')); $ts = preg_match('/^\d{4}-\d\d-\d\dT\d\d:\d\d$/', $v) ? strtotime($v) : false; }
-    else $ts = schedule_presets()[$w][1] ?? false;
+    else $ts = schedule_presets()[$w][1] ?? false; // Christmas times are only offered on the screen for Christmas cards; the times themselves are harmless for any card
     return ($ts && $ts >= time() + SCHEDULE_MIN && $ts <= time() + SCHEDULE_MAX) ? (int)$ts : false;
 }
-function schedule_picker(): string {
+function schedule_picker(array $s): string {
     $b = '<fieldset class="sendopts"><legend>When should the cards arrive?</legend><label class="optcard"><input type="radio" name="when" value="now" checked> <strong>As soon as possible</strong><span>They are sent straight away.</span></label>';
-    foreach (schedule_presets() as $k => [$l, $ts]) $b .= '<label class="optcard"><input type="radio" name="when" value="' . h($k) . '"> <strong>' . h($l) . '</strong><span>' . h(date('l j F', $ts)) . '. You can cancel until then.</span></label>';
+    foreach (occasion_of($s)[0] === 'christmas' ? schedule_presets() : [] as $k => [$l, $ts]) $b .= '<label class="optcard"><input type="radio" name="when" value="' . h($k) . '"> <strong>' . h($l) . '</strong><span>' . h(date('l j F', $ts)) . '. You can cancel until then.</span></label>';
     $b .= '<label class="optcard"><input type="radio" name="when" value="custom"> <strong>Choose a date and time</strong><span>At least an hour from now, and within 90 days.</span><input type="datetime-local" name="when_custom" min="' . date('Y-m-d\TH:i', time() + SCHEDULE_MIN) . '" max="' . date('Y-m-d\TH:i', time() + SCHEDULE_MAX) . '" aria-label="Date and time"></label>'
         . '<p class="note">Scheduled cards are held until then, so the recipients\' email addresses are kept until they are sent. Sending closes for new cards on the campaign closing date, but a card already scheduled normally still goes.</p></fieldset>';
     return $b;
@@ -150,23 +160,23 @@ function confirm_payment(int $sid, string $cs, int $amt, string $acct = '', stri
     if ($new) {
         $u = one('select * from users where id=?', [$s['user_id']]);
         mail_send($u['email'], 'Your donation receipt: 7th Swindon Scouts',
-            "Hello {$u['name']},\n\nThank you. We have received your donation of " . gbp($amt) . " to 7th Swindon Scouts.\nReference: $cs\n\n" . $gaLine . ($go ? 'Your Christmas cards are being sent.' : 'Your cards had already been queued; this donation did not trigger a second send.') . "\n\n7th Swindon Scouts");
+            "Hello {$u['name']},\n\nThank you. We have received your donation of " . gbp($amt) . " to 7th Swindon Scouts.\nReference: $cs\n\n" . $gaLine . ($go ? 'Your cards are being sent.' : 'Your cards had already been queued; this donation did not trigger a second send.') . "\n\n7th Swindon Scouts");
     }
     if ($go) process_queue();
     return true;
 }
 
 /** Wording an administrator can change. Only the sender name is ever merged in, and each place escapes it for where it goes. */
-function tpl_text(string $tpl, array $s): string { return str_replace('{sender}', (string)$s['sender_name'], $tpl); }
-function tpl_html(string $tpl, array $s): string { return str_replace(htmlspecialchars('{sender}', ENT_QUOTES), '<strong>' . htmlspecialchars((string)$s['sender_name'], ENT_QUOTES) . '</strong>', htmlspecialchars($tpl, ENT_QUOTES)); }
-function email_subject(array $s): string { return trim(preg_replace('/[\r\n]+/', ' ', tpl_text(setting('email_subject') ?: '{sender} sent you a Christmas card', $s))); }
-function email_intro(): string { return setting('email_intro') ?: '{sender} has sent you a Christmas card.'; }
+function tpl_text(string $tpl, array $s): string { return str_replace(['{sender}', '{card}'], [(string)$s['sender_name'], card_word($s)], $tpl); }
+function tpl_html(string $tpl, array $s): string { return str_replace(['{sender}', '{card}'], ['<strong>' . htmlspecialchars((string)$s['sender_name'], ENT_QUOTES) . '</strong>', htmlspecialchars(card_word($s), ENT_QUOTES)], htmlspecialchars($tpl, ENT_QUOTES)); }
+function email_subject(array $s): string { return trim(preg_replace('/[\r\n]+/', ' ', tpl_text(setting('email_subject') ?: '{sender} sent you a {card}', $s))); }
+function email_intro(): string { return setting('email_intro') ?: '{sender} has sent you a {card}.'; }
 function email_button(): string { return setting('email_button') ?: 'Open your card'; }
 
 function email_html(array $r, array $s): string {
     $e = fn($x) => htmlspecialchars((string)$x, ENT_QUOTES);
     $btn = 'display:inline-block;background:#f5b800;color:#041f3d;font-weight:bold;text-decoration:none;padding:12px 24px;border-radius:24px';
-    return '<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#1c1230"><div style="background:#024593;color:#fff;padding:12px 20px;border-bottom:4px solid #f5b800"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td><img src="' . $e(base_url() . '/assets/brand/7th-swindon-circle-blue.png') . '" alt="7th Swindon Scouts" width="56" height="56" style="display:block;border-radius:28px"></td><td style="padding-left:14px;color:#ffffff;font-size:18px;font-weight:bold">Christmas Cards</td></tr></table></div><div style="padding:20px">'
+    return '<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#1c1230"><div style="background:#024593;color:#fff;padding:12px 20px;border-bottom:4px solid #f5b800"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td><img src="' . $e(base_url() . '/assets/brand/7th-swindon-circle-blue.png') . '" alt="7th Swindon Scouts" width="56" height="56" style="display:block;border-radius:28px"></td><td style="padding-left:14px;color:#ffffff;font-size:18px;font-weight:bold">eCards</td></tr></table></div><div style="padding:20px">'
         . '<p>Dear ' . $e($r['name']) . ',</p><p>' . tpl_html(email_intro(), $s) . '</p>'
         . '<p><a href="' . $e(card_link($r)) . '" style="' . $btn . '">' . $e(email_button()) . '</a></p><p style="font-size:13px;color:#5c6470">Button not working? Copy this link: ' . $e(card_link($r)) . '<br>This private link works for ' . expiry_days() . ' days.</p>'
         . '<p style="font-size:13px;color:#5c6470"><a href="' . $e(base_url() . '/optout/' . $r['token']) . '">Stop cards from this sender or from the service</a> &middot; <a href="' . $e(base_url() . '/privacy') . '">Why did I get this? Privacy notice</a></p></div></div>';
@@ -238,7 +248,7 @@ function send_digests(): int {
     foreach (all("select * from users where notify='summary'") as $u) {
         $lines = [];
         foreach (all('select r.* from recipients r join sends s on s.id=r.send_id where s.user_id=? and (r.sent_at>? or r.viewed_at>?)', [$u['id'], time() - 86400, time() - 86400]) as $r) $lines[] = "{$r['name']}: " . rstatus($r);
-        if ($lines) { mail_send($u['email'], 'Your Christmas card summary', "In the last day:\n" . implode("\n", $lines) . "\n\nSee details or change these emails: " . base_url() . "/dashboard\n"); $n++; }
+        if ($lines) { mail_send($u['email'], 'Your eCards summary', "In the last day:\n" . implode("\n", $lines) . "\n\nSee details or change these emails: " . base_url() . "/dashboard\n"); $n++; }
     }
     return $n;
 }

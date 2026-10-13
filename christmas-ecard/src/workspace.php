@@ -80,7 +80,7 @@ function r_admin_platform(): void {
 /** The overview's opening panel: the first task this person can do is the one big button. */
 function workspace_hero(): string {
     $first = null; foreach (workspace_nav() as $items) foreach ($items as $i) if ($i[1] !== '/admin') { $first = $i; break 2; }
-    return '<section class="wshero"><p class="eyebrow">Your workspace</p><h1>Everything for your Christmas eCards, in one place</h1><p>Start with the task that needs attention. Only the tools your roles allow are shown.</p>' . ($first ? '<a class="btn big" href="' . h($first[1]) . '">' . h($first[0]) . ' &rarr;</a>' : '') . '</section>';
+    return '<section class="wshero"><p class="eyebrow">Your workspace</p><h1>Everything for your eCards, in one place</h1><p>Start with the task that needs attention. Only the tools your roles allow are shown.</p>' . ($first ? '<a class="btn big" href="' . h($first[1]) . '">' . h($first[0]) . ' &rarr;</a>' : '') . '</section>';
 }
 
 /** "What would you like to do?": a big link for every destination this person may use. */

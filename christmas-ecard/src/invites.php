@@ -21,7 +21,7 @@ function invite_create(string $email, array $roles, int $uid, bool $resendOf = f
     q('update admin_invites set revoked_at=? where lower(email)=? and accepted_at is null and revoked_at is null', [time(), $email]); // one live invitation per address
     $t = token(); q('insert into admin_invites(email,roles,token_hash,invited_by,created,expires) values(?,?,?,?,?,?)', [$email, implode(',', $roles), hash('sha256', $t), $uid, time(), time() + INVITE_DAYS * 86400]);
     $id = (int)db()->lastInsertId();
-    mail_send($email, 'You are invited to help run the Christmas cards service', $by['name'] . " has invited you to help administer 7th Swindon Scouts Christmas Cards, with these roles: " . implode(', ', array_map(fn($r) => ROLES[$r], $roles)) . ".\n\nOpen this link and sign in (or register first) with this email address:\n" . base_url() . "/invite?t=$t\n\nIt works once and for " . INVITE_DAYS . " days. The first time you open Admin you will be asked to set up two step sign in. If you were not expecting this, ignore this email and nothing will happen.");
+    mail_send($email, 'You are invited to help run the eCards service', $by['name'] . " has invited you to help administer 7th Swindon Scouts eCards, with these roles: " . implode(', ', array_map(fn($r) => ROLES[$r], $roles)) . ".\n\nOpen this link and sign in (or register first) with this email address:\n" . base_url() . "/invite?t=$t\n\nIt works once and for " . INVITE_DAYS . " days. The first time you open Admin you will be asked to set up two step sign in. If you were not expecting this, ignore this email and nothing will happen.");
     audit($uid, $resendOf ? 'admin_invite_resent' : 'admin_invite_created', "invite $id: " . implode(',', $roles));
     return ['ok' => true, 'id' => $id];
 }

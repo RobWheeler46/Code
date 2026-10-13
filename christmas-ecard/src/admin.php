@@ -38,8 +38,8 @@ function config_spec(string $area): array {
             'alert_escalate_minutes' => ['Escalate unacknowledged alerts after (minutes)', 'int', 'min' => 5, 'max' => 1440, 'def' => '60'],
             'allow_urls' => ['Allow web addresses in messages (never clickable)', 'bool', 'def' => '0']]],
         'wording' => ['view' => ['appadmin', 'rolesadmin'], 'edit' => ['appadmin', 'rolesadmin'], 'title' => 'Email and help wording', 'when' => 'Used by new emails and the Help page straight away. Emails already sent are not changed. The private link, the stop and report routes and the privacy link always stay in every email.', 'fields' => [
-            'email_subject' => ['Subject of the card email ({sender} is the sender name)', 'tpl', 'max' => 100, 'allow' => ['{sender}'], 'need' => '{sender}', 'def' => '{sender} sent you a Christmas card'],
-            'email_intro' => ['Opening line of the card email ({sender} is the sender name)', 'tpl', 'max' => 160, 'allow' => ['{sender}'], 'need' => '{sender}', 'def' => '{sender} has sent you a Christmas card.'],
+            'email_subject' => ['Subject of the card email ({sender} is the sender name, {card} is for example "Christmas card")', 'tpl', 'max' => 100, 'allow' => ['{sender}', '{card}'], 'need' => '{sender}', 'def' => '{sender} sent you a {card}'],
+            'email_intro' => ['Opening line of the card email ({sender} is the sender name, {card} is for example "Christmas card")', 'tpl', 'max' => 160, 'allow' => ['{sender}', '{card}'], 'need' => '{sender}', 'def' => '{sender} has sent you a {card}.'],
             'email_button' => ['Words on the button in the email', 'tpl', 'max' => 30, 'allow' => [], 'def' => 'Open your card'],
             'support_email' => ['Support email address shown on the Help page and in emails (blank uses the server setting)', 'email1', 'def' => ''],
             'help_extra' => ['Extra questions for the Help page. Put the question on the first line and the answer under it, with a blank line between questions (up to 10)', 'faq', 'def' => '']]],
@@ -437,7 +437,7 @@ function r_admin_audit(): void {
 function r_admin_campaign_qr(): void {
     need_admin(); if (!can_any('campaign', 'appadmin', 'finance', 'delivery', 'rolesadmin')) fail(403, 'You do not have permission for that.');
     $ref = preg_match('/^[a-z0-9-]{1,30}$/', (string)($_GET['ref'] ?? '')) ? '?ref=' . $_GET['ref'] : '';
-    header('Content-Type: image/svg+xml'); header('Content-Disposition: attachment; filename="7th-swindon-christmas-cards-qr.svg"'); header('X-Content-Type-Options: nosniff');
+    header('Content-Type: image/svg+xml'); header('Content-Disposition: attachment; filename="7th-swindon-ecards-qr.svg"'); header('X-Content-Type-Options: nosniff');
     echo qr_svg(base_url() . '/' . $ref, 1000); exit;
 }
 

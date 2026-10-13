@@ -16,7 +16,7 @@ foreach (['pegs', 'chaos'] as $i => $id) {
 }
 // logo and words on the left
 $logo = imagecreatefrompng("$root/public/assets/brand/7th-swindon-circle-blue.png"); imagecopyresampled($im, $logo, 48, 48, 0, 0, 96, 96, imagesx($logo), imagesy($logo));
-imagettftext($im, 22, 0, 160, 92, $white, $font, '7th Swindon Scouts'); imagettftext($im, 16, 0, 160, 124, $pale, $font, 'Christmas eCards');
-$lines = ['Send a little', 'Christmas cheer,', 'Scout style']; foreach ($lines as $i => $l) imagettftext($im, 44, 0, 48, 270 + $i * 66, $i === 2 ? $yellow : $white, $font, $l);
+imagettftext($im, 22, 0, 160, 92, $white, $font, '7th Swindon Scouts'); imagettftext($im, 16, 0, 160, 124, $pale, $font, 'eCards');
+$lines = ['Send a card,', 'Scout style']; foreach ($lines as $i => $l) imagettftext($im, 44, 0, 48, 300 + $i * 70, $i === 1 ? $yellow : $white, $font, $l);
 imagettftext($im, 20, 0, 48, 520, $pale, $font, 'Free to send, private to open.');
 imagejpeg($im, "$root/public/assets/share.jpg", 86); echo filesize("$root/public/assets/share.jpg") . " bytes\n";

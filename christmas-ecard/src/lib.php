@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 const ROOT = __DIR__ . '/..';
+const SITE_NAME = '7th Swindon Scouts eCards'; // the one place the service's name is written; pages, titles, emails and the share preview use it
 /** The build stamp written by scripts/build-dist.sh, so you can tell which version is deployed. */
 function app_version(): string { $f = ROOT . '/VERSION'; return is_file($f) ? trim((string)file_get_contents($f)) : 'development'; }
 date_default_timezone_set('Europe/London'); // campaign dates and displayed times are UK local
@@ -79,9 +80,9 @@ function base_url(): string { return rtrim(env('APP_URL', 'http://localhost:8060
 function app_env(): string { return env('APP_ENV', 'production'); }
 /** The picture and words shown when the site link is shared (WhatsApp, Facebook and so on). The same for every page, so a private card link reveals nothing. */
 function share_tags(): string {
-    $t = 'Send a little Christmas cheer, Scout style'; $d = 'Free Christmas eCards from 7th Swindon Scouts. Pick a design, write a message and send a private card to friends and family.'; $i = base_url() . '/assets/share.jpg';
-    return '<meta name="description" content="' . h($d) . '"><meta property="og:type" content="website"><meta property="og:site_name" content="7th Swindon Scouts Christmas eCards"><meta property="og:title" content="' . h($t) . '"><meta property="og:description" content="' . h($d) . '">'
-        . '<meta property="og:image" content="' . h($i) . '"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Two Scout themed Christmas cards beside the words Send a little Christmas cheer, Scout style"><meta name="twitter:card" content="summary_large_image">';
+    $t = 'Send a card, Scout style'; $d = 'Free eCards from 7th Swindon Scouts. Pick a design, write a message and send a private card to friends and family.'; $i = base_url() . '/assets/share.jpg';
+    return '<meta name="description" content="' . h($d) . '"><meta property="og:type" content="website"><meta property="og:site_name" content="' . h(SITE_NAME) . '"><meta property="og:title" content="' . h($t) . '"><meta property="og:description" content="' . h($d) . '">'
+        . '<meta property="og:image" content="' . h($i) . '"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Two Scout themed cards beside the words Send a card, Scout style"><meta name="twitter:card" content="summary_large_image">';
 }
 function token(): string { return bin2hex(random_bytes(24)); }
 
@@ -222,10 +223,10 @@ function page(string $title, string $body, int $code = 200): never {
             . '<form method="post" action="/logout" class="inline">' . csrf() . '<button class="link">Sign out</button></form>';
     } else $nav .= '<a href="/login">Sign in</a><a href="/register">Register</a>';
     echo '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">'
-        . '<title>' . h($title) . ' | 7th Swindon Scouts Christmas Cards</title>'
+        . '<title>' . h($title) . ' | ' . h(SITE_NAME) . '</title>'
         . share_tags()
         . '<link rel="stylesheet" href="/assets/style.css"></head><body><a class="skip" href="#main">Skip to content</a>'
-        . (app_env() !== 'production' ? '<p class="envbanner" role="note">' . h(strtoupper(app_env())) . ' environment. Test mode: nothing here is real. Do not enter real details.</p>' : '') . '<header><a class="brand" href="/"><img src="/assets/brand/7th-swindon-circle-blue.png" alt="7th Swindon Scouts" width="64" height="64"><span>Christmas Cards</span></a><nav aria-label="Main">' . $nav . '</nav></header>'
+        . (app_env() !== 'production' ? '<p class="envbanner" role="note">' . h(strtoupper(app_env())) . ' environment. Test mode: nothing here is real. Do not enter real details.</p>' : '') . '<header><a class="brand" href="/"><img src="/assets/brand/7th-swindon-circle-blue.png" alt="7th Swindon Scouts" width="64" height="64"><span>eCards</span></a><nav aria-label="Main">' . $nav . '</nav></header>'
         . '<main id="main">' . ($f ? '<p class="flash ' . h($f[0]) . '" role="' . ($f[0] === 'err' ? 'alert" tabindex="-1" data-focus' : 'status"') . '>' . h($f[1]) . '</p>' : '') . $body . '</main>'
         . '<footer><img class="footlogo" src="/assets/brand/7th-swindon-circle-blue.png" alt="7th Swindon Scouts" width="56" height="56"><a href="/privacy">Privacy and cookies</a> &middot; <a href="/terms">Terms and safeguarding</a> &middot; <a href="/help">Help and FAQ</a><br>Sending is free' . (donations_enabled() ? '; donations are optional and support 7th Swindon Scouts' : '') . '. Cards stay viewable for ' . (int)setting('expiry_days', '60') . ' days after sending.<br><small class="ver">Version ' . h(app_version()) . '</small></footer><script src="/assets/app.js"></script></body></html>';
     exit;

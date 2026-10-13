@@ -19,8 +19,8 @@ function r_account(): void {
             elseif (!filter_var($e, FILTER_VALIDATE_EMAIL) || $e === $u['email'] || one('select 1 from users where email=? and id<>?', [$e, $uid])) flash('That email cannot be used. Check it and try again.', 'err');
             else {
                 $t = token(); q('update users set pending_email=?, pending_token=?, pending_exp=? where id=?', [$e, hash('sha256', $t), time() + 3600, $uid]);
-                mail_send($e, 'Confirm your new email address', "Please confirm this is your new email address for 7th Swindon Scouts Christmas Cards. The link works for one hour and only while you are signed in.\n" . base_url() . "/account/confirm-email?t=$t\n\nIf you did not ask for this, ignore this email and nothing will change.");
-                mail_send($u['email'], 'A change of email address was requested', "Someone asked to change the email address on your 7th Swindon Scouts Christmas Cards account to " . acct_mask($e) . ". Nothing changes until that address is confirmed. If this was not you, change your password now and contact " . support_email() . '.');
+                mail_send($e, 'Confirm your new email address', "Please confirm this is your new email address for 7th Swindon Scouts eCards. The link works for one hour and only while you are signed in.\n" . base_url() . "/account/confirm-email?t=$t\n\nIf you did not ask for this, ignore this email and nothing will change.");
+                mail_send($u['email'], 'A change of email address was requested', "Someone asked to change the email address on your 7th Swindon Scouts eCards account to " . acct_mask($e) . ". Nothing changes until that address is confirmed. If this was not you, change your password now and contact " . support_email() . '.');
                 audit($uid, 'account_email_requested', "user $uid"); flash('We have sent a confirmation link to ' . $e . '. Your email stays the same until you open it.');
             }
         } elseif ($do === 'password') {
@@ -31,7 +31,7 @@ function r_account(): void {
             elseif ($new === $pw) flash('Please choose a password you have not used here before.', 'err');
             else {
                 q('update users set pass=? where id=?', [password_hash($new, PASSWORD_DEFAULT), $uid]); session_regenerate_id(true);
-                mail_send($u['email'], 'Your password was changed', "The password on your 7th Swindon Scouts Christmas Cards account was just changed. If this was not you, reset it now from the sign in page and contact " . support_email() . '.');
+                mail_send($u['email'], 'Your password was changed', "The password on your 7th Swindon Scouts eCards account was just changed. If this was not you, reset it now from the sign in page and contact " . support_email() . '.');
                 audit($uid, 'account_password_changed', "user $uid"); flash('Your password has been changed.');
             }
         }
@@ -60,6 +60,6 @@ function r_account_confirm_email(): void {
     $new = (string)$u['pending_email'];
     if (one('select 1 from users where email=? and id<>?', [$new, $u['id']])) { q("update users set pending_email=null, pending_token=null, pending_exp=0 where id=?", [$u['id']]); flash('That email address has been taken by someone else. Please choose another.', 'err'); redirect('/account'); }
     $old = $u['email']; q("update users set email=?, verified=1, verify_token='', pending_email=null, pending_token=null, pending_exp=0 where id=?", [$new, $u['id']]);
-    mail_send($old, 'Your email address was changed', "The email address on your 7th Swindon Scouts Christmas Cards account was changed to " . acct_mask($new) . ". If this was not you, contact " . support_email() . ' straight away.');
+    mail_send($old, 'Your email address was changed', "The email address on your 7th Swindon Scouts eCards account was changed to " . acct_mask($new) . ". If this was not you, contact " . support_email() . ' straight away.');
     audit((int)$u['id'], 'account_email_changed', 'user ' . (int)$u['id']); flash('Your email address is now ' . $new . '.'); redirect('/account');
 }

@@ -67,13 +67,13 @@ function alerts_tick(?int $now = null): int {
         $row = one('select * from alerts where akey=?', [$k]);
         if (!$row || $row['resolved_at']) {
             q('insert or replace into alerts(akey,text,severity,first_seen,last_notified,escalated) values(?,?,?,?,?,0)', [$k, $text, in_array($k, ['pay24', 'queue', 'cron']) ? 'high' : 'normal', $now, $now]);
-            foreach ($first as $to) { mail_send($to, "[Christmas cards] Alert: $k", "$text\n\nSeen: " . date('j M Y H:i', $now) . "\nAcknowledge it here: " . base_url() . "/admin/health\n"); $sent++; }
+            foreach ($first as $to) { mail_send($to, '[eCards] Alert: ' . $k, "$text\n\nSeen: " . date('j M Y H:i', $now) . "\nAcknowledge it here: " . base_url() . "/admin/health\n"); $sent++; }
             continue;
         }
         q('update alerts set text=? where akey=?', [$text, $k]);
         if (!$row['acked_at'] && !$row['escalated'] && $now - (int)$row['first_seen'] > $after) {
             q('update alerts set escalated=1 where akey=?', [$k]);
-            foreach ($second as $to) { mail_send($to, "[Christmas cards] ESCALATED alert: $k", "Not acknowledged after " . intdiv($after, 60) . " minutes.\n$text\n" . base_url() . "/admin/health\n"); $sent++; }
+            foreach ($second as $to) { mail_send($to, '[eCards] ESCALATED alert: ' . $k, "Not acknowledged after " . intdiv($after, 60) . " minutes.\n$text\n" . base_url() . "/admin/health\n"); $sent++; }
         }
     }
     foreach (all('select akey from alerts where resolved_at is null') as $r) if (!isset($cur[$r['akey']])) q('update alerts set resolved_at=? where akey=?', [$now, $r['akey']]);
@@ -82,7 +82,7 @@ function alerts_tick(?int $now = null): int {
 function alerts_daily(): int {
     if (campaign_state() !== 'open') return 0;
     $cur = health_alerts(); $n = 0;
-    foreach (alert_list('alert_emails') as $to) { mail_send($to, '[Christmas cards] Daily summary', $cur ? "Open alerts:\n- " . implode("\n- ", $cur) . "\n" . base_url() . "/admin/health\n" : "No alerts. Queue and payments look normal.\n"); $n++; }
+    foreach (alert_list('alert_emails') as $to) { mail_send($to, '[eCards] Daily summary', $cur ? "Open alerts:\n- " . implode("\n- ", $cur) . "\n" . base_url() . "/admin/health\n" : "No alerts. Queue and payments look normal.\n"); $n++; }
     return $n;
 }
 
@@ -96,7 +96,7 @@ function remind_link(int $uid): string { return base_url() . "/remind-off?u=$uid
 function send_reminders(?int $year = null): int {
     $year ??= (int)date('Y'); $n = 0;
     foreach (all("select * from users where remind=1 and verified=1 and suspended=0 and (remind_year is null or remind_year<>?) and email not like '%@deleted.invalid'", [$year]) as $u) {
-        if (mail_send($u['email'], 'Christmas cards from 7th Swindon Scouts are back', "Hello {$u['name']},\n\nYou asked us to let you know when our Christmas card service opens again. It is open at " . base_url() . "/. Sending is free, and a donation is optional.\n\nThis is the only email of this kind we send each year. To stop it, one click: " . remind_link((int)$u['id']) . "\n\n7th Swindon Scouts") === null) { q('update users set remind_year=? where id=?', [$year, $u['id']]); $n++; }
+        if (mail_send($u['email'], 'Time to send Christmas cards? From 7th Swindon Scouts', "Hello {$u['name']},\n\nYou asked for a yearly reminder to send Christmas cards. You can send them at " . base_url() . "/. Sending is free.\n\nThis is the only email of this kind we send each year. To stop it, one click: " . remind_link((int)$u['id']) . "\n\n7th Swindon Scouts") === null) { q('update users set remind_year=? where id=?', [$year, $u['id']]); $n++; }
     }
     return $n;
 }

@@ -17,6 +17,10 @@ function campaign_for_send(array $s): array {
 }
 /** The site wide donations switch (Campaign settings). Off until the Trustees are ready: no donation option, no Gift Aid and no public fundraising wording. */
 function donations_enabled(): bool { return setting('donations_enabled') === '1'; }
+/** [slug, label] of the occasion a send belongs to (Christmas when it has no campaign yet). */
+function occasion_of(array $s): array { $c = campaign_for_send($s); return [(string)($c['oslug'] ?? 'christmas'), (string)($c['occasion'] ?? 'Christmas')]; }
+/** The occasion as it reads in a sentence: "Christmas card", "birthday card", "thank you card". */
+function card_word(array $s): string { [$slug, $label] = occasion_of($s); return ($slug === 'christmas' ? 'Christmas' : strtolower($label)) . ' card'; }
 function campaign_allows(array $s, string $what): bool {
     if (!donations_enabled()) return false;
     $c = campaign_for_send($s);
@@ -134,5 +138,5 @@ function r_occasion(string $slug): void {
     $o = one('select * from occasions where slug=?', [$slug]);
     if ($o && $o['slug'] === 'christmas') redirect('/#gallery');
     $GLOBALS['bare'] = false;
-    page('Not open yet', '<h1>Not open yet</h1><p>We are not sending cards for this occasion at the moment. You are welcome to <a href="/">send a Christmas card</a>.</p>', 404);
+    page('Not open yet', '<h1>Not open yet</h1><p>We are not sending cards for this occasion at the moment. You are welcome to <a href="/">send a card</a>.</p>', 404);
 }

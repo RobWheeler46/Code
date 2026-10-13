@@ -14,7 +14,7 @@ ok(schedule_parse(['when' => 'custom', 'when_custom' => date('Y-m-d\TH:i', time(
 ok(schedule_parse(['when' => 'custom', 'when_custom' => 'tomorrow']) === false && schedule_parse(['when' => 'bogus']) === false, 'anything that is not a proper date or a known choice is refused');
 $ts = schedule_parse(['when' => 'custom', 'when_custom' => date('Y-m-d\TH:i', time() + 86400 * 3)]); ok(is_int($ts) && abs($ts - (time() + 86400 * 3)) < 120, 'a date a few days ahead is accepted');
 $p = schedule_presets(); foreach ($p as $k => [$l, $t]) ok(schedule_parse(['when' => $k]) === $t && $t > time(), "the $l choice is a future time");
-ok(str_contains(schedule_picker(), 'As soon as possible') && str_contains(schedule_picker(), 'name="when_custom"'), 'the picker offers now and a chosen date');
+ok(str_contains(schedule_picker([]), 'As soon as possible') && str_contains(schedule_picker([]), 'name="when_custom"'), 'the picker offers now and a chosen date');
 
 // the queue honours it
 $t = time(); q("insert into users(id,name,email,pass,verified,created,terms_version) values(1,'Sam','sam@x.example',?,1,?,?)", [password_hash('Test-pass-123', PASSWORD_DEFAULT), $t, TERMS_VERSION]);

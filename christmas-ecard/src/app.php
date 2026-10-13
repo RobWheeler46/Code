@@ -47,13 +47,13 @@ function progress(): int { return (int)one('select coalesce(sum(pence-refunded),
 function r_home(): void {
     if (preg_match('/^[a-z0-9-]{1,30}$/', (string)($_GET['ref'] ?? ''))) $_SESSION['ref'] = $_GET['ref']; // promotion source label only, never a person
     $st = campaign_state();
-    $b = '<section class="hero"><div><p class="eyebrow">7th Swindon Scouts Christmas cards</p><h1>Send a little Christmas cheer, Scout style</h1><p class="lead">Pick a design, write your message and we will email a private card to your friends and family. Sending is free' . (donations_enabled() ? ', and a donation is optional' : '') . '.</p><p><a class="btn big" href="#gallery">Choose a card</a> <a class="btn ghost" href="#how">How it works</a></p></div><div class="heroart" aria-hidden="true">' . (($hero = hero_for_session()) ? card_art($hero) : '') . '</div></section>';
+    $b = '<section class="hero"><div><p class="eyebrow">' . h(SITE_NAME) . '</p><h1>Send a card, Scout style</h1><p class="lead">Pick a design, write your message and we will email a private card to your friends and family. Sending is free' . (donations_enabled() ? ', and a donation is optional' : '') . '.</p><p><a class="btn big" href="#gallery">Choose a card</a> <a class="btn ghost" href="#how">How it works</a></p></div><div class="heroart" aria-hidden="true">' . (($hero = hero_for_session()) ? card_art($hero) : '') . '</div></section>';
     if ($st === 'locked') $b .= '<p class="flash warn">Sending is not open yet. You can prepare a card now.</p>';
     if ($st === 'before') $b .='<p class="flash warn">Sending opens on ' . h(date('j F Y \a\t H:i', strtotime(setting('opens')))) . '. You can prepare a card now.</p>';
     if ($st === 'closed') $b .= '<p class="flash warn">This year\'s card sending has closed. Cards already sent stay viewable until they expire.</p>';
     $t = (int)setting('target_pence');
     if (donations_enabled() && setting('show_progress') === '1' && $t) $b .= '<p class="progress">Raised so far: <strong>' . gbp(progress()) . '</strong> of ' . gbp($t) . ' target (confirmed donations, after refunds).</p>';
-    $b .= '<h2 id="how">How it works</h2><ol class="how"><li><b>1</b><strong>Choose a design</strong>Illustrated Scout themed cards, from tents to campfires.</li><li><b>2</b><strong>Write your message</strong>Add up to ' . max_recipients() . ' people. Give anyone a personal note if you like.</li><li><b>3</b><strong>We send each card</strong>Everyone gets their own private link and opens a Christmas envelope.</li></ol>'
+    $b .= '<h2 id="how">How it works</h2><ol class="how"><li><b>1</b><strong>Choose a design</strong>Illustrated Scout themed cards, from tents to campfires.</li><li><b>2</b><strong>Write your message</strong>Add up to ' . max_recipients() . ' people. Give anyone a personal note if you like.</li><li><b>3</b><strong>We send each card</strong>Everyone gets their own private link and opens an envelope.</li></ol>'
         . (!donations_enabled() ? '' : '<section class="cause"><h2>Every card helps local Scouting</h2><p>' . h(setting('donation_purpose') ?: 'Any donation goes straight to 7th Swindon Scouts.') . '</p><p>Sending is always free. You never have to donate, and a donation never changes how your card looks.</p></section>')
         . '<h2 id="gallery">Pick a design</h2><div class="grid">';
     foreach (gallery_cards() as $id => $c)
@@ -65,7 +65,7 @@ function r_help(): void {
     $e = h(support_email());
     $faq = [
         'Is it really free?' => 'Yes. Sending is always free.' . (donations_enabled() ? ' A donation is optional and goes to 7th Swindon Scouts. ' . setting('donation_purpose', 'Donations support 7th Swindon Scouts.') : ''),
-        'Can I choose when a card arrives?' => 'Yes. On the last step you can send straight away, pick Christmas Eve or Christmas Day, or choose a date and time. Scheduled cards can be cancelled from My cards until they are sent.',
+        'Can I choose when a card arrives?' => 'Yes. On the last step you can send straight away, pick one of the ready made times when there is one, or choose a date and time. Scheduled cards can be cancelled from My cards until they are sent.',
         'I did not get the verification email' => 'Check your spam or junk folder, then sign in and ask for it again. If the address was wrong, register again with the right one.',
         'My recipient did not get their card' => 'Open "My cards" to see each card\'s status. If it shows Failed, correct the address and send again. Ask the recipient to check spam.',
         'What do the statuses mean?' => implode(' ', array_map(fn($k, $v) => "$k: $v", array_keys(STATUS_HELP), STATUS_HELP)),
@@ -93,11 +93,11 @@ function r_register(): void {
         q('insert into users(name,email,pass,verify_token,created,terms_version,terms_at,remind) values(?,?,?,sha256(?),?,?,?,?)', [$n, $e, password_hash($p, PASSWORD_DEFAULT), $t, time(), TERMS_VERSION, time(), empty($_POST['remind']) ? 0 : 1]);
         $uid = (int)db()->lastInsertId(); $keep = $_SESSION['drafts'] ?? [];
         session_regenerate_id(true); $_SESSION['uid'] = $uid; $_SESSION['drafts'] = $keep; claim_drafts($uid);
-        mail_send($e, 'Confirm your email for 7th Swindon Scouts Christmas Cards', "Hello $n,\n\nPlease confirm your email address. We will take you back to your saved card.\n" . base_url() . "/verify?t=$t\n");
+        mail_send($e, 'Confirm your email for ' . SITE_NAME, "Hello $n,\n\nPlease confirm your email address. We will take you back to your saved card.\n" . base_url() . "/verify?t=$t\n");
         flash('Welcome! Your card is saved. Check your email and click the link to verify before sending.');
         redirect(($d = one("select id from sends where user_id=? and status='draft' order by id desc", [$uid])) ? '/compose?id=' . $d['id'] : '/dashboard');
     }
-    page('Register', '<h1>Register</h1><p>You need an account to send, so we can verify who is sending. Your card stays saved.</p><form method="post" class="stack">' . csrf() . '<label>Your name<input name="name" required maxlength="80" autocomplete="name"></label><label>Email<input type="email" name="email" required autocomplete="email"></label><label>Password (10+ characters)<input type="password" name="password" required minlength="10" autocomplete="new-password"></label><label class="opt"><input type="checkbox" name="accept" value="1" required> I am 18 or over and I accept the <a href="/terms">terms and safeguarding statement</a> and have read the <a href="/privacy">privacy notice</a></label><label class="opt"><input type="checkbox" name="remind" value="1"> Email me once next year when the Christmas card service opens again (optional)</label>' . hp_field() . '<button class="btn">Create account</button></form><p>Already registered? <a href="/login">Sign in</a></p>');
+    page('Register', '<h1>Register</h1><p>You need an account to send, so we can verify who is sending. Your card stays saved.</p><form method="post" class="stack">' . csrf() . '<label>Your name<input name="name" required maxlength="80" autocomplete="name"></label><label>Email<input type="email" name="email" required autocomplete="email"></label><label>Password (10+ characters)<input type="password" name="password" required minlength="10" autocomplete="new-password"></label><label class="opt"><input type="checkbox" name="accept" value="1" required> I am 18 or over and I accept the <a href="/terms">terms and safeguarding statement</a> and have read the <a href="/privacy">privacy notice</a></label><label class="opt"><input type="checkbox" name="remind" value="1"> Email me once a year to remind me to send Christmas cards (optional)</label>' . hp_field() . '<button class="btn">Create account</button></form><p>Already registered? <a href="/login">Sign in</a></p>');
 }
 
 function r_verify(): void {
@@ -248,7 +248,7 @@ function r_compose(): void {
         . '<input type="hidden" name="card" value="' . h($card) . '">'
         . '<label>From (your name or family name)<input name="sender_name" maxlength="' . (name_max() + 20) . '" data-max="' . name_max() . '" value="' . h($from) . '"' . fa($errs, 'sender_name', $f) . '><small class="count">Up to ' . name_max() . ' characters</small>' . fe($errs, 'sender_name') . '</label>'
         . '<label>Your message<textarea name="message" rows="5" data-max="' . msg_max() . '"' . fa($errs, 'message', $f) . '>' . h($msg) . '</textarea><small class="count">Up to ' . msg_max() . ' characters</small>' . fe($errs, 'message') . '</label>'
-        . '<details><summary>Need ideas? Greeting examples</summary><p class="note">Examples only. Choosing one adds it to your message, which you can then edit.</p><ul class="starters">' . implode('', array_map(fn($t) => '<li>' . h($t) . ' <button type="button" class="link" data-starter="' . h($t) . '">Use this</button></li>', STARTERS)) . '</ul></details>'
+        . '<details><summary>Need ideas? Greeting examples</summary><p class="note">Examples only. Choosing one adds it to your message, which you can then edit.</p><ul class="starters">' . implode('', array_map(fn($t) => '<li>' . h($t) . ' <button type="button" class="link" data-starter="' . h($t) . '">Use this</button></li>', starters($s ?: []))) . '</ul></details>'
         . ($back ? '<p class="note">Sending a card back to ' . h($back['sender_name']) . ': add their email address below.</p>' : '')
         . $recipientsHtml
         . ($s && $u && $u['verified'] ? '<p><button class="btn alt" name="act" value="pick">Choose from address book</button></p>' : ($u ? '<p class="note">Save your draft and verify your email to choose from your address book.</p>' : ''))
@@ -372,7 +372,7 @@ function r_review(): void {
     } else {
         $rec = $_GET['recover'] ?? '';
         if ($rec === 'cancelled' || $rec === 'failed') $form .= '<p class="flash warn" role="status"><strong>' . ($rec === 'cancelled' ? 'Payment was cancelled.' : 'Payment did not go through.') . '</strong> Nothing was charged and your card and recipients are safe. You can try again, or choose to send for free. Cards are only sent when you press a send button below.</p>';
-        $form .= schedule_picker();
+        $form .= schedule_picker($s);
         if (!campaign_allows($s, 'donation')) $form .= '<div class="row"><button class="btn big" name="do" value="send">Send my cards</button></div><p class="note">Sending is free.</p>';
         else { $form .= '<fieldset class="sendopts"><legend>How would you like to send?</legend>'
             . '<label class="optcard"><input type="radio" name="mode" value="free"' . ($rec ? '' : ' checked') . '> <strong>Send for free</strong><span>Your cards are free to send. No payment needed.</span></label>'
@@ -508,9 +508,9 @@ function r_card(string $t, string $act = ''): void {
     }
     $stop = '<p class="center"><a href="/optout/' . h($t) . '">Stop cards from ' . h($s['sender_name']) . ' or from this service</a></p>';
     if (empty($_GET['o'])) {
-        page('A card for you', '<section class="envelope-wrap"><div class="envelope" aria-hidden="true"><div class="flap"></div><div class="seal"></div><div class="stamp"></div><div class="to">To ' . h($r['name']) . '</div></div><h1>A Christmas card for ' . h($r['name']) . '</h1><p class="lead">From ' . h($s['sender_name']) . '</p><form method="post" action="/c/' . h($t) . '/open">' . csrf() . '<button class="btn big">Open your card</button></form><p class="note">Press the button to open it.</p></section>' . $stop);
+        page('A card for you', '<section class="envelope-wrap"><div class="envelope" aria-hidden="true"><div class="flap"></div><div class="seal"></div><div class="stamp"></div><div class="to">To ' . h($r['name']) . '</div></div><h1>A ' . h(card_word($s)) . ' for ' . h($r['name']) . '</h1><p class="lead">From ' . h($s['sender_name']) . '</p><form method="post" action="/c/' . h($t) . '/open">' . csrf() . '<button class="btn big">Open your card</button></form><p class="note">Press the button to open it.</p></section>' . $stop);
     }
-    page('Your Christmas card', '<p class="center skip"><button type="button" class="link" data-skip>Skip animation</button></p><div class="reveal">' . card_view($s['card'], $r['name'], resolved_msg($r, $s), $s['sender_name'], card_note($s), $s['art_ref'] ?? null, isset($s['design_version_id']) ? (int)$s['design_version_id'] : null) . '</div><section class="next"><h2>Want to say thank you?</h2><p>Send ' . h($s['sender_name']) . ' a card of your own. It is free, and it only takes a minute.</p><p><a class="btn big" href="/compose?card=' . h($s['card']) . '&amp;back=' . h($t) . '">Send a card back</a> <a class="btn alt" href="/">Make a card for someone else</a></p></section><p class="center"><a href="/c/' . h($t) . '">Replay the envelope</a> &middot; <button type="button" class="link" data-print>Print this card</button><br><small class="note">A printed copy stays with you after this link expires.</small></p>'
+    page('Your ' . card_word($s), '<p class="center skip"><button type="button" class="link" data-skip>Skip animation</button></p><div class="reveal">' . card_view($s['card'], $r['name'], resolved_msg($r, $s), $s['sender_name'], card_note($s), $s['art_ref'] ?? null, isset($s['design_version_id']) ? (int)$s['design_version_id'] : null) . '</div><section class="next"><h2>Want to say thank you?</h2><p>Send ' . h($s['sender_name']) . ' a card of your own. It is free, and it only takes a minute.</p><p><a class="btn big" href="/compose?card=' . h($s['card']) . '&amp;back=' . h($t) . '">Send a card back</a> <a class="btn alt" href="/">Make a card for someone else</a></p></section><p class="center"><a href="/c/' . h($t) . '">Replay the envelope</a> &middot; <button type="button" class="link" data-print>Print this card</button><br><small class="note">A printed copy stays with you after this link expires.</small></p>'
         . '<details class="center"><summary>Report this card</summary><form method="post" action="/c/' . h($t) . '/report" class="stack">' . csrf() . '' . hp_field() . '<label>What is wrong?<textarea name="reason" maxlength="500" required></textarea></label><button class="btn alt">Send report</button></form></details>' . $stop);
 }
 
@@ -521,7 +521,7 @@ function r_optout(string $t): void {
         optout($r['email'], ($_POST['scope'] ?? '') === 'all' ? 0 : (int)$s['user_id']);
         page('Preference saved', '<h1>Thank you</h1><p>We will not send you more cards' . (($_POST['scope'] ?? '') === 'all' ? ' from this service' : ' from ' . h($s['sender_name'])) . '. This applies to cards not yet sent as well.</p>');
     }
-    page('Stop cards', '<h1>Stop receiving cards</h1><form method="post" class="stack">' . csrf() . '<fieldset><legend>Choose what to stop</legend><label class="opt"><input type="radio" name="scope" value="sender" checked> Cards from ' . h($s['sender_name']) . '</label><label class="opt"><input type="radio" name="scope" value="all"> All cards from 7th Swindon Scouts Christmas Cards</label></fieldset><button class="btn">Confirm</button></form>');
+    page('Stop cards', '<h1>Stop receiving cards</h1><form method="post" class="stack">' . csrf() . '<fieldset><legend>Choose what to stop</legend><label class="opt"><input type="radio" name="scope" value="sender" checked> Cards from ' . h($s['sender_name']) . '</label><label class="opt"><input type="radio" name="scope" value="all"> All cards from ' . h(SITE_NAME) . '</label></fieldset><button class="btn">Confirm</button></form>');
 }
 
 // ---------- admin

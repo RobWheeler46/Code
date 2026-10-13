@@ -38,7 +38,7 @@ function mail_settings_save(array $in, array $user): array {
 /** Sends a test to the signed in administrator's own address, with what is saved now. Returns [ok, plain sentence]. */
 function mail_test_send(array $user): array {
     $prov = mail_provider(); $name = ['postmark' => 'Postmark', 'smtp' => 'your own mail account', 'log' => 'the log only (nothing is sent)'][$prov];
-    $err = mail_send($user['email'], 'Test email from the Christmas cards service', "This is a test email from the 7th Swindon Scouts Christmas cards service, sent through $name.\n\nIf you can read this, email sending works. You can ignore this message.");
+    $err = mail_send($user['email'], 'Test email from the eCards service', "This is a test email from the 7th Swindon Scouts eCards service, sent through $name.\n\nIf you can read this, email sending works. You can ignore this message.");
     $ok = $err === null; $msg = $ok ? ($prov === 'log' ? 'Nothing was sent: email is set to "do not send", so the test was only written to the log.' : "The mail server accepted the test email for {$user['email']} (through $name). Check your inbox and your spam folder.")
         : 'The test did not go through. ' . preg_replace('/^(PERM|UNKNOWN):/', '', $err);
     set_setting('mail_test_result', ($ok ? 'ok' : 'failed') . '|' . time() . '|' . $prov); audit((int)$user['id'], 'mail_test', ($ok ? 'accepted' : 'failed') . " via $prov");
