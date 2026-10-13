@@ -9,10 +9,9 @@ function ops_admin(): bool { return can_any('campaign', 'appadmin', 'finance', '
 function workspace_manifest(): array {
     return [
         'Start' => [['Overview', '/admin', 'Your tasks and what needs attention', fn() => true]],
-        'Cards and campaigns' => [
+        'Cards' => [
             ['eCard Library', '/admin/library', 'Add, preview and publish card designs', fn() => can_any('campaign', 'rolesadmin')],
-            ['Occasions and campaigns', '/admin/campaigns', 'Prepare draft campaigns and reuse designs', fn() => can_any('campaign', 'rolesadmin')],
-            ['Campaign settings', '/admin/campaign', 'Dates, donations, designs order and the QR code', fn() => can_any('campaign', 'appadmin', 'finance', 'delivery', 'rolesadmin')]],
+            ['Site settings', '/admin/site', 'Donations, card design order, the site link and QR code', fn() => can_any('campaign', 'appadmin', 'finance', 'delivery', 'rolesadmin')]],
         'Support and delivery' => [
             ['Delivery issues', '/admin/delivery', 'Failed and unconfirmed cards, resend, pause', fn() => can_any('delivery', 'appadmin', 'rolesadmin')],
             ['Reports and complaints', '/admin/reports', 'Cards reported by recipients', fn() => can('complaints')],

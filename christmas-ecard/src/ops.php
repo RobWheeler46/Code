@@ -80,7 +80,7 @@ function alerts_tick(?int $now = null): int {
     return $sent;
 }
 function alerts_daily(): int {
-    if (campaign_state() !== 'open') return 0;
+    if (sending_state() !== 'open') return 0;
     $cur = health_alerts(); $n = 0;
     foreach (alert_list('alert_emails') as $to) { mail_send($to, '[eCards] Daily summary', $cur ? "Open alerts:\n- " . implode("\n- ", $cur) . "\n" . base_url() . "/admin/health\n" : "No alerts. Queue and payments look normal.\n"); $n++; }
     return $n;

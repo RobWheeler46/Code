@@ -13,7 +13,7 @@ require __DIR__ . '/resilience.php';
 require __DIR__ . '/library.php';
 require __DIR__ . '/uploads.php';
 require __DIR__ . '/library_admin.php';
-require __DIR__ . '/campaigns.php';
+require __DIR__ . '/occasions.php';
 require __DIR__ . '/qr.php';
 require __DIR__ . '/account.php';
 require __DIR__ . '/invites.php';
@@ -41,20 +41,15 @@ function card_view(string $cardId, string $to, string $msg, string $from, string
 function gone_page(array $r, string $title, string $why): never {
     page($title, '<h1>' . h($title) . '</h1><p>' . h($why) . '</p><p>If you have a question, email <a href="mailto:' . h(support_email()) . '">' . h(support_email()) . '</a> and quote reference <strong>' . h(support_ref($r)) . '</strong>.</p><p><a class="btn" href="/">Send a card of your own</a></p>', 410);
 }
-function progress(): int { return (int)one('select coalesce(sum(pence-refunded),0) n from donations')['n']; }
 
 // ---------- public
 function r_home(): void {
     if (preg_match('/^[a-z0-9-]{1,30}$/', (string)($_GET['ref'] ?? ''))) $_SESSION['ref'] = $_GET['ref']; // promotion source label only, never a person
-    $st = campaign_state();
+    $st = sending_state();
     $b = '<section class="hero"><div><p class="eyebrow">' . h(SITE_NAME) . '</p><h1>Send a card, Scout style</h1><p class="lead">Pick a design, write your message and we will email a private card to your friends and family. Sending is free' . (donations_enabled() ? ', and a donation is optional' : '') . '.</p><p><a class="btn big" href="#gallery">Choose a card</a> <a class="btn ghost" href="#how">How it works</a></p></div><div class="heroart" aria-hidden="true">' . (($hero = hero_for_session()) ? card_art($hero) : '') . '</div></section>';
     if ($st === 'locked') $b .= '<p class="flash warn">Sending is not open yet. You can prepare a card now.</p>';
-    if ($st === 'before') $b .='<p class="flash warn">Sending opens on ' . h(date('j F Y \a\t H:i', strtotime(setting('opens')))) . '. You can prepare a card now.</p>';
-    if ($st === 'closed') $b .= '<p class="flash warn">This year\'s card sending has closed. Cards already sent stay viewable until they expire.</p>';
-    $t = (int)setting('target_pence');
-    if (donations_enabled() && setting('show_progress') === '1' && $t) $b .= '<p class="progress">Raised so far: <strong>' . gbp(progress()) . '</strong> of ' . gbp($t) . ' target (confirmed donations, after refunds).</p>';
     $b .= '<h2 id="how">How it works</h2><ol class="how"><li><b>1</b><strong>Choose a design</strong>Illustrated Scout themed cards, from tents to campfires.</li><li><b>2</b><strong>Write your message</strong>Add up to ' . max_recipients() . ' people. Give anyone a personal note if you like.</li><li><b>3</b><strong>We send each card</strong>Everyone gets their own private link and opens an envelope.</li></ol>'
-        . (!donations_enabled() ? '' : '<section class="cause"><h2>Every card helps local Scouting</h2><p>' . h(setting('donation_purpose') ?: 'Any donation goes straight to 7th Swindon Scouts.') . '</p><p>Sending is always free. You never have to donate, and a donation never changes how your card looks.</p></section>')
+        . (!donations_enabled() ? '' : '<section class="cause"><h2>Every card helps local Scouting</h2><p>' . h(DONATION_PURPOSE) . '</p><p>Sending is always free. You never have to donate, and a donation never changes how your card looks.</p></section>')
         . '<h2 id="gallery">Pick a design</h2><div class="grid">';
     foreach (gallery_cards() as $id => $c)
         $b .= '<a class="tile" href="/compose?card=' . h($id) . '">' . card_art($id, true) . '<span>' . h($c['title']) . '</span><em class="tjoke">' . h($c['joke']) . '</em></a>';
@@ -64,7 +59,7 @@ function r_home(): void {
 function r_help(): void {
     $e = h(support_email());
     $faq = [
-        'Is it really free?' => 'Yes. Sending is always free.' . (donations_enabled() ? ' A donation is optional and goes to 7th Swindon Scouts. ' . setting('donation_purpose', 'Donations support 7th Swindon Scouts.') : ''),
+        'Is it really free?' => 'Yes. Sending is always free.' . (donations_enabled() ? ' A donation is optional and goes to 7th Swindon Scouts. ' . DONATION_PURPOSE : ''),
         'Can I choose when a card arrives?' => 'Yes. On the last step you can send straight away, pick one of the ready made times when there is one, or choose a date and time. Scheduled cards can be cancelled from My cards until they are sent.',
         'I did not get the verification email' => 'Check your spam or junk folder, then sign in and ask for it again. If the address was wrong, register again with the right one.',
         'My recipient did not get their card' => 'Open "My cards" to see each card\'s status. If it shows Failed, correct the address and send again. Ask the recipient to check spam.',
@@ -314,7 +309,7 @@ function r_review(): void {
     if (post()) {
         $do = $_POST['do'] ?? '';
         if ($do === 'send') $do = ($_POST['mode'] ?? '') === 'donate' ? 'donate' : 'free'; // one button, the radio says which
-        if ($do === 'donate' && !campaign_allows($s, 'donation')) { flash('This campaign does not take donations. You can send your cards for free.', 'warn'); redirect("/review?id=$id"); }
+        if ($do === 'donate' && !donations_enabled()) { flash('We are not taking donations at the moment. You can send your cards for free.', 'warn'); redirect("/review?id=$id"); }
         if ($do === 'check' && $pending) {
             $r = pay_check($s);
             if ($r === 'expired') { back_to_draft($id); redirect("/review?id=$id&recover=failed"); }
@@ -329,7 +324,7 @@ function r_review(): void {
         }
         if (!$u['verified']) { flash('Please verify your email before sending.', 'warn'); redirect("/review?id=$id"); }
         sender_gate($u, "/review?id=$id");
-        if (campaign_state() !== 'open') { flash('Card sending is not open right now, so your card cannot be submitted. Your draft is saved.', 'warn'); redirect("/review?id=$id"); }
+        if (sending_state() !== 'open') { flash('Card sending is not open right now, so your card cannot be submitted. Your draft is saved.', 'warn'); redirect("/review?id=$id"); }
         if (!$rs || count($rs) > max_recipients() || $s['message'] === '') { flash('Your card needs a message and 1 to ' . max_recipients() . ' recipients.', 'err'); redirect("/compose?id=$id"); }
         if ($pending) { flash('You have a payment waiting. Check its status or cancel it first. Cards are not sent until that is resolved.', 'warn'); redirect("/review?id=$id"); }
         if (repeats_for($s) && empty($_POST['repeat_ok'])) { flash('Some recipients already have a card from you. Tick the box to send again on purpose.', 'err'); redirect("/review?id=$id"); }
@@ -341,7 +336,7 @@ function r_review(): void {
         $pence = $pick === 'custom' ? (int)round((float)($_POST['custom'] ?? 0) * 100) : (int)$pick;
         if ($pence < 100 || $pence > 50000) { flash('Choose a donation amount between £1 and £500, or choose "Send cards for free".', 'err'); redirect("/review?id=$id"); }
         $ga = null;
-        if (giftaid_on() && campaign_allows($s, 'giftaid') && !empty($_POST['giftaid'])) { [$ga, $gerr] = giftaid_validate($_POST); if ($gerr) { $_SESSION['ga_old'] = $_POST; flash(implode(' ', $gerr), 'err'); redirect("/review?id=$id"); } }
+        if (giftaid_on() && !empty($_POST['giftaid'])) { [$ga, $gerr] = giftaid_validate($_POST); if ($gerr) { $_SESSION['ga_old'] = $_POST; flash(implode(' ', $gerr), 'err'); redirect("/review?id=$id"); } }
         // one submission intent: only the request that wins this update may start a checkout
         if (!q("update sends set donation=?, donation_note=?, status='awaiting_payment', updated=? where id=? and status='draft'", [$pence, empty($_POST['donation_note']) ? 0 : 1, time(), $id])->rowCount()) redirect("/review?id=$id");
         giftaid_save_pending($id, $ga); freeze_art($id);
@@ -356,10 +351,10 @@ function r_review(): void {
         redirect($r['url']);
     }
     $list = implode('', array_map(fn($r) => '<li><strong>' . h($r['name']) . '</strong> (' . h($r['email']) . ')' . (trim((string)$r['own_msg']) !== '' ? ' <span class="pill">Personal message</span>' : '') . ' <form method="post" action="/contacts/save" class="inline">' . csrf() . '<input type="hidden" name="rid" value="' . $r['id'] . '"><input type="hidden" name="back" value="/review?id=' . $r['send_id'] . '"><button class="link">Save to address book</button></form><blockquote>' . nl2br(h(resolved_msg($r, $s))) . '</blockquote></li>', $rs));
-    $state = campaign_state();
+    $state = sending_state();
     $b = steps(3) . '<h1>Review and send</h1>';
     if (!$u['verified']) $b .= '<p class="flash warn">Verify your email (see the link we sent) before you can send. <form method="post" action="/resend-verification" class="inline">' . csrf() . '<button class="link">Send it again</button></form></p>';
-    if ($state !== 'open') $b .= '<p class="flash warn">Card sending is ' . (in_array($state, ['before', 'locked']) ? 'not open yet' : 'closed') . ', so you cannot submit this card. Your draft is saved.' . (($u = user()) && $u['is_admin'] && ($why = campaign_block_reason()) ? '<br><small><strong>Administrator note:</strong> ' . h($why) . '</small>' : '') . '</p>';
+    if ($state !== 'open') $b .= '<p class="flash warn">Card sending is ' . 'not open yet' . ', so you cannot submit this card. Your draft is saved.' . (($u = user()) && $u['is_admin'] && ($why = sending_block_reason()) ? '<br><small><strong>Administrator note:</strong> ' . h($why) . '</small>' : '') . '</p>';
     if (setting('paused') === '1') $b .= '<p class="note">Sending is briefly paused. Cards you submit will be queued and go out when it resumes.</p>';
     $b .= card_view($s['card'], $rs[0]['name'] ?? 'Friend', $rs ? resolved_msg($rs[0], $s) : $s['message'], $s['sender_name']) . '<h2>Sending to ' . count($rs) . ' ' . (count($rs) === 1 ? 'person' : 'people') . '</h2><p class="note">From: ' . h($s['sender_name']) . '. Each person sees the greeting shown here for them.</p><ul class="rlist">' . $list . '</ul><p><a href="/compose?id=' . $id . '">Edit card, message or recipients</a> &middot; <a href="/email-preview?id=' . $id . '">Preview the email</a></p>';
     $rep = repeats_for($s);
@@ -373,15 +368,15 @@ function r_review(): void {
         $rec = $_GET['recover'] ?? '';
         if ($rec === 'cancelled' || $rec === 'failed') $form .= '<p class="flash warn" role="status"><strong>' . ($rec === 'cancelled' ? 'Payment was cancelled.' : 'Payment did not go through.') . '</strong> Nothing was charged and your card and recipients are safe. You can try again, or choose to send for free. Cards are only sent when you press a send button below.</p>';
         $form .= schedule_picker($s);
-        if (!campaign_allows($s, 'donation')) $form .= '<div class="row"><button class="btn big" name="do" value="send">Send my cards</button></div><p class="note">Sending is free.</p>';
+        if (!donations_enabled()) $form .= '<div class="row"><button class="btn big" name="do" value="send">Send my cards</button></div><p class="note">Sending is free.</p>';
         else { $form .= '<fieldset class="sendopts"><legend>How would you like to send?</legend>'
             . '<label class="optcard"><input type="radio" name="mode" value="free"' . ($rec ? '' : ' checked') . '> <strong>Send for free</strong><span>Your cards are free to send. No payment needed.</span></label>'
-            . '<label class="optcard"><input type="radio" name="mode" value="donate"' . ($rec ? ' checked' : '') . '> <strong>Make an optional donation</strong><span>' . h(setting('donation_purpose', 'Donations support 7th Swindon Scouts.')) . '</span></label>'
+            . '<label class="optcard"><input type="radio" name="mode" value="donate"' . ($rec ? ' checked' : '') . '> <strong>Make an optional donation</strong><span>' . h(DONATION_PURPOSE) . '</span></label>'
             . '<div class="donatebox"><p>One donation covers all ' . count($rs) . ' of your cards.</p><div class="chips">';
         foreach (array_map('intval', explode(',', setting('amounts_pence', '200,500,1000'))) as $a) $form .= '<label class="opt"><input type="radio" name="amount" value="' . $a . '"> ' . gbp($a) . '</label>';
         $form .= '<label class="opt"><input type="radio" name="amount" value="custom"> Other amount (£) <input type="number" name="custom" min="1" max="500" step="0.01" aria-label="Custom amount in pounds"></label></div>'
             . '<label class="opt"><input type="checkbox" name="donation_note" value="1"> Add a line to the cards saying they came with a donation to 7th Swindon Scouts (no amount is shown; only after payment is confirmed)</label>'
-            . (campaign_allows($s, 'giftaid') ? giftaid_form_block() : '') . '</div>'
+            . (giftaid_on() ? giftaid_form_block() : '') . '</div>'
             . '<p class="total">Total <strong data-total>£0.00</strong></p><button class="btn big" name="do" value="send" data-send-btn>Send my cards for free</button><p class="note">Sending is always free. Nothing is charged unless you choose to donate.</p></fieldset>'; }
     }
     page('Review and send', $b . $form . '</form>');
@@ -556,7 +551,7 @@ function r_export(): void {
     foreach ($rows as $x) {
         $st = $x['refunded'] >= $x['pence'] ? 'Refunded' : ($x['refunded'] > 0 ? 'Partially refunded' : 'Confirmed');
         $m = fn($p) => number_format($p / 100, 2, '.', '');
-        fputcsv($o, array_merge([csv_text(setting('campaign', 'Christmas 2026')), csv_text((string)$x['stripe_session']), date('Y-m-d', (int)$x['created']), 'GBP', $m($x['pence']), $m($x['fee']), $m($x['refunded']), $m($x['pence'] - $x['fee'] - $x['refunded']), $st],
+        fputcsv($o, array_merge([csv_text('eCards'), csv_text((string)$x['stripe_session']), date('Y-m-d', (int)$x['created']), 'GBP', $m($x['pence']), $m($x['fee']), $m($x['refunded']), $m($x['pence'] - $x['fee'] - $x['refunded']), $st],
             $donors ? [csv_text((string)$x['name']), csv_text((string)$x['email'])] : []));
     }
     exit;
@@ -652,12 +647,11 @@ function dispatch(string $path): void {
     private_headers($path);
     $routes = ['/' => 'r_home', '/help' => 'r_help', '/register' => 'r_register', '/verify' => 'r_verify', '/resend-verification' => 'r_resend_verify', '/login' => 'r_login', '/logout' => 'r_logout', '/forgot' => 'r_forgot', '/reset' => 'r_reset',
         '/compose' => 'r_compose', '/preview' => 'r_preview', '/email-preview' => 'r_email_preview', '/review' => 'r_review', '/pay-cancelled' => 'r_pay_cancelled', '/return' => 'r_return', '/dev/pay' => 'r_dev_pay', '/dashboard' => 'r_dashboard', '/send' => 'r_send', '/prefs' => 'r_prefs', '/remind-off' => 'r_remind_off', '/privacy' => 'r_privacy', '/terms' => 'r_terms', '/accept-terms' => 'r_accept_terms', '/account/delete' => 'r_account_delete', '/account' => 'r_account', '/admin/mail' => 'r_admin_mail', '/admin/platform' => 'r_admin_platform', '/invite' => 'r_invite', '/admin/invites' => 'r_admin_invites', '/account/confirm-email' => 'r_account_confirm_email', '/contacts' => 'r_contacts', '/contacts/edit' => 'r_contact_edit', '/contacts/delete-all' => 'r_contacts_delete_all', '/contacts/pick' => 'r_pick', '/contacts/save' => 'r_save_contact', '/groups' => 'r_groups', '/discard' => 'r_discard', '/change-email' => 'r_change_email', '/copy' => 'r_copy',
-        '/hooks/tick' => 'r_tick_hook', '/mfa' => 'r_mfa', '/admin' => 'r_admin', '/admin/delivery' => 'r_admin_delivery', '/admin/finance' => 'r_admin_finance', '/admin/reports' => 'r_admin_reports', '/admin/campaign' => 'r_admin_campaign', '/admin/wording' => 'r_admin_wording', '/admin/app' => 'r_admin_app', '/admin/email' => 'r_admin_email', '/admin/privacy' => 'r_admin_privacy', '/admin/access' => 'r_admin_access', '/admin/health' => 'r_admin_health', '/admin/audit' => 'r_admin_audit', '/admin/audit/export' => 'r_admin_audit_export', '/admin/action' => 'r_admin_action', '/admin/senders' => 'r_admin_senders', '/admin/measures' => 'r_admin_measures', '/admin/giftaid' => 'r_admin_giftaid', '/admin/rehearsal' => 'r_admin_rehearsal', '/admin/library' => 'r_admin_library', '/admin/library/edit' => 'r_admin_library_edit', '/admin/library/save' => 'r_admin_library_save', '/admin/library/discard' => 'r_admin_library_discard', '/admin/library/preview' => 'r_admin_library_preview', '/admin/library/action' => 'r_admin_library_action', '/admin/campaigns' => 'r_admin_campaigns', '/admin/campaign-qr' => 'r_admin_campaign_qr', '/admin/campaigns/create' => 'r_admin_campaigns_create', '/admin/campaigns/view' => 'r_admin_campaigns_view', '/admin/campaigns/action' => 'r_admin_campaigns_action', '/admin/library/img' => 'r_admin_library_img', '/admin/export' => 'r_export', '/admin/message' => 'r_message', '/hooks/stripe' => 'r_stripe_hook', '/hooks/postmark' => 'r_postmark_hook'];
+        '/hooks/tick' => 'r_tick_hook', '/mfa' => 'r_mfa', '/admin' => 'r_admin', '/admin/delivery' => 'r_admin_delivery', '/admin/finance' => 'r_admin_finance', '/admin/reports' => 'r_admin_reports', '/admin/site' => 'r_admin_site', '/admin/wording' => 'r_admin_wording', '/admin/app' => 'r_admin_app', '/admin/email' => 'r_admin_email', '/admin/privacy' => 'r_admin_privacy', '/admin/access' => 'r_admin_access', '/admin/health' => 'r_admin_health', '/admin/audit' => 'r_admin_audit', '/admin/audit/export' => 'r_admin_audit_export', '/admin/action' => 'r_admin_action', '/admin/senders' => 'r_admin_senders', '/admin/measures' => 'r_admin_measures', '/admin/giftaid' => 'r_admin_giftaid', '/admin/rehearsal' => 'r_admin_rehearsal', '/admin/library' => 'r_admin_library', '/admin/library/edit' => 'r_admin_library_edit', '/admin/library/save' => 'r_admin_library_save', '/admin/library/discard' => 'r_admin_library_discard', '/admin/library/preview' => 'r_admin_library_preview', '/admin/library/action' => 'r_admin_library_action', '/admin/qr' => 'r_admin_qr', '/admin/library/img' => 'r_admin_library_img', '/admin/export' => 'r_export', '/admin/message' => 'r_message', '/hooks/stripe' => 'r_stripe_hook', '/hooks/postmark' => 'r_postmark_hook'];
     if (post() && !str_starts_with($path, '/hooks/')) check_csrf();
     if (preg_match('#^/c/([a-f0-9]+)(?:/(open|report))?$#', $path, $m)) r_card($m[1], $m[2] ?? '');
     if (preg_match('#^/art/([a-z0-9.-]+)$#', $path, $m)) r_art($m[1]);
     if (preg_match('#^/optout/([a-f0-9]+)$#', $path, $m)) r_optout($m[1]);
-    if (preg_match('#^/occasion/([a-z0-9-]{1,40})$#', $path, $m)) r_occasion($m[1]);
     if (isset($routes[$path])) $routes[$path]();
     fail(404, 'Page not found.');
 }

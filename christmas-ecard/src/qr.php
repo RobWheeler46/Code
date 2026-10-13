@@ -1,5 +1,5 @@
 <?php
-// A small QR code generator, so the campaign QR code is made here and the address is never sent to another website.
+// A small QR code generator, so the QR code is made here and the address is never sent to another website.
 // Byte mode, error correction level M, versions 1 to 6 (up to 106 characters), the usual eight masks scored for the lowest penalty.
 
 /** [raw codewords, blocks, error correction codewords per block] for versions 1 to 6 at level M. */

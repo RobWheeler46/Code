@@ -12,15 +12,9 @@ function role_names(string $csv): string { return implode(', ', array_map(fn($r)
 // ---------- configuration engine
 function config_spec(string $area): array {
     $specs = [
-        'campaign' => ['edit' => ['campaign', 'rolesadmin'], 'title' => 'Campaign settings', 'when' => 'New submissions after you confirm. Cards already submitted are not changed. Closing dates do not expire existing cards.', 'fields' => [
-            'campaign' => ['Campaign name', 'text', 'max' => 60, 'def' => 'Christmas 2026'],
-            'opens' => ['Sending opens (UK time)', 'datetime', 'def' => ''], 'closes' => ['Sending closes (UK time)', 'datetime', 'def' => ''],
-            'closure_queue' => ['Cards already queued when sending closes', 'choice', 'opts' => ['send' => 'Still send them', 'hold' => 'Hold them for review'], 'def' => 'send'],
+        'site' => ['edit' => ['campaign', 'rolesadmin'], 'title' => 'Site settings', 'when' => 'New submissions after you confirm. Cards already submitted are not changed.', 'fields' => [
             'donations_enabled' => ['Take donations (leave off until the Trustees are ready; sending cards stays free either way)', 'bool', 'def' => '0'],
-            'donation_purpose' => ['Approved purpose of donations', 'text', 'max' => 300, 'def' => ''],
-            'target_pence' => ['Fundraising target in pounds (blank for none)', 'money', 'def' => ''],
             'amounts_pence' => ['Suggested donation amounts in pounds, comma separated (up to 5, £1 to £500)', 'amounts', 'def' => '200,500,1000'],
-            'show_progress' => ['Show fundraising progress publicly', 'bool', 'def' => '0'],
             'giftaid_charity' => ['Charity name used in the Gift Aid declaration (as HMRC knows it)', 'text', 'max' => 100, 'def' => ''],
             'giftaid_enabled' => ['Offer Gift Aid on donations', 'bool', 'def' => '0']]],
         'app' => ['view' => ['appadmin', 'campaign', 'delivery', 'rolesadmin'], 'edit' => ['appadmin', 'rolesadmin'], 'title' => 'Application settings', 'when' => 'Applies to new entries straight away. Existing drafts are kept; a draft above a new limit must be corrected before submission. Accepted batches are unchanged.', 'fields' => [
@@ -129,7 +123,7 @@ function r_admin_config(string $area): void {
         if (!$edit) fail(403, 'You do not have permission for that.');
         $prop = []; $errs = [];
         foreach ($spec['fields'] as $k => $f) { [$v, $e] = cfg_validate($f, (string)($_POST['f_' . $k] ?? '')); $prop[$k] = $v; if ($e) $errs[$k] = $e; }
-        if ($area === 'campaign' && ($prop['giftaid_enabled'] ?? '0') === '1') {
+        if ($area === 'site' && ($prop['giftaid_enabled'] ?? '0') === '1') {
             if (trim((string)($prop['giftaid_charity'] ?? '')) === '') $errs['giftaid_charity'] = 'Enter the charity name as it appears on the HMRC declaration.';
         }
         $reason = trim((string)($_POST['reason'] ?? '')); $ref = trim((string)($_POST['approval'] ?? ''));
@@ -175,27 +169,27 @@ function r_admin_config(string $area): void {
     if ($area === 'privacy') $b .= '<p class="note">Changing a period shows the affected records first and needs a reason and approval reference.</p>';
     if ($area === 'wording') $b .= '<p class="note"><a href="/admin/email">Preview the email and send yourself a test</a> once you have saved.</p>';
     if ($area === 'campaign') $b .= '<p class="note">Free sending is always available. Payments cannot be made mandatory here.</p>';
-    admin_page($spec['title'], $b . ($edit ? '<button class="btn">Review changes</button>' : '') . '</form>' . ($area === 'campaign' ? admin_designs_and_share() : ''));
+    admin_page($spec['title'], $b . ($edit ? '<button class="btn">Review changes</button>' : '') . '</form>' . ($area === 'site' ? admin_designs_and_share() : ''));
 }
-function r_admin_campaign(): void { r_admin_config('campaign'); }
+function r_admin_site(): void { r_admin_config('site'); }
 function r_admin_wording(): void { r_admin_config('wording'); }
 function r_admin_app(): void { r_admin_config('app'); }
 function r_admin_privacy(): void { r_admin_config('privacy'); }
 
-// ---------- S32 designs (order, enable, accessible description) and campaign sharing
+// ---------- S32 designs (order, enable, accessible description) and sharing the site
 function admin_designs_and_share(): string {
     $edit = can_any('campaign', 'rolesadmin'); $b = '<h2>Approved card designs</h2><p class="note">Changes apply to new cards. Cards already submitted keep the artwork they were sent with.</p><ul class="plain">';
     $ids = array_keys(cards()); $n = count($ids);
     foreach ($ids as $i => $id) {
         $c = cards()[$id];
         $b .= '<li class="designrow">' . card_art($id) . '<div><strong>' . h($c['title']) . '</strong> ' . ($c['on'] ? '' : '<span class="pill">Disabled</span>');
-        if ($edit) $b .= '<form method="post" action="/admin/action" class="stack">' . csrf() . '<input type="hidden" name="back" value="/admin/campaign"><input type="hidden" name="card" value="' . h($id) . '"><label>Accessible description<input name="desc" maxlength="200" value="' . h(setting("desc_$id")) . '" placeholder="' . h($c['title']) . '"></label><div class="row">'
+        if ($edit) $b .= '<form method="post" action="/admin/action" class="stack">' . csrf() . '<input type="hidden" name="back" value="/admin/site"><input type="hidden" name="card" value="' . h($id) . '"><label>Accessible description<input name="desc" maxlength="200" value="' . h(setting("desc_$id")) . '" placeholder="' . h($c['title']) . '"></label><div class="row">'
             . '<button class="btn alt" name="do" value="design_desc">Save description</button><button class="btn alt" name="do" value="design">' . ($c['on'] ? 'Disable' : 'Enable') . '</button>'
             . ($i > 0 ? '<button class="btn alt" name="do" value="design_up">Move up</button>' : '') . ($i < $n - 1 ? '<button class="btn alt" name="do" value="design_down">Move down</button>' : '') . '</div></form>';
         $b .= '</div></li>';
     }
-    $b .= '</ul><h2>Share the campaign</h2><p>Public link: <code>' . h(base_url() . '/') . '</code>. Add <code>?ref=newsletter</code> (letters, numbers, hyphens) to see which promotion works. It leads to the gallery and contains nothing private.</p>'
-        . '<div class="qrbox">' . qr_svg(base_url() . '/', 200) . '</div><p><a href="/admin/campaign-qr" download>Download the QR code (SVG, prints at any size)</a></p><p class="note">Made here, so the address is not sent to any other website.</p><ul>';
+    $b .= '</ul><h2>Share the site</h2><p>Public link: <code>' . h(base_url() . '/') . '</code>. Add <code>?ref=newsletter</code> (letters, numbers, hyphens) to see which promotion works. It leads to the gallery and contains nothing private.</p>'
+        . '<div class="qrbox">' . qr_svg(base_url() . '/', 200) . '</div><p><a href="/admin/qr" download>Download the QR code (SVG, prints at any size)</a></p><p class="note">Made here, so the address is not sent to any other website.</p><ul>';
     foreach (all("select coalesce(ref,'(no label)') r, count(*) n from sends where status not in ('draft') group by ref order by n desc") as $x) $b .= '<li>' . h($x['r']) . ': ' . $x['n'] . ' cards</li>';
     return $b . '</ul>';
 }
@@ -281,12 +275,12 @@ function r_admin_action(): void {
 function r_admin(): void {
     $u = need_admin();
     if (!ops_admin()) admin_page('Overview', workspace_hero() . workspace_shortcuts() . '<p class="note">Only the tools your roles allow are shown here.</p>');
-    $st = campaign_state(); $c = admin_pause_counts();
+    $c = admin_pause_counts();
     $nc = (int)one("select count(*) n from sends where is_test=0 and status not in ('draft','awaiting_payment')")['n']; $na = count(health_alerts());
     $b = workspace_hero() . workspace_shortcuts() . '<h2>Where things stand</h2><div class="cards stats"><section class="statuscard"><h2>Cards requested</h2><p class="big">' . $nc . '</p></section>'
         . (can_any('finance', 'campaign') ? '<section class="statuscard"><h2>Donations recorded</h2><p class="big">' . gbp((int)one('select coalesce(sum(pence-refunded),0) n from donations')['n']) . '</p></section>' : '')
         . '<section class="statuscard"><h2>Needs attention</h2><p class="big">' . $na . '</p></section></div><div class="cards">'
-        . '<section class="statuscard"><h2>Campaign</h2><p>' . ['open' => 'Open for new cards', 'before' => 'Not open yet', 'closed' => 'Closed to new cards', 'locked' => 'Locked until payments are proven'][$st] . '</p>' . (($why = campaign_block_reason()) ? '<p class="note">' . h($why) . '</p>' : '') . '</section>'
+        . '<section class="statuscard"><h2>Sending</h2><p>' . (sending_state() === 'open' ? 'Open for new cards' : 'Locked until payments are proven') . '</p>' . (($why = sending_block_reason()) ? '<p class="note">' . h($why) . '</p>' : '') . '</section>'
         . '<section class="statuscard"><h2>Dispatch</h2><p>' . (setting('paused') === '1' ? '<strong>Paused</strong>' : 'Running') . '. ' . $c['queued'] . ' queued.</p></section>';
     $alerts = health_alerts();
     $b .= '<section class="statuscard"><h2>Alerts</h2><p>' . ($alerts ? '<strong>' . count($alerts) . ' need attention</strong>' : 'None found') . '</p><a href="/admin/health">System health</a></section></div>';
@@ -304,8 +298,8 @@ function r_admin(): void {
     foreach (all("select card, count(*) n from sends where is_test=0 and status not in ('draft','awaiting_payment') group by card order by n desc") as $x) $b .= '<li>' . h(cards()[$x['card']]['title'] ?? $x['card']) . ': ' . $x['n'] . '</li>';
     $b .= '</ul>';
     if (can_any('finance', 'campaign')) {
-        $d = one('select count(*) n, coalesce(sum(pence),0) gross, coalesce(sum(fee),0) fee, coalesce(sum(refunded),0) ref from donations'); $tgt = (int)setting('target_pence');
-        $b .= '<h2>Fundraising</h2><p>Confirmed gross donations: <strong>' . gbp((int)$d['gross']) . '</strong> from ' . $d['n'] . ' donations (average ' . gbp($d['n'] ? intdiv((int)$d['gross'], (int)$d['n']) : 0) . '). Fees ' . gbp((int)$d['fee']) . ', refunds ' . gbp((int)$d['ref']) . ', net after both ' . gbp((int)($d['gross'] - $d['fee'] - $d['ref'])) . ($tgt ? '. Target ' . gbp($tgt) . ' (public progress counts gross minus refunds)' : '') . '.</p>';
+        $d = one('select count(*) n, coalesce(sum(pence),0) gross, coalesce(sum(fee),0) fee, coalesce(sum(refunded),0) ref from donations');
+        $b .= '<h2>Fundraising</h2><p>Confirmed gross donations: <strong>' . gbp((int)$d['gross']) . '</strong> from ' . $d['n'] . ' donations (average ' . gbp($d['n'] ? intdiv((int)$d['gross'], (int)$d['n']) : 0) . '). Fees ' . gbp((int)$d['fee']) . ', refunds ' . gbp((int)$d['ref']) . ', net after both ' . gbp((int)($d['gross'] - $d['fee'] - $d['ref'])) . '.</p>';
     }
     admin_page('Overview', $b);
 }
@@ -391,7 +385,7 @@ function r_admin_health(): void {
     $rows = [
         ['Scheduled queue job', $st((int)setting('last_queue'), 300), 'delivery'], ['Email provider', ['postmark' => 'Postmark. Last accepted send: ' . ((int)setting('last_mail_ok') ? when((int)setting('last_mail_ok')) : 'Unknown'), 'smtp' => 'Own mail account (SMTP). Last accepted send: ' . ((int)setting('last_mail_ok') ? when((int)setting('last_mail_ok')) : 'Unknown') . '. No bounce or delivery feedback with this option.', 'log' => 'Not sending: emails are only written to a local log'][mail_provider()] . ' <a href="/admin/mail">Email delivery settings</a>', 'delivery'],
         ['Payment provider (' . $env . ' mode)', env('STRIPE_SECRET') ? 'Configured. Last webhook: ' . ((int)setting('last_stripe_hook') ? when((int)setting('last_stripe_hook')) : 'Unknown') : 'Not configured: payments are simulated', 'finance'],
-        ['Backup', $st((int)setting('last_backup'), 129600), 'appadmin'], ['Campaign availability', ['open' => 'Open', 'before' => 'Not open yet', 'closed' => 'Closed', 'locked' => 'Locked (payments not proven)'][campaign_state()], 'campaign'],
+        ['Backup', $st((int)setting('last_backup'), 129600), 'appadmin'], ['Sending', sending_state() === 'open' ? 'Open' : 'Locked (payments not proven)', 'campaign'],
         ['Dispatch', setting('paused') === '1' ? 'Paused' : 'Running', 'delivery']];
     $full = can_any('appadmin', 'rolesadmin'); $b = '<h1>System health</h1><p class="note">Checked at ' . date('j M Y H:i:s', $now) . '. Missing or old evidence is shown as Unknown or Stale, never Healthy. This page shows no secrets or private messages.</p><div class="cards">';
     foreach ($rows as [$l, $v, $who]) if ($full || can($who) || ($who === 'campaign' && can('campaign'))) $b .= '<section class="statuscard"><h2>' . h($l) . '</h2><p>' . $v . '</p></section>';
@@ -427,14 +421,14 @@ function r_admin_audit(): void {
         $ok = false; foreach ($prefixes as $p) if ($p === '' || str_starts_with($x['action'], $p)) { $ok = true; break; }
         if (!$ok) continue; if (++$n > 100) break;
         $d = json_decode($x['detail'], true);
-        $rl = ''; if (can('rolesadmin') && preg_match('/^config_(campaign|app|privacy|wording)$/', $x['action']) && !empty(($dd = json_decode($x['detail'], true))['changes'])) $rl = ' <a href="/admin/' . substr($x['action'], 7) . '?restore=' . (int)$x['id'] . '">Restore the earlier values</a>';
+        $rl = ''; if (can('rolesadmin') && preg_match('/^config_(site|app|privacy|wording)$/', $x['action']) && !empty(($dd = json_decode($x['detail'], true))['changes'])) $rl = ' <a href="/admin/' . substr($x['action'], 7) . '?restore=' . (int)$x['id'] . '">Restore the earlier values</a>';
         $b .= '<li><strong>' . h($x['action']) . '</strong> by ' . h($x['name'] ?? 'system') . ' at ' . when((int)$x['created']) . ($d && isset($d['changes']) ? ': ' . h(implode('; ', array_map(fn($k, $c) => "$k: {$c['from']} to {$c['to']}", array_keys($d['changes']), $d['changes']))) . ($d['reason'] ? ' (reason: ' . h($d['reason']) . ($d['approval'] ? ', ref ' . h($d['approval']) : '') . ')' : '') : ' ' . h($x['detail'])) . $rl . '</li>';
     }
     admin_page('Change history', $b . '</ul>' . ($n ? '' : '<p>No entries yet.</p>'));
 }
 
-/** The campaign QR code as a download. An optional promotion label, like the link itself, may only be letters, numbers and hyphens. */
-function r_admin_campaign_qr(): void {
+/** The site QR code as a download. An optional promotion label, like the link itself, may only be letters, numbers and hyphens. */
+function r_admin_qr(): void {
     need_admin(); if (!can_any('campaign', 'appadmin', 'finance', 'delivery', 'rolesadmin')) fail(403, 'You do not have permission for that.');
     $ref = preg_match('/^[a-z0-9-]{1,30}$/', (string)($_GET['ref'] ?? '')) ? '?ref=' . $_GET['ref'] : '';
     header('Content-Type: image/svg+xml'); header('Content-Disposition: attachment; filename="7th-swindon-ecards-qr.svg"'); header('X-Content-Type-Options: nosniff');

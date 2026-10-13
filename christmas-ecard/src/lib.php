@@ -4,7 +4,7 @@ const ROOT = __DIR__ . '/..';
 const SITE_NAME = '7th Swindon Scouts eCards'; // the one place the service's name is written; pages, titles, emails and the share preview use it
 /** The build stamp written by scripts/build-dist.sh, so you can tell which version is deployed. */
 function app_version(): string { $f = ROOT . '/VERSION'; return is_file($f) ? trim((string)file_get_contents($f)) : 'development'; }
-date_default_timezone_set('Europe/London'); // campaign dates and displayed times are UK local
+date_default_timezone_set('Europe/London'); // displayed times are UK local
 
 function env(string $k, string $d = ''): string {
     static $e;
@@ -88,7 +88,7 @@ function token(): string { return bin2hex(random_bytes(24)); }
 
 /** Search engines must never index, and browsers and proxies must never keep, anything that is not a public page: card links, accounts, drafts and every admin and private screen. */
 function private_headers(string $path): void {
-    if (in_array($path, ['/', '/help', '/privacy', '/terms'], true) || str_starts_with($path, '/art/') || str_starts_with($path, '/occasion/')) return;
+    if (in_array($path, ['/', '/help', '/privacy', '/terms'], true) || str_starts_with($path, '/art/')) return;
     header('X-Robots-Tag: noindex, nofollow, noarchive');
     header('Cache-Control: private, no-store');
 }
@@ -135,7 +135,7 @@ function need_login(): array {
     if (!$u) { flash('Please sign in or register to continue.', 'warn'); redirect('/login?next=' . urlencode($_SERVER['REQUEST_URI'])); }
     return $u;
 }
-const ROLES = ['campaign' => 'Campaign manager', 'appadmin' => 'Application administrator', 'finance' => 'Finance administrator', 'delivery' => 'Delivery support', 'complaints' => 'Complaints reviewer', 'rolesadmin' => 'Restricted administrator'];
+const ROLES = ['campaign' => 'Card manager', 'appadmin' => 'Application administrator', 'finance' => 'Finance administrator', 'delivery' => 'Delivery support', 'complaints' => 'Complaints reviewer', 'rolesadmin' => 'Restricted administrator'];
 function can(string $role): bool { return in_array($role, explode(',', (string)(user()['roles'] ?? ''))); }
 function need_role(string $role): array { $u = need_admin(); if (!can($role)) fail(403, 'You do not have permission for that.'); return $u; }
 function need_admin(): array {

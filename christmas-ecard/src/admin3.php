@@ -1,5 +1,5 @@
 <?php
-// FRD 2.1 Shoulds: campaign measures (FR-139, S45) and Trustee rehearsal sends (FR-136). Test sends are flagged and excluded from every count.
+// FRD 2.1 Shoulds: site measures (FR-139, S45) and Trustee rehearsal sends (FR-136). Test sends are flagged and excluded from every count.
 
 /** Small counts are shown as "fewer than N" so individuals cannot be picked out. N is decision D-16 (placeholder 5). */
 function small_n(): int { return max(2, (int)setting('small_n', '5')); }

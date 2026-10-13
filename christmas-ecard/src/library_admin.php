@@ -49,7 +49,7 @@ function lib_missing(array $r): array {
     if (!$r['full_key'] && !$r['published_at']) $m[] = 'a picture';
     if (mb_strlen(trim((string)$r['alt_text'])) < 20) $m[] = 'a full description for screen readers that includes the words on the card';
     if (!$r['rights_confirmed']) $m[] = 'confirmation that the Group may use this artwork';
-    if (!$r['year_checked']) $m[] = 'a check that the wording and year on the picture are right for this campaign';
+    if (!$r['year_checked']) $m[] = 'a check that the wording and year on the picture are right for this card';
     return $m;
 }
 

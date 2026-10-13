@@ -95,7 +95,7 @@ function schedule_picker(array $s): string {
     $b = '<fieldset class="sendopts"><legend>When should the cards arrive?</legend><label class="optcard"><input type="radio" name="when" value="now" checked> <strong>As soon as possible</strong><span>They are sent straight away.</span></label>';
     foreach (occasion_of($s)[0] === 'christmas' ? schedule_presets() : [] as $k => [$l, $ts]) $b .= '<label class="optcard"><input type="radio" name="when" value="' . h($k) . '"> <strong>' . h($l) . '</strong><span>' . h(date('l j F', $ts)) . '. You can cancel until then.</span></label>';
     $b .= '<label class="optcard"><input type="radio" name="when" value="custom"> <strong>Choose a date and time</strong><span>At least an hour from now, and within 90 days.</span><input type="datetime-local" name="when_custom" min="' . date('Y-m-d\TH:i', time() + SCHEDULE_MIN) . '" max="' . date('Y-m-d\TH:i', time() + SCHEDULE_MAX) . '" aria-label="Date and time"></label>'
-        . '<p class="note">Scheduled cards are held until then, so the recipients\' email addresses are kept until they are sent. Sending closes for new cards on the campaign closing date, but a card already scheduled normally still goes.</p></fieldset>';
+        . '<p class="note">Scheduled cards are held until then, so the recipients\' email addresses are kept until they are sent.</p></fieldset>';
     return $b;
 }
 
@@ -103,20 +103,13 @@ function card_link(array $r): string { return base_url() . '/c/' . $r['token']; 
 function expiry_ts(array $r): int { return (int)$r['sent_at'] + 86400 * expiry_days(); }
 function support_ref(array $r): string { return 'R-' . $r['id']; } // exposes no viewing token
 
-// ---- campaign window (Europe/London); blank = unrestricted
-function campaign_state(): string {
-    if (app_env() === 'production' && hard_gates_failing()) return 'locked'; // payment and backup evidence
-    $o = setting('opens'); $c = setting('closes');
-    if ($o && time() < strtotime($o)) return 'before';
-    if ($c && time() >= strtotime($c)) return 'closed';
-    return 'open';
-}
+// ---- sending state
+/** 'open' or 'locked'. Sending is always open, except in production while payments are not yet proven (see hard_gates, which only applies while donations are on). */
+function sending_state(): string { return app_env() === 'production' && hard_gates_failing() ? 'locked' : 'open'; }
 
 /** Why sending is not open, in plain words. Only shown to administrators, because it names internal set up. */
-function campaign_block_reason(): string {
-    $st = campaign_state(); if ($st === 'open') return '';
-    if ($st === 'before') return 'Sending opens on ' . date('j F Y a	 H:i', strtotime(setting('opens'))) . ' (Admin, Campaign settings).';
-    if ($st === 'closed') return 'Sending closed on ' . date('j F Y a	 H:i', strtotime(setting('closes'))) . ' (Admin, Campaign settings).';
+function sending_block_reason(): string {
+    if (sending_state() === 'open') return '';
     return 'Production is locked until these pass: ' . implode('; ', array_map(fn($k) => hard_gates()[$k][0] . ' (' . hard_gates()[$k][2] . ')', hard_gates_failing())) . '.';
 }
 
@@ -193,7 +186,6 @@ function email_body(array $r, array $s): string {
 function process_queue(int $limit = 50): int {
     if (mail_provider() === 'smtp') $limit = min($limit, max(1, (int)mail_cfg('SMTP_PER_RUN', '20'))); // ordinary mail accounts cap how many emails they send an hour
     if (setting('paused') === '1') return 0;
-    if (campaign_state() === 'closed' && setting('closure_queue') === 'hold') return 0;
     $n = 0;
     foreach (all("select r.id from recipients r where r.status='queued' and r.next_at<=? order by r.id limit $limit", [time()]) as $row) {
         if (!q("update recipients set status='sending', tries=tries+1 where id=? and status='queued'", [$row['id']])->rowCount()) continue;

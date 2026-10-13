@@ -123,7 +123,7 @@ function backup_restore(string $zip, string $key, string $targetDir): array {
 }
 
 // ---------- spec section 8: gates that configuration cannot override
-/** Each gate: [label, passes, how to pass it]. In production the campaign stays locked while any of these fails. */
+/** Each gate: [label, passes, how to pass it]. In production sending stays locked while any of these fails. */
 function hard_gates(): array {
     return [
         'mfa' => ['Two-step sign in required for every administrator action', true, 'Built in: every admin page and action checks it.'],
