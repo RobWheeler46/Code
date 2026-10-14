@@ -50,6 +50,7 @@ $f = file_get_contents(__DIR__ . '/../src/lib.php'); ok(str_contains($f, "ini_se
 putenv('APP_ENV'); ok(app_env() === 'production', 'with no APP_ENV the site counts as production'); putenv('APP_ENV=development'); ok(app_env() === 'development', 'APP_ENV=development still gives a development site');
 ok(!is_file(__DIR__ . '/../cj2.txt'), 'the stray cookie jar is gone');
 
+$home = http('/', tempnam(sys_get_temp_dir(), 'j'))[1]; ok(str_contains($home, '/assets/style.css?v=') && str_contains($home, '/assets/app.js?v='), 'the style sheet and script addresses carry the build, so a new deployment is never shown with an old cached style sheet');
 proc_terminate($proc); proc_close($proc); @unlink($log);
 exec('rmdir /s /q ' . escapeshellarg($work) . ' 2>nul'); if (is_dir($work)) exec('rm -rf ' . escapeshellarg($work));
 exit($GLOBALS['bad'] ?? 0);
