@@ -420,10 +420,10 @@ There is no design drop down. "Change design" returns to the gallery.
 |                                     [Edit]                             |
 |                                                                        |
 | When should the cards arrive?                                          |
-|  (o) As soon as possible    ( ) Christmas Eve, 6pm (Christmas cards    |
-|  ( ) Christmas Day, 8am         only, while in the future)             |
-|  ( ) Choose a date and time  [ date-time picker ]                      |
-|  Scheduled cards are held until then, so addresses are kept until sent |
+|  Delivery [ As soon as possible v ]   (or: Choose a date and time)     |
+|  Date and time [ picker ]  (shown only when that choice is picked)     |
+|  A scheduled card can be cancelled until sent. Addresses are kept      |
+|  until then.                                                           |
 |                                                                        |
 |  [Send my cards]                                                       |
 |  "Sending is free."                                                    |

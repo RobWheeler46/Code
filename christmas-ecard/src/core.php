@@ -78,23 +78,16 @@ const STATUS_HELP = [
 
 // ---- scheduled sending: a card can be held until a chosen time (at least an hour ahead, at most 90 days), then goes through the same queue
 const SCHEDULE_MIN = 3600, SCHEDULE_MAX = 86400 * 90;
-/** Ready made times: [key => [label, timestamp]], only those still ahead. */
-function schedule_presets(): array {
-    $y = (int)date('Y'); $o = [];
-    foreach (['eve' => ['Christmas Eve, 6pm', "$y-12-24 18:00"], 'day' => ['Christmas Day, 8am', "$y-12-25 08:00"]] as $k => [$l, $t]) { $ts = (int)strtotime($t); if ($ts >= time() + SCHEDULE_MIN && $ts <= time() + SCHEDULE_MAX) $o[$k] = [$l, $ts]; }
-    return $o;
-}
 /** The chosen delivery time from the review form: 0 for now, a timestamp, or false when it is not allowed. */
 function schedule_parse(array $in): int|false {
     $w = (string)($in['when'] ?? 'now'); if ($w === 'now') return 0;
     if ($w === 'custom') { $v = trim((string)($in['when_custom'] ?? '')); $ts = preg_match('/^\d{4}-\d\d-\d\dT\d\d:\d\d$/', $v) ? strtotime($v) : false; }
-    else $ts = schedule_presets()[$w][1] ?? false; // Christmas times are only offered on the screen for Christmas cards; the times themselves are harmless for any card
+    else $ts = false;
     return ($ts && $ts >= time() + SCHEDULE_MIN && $ts <= time() + SCHEDULE_MAX) ? (int)$ts : false;
 }
 function schedule_picker(array $s): string {
     // one compact drop down; the date and time box appears only when "Choose a date and time" is picked
     $b = '<fieldset class="sendopts when"><legend>When should the cards arrive?</legend><label>Delivery<select name="when"><option value="now" selected>As soon as possible</option>';
-    foreach (occasion_of($s)[0] === 'christmas' ? schedule_presets() : [] as $k => [$l, $ts]) $b .= '<option value="' . h($k) . '">' . h($l) . ' (' . h(date('D j M', $ts)) . ')</option>';
     $b .= '<option value="custom">Choose a date and time</option></select></label>'
         . '<label class="whencustom">Date and time (at least an hour from now, within 90 days)<input type="datetime-local" name="when_custom" min="' . date('Y-m-d\TH:i', time() + SCHEDULE_MIN) . '" max="' . date('Y-m-d\TH:i', time() + SCHEDULE_MAX) . '"></label>'
         . '<p class="note">A scheduled card can be cancelled until it is sent. Its recipients\' email addresses are kept until then.</p></fieldset>';

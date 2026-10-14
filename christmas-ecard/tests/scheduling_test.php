@@ -13,7 +13,7 @@ ok(schedule_parse(['when' => 'custom', 'when_custom' => date('Y-m-d\TH:i', time(
 ok(schedule_parse(['when' => 'custom', 'when_custom' => date('Y-m-d\TH:i', time() + 86400 * 100)]) === false, 'more than 90 days ahead is refused');
 ok(schedule_parse(['when' => 'custom', 'when_custom' => 'tomorrow']) === false && schedule_parse(['when' => 'bogus']) === false, 'anything that is not a proper date or a known choice is refused');
 $ts = schedule_parse(['when' => 'custom', 'when_custom' => date('Y-m-d\TH:i', time() + 86400 * 3)]); ok(is_int($ts) && abs($ts - (time() + 86400 * 3)) < 120, 'a date a few days ahead is accepted');
-$p = schedule_presets(); foreach ($p as $k => [$l, $t]) ok(schedule_parse(['when' => $k]) === $t && $t > time(), "the $l choice is a future time");
+ok(schedule_parse(['when' => 'eve']) === false && schedule_parse(['when' => 'day']) === false, 'the old Christmas Eve and Christmas Day choices are gone');
 ok(str_contains(schedule_picker([]), 'As soon as possible') && str_contains(schedule_picker([]), 'name="when_custom"'), 'the picker offers now and a chosen date');
 
 // the queue honours it

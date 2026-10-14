@@ -78,7 +78,7 @@ function r_help(): void {
     $e = h(support_email());
     $faq = [
         'Is it really free?' => 'Yes. Sending is always free.' . (donations_enabled() ? ' A donation is optional and goes to 7th Swindon Scouts. ' . DONATION_PURPOSE : ''),
-        'Can I choose when a card arrives?' => 'Yes. On the last step you can send straight away, pick one of the ready made times when there is one, or choose a date and time. Scheduled cards can be cancelled from My cards until they are sent.',
+        'Can I choose when a card arrives?' => 'Yes. On the last step you can send straight away or choose a date and time. Scheduled cards can be cancelled from My cards until they are sent.',
         'I did not get the verification email' => 'Check your spam or junk folder, then sign in and ask for it again. If the address was wrong, register again with the right one.',
         'My recipient did not get their card' => 'Open "My cards" to see each card\'s status. If it shows Failed, correct the address and send again. Ask the recipient to check spam.',
         'What do the statuses mean?' => implode(' ', array_map(fn($k, $v) => "$k: $v", array_keys(STATUS_HELP), STATUS_HELP)),
