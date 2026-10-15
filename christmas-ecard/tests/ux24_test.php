@@ -10,7 +10,7 @@ ok(array_keys($m) === ['Start', 'Cards', 'Support and delivery', 'Fundraising', 
 ok(count($hrefs) === count(array_unique($hrefs)) && !array_filter($hrefs, fn($h) => !preg_match('#^/(admin|private)/?#', $h)), 'no destination appears twice, and all are admin or private routes');
 ok(str_contains($adm, 'function admin_page(string $title, string $body): never { workspace_shell($title, $body); }'), 'every admin page uses the one shell');
 @unlink(env('DB_PATH'));
-$app = file_get_contents(__DIR__ . '/../src/app.php'); $js = file_get_contents(__DIR__ . '/../public/assets/app.js'); $css = file_get_contents(__DIR__ . '/../public/assets/style.css');
+$app = implode('', array_map('file_get_contents', glob(__DIR__ . '/../src/*.php'))); $js = file_get_contents(__DIR__ . '/../public/assets/app.js'); $css = file_get_contents(__DIR__ . '/../public/assets/style.css');
 ok(str_contains($app, 'data-skip>Skip animation') && str_contains($js, 'data-skip') && str_contains($css, '.noanim *'), 'recipient reveal has a working Skip animation control');
 ok(str_contains($app, 'name="mode" value="free"') && str_contains($app, 'value="send" data-send-btn') && strpos($app, 'name="mode" value="free"') < strpos($app, 'name="mode" value="donate"'), 'UX24-03: review offers free first (chosen unless recovering), donation as an explicit second choice, one send button');
 preg_match_all("/\$a\['([a-z0-9]+)'\]/", file_get_contents(__DIR__ . '/../src/ops.php'), $ak);

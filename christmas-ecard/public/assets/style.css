@@ -310,3 +310,6 @@ main .wsside a[aria-current=page]:not(.btn):not(.tile){background:var(--yellow);
 /* phones: the main buttons stay in view at the bottom of the screen */
 @media(max-width:759px){.sendbar{position:sticky;bottom:0;z-index:5;background:rgba(246,244,240,.96);border-top:1px solid var(--line);margin:1rem -1.2rem 0;padding:.7rem 1.2rem;display:flex;flex-wrap:wrap;gap:.6rem}.sendbar .btn{flex:1 1 9rem;text-align:center}p.sendbar{margin-left:-1rem;margin-right:-1rem;padding-left:1rem;padding-right:1rem}}
 .cardrow h2{margin:0 0 .2rem;font-size:1.1rem}
+.crumbs a{display:inline-block;padding:.45rem 0;min-height:0}
+main .libtabs a[aria-current=page]:not(.btn):not(.tile){color:#fff}
+.crumbs a{display:inline-flex;align-items:center;min-height:44px;padding:0}.crumbs ol{align-items:center}

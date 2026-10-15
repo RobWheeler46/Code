@@ -15,10 +15,10 @@ $t = time(); $xmas = ['sender_name' => 'The Smiths', 'card' => 'pegs'];
 ok(card_word($xmas) === 'Christmas card', 'a Christmas design gives a Christmas card');
 q("insert into designs(slug,internal_name,category,created) values('bd-test','Birthday test','birthday',?),('ty-test','Thanks test','thank-you',?)", [$t, $t]);
 $b = ['sender_name' => 'The Smiths', 'card' => 'bd-test']; $th = ['sender_name' => 'The Smiths', 'card' => 'ty-test'];
-ok(card_word($b) === 'birthday card' && card_word($th) === 'thank you card', 'a birthday card is a birthday card and a thank you card is a thank you card');
-ok(email_subject($xmas) === 'The Smiths sent you a Christmas card' && email_subject($b) === 'The Smiths sent you a birthday card', 'the email subject names the occasion');
-ok(tpl_text(email_intro(), $th) === 'The Smiths has sent you a thank you card.', 'the opening line names the occasion');
-ok(str_contains(tpl_html('{sender} sent you a {card}', $b), '<strong>The Smiths</strong>') && str_contains(tpl_html('{sender} sent you a {card}', $b), 'birthday card'), 'the HTML version of the email does too');
+ok(card_word($b) === 'Birthday card' && card_word($th) === 'Thank you card', 'a birthday card is a Birthday card and a thank you card is a Thank you card (the name as typed)');
+ok(email_subject($xmas) === 'The Smiths sent you a Christmas card' && email_subject($b) === 'The Smiths sent you a Birthday card', 'the email subject names the occasion');
+ok(tpl_text(email_intro(), $th) === 'The Smiths has sent you a Thank you card.', 'the opening line names the occasion');
+ok(str_contains(tpl_html('{sender} sent you a {card}', $b), '<strong>The Smiths</strong>') && str_contains(tpl_html('{sender} sent you a {card}', $b), 'Birthday card'), 'the HTML version of the email does too');
 set_setting('email_subject', 'A message from {sender}'); ok(email_subject($b) === 'A message from The Smiths', 'a subject edited by an administrator still works');
 set_setting('email_subject', '');
 

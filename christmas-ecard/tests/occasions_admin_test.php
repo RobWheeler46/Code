@@ -37,6 +37,14 @@ act($a, ['do' => 'delete', 'id' => $id]); ok(isset(occ()['easter']), 'an occasio
 $xid = (int)dbq("select id from occasions where slug='christmas'")->fetchColumn(); act($a, ['do' => 'delete', 'id' => $xid]); ok(isset(occ()['christmas']), 'Christmas cannot be removed');
 $gid = (int)dbq("select id from occasions where slug='get-well-soon'")->fetchColumn(); act($a, ['do' => 'delete', 'id' => $gid]); ok(!isset(occ()['get-well-soon']), 'an empty occasion can be removed');
 for ($i = 0; $i < 14; $i++) act($a, ['do' => 'add', 'label' => "Extra $i"]); ok(count(occ()) <= OCCASIONS_MAX, 'there is a limit on how many occasions there can be');
+// seasons
+$gw0 = (int)dbq("select id from occasions where slug='get-well'")->fetchColumn();
+act($a, ['do' => 'save', 'id' => $gw0, 'label' => 'Get well', 'season_start' => '03-01', 'season_end' => '04-30']); ok(dbq("select season_start||'/'||season_end from occasions where id=$gw0")->fetchColumn() === '03-01/04-30', 'a season of two month and day values can be saved');
+act($a, ['do' => 'save', 'id' => $gw0, 'label' => 'Get well', 'season_start' => '13-40', 'season_end' => '04-30']); ok(dbq("select season_start from occasions where id=$gw0")->fetchColumn() === '03-01', 'a start that is not a real month and day is refused');
+act($a, ['do' => 'save', 'id' => $gw0, 'label' => 'Get well', 'season_start' => '05-01', 'season_end' => '']); ok(dbq("select season_start from occasions where id=$gw0")->fetchColumn() === '03-01', 'a start with no end is refused');
+act($a, ['do' => 'save', 'id' => $gw0, 'label' => 'Get well', 'season_start' => '', 'season_end' => '']); ok(dbq("select season_start from occasions where id=$gw0")->fetchColumn() === null, 'both blank means no season');
+[, $pg] = http('/admin/occasions', $a); ok(str_contains($pg, 'aria-label="Season starts for Christmas, month and day"') && str_contains($pg, 'value="11-01"'), 'every occasion has labelled season boxes, and Christmas shows its dates');
+
 // the order occasions are listed in
 function order(): array { return array_column(dbq('select slug from occasions order by sort, id')->fetchAll(PDO::FETCH_ASSOC), 'slug'); }
 $before = order(); $gw = (int)dbq("select id from occasions where slug='get-well'")->fetchColumn();
@@ -46,7 +54,7 @@ act($a, ['do' => 'down', 'id' => $gw]); ok(order() === $before, 'and Move down p
 $first = (int)dbq("select id from occasions where slug='" . $before[0] . "'")->fetchColumn(); act($a, ['do' => 'up', 'id' => $first]); ok(order() === $before, 'the first occasion cannot be moved up');
 $lastId = (int)dbq("select id from occasions where slug='" . end($before) . "'")->fetchColumn(); act($a, ['do' => 'down', 'id' => $lastId]); ok(order() === $before, 'and the last cannot be moved down');
 [, $pg] = http('/admin/occasions', $a); ok(str_contains($pg, 'aria-label="Move Get well up"') && str_contains($pg, 'aria-label="Move Get well down"'), 'each move button says which occasion it moves');
-$log = (string)dbq("select group_concat(action) from audit where action like 'occasion_%'")->fetchColumn(); ok(str_contains($log, 'occasion_add') && str_contains($log, 'occasion_rename') && str_contains($log, 'occasion_delete'), 'each change is recorded in the change history');
+$log = (string)dbq("select group_concat(action) from audit where action like 'occasion_%'")->fetchColumn(); ok(str_contains($log, 'occasion_add') && str_contains($log, 'occasion_save') && str_contains($log, 'occasion_delete'), 'each change is recorded in the change history');
 proc_terminate($proc); proc_close($proc);
 exec('rmdir /s /q ' . escapeshellarg($work) . ' 2>nul'); if (is_dir($work)) exec('rm -rf ' . escapeshellarg($work));
 exit($GLOBALS['bad'] ?? 0);

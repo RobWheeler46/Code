@@ -49,7 +49,7 @@ ok(count($seen) > 3, 'with nothing featured the picture is random again');
 $_SESSION['hero'] = $target; ok(hero_for_session() !== '' && gallery_cards()[hero_for_session()] ?? false, 'the session hero is always a design senders can choose');
 
 // a draft whose design is later held back keeps its content and is steered to choose another
-$src = file_get_contents(__DIR__ . '/../src/app.php');
+$src = implode('', array_map('file_get_contents', glob(__DIR__ . '/../src/*.php')));
 ok(str_contains($src, 'no longer available. Use Change design to pick another. Your message and recipients are safe.') && str_contains($src, "redirect('/compose?id=' . (int)\$s['id'])"), 'compose and review keep a saved draft and ask for another design instead of discarding it');
 
 exec('rmdir /s /q ' . escapeshellarg($work) . ' 2>nul'); if (is_dir($work)) exec('rm -rf ' . escapeshellarg($work));

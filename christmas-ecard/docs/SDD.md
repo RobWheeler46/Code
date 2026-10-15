@@ -69,7 +69,11 @@ Stripe / Postmark ──webhooks──> /hooks/stripe, /hooks/postmark
 | File | Responsibility |
 |---|---|
 | `lib.php` | Settings, database connection and one time migrations, sessions, security headers, rate limits, sign in checks, roles, page layout, email sending switch |
-| `app.php` | The front controller and route table, home, compose, review, send, dashboard, card page, help, account pages, webhooks |
+| `app.php` | The front controller and route table, shared page helpers, the home page, Help, and the finance export |
+| `send.php` | The card journey: write, preview, review, send, pay, and the sender's own list of cards |
+| `recipient.php` | What a recipient sees: the envelope, the card, reporting it, stopping cards |
+| `auth.php` | Registering, signing in, passwords, two step sign in, email preferences, deleting an account |
+| `hooks.php` | Webhooks from Stripe and Postmark |
 | `core.php` | Domain logic: recipients, the send queue, email text, payment confirmation, opt outs, sending state, scheduled delivery |
 | `cards.php`, `library.php` | The card catalogue and the eCard Library tables (designs, versions) |
 | `library_admin.php`, `uploads.php` | The eCard Library screens and the safe picture upload service |
@@ -176,7 +180,7 @@ The review page offers "Send for free" or "Make an optional donation". A donatio
 
 Each design has an occasion (chosen in the eCard Library). Occasions are managed on the Occasions screen: an administrator can add, rename and remove them, except Christmas, which is built in. The home page shows a drop down of occasions that have published cards (hidden when there is only one). Wording in emails and card pages follows the card's occasion ("Christmas card", "birthday card").
 
-**The Christmas season.** Between two month and day values set in Site settings (default 1 November to 6 January, which may cross the new year) the home page heading reads "Send a Christmas card, Scout style", Christmas cards come first and the featured picture is a Christmas card. The rest of the year the heading is general, the other occasions' cards come first and Christmas cards come last. No card is ever hidden by the season.
+**Seasons.** Each occasion can have a season: two month and day values, set on the Occasions screen (Christmas starts as 1 November to 6 January; a season may cross the new year). When an occasion's season is on, the home page heading names it ("Send a Christmas card, Scout style", "Send an Easter card, Scout style"), its cards come first and the featured picture is one of them. If two seasons are on, the one higher in the Occasions list leads. Occasions with no season come next, and occasions whose season is not on come last. No card is ever hidden by a season. The occasion's name is used as typed in sentences ("a Birthday card", "an Easter card").
 
 ### 7.5 The eCard Library
 
@@ -203,7 +207,7 @@ An owner invites by email with a level (administrator or owner). The person sign
 
 | Screen | Settings |
 |---|---|
-| Site settings | Take donations, suggested amounts, the Christmas season dates, Gift Aid charity and switch; shows the site link, QR code and promotion counts |
+| Site settings | Take donations, suggested amounts, Gift Aid charity and switch; shows the site link, QR code and promotion counts |
 | Application settings | Recipients per card, greeting and name limits, address book limits, test cards per hour, blocked words, small number threshold, rehearsal allow list, alert recipients and escalation, allow web addresses |
 | Email and help wording | Subject, opening line and button of the card email (with `{sender}` and `{card}`), support email, extra Help questions |
 | Privacy and retention | How long card links and details are kept |
@@ -255,7 +259,6 @@ About 30 automated test scripts (PHP, run with `bash scripts/test-all.sh`). They
 6. Keyboard and screen reader testing and a volunteer usability trial are not done.
 7. With an ordinary mail account, large scheduled bursts send slowly. Postmark is better for busy days.
 8. The code review (`docs/CODE_REVIEW.md`) lists optional improvements, such as splitting the largest file.
-9. Only Christmas has a season. Other occasions could have their own dates if needed.
 10. Two deployments went blank for a few minutes after upload. The cause is not known; the error log added since will explain any repeat.
 
 ---
@@ -673,10 +676,10 @@ Publish and other actions ask for confirmation first and say what will change.
 +------------------------------------------------------------------------+
 | Occasions                                                              |
 | Cards are sorted into occasions, such as Christmas or Birthday. ...    |
-| Occasion            Cards  On show                                     |
-| [Christmas      ] [Rename]   12     12     Built in                    |
-| [Birthday       ] [Rename]    0      0     [Remove]                    |
-| [Get well       ] [Rename]    3      3     Has cards                   |
+| Occasion and season (month and day, like 11-01)    Cards  On show      |
+| [Christmas   ] [11-01] to [01-06] [Save]  12  12  Move up/down Built in|
+| [Birthday    ] [     ] to [     ] [Save]   0   0  Move up/down Remove  |
+| [Easter      ] [03-20] to [04-25] [Save]   3   3  Move up/down Has cards|
 |                                                                        |
 | Add an occasion                                                        |
 | Name (for example Get well, Easter, Congratulations) [____________]    |
@@ -722,7 +725,6 @@ Form                                      Review screen (after [Review changes])
 +---------------------------------------+
 ```
 
-Site settings also holds the Christmas season dates: "Christmas season starts" and "ends", each a month and day such as `11-01`. Between them the home page leads with Christmas cards.
 
 **A5 Delivery issues** (`/admin/delivery`)
 
@@ -802,7 +804,7 @@ Finance                                  Gift Aid (owners)         Measures
 ```
 Email preview                          Rehearsal
 +------------------------------------+ +-----------------------------------+
-| Email preview                      | | Trustee rehearsal                 |
+| Email preview                      | | Rehearsal                         |
 | (rendered card email, as received) | | Send test cards only to the       |
 | [Send me this email]               | | allow list: a@x, b@y              |
 +------------------------------------+ | [Send rehearsal card]  Results log|

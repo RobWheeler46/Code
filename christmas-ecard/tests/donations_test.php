@@ -10,7 +10,7 @@ ok(!donations_enabled(), 'donations are off unless the switch was turned on');
 set_setting('donations_enabled', '1'); ok(donations_enabled(), 'and on once it is');
 set_setting('donations_enabled', '0'); ok(!donations_enabled(), 'and off again');
 ok(!giftaid_on(), 'Gift Aid is off by default');
-$src = file_get_contents(__DIR__ . '/../src/app.php');
+$src = implode('', array_map('file_get_contents', glob(__DIR__ . '/../src/*.php')));
 ok(str_contains($src, "if (!donations_enabled()) \$form .=") && str_contains($src, "\$do === 'donate' && !donations_enabled()"), 'the review screen and the server both check the switch');
 
 file_put_contents($work . '/home.php', '<?php require ' . var_export(realpath(__DIR__ . '/../src/app.php'), true) . '; r_home();'); $home = (string)shell_exec('php ' . escapeshellarg($work . '/home.php'));

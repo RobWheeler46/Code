@@ -155,8 +155,8 @@ function confirm_payment(int $sid, string $cs, int $amt, string $acct = '', stri
 }
 
 /** Wording an administrator can change. Only the sender name is ever merged in, and each place escapes it for where it goes. */
-function tpl_text(string $tpl, array $s): string { return str_replace(['{sender}', '{card}'], [(string)$s['sender_name'], card_word($s)], $tpl); }
-function tpl_html(string $tpl, array $s): string { return str_replace(['{sender}', '{card}'], ['<strong>' . htmlspecialchars((string)$s['sender_name'], ENT_QUOTES) . '</strong>', htmlspecialchars(card_word($s), ENT_QUOTES)], htmlspecialchars($tpl, ENT_QUOTES)); }
+function tpl_text(string $tpl, array $s): string { $tpl = preg_replace_callback('/\b([aA]) \{card\}/', fn($m) => $m[1] === 'A' ? ucfirst(card_phrase($s)) : card_phrase($s), $tpl); return str_replace(['{sender}', '{card}'], [(string)$s['sender_name'], card_word($s)], $tpl); }
+function tpl_html(string $tpl, array $s): string { $e = fn($x) => htmlspecialchars((string)$x, ENT_QUOTES); $t = preg_replace_callback('/\b([aA]) \{card\}/', fn($m) => $e($m[1] === 'A' ? ucfirst(card_phrase($s)) : card_phrase($s)), $e($tpl)); return str_replace(['{sender}', '{card}'], ['<strong>' . $e($s['sender_name']) . '</strong>', $e(card_word($s))], $t); }
 function email_subject(array $s): string { return trim(preg_replace('/[\r\n]+/', ' ', tpl_text(setting('email_subject') ?: '{sender} sent you a {card}', $s))); }
 function email_intro(): string { return setting('email_intro') ?: '{sender} has sent you a {card}.'; }
 function email_button(): string { return setting('email_button') ?: 'Open your card'; }

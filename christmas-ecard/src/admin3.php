@@ -1,5 +1,5 @@
 <?php
-// FRD 2.1 Shoulds: site measures (FR-139, S45) and Trustee rehearsal sends (FR-136). Test sends are flagged and excluded from every count.
+// FRD 2.1 Shoulds: site measures (FR-139, S45) and rehearsal sends (FR-136). Test sends are flagged and excluded from every count.
 
 /** Small counts are shown as "fewer than N" so individuals cannot be picked out. N is decision D-16 (placeholder 5). */
 function small_n(): int { return max(2, (int)setting('small_n', '5')); }
@@ -23,7 +23,7 @@ function campaign_measures(): array {
 function r_admin_measures(): void {
     need_admin(); if (!can_any('campaign', 'finance', 'appadmin', 'rolesadmin')) fail(403, 'You do not have permission for that.');
     $m = campaign_measures();
-    $b = '<h1>Campaign measures</h1><p class="note">Totals only. Nothing here tracks individuals, and test cards are excluded. Counts below ' . small_n() . ' show as "fewer than ' . small_n() . '".</p><div class="cards">'
+    $b = '<h1>Measures</h1><p class="note">Totals only. Nothing here tracks individuals, and test cards are excluded. Counts below ' . small_n() . ' show as "fewer than ' . small_n() . '".</p><div class="cards">'
         . '<section class="statuscard"><h2>Cards started</h2><p>' . masked($m['started']) . '</p></section><section class="statuscard"><h2>Cards submitted</h2><p>' . masked($m['submitted']) . '</p></section>'
         . '<section class="statuscard"><h2>Senders who donated</h2><p>' . masked($m['donors']) . ' of ' . masked($m['senders']) . ' (' . pct($m['donors'], $m['senders']) . ')</p></section>'
         . '<section class="statuscard"><h2>Average donation</h2><p>' . ($m['donations'] >= small_n() ? gbp(intdiv($m['gross'], $m['donations'])) : 'not enough data') . '</p></section>'
@@ -35,7 +35,7 @@ function r_admin_measures(): void {
     $b .= '</ul><h2>Design popularity (submitted cards)</h2><ul>';
     foreach ($m['designs'] as $id => $n) $b .= '<li>' . h(cards()[$id]['title'] ?? $id) . ': ' . masked($n) . '</li>';
     $b .= '</ul><h2>Definitions</h2><ul><li><strong>Started:</strong> a draft was saved or sent, including unfinished ones.</li><li><strong>Submitted:</strong> the sender chose Send, with or without a donation.</li><li><strong>Viewed:</strong> a recipient pressed Open your card. It is a share of cards sent, not proof anyone read them.</li><li><strong>Where cards stop:</strong> the furthest point each unsent draft reached. We do not record the pages anyone visited.</li></ul>';
-    admin_page('Campaign measures', $b);
+    admin_page('Measures', $b);
 }
 
 // ---------- rehearsal (S42 companion): real cards to allow-listed addresses only
@@ -53,7 +53,7 @@ function r_admin_rehearsal(): void {
         foreach ($pick as $e) q('insert into recipients(send_id,name,email,token) values(?,?,?,?)', [$sid, 'Tester', $e, token()]);
         queue_send($sid); audit((int)$u['id'], 'rehearsal_send', count($pick) . ' allow-listed addresses'); flash('Rehearsal card sent to ' . count($pick) . ' allow-listed address(es). It is marked as a test and left out of all counts.'); redirect('/admin/rehearsal');
     }
-    $b = '<h1>Trustee rehearsal</h1><p>Send a real card, through the normal sending process, to addresses on the allow-list only. Use it on staging with payment in test mode. Test cards are labelled as tests and are never counted in totals.</p>';
+    $b = '<h1>Rehearsal</h1><p>Send a real card, through the normal sending process, to addresses on the allow-list only. Use it on staging with payment in test mode. Test cards are labelled as tests and are never counted in totals.</p>';
     if (!$allowed) $b .= '<p class="flash warn">The allow-list is empty. Add addresses under Application settings (Rehearsal allow-list).</p>';
     else {
         $b .= '<form method="post" class="stack">' . csrf() . '<fieldset><legend>Send a rehearsal card to</legend>' . implode('', array_map(fn($e) => '<label class="opt"><input type="checkbox" name="to[]" value="' . h($e) . '" checked> ' . h($e) . '</label>', $allowed)) . '</fieldset><button class="btn">Send rehearsal card</button></form>'
@@ -62,5 +62,5 @@ function r_admin_rehearsal(): void {
     }
     $b .= '<h2>Rehearsal history</h2><ul>';
     foreach (all("select * from audit where action in ('rehearsal_send','uat_result') order by id desc limit 30") as $x) $b .= '<li>' . when((int)$x['created']) . ' ' . h($x['action']) . ': ' . h($x['detail']) . '</li>';
-    admin_page('Trustee rehearsal', $b . '</ul>');
+    admin_page('Rehearsal', $b . '</ul>');
 }
