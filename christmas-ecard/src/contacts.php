@@ -105,7 +105,7 @@ function r_contacts(): void {
         . group_filter_links($uid, $g, $q, '/contacts') . '<p><a href="/groups">Manage groups</a></p>'
         . ($rows ? '<table><tr><th>Name</th><th>Email</th><th>Groups</th><th></th></tr>' . $rows . '</table>' : $empty)
         . '<h2>Add a contact</h2><form method="post" class="stack">' . csrf() . contact_fields($old, $errs, $uid, array_map('intval', (array)($old['groups'] ?? []))) . '<button class="btn">Add contact</button></form>'
-        . ($total ? '<p><a href="/contacts/delete-all">Delete all my contacts</a></p>' : '');
+        . '<p><a href="/contacts/import">Import contacts from a spreadsheet</a></p>' . ($total ? '<p><a href="/contacts/delete-all">Delete all my contacts</a></p>' : '');
     page('Address book', $b);
 }
 
@@ -219,4 +219,31 @@ function r_save_contact(): void {
         }
     }
     redirect(safe_next($_POST['back'] ?? ''));
+}
+
+/** Add contacts from a spreadsheet saved as CSV: name then email, one person per line, a heading line is fine. Nothing is emailed. */
+function r_contacts_import(): void {
+    $u = need_verified(); $uid = (int)$u['id'];
+    $res = '';
+    if (post()) {
+        $f = $_FILES['csv'] ?? null;
+        if (!$f || $f['error'] !== UPLOAD_ERR_OK || $f['size'] > 200000 || !is_uploaded_file($f["tmp_name"])) flash('Please choose a CSV file smaller than 200 KB.', 'err');
+        else {
+            $h = fopen($f['tmp_name'], 'r'); $n = 0; $add = 0; $dup = 0; $bad = []; $full = 0; $have = (int)one('select count(*) c from contacts where user_id=?', [$uid])['c'];
+            while (($row = fgetcsv($h, 1000, ',', '"', '')) !== false && $n < 1000) {
+                $n++; if ($row === [null]) continue;
+                $name = trim(preg_replace('/\s+/', ' ', ltrim((string)($row[0] ?? ''), "\xEF\xBB\xBF"))); $email = norm_email((string)($row[1] ?? ''));
+                if ($n === 1 && strtolower($name) === 'name' && strtolower($email) === 'email') continue; // heading line
+                if ($e = contact_errors($name, $email)) { $bad[] = "line $n: " . implode(' ', $e); continue; }
+                if (contact_dup($uid, $email)) { $dup++; continue; }
+                if ($have >= contacts_max()) { $full++; continue; }
+                q('insert into contacts(user_id,name,email,created,updated) values(?,?,?,?,?)', [$uid, $name, $email, time(), time()]); $add++; $have++;
+            }
+            fclose($h); audit($uid, 'contacts_import', "$add added, $dup already saved, " . count($bad) . ' not valid');
+            $res = '<section class="flash" role="status"><h2>Import finished</h2><p>' . $add . ' added. ' . $dup . ' already in your address book. ' . count($bad) . ' not added because they were not valid.' . ($full ? ' ' . $full . ' not added because your address book is full (' . contacts_max() . ' contacts).' : '') . '</p>'
+                . ($bad ? '<ul>' . implode('', array_map(fn($x) => '<li>' . h($x) . '</li>', array_slice($bad, 0, 20))) . '</ul>' : '') . '<p><a href="/contacts">Go to my address book</a></p></section>';
+        }
+    }
+    page('Import contacts', $res . '<h1>Import contacts</h1><p>Save your spreadsheet as a CSV file with the name in the first column and the email address in the second, one person on each line. A heading line saying Name and Email is fine. Nothing is emailed to anyone. Up to 1,000 lines at a time.</p>'
+        . '<form method="post" enctype="multipart/form-data" class="stack">' . csrf() . '<label>CSV file<input type="file" name="csv" accept=".csv,text/csv" required></label><button class="btn">Import contacts</button></form><p><a href="/contacts">Back to my address book</a></p>');
 }

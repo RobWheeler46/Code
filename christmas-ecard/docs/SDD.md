@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| Service | 7th Swindon Scouts eCards, live at https://card.7thswindon.org.uk |
+| Service | 7th Swindon Scouts eCards, live at https://cards.7thswindon.org.uk |
 | Document | Software Design Document (SDD) with wireframes |
-| Version | 1.1, 15 October 2026 |
+| Version | 1.2, 15 October 2026 |
 | Describes | Application version 2026.10.15 (the footer of every page shows the exact build) |
 | Audience | Trustees, volunteers who run the service, and whoever maintains the code |
 | Status | Describes the service as built. Items not yet decided or built are listed in section 15 |
@@ -166,6 +166,8 @@ Register / sign in / confirm email (once)  <────────────
                                                          scheduled: held until the chosen time (1 hour to 90 days ahead)
 ```
 
+After sending, the status page offers a "Tell a friend" block (WhatsApp, email and the plain link, labelled `?ref=sendshare` so Measures can count visits). While cards are still scheduled the sender can change the delivery time (same limits as when scheduling, or send at once); only cards that have not started sending move, and the change is recorded in the change history. When donations are on, the amount suggested on the review page grows with the number of cards (first, second or third amount for 1 to 3, 4 to 10 and 11 or more).
+
 Recipient states shown to the sender: Draft, Queued, Scheduled, Sent, Delivered, Viewed, Failed, Delivery unconfirmed, Cancelled.
 
 ### 7.2 The queue
@@ -278,6 +280,7 @@ About 30 automated test scripts (PHP, run with `bash scripts/test-all.sh`). They
 | P9 | Forgotten and reset password | `/forgot`, `/reset` | Visitor |
 | P10 | Account | `/account` | Sender |
 | P11 | Address book and groups | `/contacts`, `/groups` | Sender |
+| P11a | Import contacts | `/contacts/import` | Sender |
 | P12 | Help and FAQ | `/help` | Everyone |
 | P13 | Privacy and Terms | `/privacy`, `/terms` | Everyone |
 | P14 | Delete my account | `/account/delete` | Sender |
@@ -443,7 +446,7 @@ Desktop                                              Phone
                                                      +----------------------------+
 ONLY WHEN DONATIONS ARE ON the delivery block is followed by:
   How would you like to send?  (o) Send for free  ( ) Make an optional donation
-   (£2) (£5) (£10) (Other £[__])  [ ] add a line to the cards
+   (£2) (£5 suggested) (£10) (Other £[__])   suggestion grows with card count  [ ] add a line to the cards
    [ ] Gift Aid form (name, address, declaration) if offered
    Total £0.00     [Send my cards for free] / [Donate and send]
 WHEN A PAYMENT IS PENDING: [Check payment status] [Cancel this attempt]
@@ -464,8 +467,10 @@ Desktop                                                    Phone
 | Gran   gran@example.org  Viewed                      |   | | [Viewed]           | |
 | Bob    bob@example.org   Scheduled   [Cancel]        |   | +--------------------+ |
 | Sue    sue@example.org   Failed  [fix ____][Resend]  |   | | Sue  [Failed]      | |
-| Legend: Queued, Scheduled, Sent, Delivered, ...      |   | | [address] [Resend] | |
-+------------------------------------------------------+   +------------------------+
+| > Change the delivery time (only while Scheduled)    |   | | [address] [Resend] | |
+| Legend: Queued, Scheduled, Sent, Delivered, ...      |   +--------------------+ |
+| (after sending) Tell a friend: [WhatsApp] [Email]    |   +------------------------+
++------------------------------------------------------+
 On a phone each recipient is its own block, so no action is cut off.
 ```
 
@@ -527,11 +532,14 @@ Register (/register)              Sign in (/login)           Forgotten password 
 | Name        Email               Groups          Action                 |
 | Gran        gran@example.org    Family          [Edit]                 |
 | ...                                                                    |
-| [Delete all contacts]   Contact groups: Family (3) Friends (5) [New]   |
+| [Import from a spreadsheet]  [Delete all contacts]                      |
+| Contact groups: Family (3) Friends (5) [New]                           |
 | Picker while writing: "Choose from address book": tick contacts or a   |
 | group, [Add to my card]                                                |
 +------------------------------------------------------------------------+
 ```
+
+**P11a Import contacts** (`/contacts/import`): choose a CSV file (name, then email, one person per line; a heading line is fine; 200 KB and 1,000 lines at most) and [Import contacts]. The result lists how many were added, how many were already saved, and each line that was not valid. Duplicates and the address book limit are respected, nothing is emailed, and the import is recorded in the change history.
 
 **P12 Help and FAQ** (`/help`)
 
