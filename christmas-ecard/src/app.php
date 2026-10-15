@@ -281,7 +281,7 @@ function r_email_preview(): void {
 function r_preview(): void {
     $s = own_send((int)($_GET['id'] ?? 0));
     $r = one('select * from recipients where send_id=? order by id limit 1', [$s['id']]);
-    page('Preview', '<h1>Preview</h1><p>This is how your card will look' . ($r ? ' for ' . h($r['name']) : '') . '.</p>' . card_view($s['card'], $r['name'] ?? 'Friend', $r ? resolved_msg($r, $s) : $s['message'], $s['sender_name'], card_note($s)) . '<p><a class="btn" href="/compose?id=' . $s['id'] . '">Back to editing</a></p>');
+    page('Preview', '<h1>Preview</h1><p>This is how your card will look' . ($r ? ' for ' . h($r['name']) : '') . '.</p>' . card_view($s['card'], $r['name'] ?? 'Friend', $r ? resolved_msg($r, $s) : $s['message'], $s['sender_name'], card_note($s)) . '<p class="sendbar"><a class="btn alt" href="/compose?id=' . $s['id'] . '">Back to editing</a> <a class="btn" href="/review?id=' . $s['id'] . '">Review and send</a></p>');
 }
 
 /** Resolves a pending Stripe attempt. Returns 'paid', 'expired' or 'pending'. */
@@ -390,7 +390,7 @@ function r_review(): void {
         $rec = $_GET['recover'] ?? '';
         if ($rec === 'cancelled' || $rec === 'failed') $form .= '<p class="flash warn" role="status"><strong>' . ($rec === 'cancelled' ? 'Payment was cancelled.' : 'Payment did not go through.') . '</strong> Nothing was charged and your card and recipients are safe. You can try again, or choose to send for free. Cards are only sent when you press a send button below.</p>';
         $form .= schedule_picker($s);
-        if (!donations_enabled()) $form .= '<div class="row"><button class="btn big" name="do" value="send">Send my cards</button></div><p class="note">Sending is free.</p>';
+        if (!donations_enabled()) $form .= '<div class="row sendbar"><button class="btn big" name="do" value="send">Send my cards</button></div><p class="note">Sending is free.</p>';
         else { $form .= '<fieldset class="sendopts"><legend>How would you like to send?</legend>'
             . '<label class="optcard"><input type="radio" name="mode" value="free"' . ($rec ? '' : ' checked') . '> <strong>Send for free</strong><span>Your cards are free to send. No payment needed.</span></label>'
             . '<label class="optcard"><input type="radio" name="mode" value="donate"' . ($rec ? ' checked' : '') . '> <strong>Make an optional donation</strong><span>' . h(DONATION_PURPOSE) . '</span></label>'
@@ -501,7 +501,7 @@ function r_send(): void {
     $done = empty($_GET['done']) ? '' : '<section class="flash" role="status"><h2>' . ($sched ? 'Your cards are scheduled' : 'Your cards are queued for sending') . '</h2>' . ($sched ? '<p>' . h($sched) . 'You can cancel any card until then.</p>' : '') . '<p>Queued means accepted and waiting to go out. It does not mean delivered. Each status updates below as cards go out.</p><p><strong>Donation:</strong> ' . h(donation_state($s)) . ($s['donation'] && !one('select 1 from donations where send_id=?', [$s['id']]) ? ' (we will show it here once payment is confirmed)' : '') . '</p><p><a href="/dashboard">Go to my cards</a></p></section>';
     page('Card status', $done . '<h1>' . h(cards()[$s['card']]['title']) . '</h1>' . ($sched && empty($_GET['done']) ? '<p class="note">' . h($sched) . '</p>' : '') . '<p><strong>Cards:</strong> ' . h(ucfirst(str_replace('_', ' ', $s['status']))) . '. <strong>Donation:</strong> ' . h(donation_state($s)) . '.</p>'
         . ($queued ? '<form method="post">' . csrf() . '<input type="hidden" name="id" value="' . $sid . '"><button class="btn alt" name="do" value="cancel_all">Cancel unsent cards</button></form>' : '')
-        . '<table><tr><th>Name</th><th>Email</th><th>Status</th><th></th></tr>' . $rows . '</table>' . $legend . '<p class="note">"Viewed" means the recipient opened the card themselves. Cancelled and withdrawn cards do not refund a donation.</p>');
+        . '<table class="stacked"><tr><th>Name</th><th>Email</th><th>Status</th><th></th></tr>' . $rows . '</table>' . $legend . '<p class="note">"Viewed" means the recipient opened the card themselves. Cancelled and withdrawn cards do not refund a donation.</p>');
 }
 
 // ---------- recipient
