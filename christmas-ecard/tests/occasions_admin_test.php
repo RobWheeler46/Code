@@ -37,6 +37,15 @@ act($a, ['do' => 'delete', 'id' => $id]); ok(isset(occ()['easter']), 'an occasio
 $xid = (int)dbq("select id from occasions where slug='christmas'")->fetchColumn(); act($a, ['do' => 'delete', 'id' => $xid]); ok(isset(occ()['christmas']), 'Christmas cannot be removed');
 $gid = (int)dbq("select id from occasions where slug='get-well-soon'")->fetchColumn(); act($a, ['do' => 'delete', 'id' => $gid]); ok(!isset(occ()['get-well-soon']), 'an empty occasion can be removed');
 for ($i = 0; $i < 14; $i++) act($a, ['do' => 'add', 'label' => "Extra $i"]); ok(count(occ()) <= OCCASIONS_MAX, 'there is a limit on how many occasions there can be');
+// the order occasions are listed in
+function order(): array { return array_column(dbq('select slug from occasions order by sort, id')->fetchAll(PDO::FETCH_ASSOC), 'slug'); }
+$before = order(); $gw = (int)dbq("select id from occasions where slug='get-well'")->fetchColumn();
+ok(end($before) !== 'christmas' && array_search('get-well', $before) > array_search('birthday', $before), 'a new occasion goes to the end of the list');
+act($a, ['do' => 'up', 'id' => $gw]); $o1 = order(); ok(array_search('get-well', $o1) === array_search('get-well', $before) - 1, 'Move up puts an occasion one place earlier');
+act($a, ['do' => 'down', 'id' => $gw]); ok(order() === $before, 'and Move down puts it back');
+$first = (int)dbq("select id from occasions where slug='" . $before[0] . "'")->fetchColumn(); act($a, ['do' => 'up', 'id' => $first]); ok(order() === $before, 'the first occasion cannot be moved up');
+$lastId = (int)dbq("select id from occasions where slug='" . end($before) . "'")->fetchColumn(); act($a, ['do' => 'down', 'id' => $lastId]); ok(order() === $before, 'and the last cannot be moved down');
+[, $pg] = http('/admin/occasions', $a); ok(str_contains($pg, 'aria-label="Move Get well up"') && str_contains($pg, 'aria-label="Move Get well down"'), 'each move button says which occasion it moves');
 $log = (string)dbq("select group_concat(action) from audit where action like 'occasion_%'")->fetchColumn(); ok(str_contains($log, 'occasion_add') && str_contains($log, 'occasion_rename') && str_contains($log, 'occasion_delete'), 'each change is recorded in the change history');
 proc_terminate($proc); proc_close($proc);
 exec('rmdir /s /q ' . escapeshellarg($work) . ' 2>nul'); if (is_dir($work)) exec('rm -rf ' . escapeshellarg($work));

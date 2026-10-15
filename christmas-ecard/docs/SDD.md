@@ -4,8 +4,8 @@
 |---|---|
 | Service | 7th Swindon Scouts eCards, live at https://card.7thswindon.org.uk |
 | Document | Software Design Document (SDD) with wireframes |
-| Version | 1.0, 13 October 2026 |
-| Describes | Application version 2026.10.13 (the footer of every page shows the exact build) |
+| Version | 1.1, 15 October 2026 |
+| Describes | Application version 2026.10.15 (the footer of every page shows the exact build) |
 | Audience | Trustees, volunteers who run the service, and whoever maintains the code |
 | Status | Describes the service as built. Items not yet decided or built are listed in section 15 |
 
@@ -73,7 +73,7 @@ Stripe / Postmark ──webhooks──> /hooks/stripe, /hooks/postmark
 | `core.php` | Domain logic: recipients, the send queue, email text, payment confirmation, opt outs, sending state, scheduled delivery |
 | `cards.php`, `library.php` | The card catalogue and the eCard Library tables (designs, versions) |
 | `library_admin.php`, `uploads.php` | The eCard Library screens and the safe picture upload service |
-| `occasions.php` | Donations switch, which occasion a card is for |
+| `occasions.php` | Donations switch, which occasion a card is for, the Christmas season, and the Occasions admin screen |
 | `admin.php`, `admin2.php`, `admin3.php` | Overview, delivery, finance, reports, settings forms, health, change history, senders, measures, rehearsal |
 | `workspace.php` | The admin shell and the single navigation list (menu, shortcuts, breadcrumbs) |
 | `mailconfig.php`, `smtp.php` | Email delivery settings screen and the SMTP client |
@@ -82,7 +82,7 @@ Stripe / Postmark ──webhooks──> /hooks/stripe, /hooks/postmark
 
 ### 4.4 Request lifecycle
 
-1. `index.php` loads the code, starts the session (strict ids, secure and HttpOnly cookie) and sends security headers.
+1. `index.php` first installs a crash handler (a plain apology for visitors, the reason written to `app/data/error.log`), then loads the code, starts the session (strict ids, secure and HttpOnly cookie) and sends security headers.
 2. `dispatch()` matches the path to a handler. Every POST must carry a valid CSRF token, except the two webhooks.
 3. The handler checks the person's role on the server, does its work with prepared SQL statements, and returns a page built by `page()` (public) or `admin_page()` (the workspace shell).
 4. After the response is finished, `scheduler_after_request()` may run due background jobs (at most once a minute).
@@ -145,6 +145,8 @@ Cards stay viewable for 60 days after sending (setting). Greetings and recipient
 | Email | Header injection is stripped. Replies and bounces are handled. Hard bounced and opted out addresses are never mailed |
 | Secrets | In `.env` or write only settings (the mail password and keys are never shown back) |
 | Production default | A missing `APP_ENV` counts as production, so the site fails safe |
+| Crashes | A crash shows a plain apology and writes only the reason (no visitor data) to `app/data/error.log` |
+| Style sheet and script addresses | They carry the build stamp, so a new deployment is never shown with old cached styles |
 | Privacy | The change history stores ids and outcomes, never message text or addresses |
 
 ## 7. Key flows
@@ -172,7 +174,9 @@ The review page offers "Send for free" or "Make an optional donation". A donatio
 
 ### 7.4 Occasions and the gallery
 
-Each design has an occasion. The home page shows a drop down of occasions that have published cards (hidden when there is only one). Wording in emails and card pages follows the card's occasion ("Christmas card", "birthday card").
+Each design has an occasion (chosen in the eCard Library). Occasions are managed on the Occasions screen: an administrator can add, rename and remove them, except Christmas, which is built in. The home page shows a drop down of occasions that have published cards (hidden when there is only one). Wording in emails and card pages follows the card's occasion ("Christmas card", "birthday card").
+
+**The Christmas season.** Between two month and day values set in Site settings (default 1 November to 6 January, which may cross the new year) the home page heading reads "Send a Christmas card, Scout style", Christmas cards come first and the featured picture is a Christmas card. The rest of the year the heading is general, the other occasions' cards come first and Christmas cards come last. No card is ever hidden by the season.
 
 ### 7.5 The eCard Library
 
@@ -199,7 +203,7 @@ An owner invites by email with a level (administrator or owner). The person sign
 
 | Screen | Settings |
 |---|---|
-| Site settings | Take donations, suggested amounts, Gift Aid charity and switch; shows the site link, QR code and promotion counts |
+| Site settings | Take donations, suggested amounts, the Christmas season dates, Gift Aid charity and switch; shows the site link, QR code and promotion counts |
 | Application settings | Recipients per card, greeting and name limits, address book limits, test cards per hour, blocked words, small number threshold, rehearsal allow list, alert recipients and escalation, allow web addresses |
 | Email and help wording | Subject, opening line and button of the card email (with `{sender}` and `{card}`), support email, extra Help questions |
 | Privacy and retention | How long card links and details are kept |
@@ -218,6 +222,7 @@ Semantic headings and landmarks, a skip link, visible focus, labels on every fie
 3. The first request runs the database changes once.
 4. Check the footer version, send a test card, and look at System health.
 5. Optional: set an outside timer on the address shown on System health.
+6. After uploading, wait a minute or two before testing, because the host can briefly serve old files. If every page is blank, look in `app/data/error.log` (and for an `error_log` file in `public_html` or `app`) for the reason.
 
 Backups are the host's responsibility (copy the `app/data/` folder). The application also has an encrypted backup tool, which is optional.
 
@@ -250,6 +255,8 @@ About 30 automated test scripts (PHP, run with `bash scripts/test-all.sh`). They
 6. Keyboard and screen reader testing and a volunteer usability trial are not done.
 7. With an ordinary mail account, large scheduled bursts send slowly. Postmark is better for busy days.
 8. The code review (`docs/CODE_REVIEW.md`) lists optional improvements, such as splitting the largest file.
+9. Only Christmas has a season. Other occasions could have their own dates if needed.
+10. Two deployments went blank for a few minutes after upload. The cause is not known; the error log added since will explain any repeat.
 
 ---
 
@@ -279,6 +286,7 @@ About 30 automated test scripts (PHP, run with `bash scripts/test-all.sh`). They
 | A1 | Overview | `/admin` | Administrators |
 | A2 | eCard Library list, editor, preview | `/admin/library` | Administrators (publish: owner) |
 | A3 | Order and visibility | `/admin/designs` | Administrators |
+| A3b | Occasions | `/admin/occasions` | Administrators |
 | A4 | Site settings | `/admin/site` | Administrators |
 | A5 | Delivery issues | `/admin/delivery` | Administrators |
 | A6 | Reports and complaints | `/admin/reports` | Administrators |
@@ -332,10 +340,11 @@ On a phone the links wrap under the logo; nothing scrolls sideways.
 | (frame header)                                                         |
 +------------------------------------------------------------------------+
 | 7TH SWINDON SCOUTS ECARDS                       +--------------------+ |
-| Send a card, Scout style                        |  (featured card    | |
-| Pick a design, write your message and we will   |   picture)         | |
-| email a private card to friends and family.     |                    | |
-| Sending is free.                                +--------------------+ |
+| Send a card, Scout style                        |  (featured card,   | |
+| (in the Christmas season: "Send a Christmas     |   one that suits   | |
+| card, Scout style")                             |   the season)      | |
+| Pick a design, write your message and we will   +--------------------+ |
+| email a private card to friends and family. Sending is free.           |
 | [Choose a card]   [How it works]                                       |
 |                                                                        |
 | (flash notice if sending is locked: "Sending is not open yet...")      |
@@ -389,7 +398,7 @@ The occasion drop down appears only when two or more occasions have cards.
 |   before sending)"                                                     |
 +------------------------------------------------------------------------+
 Errors appear in a summary at the top and beside each field; focus moves to the summary.
-There is no design drop down. "Change design" returns to the gallery.
+There is no design drop down. "Change design" returns to the gallery. On a phone the card becomes a small strip (picture, name, "Change design") above the fields, so the fields start straight after it. On desktop the card is a narrower picture that stays in view while you type.
 ```
 
 **P3 Preview** (`/preview`)
@@ -401,58 +410,60 @@ There is no design drop down. "Change design" returns to the gallery.
 | +--------------------------------------------------------------+      |
 | | (card picture, message, "With love from NAME")                |      |
 | +--------------------------------------------------------------+      |
-| [Back to editing]                                                      |
+| [Back to editing]   [Review and send]                                  |
 +------------------------------------------------------------------------+
+On a phone the two buttons stay fixed at the bottom of the screen, so they
+are always in reach however long the card is. The card is shown full size
+here on purpose: seeing it is the point of the page.
 ```
 
 **P4 Review and send** (`/review`)
 
 ```
-+------------------------------------------------------------------------+
-| Step 3 of 3: Send                                                      |
-| Review and send                                                        |
-| (warning if email not yet verified: "Verify your email... Send again") |
-| (warning if some recipients already had a card: tick to send again)    |
-|                                                                        |
-| +-- the card as it will look ---+   Sending to 3 people                 |
-| | (picture + message)           |   * Gran (gran@example.org)          |
-| +-------------------------------+   * Uncle Bob [Personal message]     |
-|                                     [Edit]                             |
-|                                                                        |
-| When should the cards arrive?                                          |
-|  Delivery [ As soon as possible v ]   (or: Choose a date and time)     |
-|  Date and time [ picker ]  (shown only when that choice is picked)     |
-|  A scheduled card can be cancelled until sent. Addresses are kept      |
-|  until then.                                                           |
-|                                                                        |
-|  [Send my cards]                                                       |
-|  "Sending is free."                                                    |
-|                                                                        |
-|  ONLY WHEN DONATIONS ARE ON:  How would you like to send?              |
-|   (o) Send for free   ( ) Make an optional donation:                   |
-|        (£2) (£5) (£10) (Other £[__])  [ ] add a line to the cards      |
-|        [ ] Gift Aid form (name, address, declaration) if offered       |
-|        Total £0.00      [Send my cards for free] / [Donate and send]   |
-|  WHEN A PAYMENT IS PENDING: [Check payment status] [Cancel attempt]    |
-+------------------------------------------------------------------------+
+Desktop                                              Phone
++------------------------------------------------+   +----------------------------+
+| Step 3 of 3: Send                              |   | 1. 2. 3. Review and send   |
+| Review and send                                |   | Review and send            |
+| (warnings: email not verified; already sent    |   | +------------------------+ |
+|  to some of these people: tick to send again)  |   | |[thumb] Card name       | |
+|                                                |   | |        From The Smiths | |
+| +-- card ------+  > Sending to 3 people        |   | |        Edit message    | |
+| | (small       |    * Gran (g@example.org)      |   | | "Your message..."      | |
+| |  picture)    |    * Bob [Personal message]    |   | | > See the full card    | |
+| | Card name    |  Delivery                      |   | +------------------------+ |
+| | From NAME    |   [ As soon as possible v ]    |   | > Sending to 3 people      |
+| | Edit message |   (Choose a date and time:     |   |   (folded when over 3)     |
+| | "Message..." |    shows a date box)           |   | Delivery [ As soon... v ]  |
+| | > Full card  |  [Send my cards]               |   | ...                        |
+| +--------------+  "Sending is free."            |   | [   Send my cards   ] fixed|
++------------------------------------------------+   |  at the bottom of screen   |
+                                                     +----------------------------+
+ONLY WHEN DONATIONS ARE ON the delivery block is followed by:
+  How would you like to send?  (o) Send for free  ( ) Make an optional donation
+   (£2) (£5) (£10) (Other £[__])  [ ] add a line to the cards
+   [ ] Gift Aid form (name, address, declaration) if offered
+   Total £0.00     [Send my cards for free] / [Donate and send]
+WHEN A PAYMENT IS PENDING: [Check payment status] [Cancel this attempt]
+The message is shown once. Only personal messages are shown beside a person.
 ```
 
 **P5 Card status** (`/send?id=`)
 
 ```
-+------------------------------------------------------------------------+
-| (after sending) "Your cards are queued for sending" or                 |
-|                 "Your cards are scheduled. Scheduled for Fri 25 Dec 08:00" |
-| Merry Christmess                                                       |
-| Cards: Queued.  Donation: No donation                                  |
-| [Cancel unsent cards]                                                  |
-|                                                                        |
-| Name      Email                 Status               Action            |
-| Gran      gran@example.org      Viewed                                 |
-| Bob       bob@example.org       Scheduled            [Cancel]          |
-| Sue       sue@exmaple.org       Failed   [correct address ____][Resend] |
-| Legend: Queued, Scheduled, Sent, Delivered, Viewed, Failed, ...        |
-+------------------------------------------------------------------------+
+Desktop                                                    Phone
++------------------------------------------------------+   +------------------------+
+| (after sending) "Your cards are queued for sending"  |   | Merry Christmess       |
+|   or "Your cards are scheduled. Scheduled for ..."   |   | Cards: Queued.         |
+| Merry Christmess                                     |   | [Cancel unsent cards]  |
+| Cards: Queued.  Donation: No donation                |   | +--------------------+ |
+| [Cancel unsent cards]                                |   | | Gran               | |
+| Name   Email             Status      Action          |   | | gran@example.org   | |
+| Gran   gran@example.org  Viewed                      |   | | [Viewed]           | |
+| Bob    bob@example.org   Scheduled   [Cancel]        |   | +--------------------+ |
+| Sue    sue@example.org   Failed  [fix ____][Resend]  |   | | Sue  [Failed]      | |
+| Legend: Queued, Scheduled, Sent, Delivered, ...      |   | | [address] [Resend] | |
++------------------------------------------------------+   +------------------------+
+On a phone each recipient is its own block, so no action is cut off.
 ```
 
 **P6 My cards** (`/dashboard`)
@@ -585,6 +596,7 @@ R3 Stop (/optout/<token>)          Expired or withdrawn
 |  eCard Library   |                                                     |
 |  Order and       |                                                     |
 |   visibility     |                                                     |
+|  Occasions       |                                                     |
 |  Site settings   |                                                     |
 | SUPPORT AND      |                                                     |
 | DELIVERY         |                                                     |
@@ -655,6 +667,26 @@ Preview shows the card "as the sender sees it" and "as the recipient sees it".
 Publish and other actions ask for confirmation first and say what will change.
 ```
 
+**A3b Occasions** (`/admin/occasions`)
+
+```
++------------------------------------------------------------------------+
+| Occasions                                                              |
+| Cards are sorted into occasions, such as Christmas or Birthday. ...    |
+| Occasion            Cards  On show                                     |
+| [Christmas      ] [Rename]   12     12     Built in                    |
+| [Birthday       ] [Rename]    0      0     [Remove]                    |
+| [Get well       ] [Rename]    3      3     Has cards                   |
+|                                                                        |
+| Add an occasion                                                        |
+| Name (for example Get well, Easter, Congratulations) [____________]    |
+| [Add occasion]                                                         |
+| Up to 12 occasions. Names are 1 to 30 plain characters, not repeated.  |
++------------------------------------------------------------------------+
+Christmas cannot be removed. An occasion with cards cannot be removed.
+To put a card in an occasion, choose it in the eCard Library editor.
+```
+
 **A3 Order and visibility** (`/admin/designs`)
 
 ```
@@ -689,6 +721,8 @@ Form                                      Review screen (after [Review changes])
 | Cards by promotion label: ...         |
 +---------------------------------------+
 ```
+
+Site settings also holds the Christmas season dates: "Christmas season starts" and "ends", each a month and day such as `11-01`. Between them the home page leads with Christmas cards.
 
 **A5 Delivery issues** (`/admin/delivery`)
 
@@ -842,7 +876,7 @@ Public:   Home ─┬─> Compose ─> Preview ─> Review ─> Status ─> My c
                 └─> Register / Sign in ─> Account, Address book, My cards
 Recipient: email link ─> Envelope ─> Card ─> Report / Stop cards
 Admin:    Sign in ─> Two step ─> Overview ─┬─> Measures
-                                          ├─> Cards: Library, Order and visibility, Site settings
+                                          ├─> Cards: Library, Order and visibility, Occasions, Site settings
                                           ├─> Support: Delivery, Reports, Senders
                                           ├─> Fundraising: Donations, Gift Aid
                                           └─> Platform controls: Health, History, Settings,

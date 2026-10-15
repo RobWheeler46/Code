@@ -46,7 +46,7 @@ function gone_page(array $r, string $title, string $why): never {
 /** The occasions that have at least one card on show: [slug => label]. */
 function gallery_occasions(): array {
     $n = []; foreach (gallery_cards() as $c) $n[$c['cat'] ?? 'christmas'] = 1;
-    try { $all = array_column(all('select slug, label from occasions order by id'), 'label', 'slug'); } catch (Throwable $e) { $all = ['christmas' => 'Christmas']; }
+    try { $all = array_column(all('select slug, label from occasions order by sort, id'), 'label', 'slug'); } catch (Throwable $e) { $all = ['christmas' => 'Christmas']; }
     return array_intersect_key($all, $n);
 }
 /** The occasion asked for in the address, or '' for all. Anything that is not an occasion with cards on show is ignored. */
@@ -459,7 +459,7 @@ function r_dashboard(): void {
         $link = $s['status'] === 'draft' ? "/compose?id={$s['id']}" : ($s['status'] === 'awaiting_payment' ? "/review?id={$s['id']}" : "/send?id={$s['id']}");
         $act = $s['status'] === 'draft' ? '<a class="btn" href="' . $link . '">Keep writing</a> <form method="post" action="/discard" class="inline">' . csrf() . '<input type="hidden" name="id" value="' . $s['id'] . '"><button class="link">Discard draft</button></form>' : '<a class="btn alt" href="' . $link . '">See how it is going</a> <a href="/copy?id=' . $s['id'] . '">Send it again to someone</a>';
         $don = donation_state($s) === 'No donation' ? '' : '<br><small>' . h(donation_state($s)) . '</small>';
-        $rows .= '<li class="cardrow"><div class="thumb">' . card_art($s['card'], true, $s['art_ref'] ?? null) . '</div><div><h3>' . h(cards()[$s['card']]['title'] ?? $s['card']) . ($s['status'] === 'draft' ? ' <span class="pill">Draft</span>' : '') . '</h3><p class="note">' . date('j M Y', (int)$s['created']) . ($sum ? ' &middot; ' . h($sum) : '') . $don . '</p><p>' . $act . '</p></div></li>';
+        $rows .= '<li class="cardrow"><div class="thumb">' . card_art($s['card'], true, $s['art_ref'] ?? null) . '</div><div><h2>' . h(cards()[$s['card']]['title'] ?? $s['card']) . ($s['status'] === 'draft' ? ' <span class="pill">Draft</span>' : '') . '</h2><p class="note">' . date('j M Y', (int)$s['created']) . ($sum ? ' &middot; ' . h($sum) : '') . $don . '</p><p>' . $act . '</p></div></li>';
     }
     $b .= $rows ? '<ul class="plain cardlist">' . $rows . '</ul>' : '<section class="next"><h2>No cards yet</h2><p>Your first card is only a few minutes away.</p><p><a class="btn big" href="/">Choose a design</a></p></section>';
     $d = all('select * from donations where user_id=? order by id desc', [$u['id']]);

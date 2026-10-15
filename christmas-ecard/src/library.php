@@ -23,6 +23,7 @@ create index if not exists cd_version on campaign_designs(published_version_id);
         if (!in_array(explode(' ', $def)[0], array_column($p->query('pragma table_info(design_versions)')->fetchAll(), 'name'))) $p->exec("alter table design_versions add column $def");
     foreach (['giftaid int not null default 1'] as $def) // existing campaigns keep today's behaviour; new draft campaigns are created with Gift Aid off
         if (!in_array(explode(' ', $def)[0], array_column($p->query('pragma table_info(campaigns)')->fetchAll(), 'name'))) $p->exec("alter table campaigns add column $def");
+    if (!in_array('sort', array_column($p->query('pragma table_info(occasions)')->fetchAll(), 'name'))) { $p->exec('alter table occasions add column sort int not null default 0'); $p->exec('update occasions set sort=id'); } // the order occasions are listed in
     $p->exec('create index if not exists sends_campaign on sends(campaign_id)');
     if (function_exists('library_import')) library_import($p);
 }

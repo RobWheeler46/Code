@@ -19,4 +19,7 @@ ok(!$missing, 'UX24-07: every alert type on the Overview says where to act (' . 
 ok(str_contains($app, "if (\$do === 'send') \$do = (\$_POST['mode'] ?? '') === 'donate'"),'the single send button maps the chosen option to the existing free or donate paths');
 $sh = __DIR__ . '/../public/assets/share.jpg'; $sz = is_file($sh) ? getimagesize($sh) : [0, 0];
 ok($sz[0] === 1200 && $sz[1] === 630 && filesize($sh) < 400000 && str_contains(share_tags(), 'og:image') && str_contains(share_tags(), '/assets/share.jpg'), 'the share preview image is 1200 by 630, small, and linked from every page');
+// accessibility fixes found by the automated pass: readable footer version, big enough open and close controls, no skipped heading level on My cards
+ok(str_contains($css, '.ver{color:#c5d0e0}') && preg_match("/summary\{[^}]*min-height:44px/", $css), 'the footer version is readable and every open and close control is at least 44 pixels high');
+ok(str_contains($app, '<li class="cardrow"><div class="thumb">') && str_contains($app, '<h2>'), 'My cards uses a level two heading for each card, so no heading level is skipped');
 exit($GLOBALS['bad'] ?? 0);

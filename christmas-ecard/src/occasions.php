@@ -29,7 +29,7 @@ function season_rank(array $c): int { return (($c['cat'] ?? 'christmas') === 'ch
 const OCCASIONS_MAX = 12;
 function occasion_rows(): array {
     $on = []; foreach (gallery_cards() as $c) { $k = $c['cat'] ?? 'christmas'; $on[$k] = ($on[$k] ?? 0) + 1; }
-    $rows = all('select o.id, o.slug, o.label, (select count(*) from designs d where d.category=o.slug) designs from occasions o order by o.id');
+    $rows = all('select o.id, o.slug, o.label, (select count(*) from designs d where d.category=o.slug) designs from occasions o order by o.sort, o.id');
     foreach ($rows as &$r) $r['onshow'] = $on[$r['slug']] ?? 0; return $rows;
 }
 function occasion_slug(string $label): string {
@@ -52,10 +52,13 @@ function r_admin_occasions(): void {
         if ($do === 'add') {
             [$l, $e] = occasion_label((string)($_POST['label'] ?? ''));
             if (!$e && (int)one('select count(*) n from occasions')['n'] >= OCCASIONS_MAX) $e = 'There can be up to ' . OCCASIONS_MAX . ' occasions.';
-            if ($e) flash($e, 'err'); else { $slug = occasion_slug($l); q('insert into occasions(slug,label) values(?,?)', [$slug, $l]); audit($uid, 'occasion_add', "$slug: $l"); flash("Added $l. Choose it on a card in the eCard Library to put cards in it."); }
+            if ($e) flash($e, 'err'); else { $slug = occasion_slug($l); q('insert into occasions(slug,label,sort) values(?,?,(select coalesce(max(sort),0)+1 from occasions))', [$slug, $l]); audit($uid, 'occasion_add', "$slug: $l"); flash("Added $l. Choose it on a card in the eCard Library to put cards in it."); }
         } elseif ($do === 'rename' && $o) {
             [$l, $e] = occasion_label((string)($_POST['label'] ?? ''), $id);
             if ($e) flash($e, 'err'); else { q('update occasions set label=? where id=?', [$l, $id]); audit($uid, 'occasion_rename', "{$o['slug']}: {$o['label']} to $l"); flash('Renamed.'); }
+        } elseif (($do === 'up' || $do === 'down') && $o) { // swap places with the neighbour above or below
+            $n = one($do === 'up' ? 'select * from occasions where (sort<? or (sort=? and id<?)) order by sort desc, id desc limit 1' : 'select * from occasions where (sort>? or (sort=? and id>?)) order by sort, id limit 1', [$o['sort'], $o['sort'], $o['id']]);
+            if ($n) { q('update occasions set sort=? where id=?', [$n['sort'] === $o['sort'] ? ($do === 'up' ? $o['sort'] - 1 : $o['sort'] + 1) : $n['sort'], $o['id']]); if ($n['sort'] !== $o['sort']) q('update occasions set sort=? where id=?', [$o['sort'], $n['id']]); audit($uid, 'occasion_move', "{$o['slug']} $do"); }
         } elseif ($do === 'delete' && $o) {
             if ($o['slug'] === 'christmas') flash('Christmas cannot be removed: the Christmas season and wording depend on it.', 'err');
             elseif ((int)one('select count(*) n from designs where category=?', [$o['slug']])['n'] > 0) flash('That occasion still has cards in it. Move them to another occasion in the eCard Library first.', 'err');
@@ -63,10 +66,12 @@ function r_admin_occasions(): void {
         } else flash('Nothing was changed.', 'err');
         redirect('/admin/occasions');
     }
-    $b = '<h1>Occasions</h1><p class="lead">Cards are sorted into occasions, such as Christmas or Birthday. Visitors can choose an occasion above the cards on the home page once two or more occasions have cards on show. To put a card in an occasion, open it in the <a href="/admin/library">eCard Library</a> and choose its occasion.</p><table class="stacked"><tr><th>Occasion</th><th>Cards</th><th>On show</th><th></th></tr>';
-    foreach (occasion_rows() as $r) {
+    $b = '<h1>Occasions</h1><p class="lead">Cards are sorted into occasions, such as Christmas or Birthday. Visitors can choose an occasion above the cards on the home page once two or more occasions have cards on show, and they are listed in the order below. To put a card in an occasion, open it in the <a href="/admin/library">eCard Library</a> and choose its occasion.</p><table class="stacked"><tr><th>Occasion</th><th>Cards</th><th>On show</th><th></th></tr>';
+    $rows = occasion_rows(); $last = count($rows) - 1;
+    foreach ($rows as $i => $r) {
         $b .= '<tr><td><form method="post" class="inline">' . csrf() . '<input type="hidden" name="id" value="' . (int)$r['id'] . '"><input name="label" maxlength="30" value="' . h($r['label']) . '" aria-label="Name of occasion ' . h($r['label']) . '"> <button class="btn alt" name="do" value="rename">Rename</button></form></td>'
             . '<td>' . (int)$r['designs'] . '</td><td>' . (int)$r['onshow'] . '</td><td>'
+            . '<form method="post" class="inline">' . csrf() . '<input type="hidden" name="id" value="' . (int)$r['id'] . '">' . ($i > 0 ? '<button class="link" name="do" value="up" aria-label="Move ' . h($r['label']) . ' up">Move up</button> ' : '') . ($i < $last ? '<button class="link" name="do" value="down" aria-label="Move ' . h($r['label']) . ' down">Move down</button> ' : '') . '</form> '
             . ($r['slug'] === 'christmas' ? '<span class="note">Built in</span>' : ((int)$r['designs'] === 0 ? '<form method="post" class="inline">' . csrf() . '<input type="hidden" name="id" value="' . (int)$r['id'] . '"><button class="link" name="do" value="delete">Remove</button></form>' : '<span class="note">Has cards</span>')) . '</td></tr>';
     }
     $b .= '</table><h2>Add an occasion</h2><form method="post" class="stack">' . csrf() . '<label>Name (for example Get well, Easter, Congratulations)<input name="label" maxlength="30" required></label><button class="btn" name="do" value="add">Add occasion</button></form>'
