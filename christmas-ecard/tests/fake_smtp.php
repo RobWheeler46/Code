@@ -8,6 +8,8 @@ while ($c = @stream_socket_accept($srv, 3600)) {
         if ($state === 'data') {
             if ($l === '.') {
                 $state = '';
+                file_put_contents($log, json_encode($rec) . "
+", FILE_APPEND); // written before the reply, so a test that reads the log right after sending always sees it
                 if (str_contains($rcpt, 'afterdata')) $w('554 5.7.1 rejected after data');
                 elseif (str_contains($rcpt, 'silent')) break;
                 else $w('250 2.0.0 queued');
