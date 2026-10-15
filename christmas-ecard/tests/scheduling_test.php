@@ -42,6 +42,19 @@ ok($row['status'] === 'queued' && (int)$row['send_at'] === strtotime($want) && (
 [, $st] = http("/send?id=$s4&done=1", $jar); ok(str_contains($st, 'Your cards are scheduled') && str_contains($st, 'Scheduled'), 'the status page says the cards are scheduled');
 [, $dash] = http('/dashboard', $jar); ok(str_contains($dash, 'Scheduled'), 'My cards shows them as scheduled');
 [, $help] = http('/help', $jar); ok(str_contains($help, 'Can I choose when a card arrives?'), 'the Help page explains it');
+// change the delivery time of a scheduled card, and the thank you block
+ok(str_contains($st, 'Change the delivery time') && str_contains($st, 'Tell a friend') && str_contains($st, 'ref=sendshare') && str_contains($st, 'wa.me'), 'the status page offers a new time, and a Tell a friend block after sending');
+[, $st2] = http("/send?id=$s4", $jar); ok(!str_contains($st2, 'Tell a friend'), 'the friend block shows only straight after sending');
+$re = fn(array $f) => http("/send?id=$s4", $jar, ['_c' => tok($st), 'id' => $s4, 'do' => 'reschedule'] + $f);
+$re(['when' => 'custom', 'when_custom' => date('Y-m-d\TH:i', time() + 600)]); ok((int)one('select next_at from recipients where id=?', [$r4])['next_at'] === strtotime($want), 'a new time less than an hour away is refused');
+$new = date('Y-m-d\TH:i', time() + 86400 * 8); $re(['when' => 'custom', 'when_custom' => $new]);
+ok((int)one('select send_at from sends where id=?', [$s4])['send_at'] === strtotime($new) && (int)one('select next_at from recipients where id=?', [$r4])['next_at'] === strtotime($new), 'a valid new time moves the card and its recipients');
+q("update recipients set status='sent' where id=?", [$r4]); $re(['when' => 'custom', 'when_custom' => date('Y-m-d\TH:i', time() + 86400 * 9)]); ok((int)one('select next_at from recipients where id=?', [$r4])['next_at'] === strtotime($new), 'a card that has already gone is not moved');
+// donation suggestion follows the number of cards
+q("insert into settings(k,v) values('donations_enabled','1') on conflict(k) do update set v='1'");
+function rev(int $n): string { global $jar; $t = time(); q("insert into sends(user_id,card,sender_name,message,status,created,updated) values(1,'pegs','Sam','Hi','draft',?,?)", [$t, $t]); $id = (int)db()->lastInsertId(); for ($i = 0; $i < $n; $i++) q("insert into recipients(send_id,name,email,token,status) values(?,?,?,?,'draft')", [$id, "R$i", "r$i@x.example", token()]); return http("/review?id=$id", $jar)[1]; }
+$sug = fn(string $h) => preg_match('/value="(\d+)" checked> £[\d.]+ <small>\(suggested\)/', $h, $m) ? (int)$m[1] : 0;
+ok($sug(rev(2)) === 200 && $sug(rev(6)) === 500 && $sug(rev(12)) === 1000, 'the suggested donation grows with the number of cards');
 proc_terminate($proc); proc_close($proc);
 exec('rmdir /s /q ' . escapeshellarg($work) . ' 2>nul'); if (is_dir($work)) exec('rm -rf ' . escapeshellarg($work));
 exit($GLOBALS['bad'] ?? 0);

@@ -223,7 +223,8 @@ function r_review(): void {
             . '<label class="optcard"><input type="radio" name="mode" value="free"' . ($rec ? '' : ' checked') . '> <strong>Send for free</strong><span>Your cards are free to send. No payment needed.</span></label>'
             . '<label class="optcard"><input type="radio" name="mode" value="donate"' . ($rec ? ' checked' : '') . '> <strong>Make an optional donation</strong><span>' . h(DONATION_PURPOSE) . '</span></label>'
             . '<div class="donatebox"><p>One donation covers all ' . count($rs) . ' of your cards.</p><div class="chips">';
-        foreach (array_map('intval', explode(',', setting('amounts_pence', '200,500,1000'))) as $a) $form .= '<label class="opt"><input type="radio" name="amount" value="' . $a . '"> ' . gbp($a) . '</label>';
+        $am = array_map('intval', explode(',', setting('amounts_pence', '200,500,1000'))); $sug = $am[min(count($am) - 1, count($rs) > 10 ? 2 : (count($rs) > 3 ? 1 : 0))] ?? 0; // more cards, a larger suggestion
+        foreach ($am as $a) $form .= '<label class="opt"><input type="radio" name="amount" value="' . $a . '"' . ($a === $sug ? ' checked' : '') . '> ' . gbp($a) . ($a === $sug ? ' <small>(suggested)</small>' : '') . '</label>';
         $form .= '<label class="opt"><input type="radio" name="amount" value="custom"> Other amount (£) <input type="number" name="custom" min="1" max="500" step="0.01" aria-label="Custom amount in pounds"></label></div>'
             . '<label class="opt"><input type="checkbox" name="donation_note" value="1"> Add a line to the cards saying they came with a donation to 7th Swindon Scouts (no amount is shown; only after payment is confirmed)</label>'
             . (giftaid_on() ? giftaid_form_block() : '') . '</div>'
@@ -277,6 +278,12 @@ function r_dashboard(): void {
     page('My cards', $b . '<p><a href="/contacts">Address book</a> &middot; <a href="/account/delete">Delete my account</a></p>');
 }
 
+/** "Tell a friend" after sending: the public link with a promotion label, so Measures can show it working. */
+function share_block(): string {
+    $link = base_url() . '/?ref=sendshare'; $msg = 'I sent a card with 7th Swindon Scouts. You can send one too: ' . $link;
+    return '<section class="admincard"><h2>Tell a friend</h2><p>Know someone who would like to send a card too?</p><p class="row"><a class="btn alt" href="https://wa.me/?text=' . rawurlencode($msg) . '">Share on WhatsApp</a> <a class="btn alt" href="mailto:?subject=' . rawurlencode('Send a card with 7th Swindon Scouts') . '&amp;body=' . rawurlencode($msg) . '">Share by email</a></p><p class="note">Or copy the link: <code>' . h($link) . '</code></p></section>';
+}
+
 function r_send(): void {
     $u = need_login(); $s = own_send((int)($_GET['id'] ?? $_POST['id'] ?? 0));
     $sid = (int)$s['id'];
@@ -288,6 +295,14 @@ function r_send(): void {
             foreach ($ids as $i) if (one('select 1 from recipients where id=? and send_id=?', [$i, $sid])) cancel_recipient((int)$i) ? $ok++ : $late++;
             if ($ok) audit((int)$u['id'], 'cancel', "send $sid: $ok cancelled");
             flash($ok . ' cancelled.' . ($late ? " $late had already started sending and could not be stopped." : '') . ' Cancelling does not refund a donation.', $late ? 'warn' : 'ok');
+        } elseif ($do === 'reschedule') { // only cards that are still waiting for their scheduled time
+            $at = schedule_parse($_POST);
+            if ($at === false || (int)$s['send_at'] <= time()) flash('Please choose a time at least an hour from now and within 90 days.', 'err');
+            else {
+                $n = q('update recipients set next_at=? where send_id=? and status=\'queued\' and tries=0 and next_at>?', [$at, $sid, time()])->rowCount();
+                q('update sends set send_at=? where id=?', [$at, $sid]); audit((int)$u['id'], 'reschedule', "send $sid: $n moved");
+                flash($at ? 'Delivery time changed to ' . date('l j F \a	 H:i', $at) . '.' : 'Sending now.'); if (!$at) process_queue();
+            }
         } else { // correct a failed address: a new, audited delivery attempt (failed/bounced rows only, so no duplicates)
             $r = one('select * from recipients where id=? and send_id=?', [$rid, $sid]);
             $e = field('email'); $unconfirmed = $r && rstatus($r) === 'Delivery unconfirmed';
@@ -309,8 +324,9 @@ function r_send(): void {
     }
     $legend = '<details><summary>What do the statuses mean?</summary><ul>' . implode('', array_map(fn($k, $v) => '<li><strong>' . h($k) . ':</strong> ' . h($v) . '</li>', array_keys(STATUS_HELP), STATUS_HELP)) . '</ul></details>';
     $sched = (int)$s['send_at'] > time() ? 'Scheduled for ' . date('l j F \a\t H:i', (int)$s['send_at']) . '. ' : '';
-    $done = empty($_GET['done']) ? '' : '<section class="flash" role="status"><h2>' . ($sched ? 'Your cards are scheduled' : 'Your cards are queued for sending') . '</h2>' . ($sched ? '<p>' . h($sched) . 'You can cancel any card until then.</p>' : '') . '<p>Queued means accepted and waiting to go out. It does not mean delivered. Each status updates below as cards go out.</p><p><strong>Donation:</strong> ' . h(donation_state($s)) . ($s['donation'] && !one('select 1 from donations where send_id=?', [$s['id']]) ? ' (we will show it here once payment is confirmed)' : '') . '</p><p><a href="/dashboard">Go to my cards</a></p></section>';
+    $done = empty($_GET['done']) ? '' : '<section class="flash" role="status"><h2>' . ($sched ? 'Your cards are scheduled' : 'Your cards are queued for sending') . '</h2>' . ($sched ? '<p>' . h($sched) . 'You can cancel any card until then.</p>' : '') . '<p>Queued means accepted and waiting to go out. It does not mean delivered. Each status updates below as cards go out.</p><p><strong>Donation:</strong> ' . h(donation_state($s)) . ($s['donation'] && !one('select 1 from donations where send_id=?', [$s['id']]) ? ' (we will show it here once payment is confirmed)' : '') . '</p><p><a href="/dashboard">Go to my cards</a></p></section>' . share_block();
     page('Card status', $done . '<h1>' . h(cards()[$s['card']]['title']) . '</h1>' . ($sched && empty($_GET['done']) ? '<p class="note">' . h($sched) . '</p>' : '') . '<p><strong>Cards:</strong> ' . h(ucfirst(str_replace('_', ' ', $s['status']))) . '. <strong>Donation:</strong> ' . h(donation_state($s)) . '.</p>'
+        . ($sched && $queued ? '<details class="admincard"><summary>Change the delivery time</summary><form method="post" class="stack">' . csrf() . '<input type="hidden" name="id" value="' . $sid . '">' . schedule_picker($s) . '<button class="btn alt" name="do" value="reschedule">Change delivery time</button></form></details>' : '')
         . ($queued ? '<form method="post">' . csrf() . '<input type="hidden" name="id" value="' . $sid . '"><button class="btn alt" name="do" value="cancel_all">Cancel unsent cards</button></form>' : '')
         . '<table class="stacked"><tr><th>Name</th><th>Email</th><th>Status</th><th></th></tr>' . $rows . '</table>' . $legend . '<p class="note">"Viewed" means the recipient opened the card themselves. Cancelled and withdrawn cards do not refund a donation.</p>');
 }
