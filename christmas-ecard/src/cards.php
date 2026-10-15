@@ -167,6 +167,8 @@ function featured_slugs(): array {
 function hero_card(): string {
     $on = array_keys(gallery_cards()); $f = array_values(array_intersect($on, featured_slugs()));
     $pool = $f ?: $on;
+    $fit = array_values(array_filter($pool, fn($id) => season_rank(gallery_cards()[$id] ?? []) === 0)); // a card that suits the time of year, when there is one
+    if ($fit) $pool = $fit;
     return $pool ? $pool[array_rand($pool)] : '';
 }
 

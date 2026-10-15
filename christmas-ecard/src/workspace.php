@@ -13,6 +13,7 @@ function workspace_manifest(): array {
         'Cards' => [
             ['eCard Library', '/admin/library', 'Add, preview and publish card designs', fn() => can_any('campaign', 'rolesadmin')],
             ['Order and visibility', '/admin/designs', 'Put the cards in order and hide or show them', fn() => can_any('campaign', 'rolesadmin')],
+            ['Occasions', '/admin/occasions', 'Add or rename the groups cards are sorted into', fn() => can_any('campaign', 'rolesadmin')],
             ['Site settings', '/admin/site', 'Donations, Gift Aid, the site link and QR code', fn() => can_any('campaign', 'appadmin', 'finance', 'delivery', 'rolesadmin')]],
         'Support and delivery' => [
             ['Delivery issues', '/admin/delivery', 'Failed and unconfirmed cards, resend, pause', fn() => can_any('delivery', 'appadmin', 'rolesadmin')],

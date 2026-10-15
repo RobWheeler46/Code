@@ -37,7 +37,7 @@ ok(st('giftaid_charity') === 'Beta Scouts', 'and nothing is saved by looking');
 [, $cf] = http('GET', '/admin/site?restore=' . $first, $camp); ok(!str_contains($cf, 'Restoring earlier values') && preg_match('/name="f_giftaid_charity" value="Beta Scouts"/', $cf), 'a campaign manager asking for it just sees the current settings');
 
 // through the normal review and confirmation
-$post = ['reason' => 'Put it back', 'restore_of' => $first, 'f_donations_enabled' => '0', 'f_amounts_pence' => '2, 5, 10', 'f_giftaid_charity' => '', 'f_giftaid_enabled' => '0'];
+$post = ['reason' => 'Put it back', 'restore_of' => $first, 'f_donations_enabled' => '0', 'f_amounts_pence' => '2, 5, 10', 'f_giftaid_charity' => '', 'f_giftaid_enabled' => '0', 'f_season_start' => '11-01', 'f_season_end' => '01-06'];
 [, $pg] = http('GET', '/admin/site', $root); [$c, $rv] = http('POST', '/admin/site', $root, ['_c' => tok($pg)] + $post);
 ok($c === 200 && str_contains($rv, 'Review changes') && str_contains($rv, 'Beta Scouts') && str_contains($rv, 'name="restore_of"') && st('giftaid_charity') === 'Beta Scouts', 'saving shows old and new values first and still changes nothing');
 $ver = st('cfg_version'); [$c] = http('POST', '/admin/site', $root, ['_c' => tok($rv), 'confirmed' => 1, 'ver' => $ver] + $post);

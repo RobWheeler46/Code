@@ -15,6 +15,8 @@ function config_spec(string $area): array {
         'site' => ['edit' => ['campaign', 'rolesadmin'], 'title' => 'Site settings', 'when' => 'New submissions after you confirm. Cards already submitted are not changed.', 'fields' => [
             'donations_enabled' => ['Take donations (leave off until the Trustees are ready; sending cards stays free either way)', 'bool', 'def' => '0'],
             'amounts_pence' => ['Suggested donation amounts in pounds, comma separated (up to 5, £1 to £500)', 'amounts', 'def' => '200,500,1000'],
+            'season_start' => ['Christmas season starts (month and day, like 11-01). From then the home page leads with Christmas cards', 'md', 'def' => '11-01'],
+            'season_end' => ['Christmas season ends (month and day, like 01-06). After it the home page leads with the other cards', 'md', 'def' => '01-06'],
             'giftaid_charity' => ['Charity name used in the Gift Aid declaration (as HMRC knows it)', 'text', 'max' => 100, 'def' => ''],
             'giftaid_enabled' => ['Offer Gift Aid on donations', 'bool', 'def' => '0']]],
         'app' => ['view' => ['appadmin', 'campaign', 'delivery', 'rolesadmin'], 'edit' => ['appadmin', 'rolesadmin'], 'title' => 'Application settings', 'when' => 'Applies to new entries straight away. Existing drafts are kept; a draft above a new limit must be corrected before submission. Accepted batches are unchanged.', 'fields' => [
@@ -53,6 +55,7 @@ function cfg_validate(array $f, string $raw): array {
         case 'datetime': return ($raw === '' || (preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/', $raw) && strtotime($raw))) ? [$raw, null] : [$raw, 'Enter a valid UK date and time.'];
         case 'choice': return isset($f['opts'][$raw]) ? [$raw, null] : [$raw, 'Choose one of the options.'];
         case 'bool': return [$raw === '1' ? '1' : '0', null];
+        case 'md': return (preg_match('/^(\d\d)-(\d\d)$/', $raw, $m) && checkdate((int)$m[1], (int)$m[2], 2024)) ? [$raw, null] : [$raw, 'Enter a month and day like 11-01 (month, then day).'];
         case 'tpl': // one line of wording with only the placeholders allowed here, so it can never carry markup, line breaks or anything else
             $raw = preg_replace('/\s+/', ' ', $raw);
             if ($raw === '') return [$raw, 'This cannot be empty.'];
