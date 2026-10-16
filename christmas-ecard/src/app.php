@@ -63,6 +63,27 @@ function occasion_filter(string $want, string $style = '', bool $fav = false): s
     if ($can) $b .= '<label class="opt"><input type="checkbox" name="fav" value="1" data-autosubmit' . ($fav ? ' checked' : '') . '> Only my favourites</label>';
     return $b . '<noscript><button class="btn alt">Show</button></noscript></form>';
 }
+/** "What's the occasion?": a picture tile for every occasion that has cards on show (with an All cards tile), only when there is more than one. Plain links, so they work without scripts. */
+function occasion_tiles(string $want): string {
+    $o = gallery_occasions(); if (count($o) < 2) return '';
+    $first = []; foreach (gallery_cards() as $id => $c) $first[$c['cat'] ?? 'christmas'] ??= $id; $n = []; foreach (gallery_cards() as $c) $n[$c['cat'] ?? 'christmas'] = ($n[$c['cat'] ?? 'christmas'] ?? 0) + 1;
+    $t = fn($href, $art, $label, $count, $cur) => '<li><a class="tile otile" href="' . $href . '#gallery"' . ($cur ? ' aria-current="true"' : '') . '>' . $art . '<span>' . h($label) . '<small>' . $count . ($count === 1 ? ' card' : ' cards') . '</small></span></a></li>';
+    $b = '<h2>What is the occasion?</h2><ul class="grid otiles plain">' . $t('/', card_art(array_key_first(gallery_cards()), true), 'All cards', count(gallery_cards()), $want === '');
+    foreach ($o as $slug => $label) $b .= $t('/?occasion=' . h($slug), card_art($first[$slug], true), $label, $n[$slug], $want === $slug);
+    return $b . '</ul>';
+}
+/** Cards the Group has featured, up to four, in gallery order. Empty when none are featured. */
+function featured_strip(array $favs, string $back): string {
+    $f = array_values(array_filter(array_keys(gallery_cards()), fn($id) => in_array($id, featured_slugs(), true))); if (!$f) return '';
+    $b = '<h2>Featured cards</h2><div class="grid">';
+    foreach (array_slice($f, 0, 4) as $id) { $c = gallery_cards()[$id]; $b .= '<div class="tilebox"><a class="tile feat" href="/compose?card=' . h($id) . '">' . card_art($id, true) . '<span>' . h($c['title']) . '</span><em class="tjoke">' . h($c['joke']) . '</em></a>' . (user() ? fav_button($id, $c['title'], in_array($id, $favs, true), $back) : '') . '</div>'; }
+    return $b . '</div>';
+}
+/** The small line above a card's title: its occasion and styles, such as "Christmas · Funny, Heartfelt". Occasion is left out when there is only one. */
+function card_kicker(array $c, string $id, array $occ, array $stl, array $smap): string {
+    $p = []; if (count($occ) > 1) $p[] = $occ[$c['cat'] ?? 'christmas'] ?? ''; $s = array_filter(array_map(fn($x) => $stl[$x] ?? '', $smap[$id] ?? [])); if ($s) $p[] = implode(', ', $s);
+    return implode(' · ', array_filter($p));
+}
 function r_home(): void {
     if (preg_match('/^[a-z0-9-]{1,30}$/', (string)($_GET['ref'] ?? ''))) $_SESSION['ref'] = $_GET['ref']; // promotion source label only, never a person
     $st = sending_state(); $want = occasion_wanted(); $sty = style_wanted(); $fav = !empty($_GET['fav']) && user(); $favs = fav_slugs();
@@ -70,15 +91,15 @@ function r_home(): void {
     if ($st === 'locked') $b .= '<p class="flash warn">Sending is not open yet. You can prepare a card now.</p>';
     $b .= '<h2 id="how">How it works</h2><ol class="how"><li><b>1</b><strong>Choose a design</strong>Illustrated Scout themed cards, from tents to campfires.</li><li><b>2</b><strong>Write your message</strong>Add up to ' . max_recipients() . ' people. Give anyone a personal note if you like.</li><li><b>3</b><strong>We send each card</strong>Everyone gets their own private link and opens an envelope.</li></ol>'
         . (!donations_enabled() ? '' : '<section class="cause"><h2>Every card helps local Scouting</h2><p>' . h(DONATION_PURPOSE) . '</p><p>Sending is always free. You never have to donate, and a donation never changes how your card looks.</p></section>')
-        . '<h2 id="gallery">Pick a design</h2>' . occasion_filter($want, $sty, (bool)$fav);
-    $smap = $sty ? style_map() : [];
+        . occasion_tiles($want) . (($want === '' && $sty === '' && !$fav) ? featured_strip($favs, '') : '') . '<h2 id="gallery">Pick a design</h2>' . occasion_filter($want, $sty, (bool)$fav);
+    $smap = style_map(); $occ = gallery_occasions(); $stl = array_column(style_rows(true), 'label', 'slug');
     $show = array_filter(gallery_cards(), fn($c, $id) => ($want === '' || ($c['cat'] ?? 'christmas') === $want) && ($sty === '' || in_array($sty, $smap[$id] ?? [], true)) && (!$fav || in_array($id, $favs, true)), ARRAY_FILTER_USE_BOTH);
     uasort($show, fn($x, $y) => season_rank($x) <=> season_rank($y)); // cards for an occasion in season come first, then occasions with no season, then ones whose season is not on (the order within each stays as set)
     $back = http_build_query(array_filter(['occasion' => $want, 'style' => $sty, 'fav' => $fav ? '1' : '']));
     if ($want !== '' || $sty !== '' || $fav) $b .= '<p class="note" role="status">' . ($show ? count($show) . (count($show) === 1 ? ' card' : ' cards') . ' shown.' : 'No cards match those choices.') . ' <a href="/#gallery">Show all cards</a></p>';
     $b .= '<div class="grid">';
     foreach ($show as $id => $c)
-        $b .= '<div class="tilebox"><a class="tile" href="/compose?card=' . h($id) . '">' . card_art($id, true) . '<span>' . h($c['title']) . '</span><em class="tjoke">' . h($c['joke']) . '</em></a>' . (user() ? fav_button($id, $c['title'], in_array($id, $favs, true), $back) : '') . '</div>';
+        $b .= '<div class="tilebox"><a class="tile" href="/compose?card=' . h($id) . '">' . card_art($id, true) . (($k = card_kicker($c, $id, $occ, $stl, $smap)) !== '' ? '<small class="tkick">' . h($k) . '</small>' : '') . '<span>' . h($c['title']) . '</span><em class="tjoke">' . h($c['joke']) . '</em></a>' . (user() ? fav_button($id, $c['title'], in_array($id, $favs, true), $back) : '') . '</div>';
     page('Choose a card', $b . '</div>');
 }
 

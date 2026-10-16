@@ -129,7 +129,7 @@ footer{background:var(--navy);color:#e8e4f5;margin-top:3rem;padding:2rem 1rem}fo
 /* design tiles */
 .tile{box-shadow:0 2px 6px rgba(27,21,51,.08);transition:transform .15s,box-shadow .15s}
 .tile:hover,.tile:focus-visible{transform:translateY(-4px);box-shadow:0 12px 24px rgba(27,21,51,.18)}
-.tile span{font-size:1.05rem;display:flex;justify-content:space-between;gap:.5rem}.tile span::after{content:"Choose";color:var(--purple);font-weight:800}
+.tile span{font-size:1.05rem;display:flex;justify-content:space-between;gap:.5rem}.tile span::after{content:"Personalise \2192";color:var(--purple);font-weight:800}
 
 /* step indicator */
 .steps{gap:.5rem}.steps li{padding:.35rem .9rem;border-radius:999px;background:#fff;border:1px solid var(--line)}
@@ -315,3 +315,7 @@ main .libtabs a[aria-current=page]:not(.btn):not(.tile){color:#fff}
 .crumbs a{display:inline-flex;align-items:center;min-height:44px;padding:0}.crumbs ol{align-items:center}
 .tilebox{position:relative}.fav{position:absolute;top:.4rem;right:.4rem;margin:0}.favbtn{min-width:44px;min-height:44px;border:0;border-radius:50%;background:rgba(255,255,255,.92);color:var(--purple);font-size:1.5rem;line-height:1;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.25)}.favbtn:focus-visible{outline:3px solid var(--blue);outline-offset:2px}.gfilter .opt{flex-basis:auto;font-weight:400}
 .tones{display:flex;flex-wrap:wrap;gap:.4rem;margin:.4rem 0}.tones button{min-height:44px;padding:.3rem .8rem;border:2px solid #9bb0cf;border-radius:999px;background:#fff;font:inherit;cursor:pointer}.tones button[aria-pressed=true]{background:#0d3560;color:#fff;border-color:#0d3560}.starters small{color:#5c6470}
+.tkick{display:block;padding:.7rem .9rem 0;color:#4b5563;font-size:.8rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase}.tkick+span{padding-top:.2rem}
+.otiles{list-style:none;padding:0;grid-template-columns:repeat(auto-fill,minmax(10rem,1fr))}.otile span{display:block}.otile span::after{content:none}.otile small{display:block;font-weight:400;color:#4b5563}.otile[aria-current=true]{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue)}.otile img.art{aspect-ratio:3/2}
+.tile.feat{border-color:var(--yellow)}
+.tile span::after{white-space:nowrap;flex-shrink:0}

@@ -30,6 +30,15 @@ $h = page_for($work, '$_GET["occasion"] = "<script>";'); ok(tiles($h) === $xmas 
 
 $h = page_for($work, ''); ok(str_contains($h, '<noscript><button class="btn alt">Show</button></noscript>') && str_contains($h, 'data-autosubmit'), 'the Show button is only there when scripts are off; otherwise choosing an occasion applies it');
 
+// picture tiles for each occasion, and the line above each card
+ok(!str_contains($h0 = page_for($work, ''), 'xx') && str_contains($h0, 'What is the occasion?') && str_contains($h0, 'href="/?occasion=birthday#gallery"') && str_contains($h0, 'href="/?occasion=thank-you#gallery"') && str_contains($h0, '>All cards<') && substr_count($h0, 'otile') >= 4, 'with several occasions there is a tile for each, and one for all cards');
+ok(tiles($h0) === $xmas + 3, 'the occasion tiles are not counted as cards');
+$hb = page_for($work, '$_GET["occasion"] = "birthday";'); ok(str_contains($hb, 'href="/?occasion=birthday#gallery" aria-current="true"'), 'the tile for the chosen occasion is marked as current');
+ok(str_contains($h0, '<small class="tkick">Birthday</small>') && str_contains($h0, '<small class="tkick">Christmas</small>'), 'each card shows its occasion above the title');
+ok(!str_contains(page_for($work, '$_GET["occasion"] = "birthday";'), 'Featured cards'), 'the featured strip is left out while a choice is made');
+q("update campaign_designs set featured=1 where design_id=(select id from designs where slug='bday-a')"); $hf = page_for($work, '');
+ok(str_contains($hf, '<h2>Featured cards</h2>') && substr_count($hf, 'class="tile feat"') === 1, 'cards the Group has featured appear in a Featured strip, up to four');
+q("update campaign_designs set featured=0");
 // the library: an occasion can be chosen, and the thumbnail focus class is on the picture
 $lib = file_get_contents(__DIR__ . '/../src/library_admin.php');
 ok(str_contains($lib, "name=\"occasion\"") && str_contains($lib, 'update designs set internal_name=?, category=?'), 'the card editor has an Occasion choice that is saved');
