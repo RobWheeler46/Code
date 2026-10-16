@@ -14,6 +14,7 @@ require __DIR__ . '/library.php';
 require __DIR__ . '/uploads.php';
 require __DIR__ . '/library_admin.php';
 require __DIR__ . '/occasions.php';
+require __DIR__ . '/styles.php';
 require __DIR__ . '/qr.php';
 require __DIR__ . '/account.php';
 require __DIR__ . '/invites.php';
@@ -52,27 +53,32 @@ function gallery_occasions(): array {
 }
 /** The occasion asked for in the address, or '' for all. Anything that is not an occasion with cards on show is ignored. */
 function occasion_wanted(): string { $w = (string)($_GET['occasion'] ?? ''); return isset(gallery_occasions()[$w]) ? $w : ''; }
-/** A drop down above the gallery to show the cards for one occasion, only when there is more than one occasion to choose from. A plain page address, so it works without scripts and can be shared. */
-function occasion_filter(string $want): string {
-    $o = gallery_occasions(); if (count($o) < 2) return '';
-    $b = '<form method="get" action="/#gallery" class="gfilter"><label for="gocc">Show cards for</label><select id="gocc" name="occasion" data-autosubmit><option value="">All occasions</option>';
-    foreach ($o as $slug => $label) $b .= '<option value="' . h($slug) . '"' . ($want === $slug ? ' selected' : '') . '>' . h($label) . '</option>';
-    return $b . '</select><noscript><button class="btn alt">Show</button></noscript></form>';
+/** Drop downs above the gallery: occasion, style and (for a signed in sender) favourites only. A plain page address, so it works without scripts and can be shared. Empty when there is nothing to choose. */
+function occasion_filter(string $want, string $style = '', bool $fav = false): string {
+    $o = gallery_occasions(); $st = gallery_styles(); $can = (bool)user();
+    if (count($o) < 2 && !$st && !($can && fav_slugs())) return '';
+    $b = '<form method="get" action="/#gallery" class="gfilter">';
+    if (count($o) >= 2) { $b .= '<label for="gocc">Show cards for</label><select id="gocc" name="occasion" data-autosubmit><option value="">All occasions</option>'; foreach ($o as $slug => $label) $b .= '<option value="' . h($slug) . '"' . ($want === $slug ? ' selected' : '') . '>' . h($label) . '</option>'; $b .= '</select>'; }
+    if ($st) { $b .= '<label for="gsty">Style</label><select id="gsty" name="style" data-autosubmit><option value="">Any style</option>'; foreach ($st as $slug => $label) $b .= '<option value="' . h($slug) . '"' . ($style === $slug ? ' selected' : '') . '>' . h($label) . '</option>'; $b .= '</select>'; }
+    if ($can) $b .= '<label class="opt"><input type="checkbox" name="fav" value="1" data-autosubmit' . ($fav ? ' checked' : '') . '> Only my favourites</label>';
+    return $b . '<noscript><button class="btn alt">Show</button></noscript></form>';
 }
 function r_home(): void {
     if (preg_match('/^[a-z0-9-]{1,30}$/', (string)($_GET['ref'] ?? ''))) $_SESSION['ref'] = $_GET['ref']; // promotion source label only, never a person
-    $st = sending_state(); $want = occasion_wanted();
+    $st = sending_state(); $want = occasion_wanted(); $sty = style_wanted(); $fav = !empty($_GET['fav']) && user(); $favs = fav_slugs();
     $b = '<section class="hero"><div><p class="eyebrow">' . h(SITE_NAME) . '</p><h1>' . (($cs = current_season()) ? 'Send ' . card_phrase_for($cs[1] . ' card') . ', Scout style' : 'Send a card, Scout style') . '</h1><p class="lead">Pick a design, write your message and we will email a private card to your friends and family. Sending is free' . (donations_enabled() ? ', and a donation is optional' : '') . '.</p><p><a class="btn big" href="#gallery">Choose a card</a> <a class="btn ghost" href="#how">How it works</a></p></div><div class="heroart" aria-hidden="true">' . (($hero = hero_for_session()) ? card_art($hero) : '') . '</div></section>';
     if ($st === 'locked') $b .= '<p class="flash warn">Sending is not open yet. You can prepare a card now.</p>';
     $b .= '<h2 id="how">How it works</h2><ol class="how"><li><b>1</b><strong>Choose a design</strong>Illustrated Scout themed cards, from tents to campfires.</li><li><b>2</b><strong>Write your message</strong>Add up to ' . max_recipients() . ' people. Give anyone a personal note if you like.</li><li><b>3</b><strong>We send each card</strong>Everyone gets their own private link and opens an envelope.</li></ol>'
         . (!donations_enabled() ? '' : '<section class="cause"><h2>Every card helps local Scouting</h2><p>' . h(DONATION_PURPOSE) . '</p><p>Sending is always free. You never have to donate, and a donation never changes how your card looks.</p></section>')
-        . '<h2 id="gallery">Pick a design</h2>' . occasion_filter($want);
-    $show = array_filter(gallery_cards(), fn($c) => $want === '' || ($c['cat'] ?? 'christmas') === $want);
+        . '<h2 id="gallery">Pick a design</h2>' . occasion_filter($want, $sty, (bool)$fav);
+    $smap = $sty ? style_map() : [];
+    $show = array_filter(gallery_cards(), fn($c, $id) => ($want === '' || ($c['cat'] ?? 'christmas') === $want) && ($sty === '' || in_array($sty, $smap[$id] ?? [], true)) && (!$fav || in_array($id, $favs, true)), ARRAY_FILTER_USE_BOTH);
     uasort($show, fn($x, $y) => season_rank($x) <=> season_rank($y)); // cards for an occasion in season come first, then occasions with no season, then ones whose season is not on (the order within each stays as set)
-    if ($want !== '') $b .= '<p class="note" role="status">' . count($show) . (count($show) === 1 ? ' card' : ' cards') . ' shown. <a href="/#gallery">Show all cards</a></p>';
+    $back = http_build_query(array_filter(['occasion' => $want, 'style' => $sty, 'fav' => $fav ? '1' : '']));
+    if ($want !== '' || $sty !== '' || $fav) $b .= '<p class="note" role="status">' . ($show ? count($show) . (count($show) === 1 ? ' card' : ' cards') . ' shown.' : 'No cards match those choices.') . ' <a href="/#gallery">Show all cards</a></p>';
     $b .= '<div class="grid">';
     foreach ($show as $id => $c)
-        $b .= '<a class="tile" href="/compose?card=' . h($id) . '">' . card_art($id, true) . '<span>' . h($c['title']) . '</span><em class="tjoke">' . h($c['joke']) . '</em></a>';
+        $b .= '<div class="tilebox"><a class="tile" href="/compose?card=' . h($id) . '">' . card_art($id, true) . '<span>' . h($c['title']) . '</span><em class="tjoke">' . h($c['joke']) . '</em></a>' . (user() ? fav_button($id, $c['title'], in_array($id, $favs, true), $back) : '') . '</div>';
     page('Choose a card', $b . '</div>');
 }
 
@@ -130,7 +136,7 @@ function r_message(): void {
 function dispatch(string $path): void {
     private_headers($path);
     $routes = ['/' => 'r_home', '/help' => 'r_help', '/register' => 'r_register', '/verify' => 'r_verify', '/resend-verification' => 'r_resend_verify', '/login' => 'r_login', '/logout' => 'r_logout', '/forgot' => 'r_forgot', '/reset' => 'r_reset',
-        '/contacts/import' => 'r_contacts_import', '/compose' => 'r_compose', '/preview' => 'r_preview', '/email-preview' => 'r_email_preview', '/review' => 'r_review', '/pay-cancelled' => 'r_pay_cancelled', '/return' => 'r_return', '/dev/pay' => 'r_dev_pay', '/dashboard' => 'r_dashboard', '/send' => 'r_send', '/prefs' => 'r_prefs', '/remind-off' => 'r_remind_off', '/privacy' => 'r_privacy', '/terms' => 'r_terms', '/accept-terms' => 'r_accept_terms', '/account/delete' => 'r_account_delete', '/account' => 'r_account', '/admin/mail' => 'r_admin_mail', '/admin/platform' => 'r_admin_platform', '/invite' => 'r_invite', '/admin/invites' => 'r_admin_invites', '/account/confirm-email' => 'r_account_confirm_email', '/contacts' => 'r_contacts', '/contacts/edit' => 'r_contact_edit', '/contacts/delete-all' => 'r_contacts_delete_all', '/contacts/pick' => 'r_pick', '/contacts/save' => 'r_save_contact', '/groups' => 'r_groups', '/discard' => 'r_discard', '/change-email' => 'r_change_email', '/copy' => 'r_copy',
+        '/contacts/import' => 'r_contacts_import', '/favourite' => 'r_favourite', '/admin/design-styles' => 'r_admin_design_styles', '/compose' => 'r_compose', '/preview' => 'r_preview', '/email-preview' => 'r_email_preview', '/review' => 'r_review', '/pay-cancelled' => 'r_pay_cancelled', '/return' => 'r_return', '/dev/pay' => 'r_dev_pay', '/dashboard' => 'r_dashboard', '/send' => 'r_send', '/prefs' => 'r_prefs', '/remind-off' => 'r_remind_off', '/privacy' => 'r_privacy', '/terms' => 'r_terms', '/accept-terms' => 'r_accept_terms', '/account/delete' => 'r_account_delete', '/account' => 'r_account', '/admin/mail' => 'r_admin_mail', '/admin/platform' => 'r_admin_platform', '/invite' => 'r_invite', '/admin/invites' => 'r_admin_invites', '/account/confirm-email' => 'r_account_confirm_email', '/contacts' => 'r_contacts', '/contacts/edit' => 'r_contact_edit', '/contacts/delete-all' => 'r_contacts_delete_all', '/contacts/pick' => 'r_pick', '/contacts/save' => 'r_save_contact', '/groups' => 'r_groups', '/discard' => 'r_discard', '/change-email' => 'r_change_email', '/copy' => 'r_copy',
         '/hooks/tick' => 'r_tick_hook', '/mfa' => 'r_mfa', '/admin' => 'r_admin', '/admin/delivery' => 'r_admin_delivery', '/admin/finance' => 'r_admin_finance', '/admin/reports' => 'r_admin_reports', '/admin/site' => 'r_admin_site', '/admin/designs' => 'r_admin_designs', '/admin/occasions' => 'r_admin_occasions', '/admin/wording' => 'r_admin_wording', '/admin/app' => 'r_admin_app', '/admin/email' => 'r_admin_email', '/admin/privacy' => 'r_admin_privacy', '/admin/access' => 'r_admin_access', '/admin/health' => 'r_admin_health', '/admin/audit' => 'r_admin_audit', '/admin/audit/export' => 'r_admin_audit_export', '/admin/action' => 'r_admin_action', '/admin/senders' => 'r_admin_senders', '/admin/measures' => 'r_admin_measures', '/admin/giftaid' => 'r_admin_giftaid', '/admin/rehearsal' => 'r_admin_rehearsal', '/admin/library' => 'r_admin_library', '/admin/library/edit' => 'r_admin_library_edit', '/admin/library/save' => 'r_admin_library_save', '/admin/library/discard' => 'r_admin_library_discard', '/admin/library/preview' => 'r_admin_library_preview', '/admin/library/action' => 'r_admin_library_action', '/admin/qr' => 'r_admin_qr', '/admin/library/img' => 'r_admin_library_img', '/admin/export' => 'r_export', '/admin/message' => 'r_message', '/hooks/stripe' => 'r_stripe_hook', '/hooks/postmark' => 'r_postmark_hook'];
     if (post() && !str_starts_with($path, '/hooks/')) check_csrf();
     if (preg_match('#^/c/([a-f0-9]+)(?:/(open|report))?$#', $path, $m)) r_card($m[1], $m[2] ?? '');

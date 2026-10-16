@@ -46,6 +46,21 @@ function starters(array $s): array {
         default => ['Thinking of you and sending lots of love.', 'Hope you are well and having a lovely time.', 'Sending you warm wishes.'],
     };
 }
+/** The feel of each greeting example, so a sender can look through the short, the warm or the cheeky ones. Anything not listed is warm. */
+const STARTER_TONES = [
+    'Wishing you a very merry Christmas and a happy, healthy New Year.' => 'Short and sweet',
+    'Have an in-tents Christmas! Hope it is full of warmth, fun and good company.' => 'A bit cheeky',
+    'Be prepared for lots of mince pies. Merry Christmas from our family to yours!' => 'A bit cheeky',
+    'Even Santa needs a Scout! Hope your Christmas is full of adventure.' => 'A bit cheeky',
+    'Happy birthday! Hope your day is full of fun and cake.' => 'Short and sweet',
+    'Happy birthday from all of us. Have an adventure of a day!' => 'A bit cheeky',
+    'Thank you so much. It really meant a lot.' => 'Short and sweet',
+    'Well done, and many congratulations on your news.' => 'Short and sweet',
+    'Wishing you every happiness. Time to celebrate!' => 'A bit cheeky',
+    'Hope you are well and having a lovely time.' => 'Short and sweet',
+    'Sending you warm wishes.' => 'Short and sweet',
+];
+function starter_tone(string $t): string { return STARTER_TONES[$t] ?? 'Warm and thoughtful'; }
 const STARTERS = [
     'Wishing you a very merry Christmas and a happy, healthy New Year.',
     'Merry Christmas! Thinking of you and sending lots of love this festive season.',

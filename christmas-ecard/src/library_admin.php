@@ -88,6 +88,7 @@ function library_save(array $in, ?string $tmp, int $uid): array {
             q('update campaign_designs set thumb_focus_y=? where campaign_id=? and design_id=?', [$focus, lib_campaign(), $did]);
             audit($uid, 'library_draft_updated', "design $did version {$row['version_no']}: $name" . ($asset ? ' (new picture)' : ''));
         }
+        style_assign($did, (array)($in['styles'] ?? []));
         $p->commit();
     } catch (Throwable $x) {
         $p->rollBack(); if ($asset) art_forget($asset);
@@ -215,6 +216,7 @@ function r_admin_library_edit(): void {
         . '<section class="admincard"><h2>2. Details and accessibility</h2>'
         . '<label>Card name<input id="f-name" name="name" maxlength="80" value="' . $v('name', $r['internal_name'] ?? '') . '"' . fa($errs, 'name', $f) . '>' . fe($errs, 'name') . '</label>'
         . '<label>Occasion<select name="occasion">' . implode('', array_map(fn($o) => '<option value="' . h($o['slug']) . '"' . ($o['slug'] === (string)($old['occasion'] ?? $r['category'] ?? 'christmas') ? ' selected' : '') . '>' . h($o['label']) . '</option>', all('select slug, label from occasions order by sort, id'))) . '</select></label>'
+        . style_checkboxes($old ? array_map('intval', (array)($old['styles'] ?? [])) : ($did ? design_style_ids($did) : []))
         . '<label>Words printed on the card<input id="f-words" name="words" maxlength="200" value="' . $v('words', $r['description'] ?? '') . '"' . fa($errs, 'words', $f) . '>' . fe($errs, 'words') . '</label>'
         . '<label>Description for screen readers (include the words on the card and what the picture shows)<textarea id="f-alt" name="alt" rows="4" maxlength="800"' . fa($errs, 'alt', $f) . '>' . $v('alt', $r['alt_text'] ?? '') . '</textarea>' . fe($errs, 'alt') . '</label>'
         . '<label class="opt"><input type="checkbox" name="rights" value="1"' . (($old ? !empty($old['rights']) : !empty($r['rights_confirmed'])) ? ' checked' : '') . '> I confirm the Group has the right to use this artwork</label>'

@@ -313,3 +313,5 @@ main .wsside a[aria-current=page]:not(.btn):not(.tile){background:var(--yellow);
 .crumbs a{display:inline-block;padding:.45rem 0;min-height:0}
 main .libtabs a[aria-current=page]:not(.btn):not(.tile){color:#fff}
 .crumbs a{display:inline-flex;align-items:center;min-height:44px;padding:0}.crumbs ol{align-items:center}
+.tilebox{position:relative}.fav{position:absolute;top:.4rem;right:.4rem;margin:0}.favbtn{min-width:44px;min-height:44px;border:0;border-radius:50%;background:rgba(255,255,255,.92);color:var(--purple);font-size:1.5rem;line-height:1;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.25)}.favbtn:focus-visible{outline:3px solid var(--blue);outline-offset:2px}.gfilter .opt{flex-basis:auto;font-weight:400}
+.tones{display:flex;flex-wrap:wrap;gap:.4rem;margin:.4rem 0}.tones button{min-height:44px;padding:.3rem .8rem;border:2px solid #9bb0cf;border-radius:999px;background:#fff;font:inherit;cursor:pointer}.tones button[aria-pressed=true]{background:#0d3560;color:#fff;border-color:#0d3560}.starters small{color:#5c6470}

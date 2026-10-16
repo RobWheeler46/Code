@@ -191,7 +191,8 @@ function admin_designs_list(): string {
         $b .= '<li class="designrow">' . card_art($id) . '<div><strong>' . h($c['title']) . '</strong> ' . ($c['on'] ? '' : '<span class="pill">Disabled</span>');
         if ($edit) $b .= '<form method="post" action="/admin/action" class="stack">' . csrf() . '<input type="hidden" name="back" value="/admin/designs"><input type="hidden" name="card" value="' . h($id) . '"><label>Accessible description<input name="desc" maxlength="200" value="' . h(setting("desc_$id")) . '" placeholder="' . h($c['title']) . '"></label><div class="row">'
             . '<button class="btn alt" name="do" value="design_desc">Save description</button><button class="btn alt" name="do" value="design">' . ($c['on'] ? 'Disable' : 'Enable') . '</button>'
-            . ($i > 0 ? '<button class="btn alt" name="do" value="design_up">Move up</button>' : '') . ($i < $n - 1 ? '<button class="btn alt" name="do" value="design_down">Move down</button>' : '') . '</div></form>';
+            . ($i > 0 ? '<button class="btn alt" name="do" value="design_up">Move up</button>' : '') . ($i < $n - 1 ? '<button class="btn alt" name="do" value="design_down">Move down</button>' : '') . '</div></form>'
+            . (style_rows() ? '<form method="post" action="/admin/design-styles" class="stack">' . csrf() . '<input type="hidden" name="card" value="' . h($id) . '">' . style_checkboxes(array_map('intval', array_column(all('select tag_id from design_style_tags x join designs d on d.id=x.design_id where d.slug=?', [$id]), 'tag_id'))) . '<button class="btn alt">Save styles</button></form>' : '');
         $b .= '</div></li>';
     }
     return $b . '</ul>';

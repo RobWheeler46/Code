@@ -9,7 +9,11 @@ const LIBRARY_TABLES = ['campaign_designs', 'design_versions', 'designs', 'campa
 
 function library_migrate(PDO $p): void {
     if (env('LIBRARY_MIGRATE', 'on') === 'off') return;
+    $freshStyles = !$p->query("select 1 from sqlite_master where name='style_tags'")->fetch();
     $p->exec("
+create table if not exists style_tags(id integer primary key autoincrement, slug text unique not null, label text not null, is_active int not null default 1, sort int not null default 0);
+create table if not exists design_style_tags(design_id int not null, tag_id int not null, primary key(design_id, tag_id));
+create table if not exists user_favourite_designs(user_id int not null, design_slug text not null, created int not null, primary key(user_id, design_slug));
 create table if not exists occasions(id integer primary key autoincrement, slug text unique not null, label text not null);
 create table if not exists campaigns(id integer primary key autoincrement, group_id int not null default 1, occasion_id int not null, name text not null, status text not null default 'draft', starts_at int, ends_at int, beneficiary text, donation_mode text not null default 'optional', revision int not null default 1, approved_at int, created int not null);
 create table if not exists designs(id integer primary key autoincrement, owner_group_id int not null default 1, slug text unique not null, internal_name text not null, category text, created int not null);
@@ -17,6 +21,7 @@ create table if not exists design_versions(id integer primary key autoincrement,
 create table if not exists campaign_designs(campaign_id int not null, design_id int not null, published_version_id int, state text not null default 'draft', order_rank int not null default 0, featured int not null default 0, thumb_focus_y int, approved_at int, primary key(campaign_id, design_id));
 create index if not exists cd_version on campaign_designs(published_version_id);
 ");
+    if ($freshStyles) foreach (['Funny', 'Heartfelt', 'Adventure', 'Traditional'] as $i => $l) $p->exec("insert into style_tags(slug,label,sort) values('" . strtolower($l) . "','$l'," . ($i + 1) . ')');
     foreach ([['sends', 'campaign_id int'], ['sends', 'design_version_id int']] as [$t, $def])
         if (!in_array(explode(' ', $def)[0], array_column($p->query("pragma table_info($t)")->fetchAll(), 'name'))) $p->exec("alter table $t add column $def");
     foreach (['original_key text', 'full_key text', 'thumb_key text', 'rights_confirmed int default 0', 'year_checked int default 0', 'rev int default 1', 'updated int', 'author_id int', 'published_at int', 'published_by int', 'pub_name text', 'pub_thumb text'] as $def)

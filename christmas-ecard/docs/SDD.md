@@ -4,7 +4,7 @@
 |---|---|
 | Service | 7th Swindon Scouts eCards, live at https://cards.7thswindon.org.uk |
 | Document | Software Design Document (SDD) with wireframes |
-| Version | 1.2, 15 October 2026 |
+| Version | 1.3, 16 October 2026 |
 | Describes | Application version 2026.10.15 (the footer of every page shows the exact build) |
 | Audience | Trustees, volunteers who run the service, and whoever maintains the code |
 | Status | Describes the service as built. Items not yet decided or built are listed in section 15 |
@@ -77,6 +77,7 @@ Stripe / Postmark ──webhooks──> /hooks/stripe, /hooks/postmark
 | `core.php` | Domain logic: recipients, the send queue, email text, payment confirmation, opt outs, sending state, scheduled delivery |
 | `cards.php`, `library.php` | The card catalogue and the eCard Library tables (designs, versions) |
 | `library_admin.php`, `uploads.php` | The eCard Library screens and the safe picture upload service |
+| `styles.php` | Style tags and their admin list, the style filter data, and favourite designs |
 | `occasions.php` | Donations switch, which occasion a card is for, the Christmas season, and the Occasions admin screen |
 | `admin.php`, `admin2.php`, `admin3.php` | Overview, delivery, finance, reports, settings forms, health, change history, senders, measures, rehearsal |
 | `workspace.php` | The admin shell and the single navigation list (menu, shortcuts, breadcrumbs) |
@@ -112,6 +113,7 @@ Additive and idempotent. They run once for each deployed build (the build stamp 
 | `giftaid` | Gift Aid declarations | Linked to a donation. Visible to owners only |
 | `reports`, `optouts`, `bounces` | Recipient reports, people who asked to stop, hard bounces and complaints | Checked every time before sending |
 | `contacts`, `groups`, `contact_groups` | A sender's private address book | Never shared between senders |
+| `style_tags`, `design_style_tags`, `user_favourite_designs` | Style vocabulary, which cards carry which style, and each sender's favourite cards | Tags are shared; favourites are private and deleted with the account |
 | `designs`, `design_versions`, `campaign_designs`, `occasions` | The eCard Library | A design has immutable versions. A sent card is pinned to the version it used. `designs.category` is the occasion. `campaign_designs` is an internal join that records order, state and which version is published (campaign screens no longer exist) |
 | `settings` | Key and value | All admin configurable values, build stamp, last job times, timer key |
 | `audit` | Append only change history | Who, what, when. Never holds message text, addresses or secrets |
@@ -183,6 +185,8 @@ The review page offers "Send for free" or "Make an optional donation". A donatio
 Each design has an occasion (chosen in the eCard Library). Occasions are managed on the Occasions screen: an administrator can add, rename and remove them, except Christmas, which is built in. The home page shows a drop down of occasions that have published cards (hidden when there is only one). Wording in emails and card pages follows the card's occasion ("Christmas card", "birthday card").
 
 **Seasons.** Each occasion can have a season: two month and day values, set on the Occasions screen (Christmas starts as 1 November to 6 January; a season may cross the new year). When an occasion's season is on, the home page heading names it ("Send a Christmas card, Scout style", "Send an Easter card, Scout style"), its cards come first and the featured picture is one of them. If two seasons are on, the one higher in the Occasions list leads. Occasions with no season come next, and occasions whose season is not on come last. No card is ever hidden by a season. The occasion's name is used as typed in sentences ("a Birthday card", "an Easter card").
+
+**Styles and favourites.** Beside occasions, cards can carry style tags (Funny, Heartfelt, Adventure and Traditional to start; up to 12, managed at the foot of the Occasions screen, where a tag can be renamed, hidden or removed). Tags are ticked on a draft in the eCard Library editor, or on any card from Order and visibility. The home page then offers a Style drop down (only tags in use on cards on show), combined with the occasion drop down; the address holds the choices, a hidden or unknown tag is ignored, and an empty result says so with a way back. Signed in senders also see a heart on each card and an Only my favourites choice; favourites belong to the sender, are removed when the account is deleted, and a card that is turned off is never offered. Guests see no favourite controls. Greeting examples on the compose page carry a tone (Short and sweet, A bit cheeky, Warm and thoughtful) with tone buttons when scripts run. The card a recipient opens links to the gallery with the promotion label `recipient-card`.
 
 ### 7.5 The eCard Library
 

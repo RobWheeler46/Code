@@ -137,7 +137,7 @@ function r_account_delete(): void {
         q("update recipients set status='cancelled', error='Account closed' where send_id in ($in) and status='queued'");   // unclaimed only
         q("update recipients set withdrawn=1 where send_id in ($in) and status<>'draft'");                                  // live links switched off
         q("delete from recipients where send_id in (select id from sends where user_id=? and status='draft')", [$uid]); q("delete from sends where user_id=? and status='draft'", [$uid]);
-        q('delete from contact_groups where contact_id in (select id from contacts where user_id=?)', [$uid]); q('delete from contacts where user_id=?', [$uid]); q('delete from groups where user_id=?', [$uid]);
+        q('delete from contact_groups where contact_id in (select id from contacts where user_id=?)', [$uid]); q('delete from contacts where user_id=?', [$uid]); q('delete from groups where user_id=?', [$uid]); q('delete from user_favourite_designs where user_id=?', [$uid]);
         q("update users set name='Deleted account', email=?, pass='', verified=0, verify_token='', reset_token='', roles='', is_admin=0, totp_secret=null, notify='off' where id=?", ["deleted-$uid@deleted.invalid", $uid]);
         db()->commit();
         audit($uid, 'account_deleted', "contacts {$c['contacts']}, groups {$c['groups']}, drafts {$c['drafts']}, cancelled {$c['queued']}, withdrawn {$c['claimed']}");

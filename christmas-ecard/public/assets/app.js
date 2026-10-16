@@ -7,6 +7,17 @@
     function upd() { var n = el.value.length; out.textContent = n + ' of ' + max + ' characters' + (n > max ? ' (too long)' : ''); out.classList.toggle('over', n > max); }
     el.addEventListener('input', upd); upd();
   });
+  document.querySelectorAll('ul.starters').forEach(function (ul) { // tone buttons only appear when scripts run; without them every idea is shown
+    var tones = []; ul.querySelectorAll('li[data-tone]').forEach(function (li) { if (tones.indexOf(li.dataset.tone) < 0) tones.push(li.dataset.tone); });
+    if (tones.length < 2) return;
+    var bar = document.createElement('div'); bar.className = 'tones'; bar.setAttribute('role', 'group'); bar.setAttribute('aria-label', 'Show ideas that are');
+    ['All'].concat(tones).forEach(function (t) {
+      var b = document.createElement('button'); b.type = 'button'; b.textContent = t; b.setAttribute('aria-pressed', t === 'All' ? 'true' : 'false');
+      b.addEventListener('click', function () { bar.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); }); ul.querySelectorAll('li').forEach(function (li) { li.hidden = t !== 'All' && li.dataset.tone !== t; }); });
+      bar.appendChild(b);
+    });
+    ul.parentNode.insertBefore(bar, ul);
+  });
   document.querySelectorAll('[data-starter]').forEach(function (b) {
     b.addEventListener('click', function () {
       var m = document.querySelector('textarea[name=message]');

@@ -63,6 +63,7 @@ function r_admin_occasions(): void {
     $u = need_admin(); if (!can_any('campaign', 'rolesadmin')) fail(403, 'You do not have permission for that.'); $uid = (int)$u['id'];
     if (post()) {
         $do = (string)($_POST['do'] ?? ''); $id = (int)($_POST['id'] ?? 0); $o = $id ? one('select * from occasions where id=?', [$id]) : null;
+        if (styles_post($uid, $do)) redirect('/admin/occasions');
         if ($do === 'add') {
             [$l, $e] = occasion_label((string)($_POST['label'] ?? ''));
             if (!$e && (int)one('select count(*) n from occasions')['n'] >= OCCASIONS_MAX) $e = 'There can be up to ' . OCCASIONS_MAX . ' occasions.';
@@ -93,5 +94,5 @@ function r_admin_occasions(): void {
     }
     $b .= '</table><h2>Add an occasion</h2><form method="post" class="stack">' . csrf() . '<label>Name (for example Get well, Easter, Congratulations)<input name="label" maxlength="30" required></label><button class="btn" name="do" value="add">Add occasion</button></form>'
         . '<p class="note">The name is used as typed in sentences, for example "a Get well card" or "an Easter card", so choose short, plain names. A season is the weeks when the home page leads with the cards of that occasion; leave it blank if the occasion has none. Cards for an occasion whose season is not on come after the others, and nothing is ever hidden.</p>';
-    admin_page('Occasions', $b);
+    admin_page('Occasions', $b . styles_admin_section());
 }
