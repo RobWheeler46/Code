@@ -604,17 +604,17 @@ R3 Stop (/optout/<token>)          Expired or withdrawn
 | (7) Volunteer    |  Overview / Cards / Order and visibility            |
 | workspace        |  (breadcrumb)                  [Alex Owner · Owner] |
 | ---------------- |                                                     |
-| START            |                                                     |
+| OVERVIEW         |                                                     |
 |  Overview        |            PAGE CONTENT                             |
 |  Measures        |                                                     |
-| CARDS            |                                                     |
+| CARDS AND        |                                                     |
 |  eCard Library   |                                                     |
 |  Order and       |                                                     |
 |   visibility     |                                                     |
 |  Occasions       |                                                     |
 |  Site settings   |                                                     |
-| SUPPORT AND      |                                                     |
-| DELIVERY         |                                                     |
+| PEOPLE AND       |                                                     |
+| SUPPORT          |                                                     |
 |  Delivery issues |                                                     |
 |  Reports and     |                                                     |
 |   complaints     |                                                     |
@@ -623,7 +623,8 @@ R3 Stop (/optout/<token>)          Expired or withdrawn
 |  Donations and   |                                                     |
 |   payments       |                                                     |
 |  Gift Aid (owner)|                                                     |
-| ADMINISTRATION   |                                                     |
+| SETTINGS AND     |                                                     |
+| HEALTH           |                                                     |
 |  Platform controls|                                                    |
 +------------------+-----------------------------------------------------+
 Navy panel, white links, current page in yellow. The list is built from one

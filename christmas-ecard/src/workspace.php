@@ -8,21 +8,21 @@ function ops_admin(): bool { return can_any('campaign', 'appadmin', 'finance', '
 /** [group => [[label, href, short description, allowed?]]] in display order. The single source for the menu, the overview shortcuts and the breadcrumbs. */
 function workspace_manifest(): array {
     return [
-        'Start' => [['Overview', '/admin', 'What needs doing and how things stand', fn() => true],
+        'Overview' => [['Overview', '/admin', 'What needs doing and how things stand', fn() => true],
             ['Measures', '/admin/measures', 'Counts and progress, with small numbers hidden', fn() => can_any('campaign', 'finance', 'appadmin', 'rolesadmin')]],
-        'Cards' => [
+        'Cards and occasions' => [
             ['eCard Library', '/admin/library', 'Add, preview and publish card designs', fn() => can_any('campaign', 'rolesadmin')],
             ['Order and visibility', '/admin/designs', 'Put the cards in order and hide or show them', fn() => can_any('campaign', 'rolesadmin')],
             ['Occasions', '/admin/occasions', 'Add or rename the groups cards are sorted into', fn() => can_any('campaign', 'rolesadmin')],
             ['Site settings', '/admin/site', 'Donations, Gift Aid, the site link and QR code', fn() => can_any('campaign', 'appadmin', 'finance', 'delivery', 'rolesadmin')]],
-        'Support and delivery' => [
+        'People and support' => [
             ['Delivery issues', '/admin/delivery', 'Failed and unconfirmed cards, resend, pause', fn() => can_any('delivery', 'appadmin', 'rolesadmin')],
             ['Reports and complaints', '/admin/reports', 'Cards reported by recipients', fn() => can('complaints')],
             ['Senders', '/admin/senders', 'Suspend or reinstate a sender', fn() => can_any('complaints', 'rolesadmin')]],
         'Fundraising' => [
             ['Donations and payments', '/admin/finance', 'Reconcile payments, refunds and exports', fn() => can('finance')],
             ['Gift Aid', '/admin/giftaid', 'Declarations and the claim schedule (owners only)', fn() => can('owner')]],
-        'Administration' => [['Platform controls', '/admin/platform', 'Settings, email, access, health and history', fn() => ops_admin()]],
+        'Settings and health' => [['Platform controls', '/admin/platform', 'Settings, email, access, health and history', fn() => ops_admin()]],
     ];
 }
 /** The tools inside Platform controls, so the menu stays one level deep. */
@@ -51,7 +51,7 @@ function platform_links(): array { return array_values(array_map(fn($i) => array
 function workspace_locate(string $path): ?array {
     $best = null; $bl = -1;
     foreach (workspace_manifest() as $g => $items) foreach ($items as $i) if (($path === $i[1] || str_starts_with($path, $i[1] . '/')) && strlen($i[1]) > $bl) { $best = ['group' => $g, 'item' => $i[0], 'href' => $i[1], 'child' => null]; $bl = strlen($i[1]); }
-    foreach (platform_manifest() as $c) if (($path === $c[1] || str_starts_with($path, $c[1] . '/')) && strlen($c[1]) > $bl) { $best = ['group' => 'Administration', 'item' => 'Platform controls', 'href' => '/admin/platform', 'child' => $c[0]]; $bl = strlen($c[1]); }
+    foreach (platform_manifest() as $c) if (($path === $c[1] || str_starts_with($path, $c[1] . '/')) && strlen($c[1]) > $bl) { $best = ['group' => 'Settings and health', 'item' => 'Platform controls', 'href' => '/admin/platform', 'child' => $c[0]]; $bl = strlen($c[1]); }
     return $best;
 }
 
@@ -65,7 +65,7 @@ function workspace_shell(string $title, string $body): never {
     }
     $nav .= '</nav>';
     $crumb = '<nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/admin">Overview</a></li>';
-    if ($loc && $loc['href'] !== '/admin') { if ($loc['group'] !== 'Start') $crumb .= '<li>' . h($loc['group']) . '</li>'; $crumb .= '<li>' . ($loc['child'] ? '<a href="' . h($loc['href']) . '">' . h($loc['item']) . '</a>' : '<span aria-current="page">' . h($loc['item']) . '</span>') . '</li>'; if ($loc['child']) $crumb .= '<li><span aria-current="page">' . h($loc['child']) . '</span></li>'; }
+    if ($loc && $loc['href'] !== '/admin') { if ($loc['group'] !== 'Overview') $crumb .= '<li>' . h($loc['group']) . '</li>'; $crumb .= '<li>' . ($loc['child'] ? '<a href="' . h($loc['href']) . '">' . h($loc['item']) . '</a>' : '<span aria-current="page">' . h($loc['item']) . '</span>') . '</li>'; if ($loc['child']) $crumb .= '<li><span aria-current="page">' . h($loc['child']) . '</span></li>'; }
     $crumb .= '</ol></nav>';
     $who = '<p class="wsrole">' . h($u['name']) . ' · ' . h(implode(', ', array_map(fn($r) => ROLES[$r] ?? $r, array_filter(explode(',', (string)$u['roles'])))) ?: 'no roles') . '</p>';
     page($title, '<div class="ws"><aside class="wsside"><p class="wsbrand"><span>7</span><strong>Volunteer workspace</strong><small>7th Swindon Scouts</small></p><details class="wsmenu" open><summary>Workspace menu</summary>' . $nav . '</details></aside><div class="wsmain"><div class="wstop">' . $crumb . $who . '</div>' . $body . '</div></div>');
