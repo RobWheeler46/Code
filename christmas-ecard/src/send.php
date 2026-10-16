@@ -265,12 +265,14 @@ function r_dashboard(): void {
     $rows = '';
     foreach (all('select * from sends where user_id=? order by id desc', [$u['id']]) as $s) {
         $c = [];
-        foreach (all('select * from recipients where send_id=?', [$s['id']]) as $r) { $k = rstatus($r); $c[$k] = ($c[$k] ?? 0) + 1; }
+        $gone = 0; $went = 0;
+        foreach (all('select * from recipients where send_id=?', [$s['id']]) as $r) { $k = rstatus($r); $c[$k] = ($c[$k] ?? 0) + 1; if ($r['sent_at']) { $went++; if (expiry_ts($r) < time()) $gone++; } }
+        $state = $s['status'] === 'draft' ? ['Draft', 'draft'] : ($went && $gone === $went ? ['Links expired', 'expired'] : (!empty($c['Scheduled']) ? ['Scheduled', 'scheduled'] : ($went ? ['Sent', 'sent'] : ['Waiting to send', 'queued'])));
         $sum = implode(', ', array_map(fn($k, $v) => "$v $k", array_keys($c), $c));
         $link = $s['status'] === 'draft' ? "/compose?id={$s['id']}" : ($s['status'] === 'awaiting_payment' ? "/review?id={$s['id']}" : "/send?id={$s['id']}");
         $act = $s['status'] === 'draft' ? '<a class="btn" href="' . $link . '">Keep writing</a> <form method="post" action="/discard" class="inline">' . csrf() . '<input type="hidden" name="id" value="' . $s['id'] . '"><button class="link">Discard draft</button></form>' : '<a class="btn alt" href="' . $link . '">See how it is going</a> <a href="/copy?id=' . $s['id'] . '">Send it again to someone</a>';
         $don = donation_state($s) === 'No donation' ? '' : '<br><small>' . h(donation_state($s)) . '</small>';
-        $rows .= '<li class="cardrow"><div class="thumb">' . card_art($s['card'], true, $s['art_ref'] ?? null) . '</div><div><h2>' . h(cards()[$s['card']]['title'] ?? $s['card']) . ($s['status'] === 'draft' ? ' <span class="pill">Draft</span>' : '') . '</h2><p class="note">' . date('j M Y', (int)$s['created']) . ($sum ? ' &middot; ' . h($sum) : '') . $don . '</p><p>' . $act . '</p></div></li>';
+        $rows .= '<li class="cardrow"><div class="thumb">' . card_art($s['card'], true, $s['art_ref'] ?? null) . '</div><div><h2>' . h(cards()[$s['card']]['title'] ?? $s['card']) . ' <span class="pill ' . $state[1] . '">' . $state[0] . '</span></h2><p class="note">' . date('j M Y', (int)$s['created']) . ($sum ? ' &middot; ' . h($sum) : '') . $don . '</p><p>' . $act . '</p></div></li>';
     }
     $b .= $rows ? '<ul class="plain cardlist">' . $rows . '</ul>' : '<section class="next"><h2>No cards yet</h2><p>Your first card is only a few minutes away.</p><p><a class="btn big" href="/">Choose a design</a></p></section>';
     $b .= favourites_section();

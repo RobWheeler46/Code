@@ -319,3 +319,6 @@ main .libtabs a[aria-current=page]:not(.btn):not(.tile){color:#fff}
 .otiles{list-style:none;padding:0;grid-template-columns:repeat(auto-fill,minmax(10rem,1fr))}.otile span{display:block}.otile span::after{content:none}.otile small{display:block;font-weight:400;color:#4b5563}.otile[aria-current=true]{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue)}.otile img.art{aspect-ratio:3/2}
 .tile.feat{border-color:var(--yellow)}
 .tile span::after{white-space:nowrap;flex-shrink:0}
+.pill.expired{background:#e5e7eb;color:#374151}.pill.scheduled{background:#e8e0fa;color:#2e1065}.pill.draft{background:#fff3cd;color:#5b4300}
+.tpreview{position:absolute;top:.4rem;left:.4rem;display:inline-flex;align-items:center;min-height:44px;padding:0 .9rem;border-radius:999px;background:rgba(255,255,255,.92);color:var(--purple);font-weight:800;text-decoration:none;box-shadow:0 1px 4px rgba(0,0,0,.25)}.tpreview:focus-visible,.tpreview:hover{outline:3px solid var(--blue);outline-offset:2px}
+.cardpreview{max-width:44rem;margin:1rem 0}.cardpreview img{width:100%;height:auto;border-radius:14px;display:block}

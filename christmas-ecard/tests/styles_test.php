@@ -69,6 +69,14 @@ ok(dbq('select count(*) from user_favourite_designs')->fetchColumn() == 0, 'remo
 dbq("insert into user_favourite_designs values((select id from users where email='plain@x.example'),'$c1',1)"); dbq("insert into settings(k,v) values('off_$c1','1') on conflict(k) do update set v='1'");
 ok(!str_contains(http('/dashboard', $p)[1], 'compose?card=' . $c1), 'a saved card that is turned off is not shown');
 dbq("delete from settings where k='off_$c1'"); dbq('delete from user_favourite_designs');
+// a closer look at a card before choosing it
+$gj = tempnam(sys_get_temp_dir(), 'jar'); [$c, $pv] = http('/card-preview?card=' . $c1, $gj);
+ok($c === 200 && str_contains($pv, 'compose?card=' . $c1) && str_contains($pv, 'Personalise this card') && str_contains($pv, 'Back to the cards'), 'anyone can preview a card in full and go on to personalise it');
+ok(str_contains(guest_home(), 'href="/card-preview?card=' . $c1 . '"') && str_contains(guest_home(), 'Preview<span class="sr">'), 'each card in the gallery has a Preview link that names the card');
+[$c, ] = http('/card-preview?card=nonsense', $gj); ok($c === 302, 'a card that does not exist goes back to the gallery');
+dbq("insert into settings(k,v) values('off_$c1','1') on conflict(k) do update set v='1'"); [$c, ] = http('/card-preview?card=' . $c1, $gj); ok($c === 302, 'a card that is turned off cannot be previewed');
+dbq("delete from settings where k='off_$c1'");
+[, $pv] = http('/card-preview?card=' . urlencode('"><script>'), $gj); ok(!str_contains($pv, '<script>'), 'odd input is never printed');
 // greeting ideas and the card sent back
 [, $cm] = http('/compose?card=' . $c1, $p); ok(str_contains($cm, 'data-tone="Short and sweet"') && str_contains($cm, 'data-tone="A bit cheeky"') && str_contains($cm, 'data-tone="Warm and thoughtful"'), 'greeting examples carry a tone');
 ok(starter_tone('Sending you warm wishes.') === 'Short and sweet' && starter_tone('something else') === 'Warm and thoughtful', 'an example without a tone is warm');

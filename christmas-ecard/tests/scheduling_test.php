@@ -50,6 +50,10 @@ $re(['when' => 'custom', 'when_custom' => date('Y-m-d\TH:i', time() + 600)]); ok
 $new = date('Y-m-d\TH:i', time() + 86400 * 8); $re(['when' => 'custom', 'when_custom' => $new]);
 ok((int)one('select send_at from sends where id=?', [$s4])['send_at'] === strtotime($new) && (int)one('select next_at from recipients where id=?', [$r4])['next_at'] === strtotime($new), 'a valid new time moves the card and its recipients');
 q("update recipients set status='sent' where id=?", [$r4]); $re(['when' => 'custom', 'when_custom' => date('Y-m-d\TH:i', time() + 86400 * 9)]); ok((int)one('select next_at from recipients where id=?', [$r4])['next_at'] === strtotime($new), 'a card that has already gone is not moved');
+// My cards says plainly where each card stands
+q('update recipients set sent_at=? where id=?', [time() - 60, $r4]); [, $dash] = http('/dashboard', $jar); ok(preg_match('/Merry Christmess|pill sent">Sent</', $dash) && str_contains($dash, 'pill sent">Sent<'), 'a card that has gone out shows a Sent label');
+q('update recipients set sent_at=? where id=?', [time() - 86400 * 400, $r4]); [, $dash] = http('/dashboard', $jar); ok(str_contains($dash, 'pill expired">Links expired<'), 'a card whose links have passed their time shows Links expired');
+q("update recipients set status='queued', sent_at=null, next_at=? where id=?", [time() + 86400, $r4]); [, $dash] = http('/dashboard', $jar); ok(str_contains($dash, 'pill scheduled">Scheduled<'), 'a card waiting for its chosen time shows Scheduled');
 // donation suggestion follows the number of cards
 q("insert into settings(k,v) values('donations_enabled','1') on conflict(k) do update set v='1'");
 function rev(int $n): string { global $jar; $t = time(); q("insert into sends(user_id,card,sender_name,message,status,created,updated) values(1,'pegs','Sam','Hi','draft',?,?)", [$t, $t]); $id = (int)db()->lastInsertId(); for ($i = 0; $i < $n; $i++) q("insert into recipients(send_id,name,email,token,status) values(?,?,?,?,'draft')", [$id, "R$i", "r$i@x.example", token()]); return http("/review?id=$id", $jar)[1]; }
