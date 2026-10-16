@@ -59,6 +59,16 @@ dbq("delete from settings where k='off_$c1'");
 http('/favourite', $p, ['_c' => tok($pg), 'card' => $c1, 'on' => '', 'back' => 'style=funny']); ok(dbq('select count(*) from user_favourite_designs')->fetchColumn() == 0, 'it can be removed');
 ok(preg_match('/user_favourite_designs/', file_get_contents(__DIR__ . '/../src/auth.php')) === 1, 'deleting an account removes its favourites');
 
+// favourites on My cards
+[, $dp] = http('/dashboard', $p); ok(str_contains($dp, 'My favourite cards') && str_contains($dp, 'Press the heart'), 'My cards has a favourites section, with a hint when it is empty');
+[, $pg] = http('/', $p); http('/favourite', $p, ['_c' => tok($pg), 'card' => $c1, 'on' => '1', 'back' => '']);
+[, $dp] = http('/dashboard', $p); ok(str_contains($dp, 'compose?card=' . $c1) && !str_contains($dp, 'Press the heart') && str_contains($dp, 'name="to" value="dashboard"'), 'a saved card appears there as a link to start a card');
+[, $do2] = http('/dashboard', $o); ok(str_contains($do2, 'Press the heart'), 'another sender does not see it');
+[, $pg2] = http('/dashboard', $p); [$c, ] = http('/favourite', $p, ['_c' => tok($pg2), 'card' => $c1, 'on' => '', 'to' => 'dashboard']);
+ok(dbq('select count(*) from user_favourite_designs')->fetchColumn() == 0, 'removing it there removes the favourite');
+dbq("insert into user_favourite_designs values((select id from users where email='plain@x.example'),'$c1',1)"); dbq("insert into settings(k,v) values('off_$c1','1') on conflict(k) do update set v='1'");
+ok(!str_contains(http('/dashboard', $p)[1], 'compose?card=' . $c1), 'a saved card that is turned off is not shown');
+dbq("delete from settings where k='off_$c1'"); dbq('delete from user_favourite_designs');
 // greeting ideas and the card sent back
 [, $cm] = http('/compose?card=' . $c1, $p); ok(str_contains($cm, 'data-tone="Short and sweet"') && str_contains($cm, 'data-tone="A bit cheeky"') && str_contains($cm, 'data-tone="Warm and thoughtful"'), 'greeting examples carry a tone');
 ok(starter_tone('Sending you warm wishes.') === 'Short and sweet' && starter_tone('something else') === 'Warm and thoughtful', 'an example without a tone is warm');

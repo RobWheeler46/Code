@@ -45,10 +45,11 @@ function r_favourite(): void {
         if ($on && isset(gallery_cards()[$slug])) q('insert or ignore into user_favourite_designs(user_id,design_slug,created) values(?,?,?)', [$u['id'], $slug, time()]);
         elseif (!$on) q('delete from user_favourite_designs where user_id=? and design_slug=?', [$u['id'], $slug]);
     }
+    if (($_POST['to'] ?? '') === 'dashboard') redirect('/dashboard');
     redirect('/' . ($back ? "?$back" : '') . '#gallery');
 }
-function fav_button(string $slug, string $title, bool $is, string $back): string {
-    return '<form method="post" action="/favourite" class="fav">' . csrf() . '<input type="hidden" name="card" value="' . h($slug) . '"><input type="hidden" name="back" value="' . h($back) . '"><input type="hidden" name="on" value="' . ($is ? '' : '1') . '">'
+function fav_button(string $slug, string $title, bool $is, string $back, string $to = ''): string {
+    return '<form method="post" action="/favourite" class="fav">' . csrf() . ($to ? '<input type="hidden" name="to" value="' . h($to) . '">' : '') . '<input type="hidden" name="card" value="' . h($slug) . '"><input type="hidden" name="back" value="' . h($back) . '"><input type="hidden" name="on" value="' . ($is ? '' : '1') . '">'
         . '<button class="favbtn" aria-pressed="' . ($is ? 'true' : 'false') . '" aria-label="' . ($is ? 'Remove ' : 'Save ') . h($title) . ($is ? ' from your favourites' : ' to your favourites') . '">' . ($is ? '&#9829;' : '&#9825;') . '</button></form>';
 }
 
@@ -99,4 +100,14 @@ function r_admin_design_styles(): void {
         else flash('Card not found.', 'err');
     }
     redirect('/admin/designs');
+}
+
+/** "My favourite cards" on My cards: the saved designs that are still on show, each a link to start a card, with a heart to remove it. */
+function favourites_section(): string {
+    $on = array_values(array_filter(fav_slugs(), fn($id) => isset(gallery_cards()[$id])));
+    $b = '<h2 id="favourites">My favourite cards</h2>';
+    if (!$on) return $b . '<p class="note">Press the heart on a card in the <a href="/#gallery">gallery</a> to keep it here for next time.</p>';
+    $b .= '<div class="grid">';
+    foreach ($on as $id) { $c = gallery_cards()[$id]; $b .= '<div class="tilebox"><a class="tile" href="/compose?card=' . h($id) . '">' . card_art($id, true) . '<span>' . h($c['title']) . '</span></a>' . fav_button($id, $c['title'], true, '', 'dashboard') . '</div>'; }
+    return $b . '</div>';
 }
