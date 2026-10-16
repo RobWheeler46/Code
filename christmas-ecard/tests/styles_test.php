@@ -77,6 +77,9 @@ ok(str_contains(guest_home(), 'href="/card-preview?card=' . $c1 . '"') && str_co
 dbq("insert into settings(k,v) values('off_$c1','1') on conflict(k) do update set v='1'"); [$c, ] = http('/card-preview?card=' . $c1, $gj); ok($c === 302, 'a card that is turned off cannot be previewed');
 dbq("delete from settings where k='off_$c1'");
 [, $pv] = http('/card-preview?card=' . urlencode('"><script>'), $gj); ok(!str_contains($pv, '<script>'), 'odd input is never printed');
+// hidden text for screen readers must be clipped, not moved off to the left (inside a positioned link that put it on screen in the right hand columns)
+ok(preg_match('/^\.sr\{[^}]*clip:rect/m', file_get_contents(__DIR__ . '/../public/assets/style.css')) && !preg_match('/\.sr\{[^}]*left:-999px/', file_get_contents(__DIR__ . '/../public/assets/style.css')), 'text meant only for screen readers is clipped away and cannot appear on screen');
+
 // greeting ideas and the card sent back
 [, $cm] = http('/compose?card=' . $c1, $p); ok(str_contains($cm, 'data-tone="Short and sweet"') && str_contains($cm, 'data-tone="A bit cheeky"') && str_contains($cm, 'data-tone="Warm and thoughtful"'), 'greeting examples carry a tone');
 ok(starter_tone('Sending you warm wishes.') === 'Short and sweet' && starter_tone('something else') === 'Warm and thoughtful', 'an example without a tone is warm');
