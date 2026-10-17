@@ -40,9 +40,9 @@ function fa(array $e, string $k, bool &$first): string {
     $a = ' aria-invalid="true" aria-describedby="e-' . $k . '"' . ($first ? ' data-focus' : ''); $first = false; return $a;
 }
 
-function card_view(string $cardId, string $to, string $msg, string $from, string $note = '', ?string $artRef = null, ?int $vid = null, string $link = ''): string {
+function card_view(string $cardId, string $to, string $msg, string $from, string $note = '', ?string $artRef = null, ?int $vid = null): string {
     $c = card_meta($cardId, $vid) ?? cards()[$cardId]; // message is escaped plain text; URLs are never linked
-    return '<article class="card">' . card_art($cardId, false, $artRef, $vid) . '<div class="inner">' . ($c['baked'] ? '' : '<h2>' . h($c['title']) . '</h2><p class="joke">' . h($c['joke']) . '</p>') . '<p class="to">Dear ' . h($to) . ',</p><p class="msg">' . nl2br(h($msg)) . '</p><p class="from">With love from<br><strong>' . h($from) . '</strong></p>' . ($note ? '<p class="note">' . h($note) . '</p>' : '') . ($link !== '' ? '<p class="grouplink"><a href="' . h($link) . '" target="_blank" rel="noopener noreferrer nofollow">Find out more about 7th Swindon Scouts<span class="sr"> (opens in a new tab)</span></a></p>' : '') . '</div></article>';
+    return '<article class="card">' . card_art($cardId, false, $artRef, $vid) . '<div class="inner">' . ($c['baked'] ? '' : '<h2>' . h($c['title']) . '</h2><p class="joke">' . h($c['joke']) . '</p>') . '<p class="to">Dear ' . h($to) . ',</p><p class="msg">' . nl2br(h($msg)) . '</p><p class="from">With love from<br><strong>' . h($from) . '</strong></p>' . ($note ? '<p class="note">' . h($note) . '</p>' : '') . '</div></article>';
 }
 
 // ---------- public
@@ -169,7 +169,7 @@ function r_message(): void {
     $why = field('reason', 200); if ($why === '') fail(400, 'A reason is required.');
     audit((int)$u['id'], 'message_access', "report {$rep['id']}: $why");
     $s = one('select * from sends where id=?', [$rep['send_id']]);
-    page('Reported card', '<h1>Reported card</h1>' . card_view($s['card'], $rep['name'], resolved_msg(one('select * from recipients where id=?', [$rep['recipient_id']]), $s), $s['sender_name'], '', $s['art_ref'] ?? null, isset($s['design_version_id']) ? (int)$s['design_version_id'] : null, card_link_url($s)) . '<p><a href="/admin">Back</a></p>');
+    page('Reported card', '<h1>Reported card</h1>' . card_view($s['card'], $rep['name'], resolved_msg(one('select * from recipients where id=?', [$rep['recipient_id']]), $s), $s['sender_name'], '', $s['art_ref'] ?? null, isset($s['design_version_id']) ? (int)$s['design_version_id'] : null) . '<p><a href="/admin">Back</a></p>');
 }
 
 function dispatch(string $path): void {

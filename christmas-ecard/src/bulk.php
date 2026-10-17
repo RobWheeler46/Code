@@ -43,7 +43,7 @@ function r_admin_bulk(): void {
                 [$rows, $bad] = bulk_parse($f['tmp_name'], $default);
                 if (!$rows) { $e[] = 'No one in the file could be used.'; foreach (array_slice($bad, 0, 10) as $b) $e[] = $b; }
                 else {
-                    q('insert into sends(user_id,card,sender_name,message,status,created,updated,bulk,group_link) values(?,?,?,?,?,?,?,1,?)', [$uid, $card, $from, $default !== '' ? $default : $rows[0][2], 'draft', time(), time(), empty($_POST['group_link']) ? 0 : 1]); $sid = (int)db()->lastInsertId();
+                    q('insert into sends(user_id,card,sender_name,message,status,created,updated,bulk) values(?,?,?,?,?,?,?,1)', [$uid, $card, $from, $default !== '' ? $default : $rows[0][2], 'draft', time(), time()]); $sid = (int)db()->lastInsertId();
                     foreach ($rows as [$n, $em, $m]) q('insert into recipients(send_id,name,email,own_msg,token) values(?,?,?,?,?)', [$sid, $n, $em, $m, token()]);
                     audit($uid, 'bulk_draft', "send $sid: " . count($rows) . ' people, ' . count($bad) . ' lines not used'); $_SESSION['bulk_bad'][$sid] = array_slice($bad, 0, 30);
                     redirect('/admin/bulk?id=' . $sid);
@@ -73,7 +73,6 @@ function r_admin_bulk(): void {
             . '<label>From<input name="sender_name" maxlength="' . (name_max() + 20) . '" value="' . h($u['name']) . '"></label>'
             . '<label>CSV file<input type="file" name="csv" accept=".csv,text/csv" required></label>'
             . '<label>Message for anyone with no message of their own (optional)<textarea name="message" rows="3" maxlength="' . msg_max() . '"></textarea></label>'
-            . (group_link_url() !== '' ? '<label class="opt"><input type="checkbox" name="group_link" value="1"> Add a link to the 7th Swindon Scouts website at the bottom of each card</label>' : '')
             . '<button class="btn">Check the file</button></form>'
             . '<h2>The file</h2><p>Save your spreadsheet as a CSV file with three columns: <strong>Name</strong>, <strong>Email</strong> and <strong>Message</strong>, one person on each line. A heading line saying Name, Email and Message is fine. Up to ' . BULK_MAX . ' people at a time, and up to ' . msg_max() . ' characters in each message. Anyone who has asked not to receive cards is skipped automatically. Sending is free, uses your own account, and goes through the normal queue.</p>'
             . '<pre>Name,Email,Message' . "\n" . 'Gran,gran@example.com,"Thank you for the wonderful scarf."' . "\n" . 'Sam,sam@example.com,"Good luck with the exams!"</pre>');

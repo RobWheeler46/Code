@@ -13,7 +13,7 @@ function r_compose(): void {
         $act = $_POST['act'] ?? 'save';
         $from = trim((string)($_POST['sender_name'] ?? '')) ?: ($u['name'] ?? ''); $msg = trim((string)($_POST['message'] ?? ''));
         $names = array_values((array)($_POST['r_name'] ?? [])); $emails = array_values((array)($_POST['r_email'] ?? [])); $msgs = array_values((array)($_POST['r_msg'] ?? [])); $paste = (string)($_POST['paste'] ?? '');
-        $stash = fn(array $extra = []) => $_SESSION['old'] = array_merge(['card' => $card, 'sender_name' => (string)($_POST['sender_name'] ?? ''), 'message' => (string)($_POST['message'] ?? ''), 'group_link' => empty($_POST['group_link']) ? 0 : 1, 'r_name' => $names, 'r_email' => $emails, 'r_msg' => $msgs, 'paste' => $paste], $extra);
+        $stash = fn(array $extra = []) => $_SESSION['old'] = array_merge(['card' => $card, 'sender_name' => (string)($_POST['sender_name'] ?? ''), 'message' => (string)($_POST['message'] ?? ''), 'r_name' => $names, 'r_email' => $emails, 'r_msg' => $msgs, 'paste' => $paste], $extra);
         if ($act === 'addrow' || preg_match('/^remove_(\d+)$/', $act, $mm)) { // rows only: keep everything typed, change the row list, no validation yet
             if (isset($mm)) foreach (['names', 'emails', 'msgs'] as $v) { array_splice($$v, (int)$mm[1], 1); }
             $stash(['r_name' => $names, 'r_email' => $emails, 'r_msg' => $msgs, 'addrow' => $act === 'addrow' ? 1 : 0]);
@@ -55,9 +55,9 @@ function r_compose(): void {
             redirect('/compose?' . ($s ? 'id=' . $s['id'] : 'card=' . urlencode($card)));
         }
         if (!$s) {
-            q('insert into sends(user_id,card,sender_name,message,created,updated,ref,group_link) values(?,?,?,?,?,?,?,?)', [$u['id'] ?? 0, $card, $from, $msg, time(), time(), $_SESSION['ref'] ?? null, empty($_POST['group_link']) ? 0 : 1]); $sid = (int)db()->lastInsertId();
+            q('insert into sends(user_id,card,sender_name,message,created,updated,ref) values(?,?,?,?,?,?,?)', [$u['id'] ?? 0, $card, $from, $msg, time(), time(), $_SESSION['ref'] ?? null]); $sid = (int)db()->lastInsertId();
             if (!$u) $_SESSION['drafts'][] = $sid;
-        } else { $sid = (int)$s['id']; q('update sends set card=?, sender_name=?, message=?, group_link=?, updated=? where id=?', [$card, $from, $msg, empty($_POST['group_link']) ? 0 : 1, time(), $sid]); }
+        } else { $sid = (int)$s['id']; q('update sends set card=?, sender_name=?, message=?, updated=? where id=?', [$card, $from, $msg, time(), $sid]); }
         q("delete from recipients where send_id=? and status='draft'", [$sid]);
         foreach ($rows as [$n, $e, $own]) q('insert into recipients(send_id,name,email,own_msg,token) values(?,?,?,?,?)', [$sid, $n, $e, $own, token()]);
         if ($act === 'test') {
@@ -104,7 +104,6 @@ function r_compose(): void {
         . '<input type="hidden" name="card" value="' . h($card) . '">'
         . '<label>From (your name or family name)<input name="sender_name" maxlength="' . (name_max() + 20) . '" data-max="' . name_max() . '" value="' . h($from) . '"' . fa($errs, 'sender_name', $f) . '><small class="count">Up to ' . name_max() . ' characters</small>' . fe($errs, 'sender_name') . '</label>'
         . '<label>Your message<textarea name="message" rows="5" data-max="' . msg_max() . '"' . fa($errs, 'message', $f) . '>' . h($msg) . '</textarea><small class="count">Up to ' . msg_max() . ' characters</small>' . fe($errs, 'message') . '</label>'
-        . (group_link_url() !== '' ? '<label class="opt"><input type="checkbox" name="group_link" value="1"' . (($old ? !empty($old['group_link']) : !empty($s['group_link'])) ? ' checked' : '') . '> Add a link to the 7th Swindon Scouts website at the bottom of the card</label>' : '')
         . '<details><summary>Need ideas? Greeting examples</summary><p class="note">Examples only. Choosing one adds it to your message, which you can then edit.</p><ul class="starters">' . implode('', array_map(fn($t) => '<li data-tone="' . h(starter_tone($t)) . '">' . h($t) . ' <small>(' . h(starter_tone($t)) . ')</small> <button type="button" class="link" data-starter="' . h($t) . '">Use this</button></li>', starters($s ?: []))) . '</ul></details>'
         . ($back ? '<p class="note">Sending a card back to ' . h($back['sender_name']) . ': add their email address below.</p>' : '')
         . $recipientsHtml
@@ -125,7 +124,7 @@ function r_email_preview(): void {
 function r_preview(): void {
     $s = own_send((int)($_GET['id'] ?? 0));
     $r = one('select * from recipients where send_id=? order by id limit 1', [$s['id']]);
-    page('Preview', '<h1>Preview</h1><p>This is how your card will look' . ($r ? ' for ' . h($r['name']) : '') . '.</p>' . card_view($s['card'], $r['name'] ?? 'Friend', $r ? resolved_msg($r, $s) : $s['message'], $s['sender_name'], card_note($s), null, null, card_link_url($s)) . '<p class="sendbar"><a class="btn alt" href="/compose?id=' . $s['id'] . '">Back to editing</a> <a class="btn" href="/review?id=' . $s['id'] . '">Review and send</a></p>');
+    page('Preview', '<h1>Preview</h1><p>This is how your card will look' . ($r ? ' for ' . h($r['name']) : '') . '.</p>' . card_view($s['card'], $r['name'] ?? 'Friend', $r ? resolved_msg($r, $s) : $s['message'], $s['sender_name'], card_note($s)) . '<p class="sendbar"><a class="btn alt" href="/compose?id=' . $s['id'] . '">Back to editing</a> <a class="btn" href="/review?id=' . $s['id'] . '">Review and send</a></p>');
 }
 
 /** Resolves a pending Stripe attempt. Returns 'paid', 'expired' or 'pending'. */
@@ -223,7 +222,7 @@ function r_review(): void {
     if (setting('paused') === '1') $b .= '<p class="note">Sending is briefly paused. Cards you submit will be queued and go out when it resumes.</p>';
     // a small card beside the details, the message once, and the full card only if asked for
     $left = '<div class="card preview compact">' . card_art($s['card'], true) . '<p class="cardname"><strong>' . h(cards()[$s['card']]['title'] ?? '') . '</strong><br><small>From ' . h($s['sender_name']) . '</small></p><p class="center"><a href="/compose?id=' . $id . '">Edit message or recipients</a></p>'
-        . '<blockquote class="yourmsg">' . nl2br(h($s['message'])) . '</blockquote><details><summary>See the full card</summary>' . card_view($s['card'], $rs[0]['name'] ?? 'Friend', $rs ? resolved_msg($rs[0], $s) : $s['message'], $s['sender_name'], '', null, null, card_link_url($s)) . '</details></div>';
+        . '<blockquote class="yourmsg">' . nl2br(h($s['message'])) . '</blockquote><details><summary>See the full card</summary>' . card_view($s['card'], $rs[0]['name'] ?? 'Friend', $rs ? resolved_msg($rs[0], $s) : $s['message'], $s['sender_name']) . '</details></div>';
     // a short list is open; a long one is folded so the delivery choice and the Send button stay near the top
     $mid = '<details class="rcpts"' . (count($rs) <= 3 ? ' open' : '') . '><summary><strong>Sending to ' . count($rs) . ' ' . (count($rs) === 1 ? 'person' : 'people') . '</strong></summary><ul class="rlist">' . $list . '</ul><p class="note"><a href="/email-preview?id=' . $id . '">Preview the email</a></p></details>';
     $rep = repeats_for($s);

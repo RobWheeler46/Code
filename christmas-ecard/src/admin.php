@@ -17,7 +17,7 @@ function config_spec(string $area): array {
             'amounts_pence' => ['Suggested donation amounts in pounds, comma separated (up to 5, £1 to £500)', 'amounts', 'def' => '200,500,1000'],
             'giftaid_charity' => ['Charity name used in the Gift Aid declaration (as HMRC knows it)', 'text', 'max' => 100, 'def' => ''],
             'giftaid_enabled' => ['Offer Gift Aid on donations', 'bool', 'def' => '0'],
-            'group_url' => ['Group website address, offered to senders as a link on their card (an https address; blank switches the option off)', 'url', 'max' => 200, 'def' => 'https://www.7thswindon.org.uk/']]],
+            'group_url' => ['Group website address, mentioned in every card email (an https address; blank leaves it out)', 'url', 'max' => 200, 'def' => 'https://www.7thswindon.org.uk/']]],
         'app' => ['view' => ['appadmin', 'campaign', 'delivery', 'rolesadmin'], 'edit' => ['appadmin', 'rolesadmin'], 'title' => 'Application settings', 'when' => 'Applies to new entries straight away. Existing drafts are kept; a draft above a new limit must be corrected before submission. Accepted batches are unchanged.', 'fields' => [
             'max_recipients' => ['Recipients per card (1 to 20)', 'int', 'min' => 1, 'max' => 20, 'def' => '20'],
             'msg_max' => ['Greeting limit (characters)', 'int', 'min' => 50, 'max' => 2000, 'def' => '500'],

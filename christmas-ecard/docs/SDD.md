@@ -170,7 +170,7 @@ Register / sign in / confirm email (once)  <────────────
 
 After sending, the status page offers a "Tell a friend" block (WhatsApp, email and the plain link, labelled `?ref=sendshare` so Measures can count visits). While cards are still scheduled the sender can change the delivery time (same limits as when scheduling, or send at once); only cards that have not started sending move, and the change is recorded in the change history. When donations are on, the amount suggested on the review page grows with the number of cards (first, second or third amount for 1 to 3, 4 to 10 and 11 or more).
 
-**Group website link.** The write screen (and the bulk send screen) offers a tick box, Add a link to the 7th Swindon Scouts website at the bottom of the card. It is saved with the draft (`sends.group_link`), kept when a card is copied, and shown on the preview and on the recipient's card as one plain link that opens in a new tab (`rel="noopener noreferrer nofollow"`, and named for screen readers). The address is a setting (starts as https://www.7thswindon.org.uk/); only an https address is accepted, and if an administrator blanks it the option disappears and cards already sent stop showing the link. The recipient's private card address is never passed on, because the site sends no referrer to other sites.
+**Group website link in the email.** Every card email, in both its styled and plain text forms, mentions the Group website: "Find out more about 7th Swindon Scouts:" followed by the address, after the private link note and before the stop cards line. It is not a choice for the sender and does not appear on the card page. The address is a setting under Donations and sharing (starts as https://www.7thswindon.org.uk/); only an https address is accepted, and a blank setting leaves the line out.
 
 **Guests.** A visitor can write a card without an account. Pressing Review saves the draft and goes to a Create your free account page that says the card is waiting (with Sign in for people who already have an account, and the way back kept in the address as `next`, accepted only if it is a review of a card). Registering returns straight to Review with the card now owned by the new account; sending still needs the email to be verified, and the link in the confirmation email returns to the saved card.
 
@@ -223,7 +223,7 @@ An owner invites by email with a level (administrator or owner). The person sign
 
 | Screen | Settings |
 |---|---|
-| Donations and sharing | Take donations, suggested amounts, Gift Aid charity and switch, the Group website address offered on cards (https only; blank switches the option off); shows the site link, QR code and promotion counts |
+| Donations and sharing | Take donations, suggested amounts, Gift Aid charity and switch, the Group website address mentioned in every card email (https only; blank leaves it out); shows the site link, QR code and promotion counts |
 | Application settings | Recipients per card, greeting and name limits, address book limits, test cards per hour, blocked words, small number threshold, rehearsal allow list, alert recipients and escalation, allow web addresses |
 | Email and help wording | Subject, opening line and button of the card email (with `{sender}` and `{card}`), support email, extra Help questions |
 | Privacy and retention | How long card links and details are kept |

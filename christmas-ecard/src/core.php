@@ -88,10 +88,8 @@ const STARTERS = [
     'Even Santa needs a Scout! Hope your Christmas is full of adventure.',
 ];
 
-/** The Group website address a sender may add to their card, or '' when the option is switched off. */
+/** The Group website address mentioned in every card email, or '' when the setting is blank. */
 function group_link_url(): string { $u = trim((string)setting('group_url', 'https://www.7thswindon.org.uk/')); return preg_match('#^https://[^\s"\'<>]+$#i', $u) ? $u : ''; }
-/** The address to show on a card: only when the sender ticked the box and the option is still on. */
-function card_link_url(array $s): string { return !empty($s['group_link']) ? group_link_url() : ''; }
 
 /** Optional line on the card, only when the sender chose it and a verified payment exists. Never an amount. */
 function card_note(array $s): string {
@@ -205,12 +203,13 @@ function email_html(array $r, array $s): string {
     return '<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#1c1230"><div style="background:#024593;color:#fff;padding:12px 20px;border-bottom:4px solid #f5b800"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td><img src="' . $e(base_url() . '/assets/brand/7th-swindon-circle-blue.png') . '" alt="7th Swindon Scouts" width="56" height="56" style="display:block;border-radius:28px"></td><td style="padding-left:14px;color:#ffffff;font-size:18px;font-weight:bold">' . $e(SITE_NAME) . '</td></tr></table></div><div style="padding:20px">'
         . '<p>Dear ' . $e($r['name']) . ',</p><p>' . tpl_html(email_intro(), $s) . '</p>'
         . '<p><a href="' . $e(card_link($r)) . '" style="' . $btn . '">' . $e(email_button()) . '</a></p><p style="font-size:13px;color:#5c6470">Button not working? Copy this link: ' . $e(card_link($r)) . '<br>This private link works for ' . expiry_days() . ' days.</p>'
+        . (group_link_url() !== '' ? '<p style="font-size:14px">Find out more about 7th Swindon Scouts: <a href="' . $e(group_link_url()) . '">' . $e(group_link_url()) . '</a></p>' : '')
         . '<p style="font-size:13px;color:#5c6470"><a href="' . $e(base_url() . '/optout/' . $r['token']) . '">Stop cards from this sender or from the service</a> &middot; <a href="' . $e(base_url() . '/privacy') . '">Why did I get this? Privacy notice</a></p></div></div>';
 }
 
 function email_body(array $r, array $s): string {
     return "Dear {$r['name']},\n\n" . tpl_text(email_intro(), $s) . "\n\n" . email_button() . " here:\n" . card_link($r)
-        . "\n\nThis private link works for " . expiry_days() . " days.\n\nDo not want these? Stop cards from this sender or from the service:\n" . base_url() . '/optout/' . $r['token']
+        . "\n\nThis private link works for " . expiry_days() . " days." . (group_link_url() !== '' ? "\n\nFind out more about 7th Swindon Scouts: " . group_link_url() : '') . "\n\nDo not want these? Stop cards from this sender or from the service:\n" . base_url() . '/optout/' . $r['token']
         . "\n\nWhy did I get this? A person you know asked us to send it. Privacy notice: " . base_url() . "/privacy"
         . "\n\n7th Swindon Scouts";
 }
@@ -255,7 +254,7 @@ function is_scanner(): bool { return (bool)preg_match('/bot|crawl|spider|preview
 function copy_send(int $fromId, int $uid, array $recipientIds): int {
     $s = one('select * from sends where id=? and user_id=?', [$fromId, $uid]);
     if (!$s) return 0;
-    q('insert into sends(user_id,card,sender_name,message,created,updated,group_link) values(?,?,?,?,?,?,?)', [$uid, $s['card'], $s['sender_name'], $s['message'], time(), time(), (int)($s['group_link'] ?? 0)]);
+    q('insert into sends(user_id,card,sender_name,message,created,updated) values(?,?,?,?,?,?)', [$uid, $s['card'], $s['sender_name'], $s['message'], time(), time()]);
     $new = (int)db()->lastInsertId();
     foreach ($recipientIds as $rid) if ($r = one('select * from recipients where id=? and send_id=?', [(int)$rid, $fromId]))
         q('insert into recipients(send_id,name,email,own_msg,token) values(?,?,?,?,?)', [$new, $r['name'], $r['email'], $r['own_msg'], token()]);
