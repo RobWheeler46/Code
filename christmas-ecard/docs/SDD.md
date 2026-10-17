@@ -151,7 +151,7 @@ Cards stay viewable for 60 days after sending (setting). Greetings and recipient
 | Email | Header injection is stripped. Replies and bounces are handled. Hard bounced and opted out addresses are never mailed |
 | Secrets | In `.env` or write only settings (the mail password and keys are never shown back) |
 | Production default | A missing `APP_ENV` counts as production, so the site fails safe |
-| Crashes | A crash shows a plain apology and writes only the reason (no visitor data) to `app/data/error.log` |
+| Crashes | A crash, or an upload that left a file missing, shows a friendly "Back in a minute" page (503 with a retry time, tries again by itself every 30 seconds, no technical detail; PHP's own error display is switched off) and writes only the reason (no visitor data) to `app/data/error.log` |
 | Style sheet and script addresses | They carry the build stamp, so a new deployment is never shown with old cached styles |
 | Privacy | The change history stores ids and outcomes, never message text or addresses |
 
@@ -242,7 +242,7 @@ Semantic headings and landmarks, a skip link, visible focus, labels on every fie
 3. The first request runs the database changes once.
 4. Check the footer version, send a test card, and look at System health.
 5. Optional: set an outside timer on the address shown on System health.
-6. After uploading, wait a minute or two before testing, because the host can briefly serve old files. If every page is blank, look in `app/data/error.log` (and for an `error_log` file in `public_html` or `app`) for the reason.
+6. To keep visitors off a half finished upload, create an empty file `app/data/MAINTENANCE` before uploading (the whole site then shows the friendly page, and the payment and email webhooks are told to try again later) and delete it once the new version shows in the footer. This works from the version that added it onwards. Without it, a visit during the upload still gets the friendly page and not a blank error. After uploading, wait a minute or two before testing, because the host can briefly serve old files. If every page is blank, look in `app/data/error.log` (and for an `error_log` file in `public_html` or `app`) for the reason.
 
 Backups are the host's responsibility (copy the `app/data/` folder). The application also has an encrypted backup tool, which is optional.
 
