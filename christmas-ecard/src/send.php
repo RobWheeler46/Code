@@ -6,6 +6,7 @@ function r_compose(): void {
     $u = user();
     $s = isset($_GET['id']) ? own_send((int)$_GET['id']) : null;
     if ($s && $s['status'] !== 'draft') redirect($u ? '/send?id=' . $s['id'] : '/');
+    if ($s && !empty($s['bulk'])) redirect('/admin/bulk?id=' . $s['id']); // a bulk draft has its own screen
     if (post()) {
         $card = field('card', 40);
         if (!(cards()[$card]['on'] ?? false)) { flash('Please choose an available design.', 'err'); redirect($s ? '/compose?id=' . (int)$s['id'] : '/'); }
@@ -163,6 +164,7 @@ function r_pay_cancelled(): void { // Stripe cancel_url lands here
 function r_review(): void {
     $u = need_login(); $s = own_send((int)($_GET['id'] ?? $_POST['id'] ?? 0));
     if (!in_array($s['status'], ['draft', 'awaiting_payment'])) redirect('/send?id=' . $s['id']);
+    if (!empty($s['bulk'])) redirect('/admin/bulk?id=' . $s['id']);
     if ($s['status'] === 'draft' && !(cards()[$s['card']]['on'] ?? false)) { flash('The design you chose is no longer available. Pick another and your message and recipients are kept.', 'warn'); redirect('/compose?id=' . (int)$s['id']); }
     $id = (int)$s['id'];
     $rs = all('select * from recipients where send_id=? order by id', [$id]);
@@ -284,7 +286,7 @@ function r_dashboard(): void {
         foreach (all('select * from recipients where send_id=?', [$s['id']]) as $r) { $k = rstatus($r); $c[$k] = ($c[$k] ?? 0) + 1; if ($r['sent_at']) { $went++; if (expiry_ts($r) < time()) $gone++; } }
         $state = $s['status'] === 'draft' ? ['Draft', 'draft'] : ($went && $gone === $went ? ['Links expired', 'expired'] : (!empty($c['Scheduled']) ? ['Scheduled', 'scheduled'] : ($went ? ['Sent', 'sent'] : ['Waiting to send', 'queued'])));
         $sum = implode(', ', array_map(fn($k, $v) => "$v $k", array_keys($c), $c));
-        $link = $s['status'] === 'draft' ? "/compose?id={$s['id']}" : ($s['status'] === 'awaiting_payment' ? "/review?id={$s['id']}" : "/send?id={$s['id']}");
+        $link = $s['status'] === 'draft' ? (!empty($s['bulk']) ? "/admin/bulk?id={$s['id']}" : "/compose?id={$s['id']}") : ($s['status'] === 'awaiting_payment' ? "/review?id={$s['id']}" : "/send?id={$s['id']}");
         $act = $s['status'] === 'draft' ? '<a class="btn" href="' . $link . '">Keep writing</a> <form method="post" action="/discard" class="inline">' . csrf() . '<input type="hidden" name="id" value="' . $s['id'] . '"><button class="link">Discard draft</button></form>' : '<a class="btn alt" href="' . $link . '">See how it is going</a> <a href="/copy?id=' . $s['id'] . '">Send it again to someone</a>';
         $don = donation_state($s) === 'No donation' ? '' : '<br><small>' . h(donation_state($s)) . '</small>';
         $rows .= '<li class="cardrow"><div class="thumb">' . card_art($s['card'], true, $s['art_ref'] ?? null) . '</div><div><h2>' . h(cards()[$s['card']]['title'] ?? $s['card']) . ' <span class="pill ' . $state[1] . '">' . $state[0] . '</span></h2><p class="note">' . date('j M Y', (int)$s['created']) . ($sum ? ' &middot; ' . h($sum) : '') . $don . '</p><p>' . $act . '</p></div></li>';

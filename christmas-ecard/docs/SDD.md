@@ -194,6 +194,10 @@ Each design has an occasion (chosen in the eCard Library). Occasions are managed
 
 Draft, preview, publish (owner), hold back, restore, new version, roll back. Published versions never change. Sent cards keep the version they used. Publishing needs the "I have the right to use this" and "wording and year are right" checks and a screen reader description.
 
+### 7.5a Bulk card send (administrators)
+
+An administrator can send one card to many people, each with their own message, from a CSV file (Name, Email, Message; a heading line is optional). Steps: choose the card, the From name and an optional shared message (used for any line with none of its own), and upload the file (300 KB, up to 200 people). The file is read into a draft that belongs to the administrator and is marked `bulk`; lines with a bad address, a repeat, an over long or unsuitable message, or no message and no shared message are left out and listed by line number. A check page shows the card, the counts, the first ten people and what was left out, with the usual delivery choice (now, or a time from 1 hour to 90 days ahead). Only then does [Send] queue the cards, through the ordinary queue: opt outs are skipped at send time, retries and the scheduler apply, and the normal status page shows each person and allows cancelling cards that have not gone. Sending is free and uses the administrator's own account (it must be verified and have accepted the terms). A bulk draft has no ordinary write or review screen: those redirect to the bulk screen. The change history records counts only, never addresses or messages.
+
 ### 7.6 Administrator invitations
 
 An owner invites by email with a level (administrator or owner). The person signs in or registers with that address, accepts, and then sets up two step sign in. The first owner is set up by putting `ADMIN_EMAIL` in `.env` and confirming that address.
@@ -299,6 +303,7 @@ About 30 automated test scripts (PHP, run with `bash scripts/test-all.sh`). They
 | A2 | eCard Library list, editor, preview | `/admin/library` | Administrators (publish: owner) |
 | A3 | Order and visibility | `/admin/designs` | Administrators |
 | A3b | Occasions | `/admin/occasions` | Administrators |
+| A3c | Bulk card send | `/admin/bulk` | Administrators |
 | A4 | Site settings | `/admin/site` | Administrators |
 | A5 | Delivery issues | `/admin/delivery` | Administrators |
 | A6 | Reports and complaints | `/admin/reports` | Administrators |

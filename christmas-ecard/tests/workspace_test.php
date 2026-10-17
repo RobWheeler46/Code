@@ -9,7 +9,7 @@ $roles = ['admin', 'owner']; $U = [];
 foreach ($roles as $r) { $sec = b32e(random_bytes(10)); q("insert into users(name,email,pass,verified,created,terms_version,is_admin,roles,totp_secret) values(?,?,?,1,?,?,1,?,?)", ["u$r", "$r@x.com", password_hash('Test-pass-123', PASSWORD_DEFAULT), time(), TERMS_VERSION, $r, $sec]); $U[$r] = ["$r@x.com", $sec]; }
 // the expectation, written out again here on purpose (not read from the manifest): which roles may use which destination
 $both = ['admin', 'owner']; $ownerOnly = ['owner'];
-$rules = ['/admin' => ['*'], '/admin/library' => $both, '/admin/designs' => $both, '/admin/occasions' => $both, '/admin/site' => $both, '/admin/delivery' => $both, '/admin/reports' => $both, '/admin/senders' => $both, '/admin/finance' => $both, '/admin/giftaid' => $ownerOnly,
+$rules = ['/admin' => ['*'], '/admin/library' => $both, '/admin/designs' => $both, '/admin/occasions' => $both, '/admin/bulk' => $both, '/admin/site' => $both, '/admin/delivery' => $both, '/admin/reports' => $both, '/admin/senders' => $both, '/admin/finance' => $both, '/admin/giftaid' => $ownerOnly,
     '/admin/measures' => $both, '/admin/platform' => $both, '/admin/app' => $both, '/admin/mail' => $ownerOnly, '/admin/wording' => $both, '/admin/email' => $both, '/admin/privacy' => $both, '/admin/access' => $ownerOnly, '/admin/rehearsal' => $both,
     '/admin/health' => $both, '/admin/audit' => $both];
 $port = random_int(19100, 19900); $proc = proc_open([PHP_BINARY, '-S', "127.0.0.1:$port", '-t', __DIR__ . '/../public', __DIR__ . '/../public/index.php'], [1 => ['file', $work . '/srv.log', 'w'], 2 => ['file', $work . '/srv.log', 'a']], $pipes, null, array_merge(getenv(), ['DB_PATH' => $dbf, 'POSTMARK_TOKEN' => '', 'SMTP_HOST' => '']));
