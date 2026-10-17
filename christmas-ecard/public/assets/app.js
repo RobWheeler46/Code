@@ -56,3 +56,35 @@ document.querySelectorAll('[data-skip]').forEach(function (b) { b.addEventListen
 (function () { var m = document.querySelector('.wsmenu'); if (m && window.matchMedia && window.matchMedia('(max-width:790px)').matches) m.removeAttribute('open'); })();
 
 document.querySelectorAll('[data-autosubmit]').forEach(function (s) { s.addEventListener('change', function () { s.form.submit(); }); });
+
+// Recipients: add and remove rows without reloading the page. Without scripts the same buttons still work, one page load each.
+(function () {
+  var fs = document.getElementById('recipients'); if (!fs) return;
+  var rc = fs.querySelector('[data-recipient-count]'), max = rc ? parseInt(rc.textContent.split(' of ')[1], 10) || 20 : 20;
+  var rows = function () { return fs.querySelectorAll('.rrow'); };
+  var tidy = function (quiet) {
+    var rs = rows(), add = fs.querySelector('button[value=addrow]');
+    rs.forEach(function (r, i) {
+      r.setAttribute('aria-label', 'Recipient ' + (i + 1));
+      var b = r.querySelector('button[value^=remove_]');
+      if (!b) { b = document.createElement('button'); b.type = 'button'; b.className = 'btn alt'; b.name = 'act'; b.textContent = 'Remove'; r.appendChild(b); }
+      b.value = 'remove_' + i; b.setAttribute('aria-label', 'Remove recipient ' + (i + 1)); b.hidden = rs.length < 2;
+    });
+    if (add) add.hidden = rs.length >= max;
+    var e = fs.querySelector('input[name="r_email[]"]'); if (e && !quiet) e.dispatchEvent(new Event('input', { bubbles: true })); // refreshes the count
+  };
+  fs.addEventListener('click', function (ev) {
+    var b = ev.target.closest('button[name=act]'); if (!b) return;
+    if (b.value === 'addrow') {
+      ev.preventDefault(); var rs = rows(); if (rs.length >= max) return;
+      var n = rs[rs.length - 1].cloneNode(true);
+      n.querySelectorAll('input,textarea').forEach(function (x) { x.value = ''; x.removeAttribute('aria-invalid'); x.removeAttribute('aria-describedby'); x.removeAttribute('data-focus'); });
+      n.querySelectorAll('.fe').forEach(function (x) { x.remove(); }); n.querySelectorAll('details').forEach(function (d) { d.open = false; });
+      rs[rs.length - 1].after(n); tidy(); n.querySelector('input').focus();
+    } else if (/^remove_/.test(b.value)) {
+      ev.preventDefault(); var all = rows(), row = b.closest('.rrow'), at = Array.prototype.indexOf.call(all, row);
+      if (all.length < 2) return; row.remove(); tidy(); var left = rows(); left[Math.min(at, left.length - 1)].querySelector('input').focus();
+    }
+  });
+  tidy(true);
+})();

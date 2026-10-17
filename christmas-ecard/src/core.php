@@ -8,23 +8,41 @@ function name_max(): int { return (int)setting('name_max', '60'); }
 function expiry_days(): int { return (int)setting('expiry_days', '60'); }
 
 /** "Name, email" or "Name <email>" per line, optionally followed by " | personal message". Returns [rows of [name, email, override], error strings]. */
+/** A friendly name from an address with none given: "uncle.bob42@example.com" becomes "Uncle Bob". */
+function name_from_email(string $e): string {
+    $l = preg_replace('/\+.*$/', '', (string)strstr($e, '@', true)); $l = trim(preg_replace('/\s+/', ' ', preg_replace(['/[._-]+/', '/\d+/'], [' ', ''], $l)));
+    return $l === '' ? 'Friend' : mb_convert_case($l, MB_CASE_TITLE, 'UTF-8');
+}
+/** One pasted line can hold several people: "Name <a@x>, Name <b@x>", "a@x; b@x" or "a@x b@x c@x". Lines with a personal message (a bar) are left whole. */
+function split_recipient_line(string $ln): array {
+    if (str_contains($ln, '|') || substr_count($ln, '@') < 2) return [$ln];
+    $e = '[^\s<>,;"@]+@[^\s<>,;"]+';
+    if (preg_match_all('/\s*(?:"([^"]*)"|([^<>,;"]*?))\s*<\s*(' . $e . ')\s*>\s*(?:[,;]|$)/', $ln, $m, PREG_SET_ORDER) && implode('', array_column($m, 0)) === $ln)
+        return array_map(fn($x) => ($n = trim($x[1] !== '' ? $x[1] : $x[2])) === '' ? $x[3] : $n . ' <' . $x[3] . '>', $m);
+    $bits = preg_split('/[\s,;]+/', trim($ln), -1, PREG_SPLIT_NO_EMPTY);
+    if (!array_filter($bits, fn($b) => !preg_match('/^<?' . $e . '>?$/', $b))) return $bits;
+    return array_map('trim', explode(';', $ln));
+}
+/** Pasted people, from a spreadsheet or an email: "Name, email", "Name <email>", a tab between name and email, or just an address (the name is made from it). Returns [rows, errors, the lines that could not be read]. */
 function parse_recipients(string $text): array {
-    $rows = []; $errs = []; $seen = [];
-    foreach (preg_split('/\R/', $text) as $line) {
-        [$line, $own] = array_map('trim', explode('|', $line, 2) + [1 => '']);
+    $rows = []; $errs = []; $seen = []; $bad = [];
+    foreach (preg_split('/\R/', $text) as $raw) foreach (split_recipient_line($raw) as $line) {
+        [$line, $own] = array_map('trim', explode('|', str_replace("\t", ', ', $line), 2) + [1 => '']);
         if ($line === '') continue;
-        if (!preg_match('/^(.+?)\s*(?:,|<)\s*([^\s<>,]+)\s*>?$/u', $line, $m)) { $errs[] = "Could not read: $line"; continue; }
-        $name = trim($m[1]); $email = norm_email($m[2]); $key = strtolower($email);
-        if (mb_strlen($name) > 60 || !filter_var($email, FILTER_VALIDATE_EMAIL)) { $errs[] = "Invalid name or email: $line"; continue; }
-        if (isset($seen[$key])) { $errs[] = "$email appears more than once in this card"; continue; }
+        if (preg_match('/^<?([^\s<>,;"@]+@[^\s<>,;"]+)>?$/u', $line, $m)) { $name = ''; $email = norm_email($m[1]); }
+        elseif (preg_match('/^"?(.+?)"?\s*(?:,|<)\s*([^\s<>,]+)\s*>?$/u', $line, $m)) { $name = trim($m[1]); $email = norm_email($m[2]); }
+        else { $errs[] = "Could not read: $line"; $bad[] = $line; continue; }
+        if ($name === '' && filter_var($email, FILTER_VALIDATE_EMAIL)) $name = name_from_email($email);
+        $key = strtolower($email);
+        if (mb_strlen($name) > 60 || !filter_var($email, FILTER_VALIDATE_EMAIL)) { $errs[] = "Invalid name or email: $line"; $bad[] = $line; continue; }
+        if (isset($seen[$key])) { $errs[] = "$email appears more than once in this card"; $bad[] = $line; continue; }
         $seen[$key] = 1;
-        if (mb_strlen($own) > msg_max()) { $errs[] = "Personal message for $name is over " . msg_max() . ' characters'; continue; }
-        if ($own !== '' && ($bad = abuse_check($own))) { $errs[] = "Personal message for $name: $bad"; continue; }
+        if (mb_strlen($own) > msg_max()) { $errs[] = "Personal message for $name is over " . msg_max() . ' characters'; $bad[] = $line; continue; }
+        if ($own !== '' && ($why = abuse_check($own))) { $errs[] = "Personal message for $name: $why"; $bad[] = $line; continue; }
         $rows[] = [$name, $email, $own];
     }
-    return [$rows, $errs];
+    return [$rows, $errs, $bad];
 }
-
 /** Per-recipient override wins; a shared edit never touches overrides. */
 function resolved_msg(array $r, array $s): string { return trim((string)($r['own_msg'] ?? '')) !== '' ? $r['own_msg'] : $s['message']; }
 

@@ -402,13 +402,15 @@ The occasion drop down appears only when two or more occasions have cards.
 |     > Personal message for this person (optional)         [Remove]     |
 |  Recipient 2:  ...                                                     |
 |  [Add another recipient]                       2 of 20                 |
-|  > Paste several at once  (one per line: Name, email)                  |
+|  > Paste several at once  (Name, email per line, or just addresses;     |
+|    [Add these people to the list] turns them into rows to check)       |
 |  [Choose from address book]                                            |
 |                                                                        |
 |  [Save draft]   [Preview]   [Continue to review]                       |
 |  "Draft saved at 14:05"  or  "Not saved yet. ... (you will register    |
 |   before sending)"                                                     |
 +------------------------------------------------------------------------+
+Adding many people: [Add another recipient] and [Remove] change the rows on the page without reloading (one page load each when scripts are off). The paste box reads Name, email lines, Name <email> lists copied from an email, tab separated spreadsheet rows, and bare addresses (a name is made from the address, for example uncle.bob@example.com becomes Uncle Bob). [Add these people to the list] shows each person as a row to check, skips addresses already on the card, stops at the limit, and leaves any line it could not read in the box with a reason. The box is open when the list is empty.
 Errors appear in a summary at the top and beside each field; focus moves to the summary.
 There is no design drop down. "Change design" returns to the gallery. On a phone the card becomes a small strip (picture, name, "Change design") above the fields, so the fields start straight after it. On desktop the card is a narrower picture that stays in view while you type.
 ```

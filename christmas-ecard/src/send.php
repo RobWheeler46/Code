@@ -16,6 +16,21 @@ function r_compose(): void {
         if ($act === 'addrow' || preg_match('/^remove_(\d+)$/', $act, $mm)) { // rows only: keep everything typed, change the row list, no validation yet
             if (isset($mm)) foreach (['names', 'emails', 'msgs'] as $v) { array_splice($$v, (int)$mm[1], 1); }
             $stash(['r_name' => $names, 'r_email' => $emails, 'r_msg' => $msgs, 'addrow' => $act === 'addrow' ? 1 : 0]);
+            redirect('/compose?' . ($s ? 'id=' . $s['id'] : 'card=' . urlencode($card)) . ($act === 'addrow' ? '#newrow' : '#recipients')); // a new row lands in view, not the top of the list
+        }
+        if ($act === 'addpaste') { // turn the pasted list into rows you can see and fix; whatever could not be read stays in the box
+            [$prows, $perrs, $bad] = parse_recipients($paste);
+            $keep = array_values(array_filter(array_keys($emails + $names + $msgs), fn($i) => trim((string)($emails[$i] ?? '')) . trim((string)($names[$i] ?? '')) . trim((string)($msgs[$i] ?? '')) !== ''));
+            $n2 = array_map(fn($i) => (string)($names[$i] ?? ''), $keep); $e2 = array_map(fn($i) => (string)($emails[$i] ?? ''), $keep); $m2 = array_map(fn($i) => (string)($msgs[$i] ?? ''), $keep);
+            $have = array_flip(array_map(fn($x) => strtolower(norm_email($x)), $e2)); $added = 0; $dupes = 0; $over = 0;
+            foreach ($prows as [$pn, $pe, $po]) {
+                if (isset($have[strtolower($pe)])) { $dupes++; continue; }
+                if (count($e2) >= max_recipients()) { $over++; continue; }
+                $n2[] = $pn; $e2[] = $pe; $m2[] = $po; $have[strtolower($pe)] = 1; $added++;
+            }
+            $stash(['r_name' => $n2, 'r_email' => $e2, 'r_msg' => $m2, 'paste' => implode("\n", $bad), 'addrow' => 0]);
+            if ($perrs) $_SESSION['errs'] = ['paste' => $perrs];
+            flash(($added ? "Added $added " . ($added === 1 ? 'person' : 'people') . ' to your list. Check the names, then carry on.' : 'No one was added.') . ($dupes ? " $dupes already on the card " . ($dupes === 1 ? 'was' : 'were') . ' skipped.' : '') . ($over ? " $over would go over the limit of " . max_recipients() . ' and ' . ($over === 1 ? 'was' : 'were') . ' left out.' : '') . ($bad ? ' Lines that could not be read are left in the box.' : ''), $added && !$bad && !$over ? 'ok' : 'warn');
             redirect('/compose?' . ($s ? 'id=' . $s['id'] : 'card=' . urlencode($card)) . '#recipients');
         }
         [$rows, $rowErrs] = parse_rows($names, $emails, $msgs);
@@ -72,7 +87,7 @@ function r_compose(): void {
     if (!$rowsIn) $rowsIn[] = ['', '', ''];
     $rowsHtml = ''; $nrows = count($rowsIn);
     foreach ($rowsIn as $i => [$rn, $re, $rm]) {
-        $rowsHtml .= '<div class="rrow" role="group" aria-label="Recipient ' . ($i + 1) . '"><label>Name<input name="r_name[]" maxlength="100" value="' . h($rn) . '"' . fa($errs, "name$i", $f) . '>' . fe($errs, "name$i") . '</label>'
+        $rowsHtml .= '<div class="rrow"' . ($i === $nrows - 1 && !empty($old['addrow']) ? ' id="newrow"' : '') . ' role="group" aria-label="Recipient ' . ($i + 1) . '"><label>Name<input name="r_name[]" maxlength="100" value="' . h($rn) . '"' . fa($errs, "name$i", $f) . '>' . fe($errs, "name$i") . '</label>'
             . '<label>Email<input type="email" name="r_email[]" value="' . h($re) . '"' . fa($errs, "email$i", $f) . '>' . fe($errs, "email$i") . '</label>'
             . '<details class="wide"' . ($rm !== '' || isset($errs["msg$i"]) ? ' open' : '') . '><summary>Personal message for this person (optional)</summary><label>Message<textarea name="r_msg[]" rows="2"' . fa($errs, "msg$i", $f) . '>' . h($rm) . '</textarea>' . fe($errs, "msg$i") . '</label></details>'
             . ($nrows > 1 ? '<button class="btn alt" name="act" value="remove_' . $i . '" aria-label="Remove recipient ' . ($i + 1) . '">Remove</button>' : '') . '</div>';
@@ -80,7 +95,7 @@ function r_compose(): void {
     $recipientsHtml = '<fieldset id="recipients"><legend>Who is it for? (up to ' . max_recipients() . ')</legend>' . fe($errs, 'recipients') . $rowsHtml
         . ($nrows < max_recipients() ? '<button class="btn alt" name="act" value="addrow">Add another recipient</button>' : '<p class="note">That is the most you can send at once (' . max_recipients() . ').</p>')
         . ' <small class="count" data-recipient-count>' . $nrows . ' of ' . max_recipients() . '</small>'
-        . '<details' . (isset($errs['paste']) || ($old['paste'] ?? '') !== '' ? ' open' : '') . '><summary>Paste several at once</summary><label>One per line as <em>Name, email</em><textarea name="paste" rows="4" placeholder="Gran, gran@example.com&#10;Uncle Bob, bob@example.com"' . fa($errs, 'paste', $f) . '>' . h($old['paste'] ?? '') . '</textarea>' . fe($errs, 'paste') . '</label></details></fieldset>';
+        . '<details' . (isset($errs['paste']) || ($old['paste'] ?? '') !== '' || !array_filter($rowsIn, fn($r) => trim($r[0] . $r[1]) !== '') ? ' open' : '') . '><summary>Paste several at once</summary><label>Paste a list from a spreadsheet or an email: <em>Name, email</em> on each line, or just email addresses<textarea name="paste" rows="4" placeholder="Gran, gran@example.com&#10;Uncle Bob, bob@example.com&#10;or: aunt.sue@example.com, cousin@example.com"' . fa($errs, 'paste', $f) . '>' . h($old['paste'] ?? '') . '</textarea>' . fe($errs, 'paste') . '</label><button class="btn alt" name="act" value="addpaste">Add these people to the list</button></details></fieldset>';
     $from = $old['sender_name'] ?? $s['sender_name'] ?? ($u['name'] ?? ''); $msg = $old['message'] ?? $s['message'] ?? '';
     $saved = $s ? '<p class="note" role="status">Draft saved at ' . date('H:i', (int)$s['updated']) . '.</p>' : '<p class="note">Not saved yet. Use Save draft to keep your work' . ($u ? '.' : ' (you will register before sending).') . '</p>';
     page('Write your card', steps(2) . $gone . '<h1>Write something wonderful</h1><p class="lead">Your message and everyone you are sending it to, together in one place.</p>' . ($u ? '' : '<p class="note">You can prepare your card now. Before it is sent you will create a free account and verify your email, and your card will wait for you.</p>')
