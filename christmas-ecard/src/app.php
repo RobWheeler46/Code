@@ -121,7 +121,7 @@ function r_llms(): never {
     echo "# " . SITE_NAME . "\n\n"
         . "> Free Scout themed eCards from 7th Swindon Scouts, in Swindon, Wiltshire. A person chooses a design, writes a message and emails a private card to friends and family. Sending is always free" . (donations_enabled() ? ', and a donation to the Group is optional' : '') . ".\n\n"
         . "## What it is\n\n"
-        . "- Illustrated, Scout themed cards" . ($occ ? ' for ' . implode(', ', array_map('strtolower', $occ)) : '') . ".\n"
+        . "- Illustrated, Scout themed cards" . ($occ ? ' for ' . implode(', ', $occ) : '') . ".\n"
         . "- Each card goes to up to " . max_recipients() . " people. Every person gets their own private link and opens an envelope; the link works for " . expiry_days() . " days.\n"
         . "- Cards are private. They are not listed or searchable, and a card link is never public.\n"
         . "- Run by 7th Swindon Scouts" . ($g !== '' ? " (website: $g)" : '') . ". Contact: $mail.\n\n"
