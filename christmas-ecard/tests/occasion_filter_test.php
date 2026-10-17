@@ -39,6 +39,14 @@ ok(!str_contains(page_for($work, '$_GET["occasion"] = "birthday";'), 'Featured c
 q("update campaign_designs set featured=1 where design_id=(select id from designs where slug='bday-a')"); $hf = page_for($work, '');
 ok(str_contains($hf, '<h2>Featured cards</h2>') && substr_count($hf, 'class="tile feat"') === 1, 'cards the Group has featured appear in a Featured strip, up to four');
 q("update campaign_designs set featured=0");
+// a New this month strip: cards added through the library recently, never the original set
+ok(!str_contains(page_for($work, ''), 'New this month'), 'with nothing added through the library there is no New strip');
+q("update design_versions set full_key='k', published_at=? where design_id=(select id from designs where slug='bday-a')", [time() - 86400]);
+q("update design_versions set full_key='k', published_at=? where design_id=(select id from designs where slug='bday-b')", [time() - 86400 * 40]);
+$hn = page_for($work, ''); ok(str_contains($hn, '<h2>New this month</h2>') && substr_count($hn, 'class="tile newc"') === 1 && str_contains($hn, 'Card bday-a'), 'a card added in the last 30 days appears in New this month');
+ok(tiles($hn) === $xmas + 3, 'and the strip is not counted as gallery cards');
+q("update campaign_designs set featured=1 where design_id=(select id from designs where slug='bday-a')"); ok(!str_contains(page_for($work, ''), 'class="tile newc"'), 'a card already featured is not repeated in New');
+q("update campaign_designs set featured=0"); ok(!str_contains(page_for($work, '$_GET["occasion"] = "birthday";'), 'New this month'), 'the strip is left out while a choice is made');
 // the library: an occasion can be chosen, and the thumbnail focus class is on the picture
 $lib = file_get_contents(__DIR__ . '/../src/library_admin.php');
 ok(str_contains($lib, "name=\"occasion\"") && str_contains($lib, 'update designs set internal_name=?, category=?'), 'the card editor has an Occasion choice that is saved');
