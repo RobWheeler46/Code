@@ -31,7 +31,8 @@ function config_spec(string $area): array {
             'alert_emails' => ['Who receives operational alerts (emails, comma separated)', 'emails', 'def' => ''],
             'alert_escalate_emails' => ['Who receives an alert nobody acknowledged (emails)', 'emails', 'def' => ''],
             'alert_escalate_minutes' => ['Escalate unacknowledged alerts after (minutes)', 'int', 'min' => 5, 'max' => 1440, 'def' => '60'],
-            'allow_urls' => ['Allow web addresses in messages (never clickable)', 'bool', 'def' => '0']]],
+            'allow_urls' => ['Allow web addresses in messages (never clickable)', 'bool', 'def' => '0'],
+            'show_new_strip' => ['Show the "New this month" row of recently added cards on the home page', 'bool', 'def' => '1']]],
         'wording' => ['view' => ['appadmin', 'rolesadmin'], 'edit' => ['appadmin', 'rolesadmin'], 'title' => 'Email and help wording', 'when' => 'Used by new emails and the Help page straight away. Emails already sent are not changed. The private link, the stop and report routes and the privacy link always stay in every email.', 'fields' => [
             'email_subject' => ['Subject of the card email ({sender} is the sender name, {card} is for example "Christmas card")', 'tpl', 'max' => 100, 'allow' => ['{sender}', '{card}'], 'need' => '{sender}', 'def' => '{sender} sent you a {card}'],
             'email_intro' => ['Opening line of the card email ({sender} is the sender name, {card} is for example "Christmas card")', 'tpl', 'max' => 160, 'allow' => ['{sender}', '{card}'], 'need' => '{sender}', 'def' => '{sender} has sent you a {card}.'],

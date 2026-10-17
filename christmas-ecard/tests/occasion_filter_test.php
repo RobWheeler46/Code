@@ -45,6 +45,8 @@ q("update design_versions set full_key='k', published_at=? where design_id=(sele
 q("update design_versions set full_key='k', published_at=? where design_id=(select id from designs where slug='bday-b')", [time() - 86400 * 40]);
 $hn = page_for($work, ''); ok(str_contains($hn, '<h2>New this month</h2>') && substr_count($hn, 'class="tile newc"') === 1 && str_contains($hn, 'Card bday-a'), 'a card added in the last 30 days appears in New this month');
 ok(tiles($hn) === $xmas + 3, 'and the strip is not counted as gallery cards');
+set_setting('show_new_strip', '0'); ok(!str_contains(page_for($work, ''), 'New this month'), 'an administrator can switch the New this month row off');
+set_setting('show_new_strip', '1'); ok(str_contains(page_for($work, ''), '<h2>New this month</h2>'), 'and on again');
 q("update campaign_designs set featured=1 where design_id=(select id from designs where slug='bday-a')"); ok(!str_contains(page_for($work, ''), 'class="tile newc"'), 'a card already featured is not repeated in New');
 q("update campaign_designs set featured=0"); ok(!str_contains(page_for($work, '$_GET["occasion"] = "birthday";'), 'New this month'), 'the strip is left out while a choice is made');
 // the library: an occasion can be chosen, and the thumbnail focus class is on the picture

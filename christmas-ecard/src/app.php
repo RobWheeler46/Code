@@ -87,6 +87,7 @@ function featured_strip(array $favs, string $back): string {
 }
 /** Cards added through the eCard Library in the last 30 days, newest first, leaving out any already featured. The original Christmas set never counts as new. */
 function new_strip(array $favs, string $back): string {
+    if (setting('show_new_strip', '1') === '0') return '';
     try { $rows = all('select d.slug from campaign_designs cd join design_versions v on v.id=cd.published_version_id join designs d on d.id=cd.design_id where cd.state=\'published\' and v.full_key is not null and v.published_at>? order by v.published_at desc', [time() - 30 * 86400]); } catch (Throwable $e) { return ''; }
     $ids = array_values(array_filter(array_column($rows, 'slug'), fn($id) => isset(gallery_cards()[$id]) && !in_array($id, featured_slugs(), true)));
     return card_strip('New this month', $ids, 'newc', $favs, $back);
