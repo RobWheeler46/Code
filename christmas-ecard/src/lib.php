@@ -83,17 +83,22 @@ function gbp(int $p): string { return '£' . number_format($p / 100, 2); }
 function base_url(): string { return rtrim(env('APP_URL', 'http://localhost:8060'), '/'); }
 /** Anything but an explicit APP_ENV=development (or staging) is production, so a missing line fails safe. */
 function app_env(): string { return env('APP_ENV', 'production'); }
-/** The picture and words shown when the site link is shared (WhatsApp, Facebook and so on). The same for every page, so a private card link reveals nothing. */
+/** Search and sharing details for a public page: seo(['desc' => ..., 'canonical' => '/help', 'og_title' => ..., 'ld' => [structured data blocks]]). Only the public pages call it; every other page keeps the plain defaults below and is never given a canonical address or structured data. */
+function seo(array $o): void { $GLOBALS['seo'] = $o; }
+/** The picture and words shown when the site link is shared (WhatsApp, Facebook and so on). Private pages always get the same plain words, so a private card link reveals nothing. */
 function share_tags(): string {
-    $t = 'Send a card, Scout style'; $d = 'Free eCards from 7th Swindon Scouts. Pick a design, write a message and send a private card to friends and family.'; $i = base_url() . '/assets/share.jpg';
-    return '<meta name="description" content="' . h($d) . '"><meta property="og:type" content="website"><meta property="og:site_name" content="' . h(SITE_NAME) . '"><meta property="og:title" content="' . h($t) . '"><meta property="og:description" content="' . h($d) . '">'
+    $o = $GLOBALS['seo'] ?? [];
+    $t = $o['og_title'] ?? 'Send a card, Scout style'; $d = $o['desc'] ?? 'Free eCards from 7th Swindon Scouts. Pick a design, write a message and send a private card to friends and family.'; $i = base_url() . '/assets/share.jpg';
+    $extra = !empty($o['canonical']) ? '<link rel="canonical" href="' . h(base_url() . $o['canonical']) . '">' : '';
+    foreach ($o['ld'] ?? [] as $block) $extra .= '<script type="application/ld+json">' . json_encode($block, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) . '</script>';
+    return $extra . '<meta name="description" content="' . h($d) . '"><meta property="og:type" content="website"><meta property="og:site_name" content="' . h(SITE_NAME) . '"><meta property="og:title" content="' . h($t) . '"><meta property="og:description" content="' . h($d) . '">'
         . '<meta property="og:image" content="' . h($i) . '"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Two Scout themed cards beside the words Send a card, Scout style"><meta name="twitter:card" content="summary_large_image">';
 }
 function token(): string { return bin2hex(random_bytes(24)); }
 
 /** Search engines must never index, and browsers and proxies must never keep, anything that is not a public page: card links, accounts, drafts and every admin and private screen. */
 function private_headers(string $path): void {
-    if (in_array($path, ['/', '/help', '/privacy', '/terms'], true) || str_starts_with($path, '/art/')) return;
+    if (in_array($path, ['/', '/help', '/privacy', '/terms', '/robots.txt', '/sitemap.xml', '/llms.txt'], true) || str_starts_with($path, '/art/')) return;
     header('X-Robots-Tag: noindex, nofollow, noarchive');
     header('Cache-Control: private, no-store');
 }
@@ -240,6 +245,6 @@ function page(string $title, string $body, int $code = 200): never {
         . '<link rel="stylesheet" href="/assets/style.css?v=' . rawurlencode(app_version()) . '"></head><body><a class="skip" href="#main">Skip to content</a>'
         . (app_env() !== 'production' ? '<p class="envbanner" role="note">' . h(strtoupper(app_env())) . ' environment. Test mode: nothing here is real. Do not enter real details.</p>' : '') . '<header><a class="brand" href="/"><img src="/assets/brand/7th-swindon-circle-blue.png" alt="7th Swindon Scouts" width="64" height="64"><span>' . h(SITE_NAME) . '</span></a><nav aria-label="Main">' . $nav . '</nav></header>'
         . '<main id="main">' . ($f ? '<p class="flash ' . h($f[0]) . '" role="' . ($f[0] === 'err' ? 'alert" tabindex="-1" data-focus' : 'status"') . '>' . h($f[1]) . '</p>' : '') . $body . '</main>'
-        . '<footer><img class="footlogo" src="/assets/brand/7th-swindon-circle-blue.png" alt="7th Swindon Scouts" width="56" height="56"><a href="/privacy">Privacy and cookies</a> &middot; <a href="/terms">Terms and safeguarding</a> &middot; <a href="/help">Help and FAQ</a><br>Sending is free' . (donations_enabled() ? '; donations are optional and support 7th Swindon Scouts' : '') . '. Cards stay viewable for ' . (int)setting('expiry_days', '60') . ' days after sending.<br><small class="ver">Version ' . h(app_version()) . '</small></footer><script src="/assets/app.js?v=' . rawurlencode(app_version()) . '"></script></body></html>';
+        . '<footer><img class="footlogo" src="/assets/brand/7th-swindon-circle-blue.png" alt="7th Swindon Scouts" width="56" height="56"><a href="/privacy">Privacy and cookies</a> &middot; <a href="/terms">Terms and safeguarding</a> &middot; <a href="/help">Help and FAQ</a>' . (empty($GLOBALS['bare']) && group_link_url() !== '' ? '<br>A service of <a href="' . h(group_link_url()) . '">7th Swindon Scouts</a>' : '') . '<br>Sending is free' . (donations_enabled() ? '; donations are optional and support 7th Swindon Scouts' : '') . '. Cards stay viewable for ' . (int)setting('expiry_days', '60') . ' days after sending.<br><small class="ver">Version ' . h(app_version()) . '</small></footer><script src="/assets/app.js?v=' . rawurlencode(app_version()) . '"></script></body></html>';
     exit;
 }

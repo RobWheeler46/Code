@@ -6,6 +6,7 @@ function legal_owner(): string { return 'The 7th Swindon Scout Group (the Group)
 
 function r_privacy(): void {
     $sup = h(support_email());
+    seo(['desc' => 'How 7th Swindon Scouts eCards uses and protects your details: what is kept, for how long, and how to ask us to delete it.', 'canonical' => '/privacy', 'og_title' => 'Privacy and cookies']);
     page('Privacy and cookies', '<h1>Privacy and cookies</h1>
 <p>' . h(legal_owner()) . ' runs this service. Contact us at <a href="mailto:' . $sup . '">' . $sup . '</a>.</p>
 <h2>What we keep and why</h2>
@@ -33,6 +34,7 @@ function r_privacy(): void {
 
 function r_terms(): void {
     $sup = h(support_email());
+    seo(['desc' => 'The terms for sending cards with 7th Swindon Scouts eCards, and how we keep young people safe.', 'canonical' => '/terms', 'og_title' => 'Terms and safeguarding']);
     page('Terms and safeguarding', '<h1>Terms of use and safeguarding</h1>
 <h2>Who can send</h2>
 <p>You must be 18 or over to create an account and send cards. If you are younger, ask a parent or carer to send the card for you.</p>

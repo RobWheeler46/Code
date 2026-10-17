@@ -103,7 +103,45 @@ function r_card_preview(): void {
     $id = (string)($_GET['card'] ?? ''); $c = gallery_cards()[$id] ?? null; if (!$c) redirect('/#gallery');
     page('Preview: ' . $c['title'], '<h1>' . h($c['title']) . '</h1><p class="lead">' . h($c['joke']) . '</p><div class="cardpreview">' . card_art($id) . '</div><p class="row"><a class="btn big" href="/compose?card=' . h($id) . '">Personalise this card</a> <a class="btn alt" href="/#gallery">Back to the cards</a></p><p class="note">This is the picture only. You add your own message and who it is for in the next step.</p>');
 }
+/** Who runs the service, as structured data. Only the town is given, never a street address. */
+function org_ld(): array {
+    $o = ['@context' => 'https://schema.org', '@type' => 'Organization', '@id' => base_url() . '/#org', 'name' => '7th Swindon Scouts', 'logo' => base_url() . '/assets/brand/7th-swindon-circle-blue.png', 'address' => ['@type' => 'PostalAddress', 'addressLocality' => 'Swindon', 'addressRegion' => 'Wiltshire', 'addressCountry' => 'GB']];
+    if (group_link_url() !== '') { $o['url'] = group_link_url(); $o['sameAs'] = [group_link_url()]; }
+    return $o;
+}
+/** What search engines and other crawlers may read: the public pages and pictures, nothing else. Card links, accounts and admin stay closed (and also say noindex themselves). */
+function r_robots(): never {
+    header('Content-Type: text/plain; charset=UTF-8'); header('Cache-Control: public, max-age=3600');
+    echo "User-agent: *\nDisallow: /\nAllow: /\$\nAllow: /llms.txt\nAllow: /help\nAllow: /privacy\nAllow: /terms\nAllow: /art/\nAllow: /assets/\n\nSitemap: " . base_url() . "/sitemap.xml\n"; exit;
+}
+/** A short plain summary for AI tools (the llms.txt convention): what the service is and where the facts are. Built from the live settings, so it never goes out of date, and it says nothing that is not already on the public pages. */
+function r_llms(): never {
+    header('Content-Type: text/plain; charset=UTF-8'); header('Cache-Control: public, max-age=3600');
+    $b = base_url(); $occ = array_values(gallery_occasions()); $g = group_link_url(); $mail = support_email();
+    echo "# " . SITE_NAME . "\n\n"
+        . "> Free Scout themed eCards from 7th Swindon Scouts, in Swindon, Wiltshire. A person chooses a design, writes a message and emails a private card to friends and family. Sending is always free" . (donations_enabled() ? ', and a donation to the Group is optional' : '') . ".\n\n"
+        . "## What it is\n\n"
+        . "- Illustrated, Scout themed cards" . ($occ ? ' for ' . implode(', ', array_map('strtolower', $occ)) : '') . ".\n"
+        . "- Each card goes to up to " . max_recipients() . " people. Every person gets their own private link and opens an envelope; the link works for " . expiry_days() . " days.\n"
+        . "- Cards are private. They are not listed or searchable, and a card link is never public.\n"
+        . "- Run by 7th Swindon Scouts" . ($g !== '' ? " (website: $g)" : '') . ". Contact: $mail.\n\n"
+        . "## Pages\n\n"
+        . "- [Choose a card]($b/): the card designs, by occasion\n"
+        . "- [Help and FAQ]($b/help): cost, when cards arrive, how long they last, privacy, what to do if a card does not arrive\n"
+        . "- [Privacy and cookies]($b/privacy): what is kept and for how long\n"
+        . "- [Terms and safeguarding]($b/terms): who can send, acceptable use and how young people are kept safe\n";
+    exit;
+}
+/** The public pages, for search engines. Never a card link, a promotion label or anything private. */
+function r_sitemap(): never {
+    header('Content-Type: application/xml; charset=UTF-8'); header('Cache-Control: public, max-age=3600');
+    echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n" . '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">';
+    foreach (['/', '/help', '/privacy', '/terms'] as $p) echo '<url><loc>' . htmlspecialchars(base_url() . $p, ENT_XML1) . '</loc></url>';
+    echo '</urlset>'; exit;
+}
 function r_home(): void {
+    seo(['desc' => 'Free Scout themed eCards from 7th Swindon Scouts in Swindon. Choose a design, write your message and email a private card to friends and family.', 'canonical' => '/', 'og_title' => 'Send a card, Scout style',
+        'ld' => [org_ld(), ['@context' => 'https://schema.org', '@type' => 'WebSite', 'name' => SITE_NAME, 'url' => base_url() . '/', 'inLanguage' => 'en-GB', 'publisher' => ['@id' => base_url() . '/#org']]]]);
     if (preg_match('/^[a-z0-9-]{1,30}$/', (string)($_GET['ref'] ?? ''))) $_SESSION['ref'] = $_GET['ref']; // promotion source label only, never a person
     $st = sending_state(); $want = occasion_wanted(); $sty = style_wanted(); $fav = !empty($_GET['fav']) && user(); $favs = fav_slugs();
     $b = '<section class="hero"><div><p class="eyebrow">' . h(SITE_NAME) . '</p><h1>' . (($cs = current_season()) ? 'Send ' . card_phrase_for($cs[1] . ' card') . ', Scout style' : 'Send a card, Scout style') . '</h1><p class="lead">Pick a design, write your message and we will email a private card to your friends and family. Sending is free' . (donations_enabled() ? ', and a donation is optional' : '') . '.</p><p><a class="btn big" href="#gallery">Choose a card</a> <a class="btn ghost" href="#how">How it works</a></p></div><div class="heroart" aria-hidden="true">' . (($hero = hero_for_session()) ? card_art($hero) : '') . '</div></section>';
@@ -119,7 +157,7 @@ function r_home(): void {
     $b .= '<div class="grid">';
     foreach ($show as $id => $c)
         $b .= '<div class="tilebox"><a class="tile" href="/compose?card=' . h($id) . '">' . card_art($id, true) . (($k = card_kicker($c, $id, $occ, $stl, $smap)) !== '' ? '<small class="tkick">' . h($k) . '</small>' : '') . '<span>' . h($c['title']) . '</span><em class="tjoke">' . h($c['joke']) . '</em></a>' . preview_link($id, $c['title']) . (user() ? fav_button($id, $c['title'], in_array($id, $favs, true), $back) : '') . '</div>';
-    page('Choose a card', $b . '</div>');
+    page('Free Scout eCards to send by email', $b . '</div>');
 }
 
 function r_help(): void {
@@ -136,7 +174,9 @@ function r_help(): void {
         'Can I delete my account?' => 'Yes, from the bottom of My cards. It cancels cards that have not started sending, deletes your saved contacts and groups, and switches off the links of the cards you sent. Finance records and opt-out records are kept separately.',
         'I received a card I do not want' => 'Open the card and use "Report this card", or use the "stop cards" link at the bottom of the email.',
     ];
-    $b = '<h1>Help and FAQ</h1>';
+    $b = '<h1>Help and FAQ</h1>'; $ld = [];
+    foreach ($faq + faq_parse(setting('help_extra')) as $q => $a) $ld[] = ['@type' => 'Question', 'name' => $q, 'acceptedAnswer' => ['@type' => 'Answer', 'text' => trim(html_entity_decode(strip_tags($a), ENT_QUOTES))]];
+    seo(['desc' => 'Answers about sending free eCards from 7th Swindon Scouts: what it costs, when cards arrive, how long they last, privacy, and what to do if a card does not arrive.', 'canonical' => '/help', 'og_title' => 'Help and FAQ', 'ld' => [['@context' => 'https://schema.org', '@type' => 'FAQPage', 'mainEntity' => $ld]]]);
     foreach ($faq as $q => $a) $b .= '<details><summary>' . h($q) . '</summary><p>' . (str_contains($a, $e) ? $a : h($a)) . '</p></details>';
     foreach (faq_parse(setting('help_extra')) as $q => $a) $b .= '<details><summary>' . h($q) . '</summary><p>' . nl2br(h($a)) . '</p></details>'; // extra questions are always escaped
     page('Help', $b . '<p>Still stuck? Email <a href="mailto:' . $e . '">' . $e . '</a>.</p>');
@@ -176,7 +216,7 @@ function r_message(): void {
 function dispatch(string $path): void {
     private_headers($path);
     $routes = ['/' => 'r_home', '/help' => 'r_help', '/register' => 'r_register', '/verify' => 'r_verify', '/resend-verification' => 'r_resend_verify', '/login' => 'r_login', '/logout' => 'r_logout', '/forgot' => 'r_forgot', '/reset' => 'r_reset',
-        '/contacts/import' => 'r_contacts_import', '/favourite' => 'r_favourite', '/admin/bulk' => 'r_admin_bulk', '/card-preview' => 'r_card_preview', '/admin/design-styles' => 'r_admin_design_styles', '/compose' => 'r_compose', '/preview' => 'r_preview', '/email-preview' => 'r_email_preview', '/review' => 'r_review', '/pay-cancelled' => 'r_pay_cancelled', '/return' => 'r_return', '/dev/pay' => 'r_dev_pay', '/dashboard' => 'r_dashboard', '/send' => 'r_send', '/prefs' => 'r_prefs', '/remind-off' => 'r_remind_off', '/privacy' => 'r_privacy', '/terms' => 'r_terms', '/accept-terms' => 'r_accept_terms', '/account/delete' => 'r_account_delete', '/account' => 'r_account', '/admin/mail' => 'r_admin_mail', '/admin/platform' => 'r_admin_platform', '/invite' => 'r_invite', '/admin/invites' => 'r_admin_invites', '/account/confirm-email' => 'r_account_confirm_email', '/contacts' => 'r_contacts', '/contacts/edit' => 'r_contact_edit', '/contacts/delete-all' => 'r_contacts_delete_all', '/contacts/pick' => 'r_pick', '/contacts/save' => 'r_save_contact', '/groups' => 'r_groups', '/discard' => 'r_discard', '/change-email' => 'r_change_email', '/copy' => 'r_copy',
+        '/contacts/import' => 'r_contacts_import', '/favourite' => 'r_favourite', '/robots.txt' => 'r_robots', '/llms.txt' => 'r_llms', '/sitemap.xml' => 'r_sitemap', '/admin/bulk' => 'r_admin_bulk', '/card-preview' => 'r_card_preview', '/admin/design-styles' => 'r_admin_design_styles', '/compose' => 'r_compose', '/preview' => 'r_preview', '/email-preview' => 'r_email_preview', '/review' => 'r_review', '/pay-cancelled' => 'r_pay_cancelled', '/return' => 'r_return', '/dev/pay' => 'r_dev_pay', '/dashboard' => 'r_dashboard', '/send' => 'r_send', '/prefs' => 'r_prefs', '/remind-off' => 'r_remind_off', '/privacy' => 'r_privacy', '/terms' => 'r_terms', '/accept-terms' => 'r_accept_terms', '/account/delete' => 'r_account_delete', '/account' => 'r_account', '/admin/mail' => 'r_admin_mail', '/admin/platform' => 'r_admin_platform', '/invite' => 'r_invite', '/admin/invites' => 'r_admin_invites', '/account/confirm-email' => 'r_account_confirm_email', '/contacts' => 'r_contacts', '/contacts/edit' => 'r_contact_edit', '/contacts/delete-all' => 'r_contacts_delete_all', '/contacts/pick' => 'r_pick', '/contacts/save' => 'r_save_contact', '/groups' => 'r_groups', '/discard' => 'r_discard', '/change-email' => 'r_change_email', '/copy' => 'r_copy',
         '/hooks/tick' => 'r_tick_hook', '/mfa' => 'r_mfa', '/admin' => 'r_admin', '/admin/delivery' => 'r_admin_delivery', '/admin/finance' => 'r_admin_finance', '/admin/reports' => 'r_admin_reports', '/admin/site' => 'r_admin_site', '/admin/designs' => 'r_admin_designs', '/admin/occasions' => 'r_admin_occasions', '/admin/wording' => 'r_admin_wording', '/admin/app' => 'r_admin_app', '/admin/email' => 'r_admin_email', '/admin/privacy' => 'r_admin_privacy', '/admin/access' => 'r_admin_access', '/admin/health' => 'r_admin_health', '/admin/audit' => 'r_admin_audit', '/admin/audit/export' => 'r_admin_audit_export', '/admin/action' => 'r_admin_action', '/admin/senders' => 'r_admin_senders', '/admin/measures' => 'r_admin_measures', '/admin/giftaid' => 'r_admin_giftaid', '/admin/rehearsal' => 'r_admin_rehearsal', '/admin/library' => 'r_admin_library', '/admin/library/edit' => 'r_admin_library_edit', '/admin/library/save' => 'r_admin_library_save', '/admin/library/discard' => 'r_admin_library_discard', '/admin/library/preview' => 'r_admin_library_preview', '/admin/library/action' => 'r_admin_library_action', '/admin/qr' => 'r_admin_qr', '/admin/library/img' => 'r_admin_library_img', '/admin/export' => 'r_export', '/admin/message' => 'r_message', '/hooks/stripe' => 'r_stripe_hook', '/hooks/postmark' => 'r_postmark_hook'];
     if (post() && !str_starts_with($path, '/hooks/')) check_csrf();
     if (preg_match('#^/c/([a-f0-9]+)(?:/(open|report))?$#', $path, $m)) r_card($m[1], $m[2] ?? '');
