@@ -88,6 +88,11 @@ const STARTERS = [
     'Even Santa needs a Scout! Hope your Christmas is full of adventure.',
 ];
 
+/** The Group website address a sender may add to their card, or '' when the option is switched off. */
+function group_link_url(): string { $u = trim((string)setting('group_url', 'https://www.7thswindon.org.uk/')); return preg_match('#^https://[^\s"\'<>]+$#i', $u) ? $u : ''; }
+/** The address to show on a card: only when the sender ticked the box and the option is still on. */
+function card_link_url(array $s): string { return !empty($s['group_link']) ? group_link_url() : ''; }
+
 /** Optional line on the card, only when the sender chose it and a verified payment exists. Never an amount. */
 function card_note(array $s): string {
     return ($s['donation_note'] && one('select 1 from donations where send_id=?', [$s['id']])) ? 'This card came with a donation to 7th Swindon Scouts.' : '';
@@ -250,7 +255,7 @@ function is_scanner(): bool { return (bool)preg_match('/bot|crawl|spider|preview
 function copy_send(int $fromId, int $uid, array $recipientIds): int {
     $s = one('select * from sends where id=? and user_id=?', [$fromId, $uid]);
     if (!$s) return 0;
-    q('insert into sends(user_id,card,sender_name,message,created,updated) values(?,?,?,?,?,?)', [$uid, $s['card'], $s['sender_name'], $s['message'], time(), time()]);
+    q('insert into sends(user_id,card,sender_name,message,created,updated,group_link) values(?,?,?,?,?,?,?)', [$uid, $s['card'], $s['sender_name'], $s['message'], time(), time(), (int)($s['group_link'] ?? 0)]);
     $new = (int)db()->lastInsertId();
     foreach ($recipientIds as $rid) if ($r = one('select * from recipients where id=? and send_id=?', [(int)$rid, $fromId]))
         q('insert into recipients(send_id,name,email,own_msg,token) values(?,?,?,?,?)', [$new, $r['name'], $r['email'], $r['own_msg'], token()]);

@@ -16,7 +16,8 @@ function config_spec(string $area): array {
             'donations_enabled' => ['Take donations (leave off until the Trustees are ready; sending cards stays free either way)', 'bool', 'def' => '0'],
             'amounts_pence' => ['Suggested donation amounts in pounds, comma separated (up to 5, £1 to £500)', 'amounts', 'def' => '200,500,1000'],
             'giftaid_charity' => ['Charity name used in the Gift Aid declaration (as HMRC knows it)', 'text', 'max' => 100, 'def' => ''],
-            'giftaid_enabled' => ['Offer Gift Aid on donations', 'bool', 'def' => '0']]],
+            'giftaid_enabled' => ['Offer Gift Aid on donations', 'bool', 'def' => '0'],
+            'group_url' => ['Group website address, offered to senders as a link on their card (an https address; blank switches the option off)', 'url', 'max' => 200, 'def' => 'https://www.7thswindon.org.uk/']]],
         'app' => ['view' => ['appadmin', 'campaign', 'delivery', 'rolesadmin'], 'edit' => ['appadmin', 'rolesadmin'], 'title' => 'Application settings', 'when' => 'Applies to new entries straight away. Existing drafts are kept; a draft above a new limit must be corrected before submission. Accepted batches are unchanged.', 'fields' => [
             'max_recipients' => ['Recipients per card (1 to 20)', 'int', 'min' => 1, 'max' => 20, 'def' => '20'],
             'msg_max' => ['Greeting limit (characters)', 'int', 'min' => 50, 'max' => 2000, 'def' => '500'],
@@ -53,6 +54,10 @@ function cfg_validate(array $f, string $raw): array {
         case 'datetime': return ($raw === '' || (preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/', $raw) && strtotime($raw))) ? [$raw, null] : [$raw, 'Enter a valid UK date and time.'];
         case 'choice': return isset($f['opts'][$raw]) ? [$raw, null] : [$raw, 'Choose one of the options.'];
         case 'bool': return [$raw === '1' ? '1' : '0', null];
+        case 'url': // one web address: https only, no spaces, quotes or markup
+            if ($raw === '') return ['', null];
+            if (mb_strlen($raw) > $f['max'] || preg_match('/[\s"\'<>\x00-\x1F\x7F]/', $raw) || !filter_var($raw, FILTER_VALIDATE_URL) || strtolower((string)parse_url($raw, PHP_URL_SCHEME)) !== 'https') return [$raw, 'Enter one web address that starts with https://, or leave it blank.'];
+            return [$raw, null];
         case 'md': return (preg_match('/^(\d\d)-(\d\d)$/', $raw, $m) && checkdate((int)$m[1], (int)$m[2], 2024)) ? [$raw, null] : [$raw, 'Enter a month and day like 11-01 (month, then day).'];
         case 'tpl': // one line of wording with only the placeholders allowed here, so it can never carry markup, line breaks or anything else
             $raw = preg_replace('/\s+/', ' ', $raw);
