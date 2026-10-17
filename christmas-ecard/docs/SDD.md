@@ -174,7 +174,7 @@ After sending, the status page offers a "Tell a friend" block (WhatsApp, email a
 
 **Guests.** A visitor can write a card without an account. Pressing Review saves the draft and goes to a Create your free account page that says the card is waiting (with Sign in for people who already have an account, and the way back kept in the address as `next`, accepted only if it is a review of a card). Registering returns straight to Review with the card now owned by the new account; sending still needs the email to be verified, and the link in the confirmation email returns to the saved card.
 
-Recipient states shown to the sender: Draft, Queued, Scheduled, Sent, Delivered, Viewed, Failed, Delivery unconfirmed, Cancelled.
+Recipient states shown to the sender: Draft, Waiting to send, Scheduled, Sent, Delivered, Viewed, Not delivered, No confirmation yet, Cancelled. (Inside the code and the change history the older names Queued, Failed and Delivery unconfirmed are still used.)
 
 ### 7.2 The queue
 
@@ -224,7 +224,7 @@ An owner invites by email with a level (administrator or owner). The person sign
 | Screen | Settings |
 |---|---|
 | Donations and sharing | Take donations, suggested amounts, Gift Aid charity and switch, the Group website address mentioned in every card email (https only; blank leaves it out); shows the site link, QR code and promotion counts |
-| Application settings | Recipients per card, greeting and name limits, address book limits, test cards per hour, blocked words, small number threshold, rehearsal allow list, whether the New this month row shows on the home page, alert recipients and escalation, allow web addresses |
+| Application settings (in sections: Limits for senders, Message rules, Reports and testing, Alerts, Home page) | Recipients per card, greeting and name limits, address book limits, test cards per hour, blocked words, small number threshold, rehearsal allow list, whether the New this month row shows on the home page, alert recipients and escalation, allow web addresses |
 | Email and help wording | Subject, opening line and button of the card email (with `{sender}` and `{card}`), support email, extra Help questions |
 | Privacy and retention | How long card links and details are kept |
 | Email delivery | Provider, sender, Postmark token, SMTP details, test email |
@@ -805,9 +805,15 @@ Finance                                  Gift Aid (owners)         Measures
 | Platform controls                                                      |
 | Settings and tools for running the service. You see only what your     |
 | level allows.                                                          |
-| [System health ->]       [Change history ->]    [Application settings ->]
-| [Email delivery ->] (owner) [Email and help wording ->] [Email preview and test ->]
-| [Privacy and retention ->] [Administrator access ->] (owner) [Rehearsal ->]
+| Check on the service                                                   |
+|   [System health ->]  [Change history ->]                              |
+| Email                                                                  |
+|   [Email delivery ->] (owner)  [Email and help wording ->]             |
+|   [Email preview and test ->]  [Rehearsal ->]                          |
+| Rules and settings                                                     |
+|   [Application settings ->]  [Privacy and retention ->]                |
+| People                                                                 |
+|   [Administrator access ->] (owner)                                    |
 +------------------------------------------------------------------------+
 ```
 

@@ -31,7 +31,7 @@ function r_admin_measures(): void {
         . '<h2>Where cards stop</h2><ul>';
     foreach ($m['stage'] as $k => $n) $b .= '<li>' . h($k) . ': ' . masked($n) . '</li>';
     $b .= '</ul><h2>Delivery status of recipients</h2><ul>';
-    foreach ($m['status'] as $k => $n) $b .= '<li>' . h($k) . ': ' . masked($n) . '</li>';
+    foreach ($m['status'] as $k => $n) $b .= '<li>' . h(status_label($k)) . ': ' . masked($n) . '</li>';
     $b .= '</ul><h2>Design popularity (submitted cards)</h2><ul>';
     foreach ($m['designs'] as $id => $n) $b .= '<li>' . h(cards()[$id]['title'] ?? $id) . ': ' . masked($n) . '</li>';
     $b .= '</ul><h2>Definitions</h2><ul><li><strong>Started:</strong> a draft was saved or sent, including unfinished ones.</li><li><strong>Submitted:</strong> the sender chose Send, with or without a donation.</li><li><strong>Viewed:</strong> a recipient pressed Open your card. It is a share of cards sent, not proof anyone read them.</li><li><strong>Where cards stop:</strong> the furthest point each unsent draft reached. We do not record the pages anyone visited.</li></ul>';

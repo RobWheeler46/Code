@@ -79,11 +79,26 @@ function library_sections(string $cur): string {
     return $b . '</nav>';
 }
 
+/** The platform tools by what they are for, so the hub reads as four short lists, not nine cards in a row. Every tool in platform_manifest() is in exactly one group. */
+function platform_groups(): array {
+    return [
+        'Check on the service' => ['/admin/health', '/admin/audit'],
+        'Email' => ['/admin/mail', '/admin/wording', '/admin/email', '/admin/rehearsal'],
+        'Rules and settings' => ['/admin/app', '/admin/privacy'],
+        'People' => ['/admin/access'],
+    ];
+}
 function r_admin_platform(): void {
     need_admin(); if (!ops_admin()) fail(403, 'You do not have permission for that.');
-    $b = '<h1>Platform controls</h1><p class="lead">Settings and tools for running the service. You see only the ones your roles allow.</p><ul class="wscards plain">';
-    foreach (platform_links() as [$label, $href, $desc]) $b .= '<li><a class="wscard" href="' . h($href) . '"><strong>' . h($label) . '</strong><span>' . h($desc) . '</span></a></li>';
-    admin_page('Platform controls', $b . '</ul>');
+    $mine = []; foreach (platform_links() as $l) $mine[$l[1]] = $l;
+    $b = '<h1>Platform controls</h1><p class="lead">Settings and tools for running the service, grouped by what they are for. You see only the ones your roles allow.</p>';
+    foreach (platform_groups() as $name => $hrefs) {
+        $items = array_filter(array_map(fn($h) => $mine[$h] ?? null, $hrefs)); if (!$items) continue;
+        $b .= '<h2>' . h($name) . '</h2><ul class="wscards plain">';
+        foreach ($items as [$label, $href, $desc]) $b .= '<li><a class="wscard" href="' . h($href) . '"><strong>' . h($label) . '</strong><span>' . h($desc) . '</span></a></li>';
+        $b .= '</ul>';
+    }
+    admin_page('Platform controls', $b);
 }
 
 /** The overview's opening panel: the first task this person can do is the one big button. */

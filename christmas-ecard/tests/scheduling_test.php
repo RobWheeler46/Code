@@ -55,6 +55,9 @@ q('update recipients set sent_at=? where id=?', [time() - 60, $r4]); [, $dash] =
 q('update recipients set sent_at=? where id=?', [time() - 86400 * 400, $r4]); [, $dash] = http('/dashboard', $jar); ok(str_contains($dash, 'pill expired">Links expired<'), 'a card whose links have passed their time shows Links expired');
 [, $dash] = http('/dashboard', $jar); ok(str_contains($dash, '<h2>Sent</h2>') || str_contains($dash, '<h2>Drafts</h2>'), 'My cards groups cards under headings');
 q("update recipients set status='queued', sent_at=null, next_at=? where id=?", [time() + 86400, $r4]); [, $dash] = http('/dashboard', $jar); ok(str_contains($dash, 'pill scheduled">Scheduled<'), 'a card waiting for its chosen time shows Scheduled');
+// plain words for the card statuses; the internal names are unchanged
+ok(status_label('Queued') === 'Waiting to send' && status_label('Failed') === 'Not delivered' && status_label('Delivery unconfirmed') === 'No confirmation yet' && status_label('Sent') === 'Sent', 'the status labels senders see are in plain words');
+[, $help] = http('/help', $jar); ok(str_contains($help, 'No confirmation yet') && str_contains($help, 'Waiting to send') && !str_contains($help, 'Delivery unconfirmed:'), 'and Help explains them in those words');
 // donation suggestion follows the number of cards
 q("insert into settings(k,v) values('donations_enabled','1') on conflict(k) do update set v='1'");
 function rev(int $n): string { global $jar; $t = time(); q("insert into sends(user_id,card,sender_name,message,status,created,updated) values(1,'pegs','Sam','Hi','draft',?,?)", [$t, $t]); $id = (int)db()->lastInsertId(); for ($i = 0; $i < $n; $i++) q("insert into recipients(send_id,name,email,token,status) values(?,?,?,?,'draft')", [$id, "R$i", "r$i@x.example", token()]); return http("/review?id=$id", $jar)[1]; }

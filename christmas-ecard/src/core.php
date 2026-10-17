@@ -106,10 +106,13 @@ function rstatus(array $r): string {
     if ($r['status'] === 'queued' && (int)$r['tries'] === 0 && (int)$r['next_at'] > time()) return 'Scheduled';
     return $r['status'] === 'draft' ? 'Draft' : 'Queued';
 }
+/** What a sender is shown for a status. The names used inside the code are unchanged. */
+const STATUS_LABELS = ['Queued' => 'Waiting to send', 'Failed' => 'Not delivered', 'Delivery unconfirmed' => 'No confirmation yet'];
+function status_label(string $k): string { return STATUS_LABELS[$k] ?? $k; }
 const STATUS_HELP = [
     'Queued' => 'Accepted and waiting to be sent.', 'Scheduled' => 'Waiting for the date and time you chose. You can cancel until then.', 'Sent' => 'Accepted by the email service; inbox delivery is not confirmed.',
     'Delivered' => 'The email service confirmed delivery. This does not prove the card was read.', 'Viewed' => 'The recipient opened the card themselves.',
-    'Failed' => 'The email could not be delivered. Correct the address to try again.', 'Delivery unconfirmed' => 'We have no delivery confirmation yet.',
+    'Failed' => 'The email could not be delivered. Correct the address to try again.', 'Delivery unconfirmed' => 'The email was sent, but we have had no word that it arrived.',
     'Cancelled' => 'Cancelled before it was sent.'];
 
 // ---- scheduled sending: a card can be held until a chosen time (at least an hour ahead, at most 90 days), then goes through the same queue
@@ -271,7 +274,7 @@ function send_digests(): int {
     $n = 0;
     foreach (all("select * from users where notify='summary'") as $u) {
         $lines = [];
-        foreach (all('select r.* from recipients r join sends s on s.id=r.send_id where s.user_id=? and (r.sent_at>? or r.viewed_at>?)', [$u['id'], time() - 86400, time() - 86400]) as $r) $lines[] = "{$r['name']}: " . rstatus($r);
+        foreach (all('select r.* from recipients r join sends s on s.id=r.send_id where s.user_id=? and (r.sent_at>? or r.viewed_at>?)', [$u['id'], time() - 86400, time() - 86400]) as $r) $lines[] = "{$r['name']}: " . status_label(rstatus($r));
         if ($lines) { mail_send($u['email'], 'Your eCards summary', "In the last day:\n" . implode("\n", $lines) . "\n\nSee details or change these emails: " . base_url() . "/dashboard\n"); $n++; }
     }
     return $n;

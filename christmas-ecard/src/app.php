@@ -129,7 +129,7 @@ function r_help(): void {
         'Can I choose when a card arrives?' => 'Yes. On the last step you can send straight away or choose a date and time. Scheduled cards can be cancelled from My cards until they are sent.',
         'I did not get the verification email' => 'Check your spam or junk folder, then sign in and ask for it again. If the address was wrong, register again with the right one.',
         'My recipient did not get their card' => 'Open "My cards" to see each card\'s status. If it shows Failed, correct the address and send again. Ask the recipient to check spam.',
-        'What do the statuses mean?' => implode(' ', array_map(fn($k, $v) => "$k: $v", array_keys(STATUS_HELP), STATUS_HELP)),
+        'What do the statuses mean?' => implode(' ', array_map(fn($k, $v) => status_label($k) . ": $v", array_keys(STATUS_HELP), STATUS_HELP)),
         'How long does a card last?' => 'A card link works for ' . expiry_days() . ' days after it is sent.',
         ...(donations_enabled() ? ['I have a question about a donation' => "Email $e and quote the reference from your receipt."] : []),
         'How do you decide a card was viewed?' => 'A card counts as Viewed only when the recipient deliberately presses Open your card. Opening the email, or a security scanner fetching the link, does not count. If someone reads the card without that step we cannot tell, so it shows as not confirmed. Viewed never means we know who read it.',

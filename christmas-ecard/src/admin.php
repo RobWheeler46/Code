@@ -18,7 +18,7 @@ function config_spec(string $area): array {
             'giftaid_charity' => ['Charity name used in the Gift Aid declaration (as HMRC knows it)', 'text', 'max' => 100, 'def' => ''],
             'giftaid_enabled' => ['Offer Gift Aid on donations', 'bool', 'def' => '0'],
             'group_url' => ['Group website address, mentioned in every card email (an https address; blank leaves it out)', 'url', 'max' => 200, 'def' => 'https://www.7thswindon.org.uk/']]],
-        'app' => ['view' => ['appadmin', 'campaign', 'delivery', 'rolesadmin'], 'edit' => ['appadmin', 'rolesadmin'], 'title' => 'Application settings', 'when' => 'Applies to new entries straight away. Existing drafts are kept; a draft above a new limit must be corrected before submission. Accepted batches are unchanged.', 'fields' => [
+        'app' => ['view' => ['appadmin', 'campaign', 'delivery', 'rolesadmin'], 'edit' => ['appadmin', 'rolesadmin'], 'sections' => ['max_recipients' => 'Limits for senders', 'abuse_terms' => 'Message rules', 'small_n' => 'Reports and testing', 'alert_emails' => 'Alerts', 'show_new_strip' => 'Home page'], 'title' => 'Application settings', 'when' => 'Applies to new entries straight away. Existing drafts are kept; a draft above a new limit must be corrected before submission. Accepted batches are unchanged.', 'fields' => [
             'max_recipients' => ['Recipients per card (1 to 20)', 'int', 'min' => 1, 'max' => 20, 'def' => '20'],
             'msg_max' => ['Greeting limit (characters)', 'int', 'min' => 50, 'max' => 2000, 'def' => '500'],
             'name_max' => ['Display name limit (characters)', 'int', 'min' => 10, 'max' => 100, 'def' => '60'],
@@ -26,12 +26,12 @@ function config_spec(string $area): array {
             'groups_max' => ['Contact groups per account', 'int', 'min' => 1, 'max' => 100, 'def' => '20'],
             'test_per_hour' => ['Test cards per account per hour', 'int', 'min' => 1, 'max' => 20, 'def' => '3'],
             'abuse_terms' => ['Blocked words in messages (comma separated)', 'text', 'max' => 500, 'def' => ''],
+            'allow_urls' => ['Allow web addresses in messages (never clickable)', 'bool', 'def' => '0'],
             'small_n' => ['Show counts below this number as "fewer than N"', 'int', 'min' => 2, 'max' => 50, 'def' => '5'],
             'rehearsal_emails' => ['Rehearsal allow-list (emails, comma separated)', 'emails', 'def' => ''],
             'alert_emails' => ['Who receives operational alerts (emails, comma separated)', 'emails', 'def' => ''],
             'alert_escalate_emails' => ['Who receives an alert nobody acknowledged (emails)', 'emails', 'def' => ''],
             'alert_escalate_minutes' => ['Escalate unacknowledged alerts after (minutes)', 'int', 'min' => 5, 'max' => 1440, 'def' => '60'],
-            'allow_urls' => ['Allow web addresses in messages (never clickable)', 'bool', 'def' => '0'],
             'show_new_strip' => ['Show the "New this month" row of recently added cards on the home page', 'bool', 'def' => '1']]],
         'wording' => ['view' => ['appadmin', 'rolesadmin'], 'edit' => ['appadmin', 'rolesadmin'], 'title' => 'Email and help wording', 'when' => 'Used by new emails and the Help page straight away. Emails already sent are not changed. The private link, the stop and report routes and the privacy link always stay in every email.', 'fields' => [
             'email_subject' => ['Subject of the card email ({sender} is the sender name, {card} is for example "Christmas card")', 'tpl', 'max' => 100, 'allow' => ['{sender}', '{card}'], 'need' => '{sender}', 'def' => '{sender} sent you a {card}'],
@@ -172,7 +172,7 @@ function r_admin_config(string $area): void {
     } elseif ($old && !empty($old['restore_of'])) { $restore = (int)$old['restore_of']; }
     $b = $restoreNote . '<h1>' . h($spec['title']) . '</h1><p class="note">' . h($spec['when']) . ' Version ' . h(setting('cfg_version', '0')) . '.</p>' . (!$edit ? '<p class="flash warn">You can view these settings but not change them.</p>' : '') . '<form method="post" class="stack">' . csrf() . '<input type="hidden" name="ver" value="' . h(setting('cfg_version', '0')) . '">';
     if ($restore) $b .= '<input type="hidden" name="restore_of" value="' . $restore . '">';
-    foreach ($spec['fields'] as $k => $f) $b .= cfg_input($k, $f, $old ? (string)($old['f_' . $k] ?? '') : cfg_form_value($k, $f), $errs[$k] ?? null, $edit, $first);
+    foreach ($spec['fields'] as $k => $f) $b .= (isset($spec['sections'][$k]) ? '<h2>' . h($spec['sections'][$k]) . '</h2>' : '') . cfg_input($k, $f, $old ? (string)($old['f_' . $k] ?? '') : cfg_form_value($k, $f), $errs[$k] ?? null, $edit, $first);
     if ($area === 'privacy') $b .= '<p class="note">Changing a period shows the affected records first and needs a reason and approval reference.</p>';
     if ($area === 'wording') $b .= '<p class="note"><a href="/admin/email">Preview the email and send yourself a test</a> once you have saved.</p>';
     if ($area === 'campaign') $b .= '<p class="note">Free sending is always available. Payments cannot be made mandatory here.</p>';
@@ -308,7 +308,7 @@ function r_admin(): void {
         . '<section class="statuscard"><h2>Dispatch</h2><p>' . (setting('paused') === '1' ? '<strong>Paused</strong>' : 'Running') . '. ' . $c['queued'] . ' queued.</p></section>'
         . (donations_enabled() ? '<section class="statuscard"><h2>Donations recorded</h2><p class="big">' . gbp((int)one('select coalesce(sum(pence-refunded),0) n from donations')['n']) . '</p></section>' : '') . '</div>';
     $rc = []; foreach (all('select r.* from recipients r join sends s on s.id=r.send_id where s.is_test=0') as $r) { $k = rstatus($r); $rc[$k] = ($rc[$k] ?? 0) + 1; }
-    $b .= '<h2>Card activity</h2><p>' . h(implode(', ', array_map(fn($k, $v) => "$v $k", array_keys($rc), $rc)) ?: 'Nothing sent yet.') . '</p><ul>';
+    $b .= '<h2>Card activity</h2><p>' . h(implode(', ', array_map(fn($k, $v) => "$v " . status_label($k), array_keys($rc), $rc)) ?: 'Nothing sent yet.') . '</p><ul>';
     foreach (all("select card, count(*) n from sends where is_test=0 and status not in ('draft','awaiting_payment') group by card order by n desc") as $x) $b .= '<li>' . h(cards()[$x['card']]['title'] ?? $x['card']) . ': ' . $x['n'] . '</li>';
     $b .= '</ul>';
     if (donations_enabled()) {
@@ -327,7 +327,7 @@ function r_admin_delivery(): void {
     else $b .= '<p class="note">Only administrators can pause or resume dispatch.</p>';
     $b .= '<h2>Needs attention</h2><table class="stacked"><tr><th>Recipient</th><th>Status</th><th>Detail</th><th></th></tr>';
     foreach (all("select * from recipients where status in ('failed','bounced','sending') or (status='sent' and delivered_at is null and sent_at<?) order by id desc limit 50", [time() - 172800]) as $r)
-        $b .= '<tr><td>' . h($r['email']) . '</td><td>' . rstatus($r) . '</td><td>' . h($r['error']) . '</td><td>' . adminbtn('resend', (int)$r['id'], 'Resend with a fresh link') . '</td></tr>';
+        $b .= '<tr><td>' . h($r['email']) . '</td><td>' . h(status_label(rstatus($r))) . '</td><td>' . h($r['error']) . '</td><td>' . adminbtn('resend', (int)$r['id'], 'Resend with a fresh link') . '</td></tr>';
     admin_page('Delivery', $b . '</table>' . (str_ends_with($b, '</th></tr>') ? '<p class="note">No delivery exceptions. Nothing needs attention.</p>' : '') . '<p class="note">Resending creates a new private link and switches the old one off. For an unconfirmed delivery the first email may already have arrived.</p>');
 }
 
