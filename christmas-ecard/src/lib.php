@@ -26,6 +26,7 @@ create table if not exists sends(id integer primary key autoincrement, user_id i
 create table if not exists recipients(id integer primary key autoincrement, send_id int, name text, email text, token text unique, status text default 'draft', error text, tries int default 0, sent_at int, delivered_at int, opened_at int, viewed_at int);
 create table if not exists donations(id integer primary key autoincrement, send_id int, user_id int, pence int, stripe_session text unique, account text, fee int default 0, refunded int default 0, created int);
 create table if not exists reports(id integer primary key autoincrement, recipient_id int, reason text, status text default 'open', decision text, created int);
+create table if not exists engagement_daily(day text not null, event text not null, occasion text not null default '', design text not null default '', n int not null default 0, primary key(day, event, occasion, design));
 create table if not exists optouts(email text, user_id int, created int, primary key(email, user_id));
 create table if not exists settings(k text primary key, v text);
 create table if not exists admin_invites(id integer primary key autoincrement, email text not null, roles text not null, token_hash text unique, invited_by int, created int, expires int, accepted_at int, accepted_by int, revoked_at int);

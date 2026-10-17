@@ -25,7 +25,7 @@ function r_privacy(): void {
 <h2>Why recipients get an email</h2>
 <p>A person you know asked us to send them a card. It is a single email and it can be stopped from the email or the card page without an account.</p>
 <h2>How long we keep it</h2>
-<p>Card links work for ' . expiry_days() . ' days after sending. Greetings and recipient details are deleted ' . (int)setting('retention_days', '90') . ' days after sending. Unused drafts are removed after 7 days if not linked to an account. Finance records and stop requests are kept longer, as described in the Group\'s retention schedule.</p>
+<p>Card links work for ' . expiry_days() . ' days after sending. Greetings and recipient details are deleted ' . (int)setting('retention_days', '90') . ' days after sending. Unused drafts are removed after 7 days if not linked to an account. We count how many times pages such as the home page, the write screen and the review screen are opened, as daily totals with no cookie and nothing that identifies you or your card. We leave out search engine robots, our own administrators and anyone whose browser asks not to be tracked, and we keep these totals for 24 months. Finance records and stop requests are kept longer, as described in the Group\'s retention schedule.</p>
 <h2>Your rights</h2>
 <p>You can ask to see, correct or delete your information. You can delete your account yourself from <em>My cards</em>. For anything else email <a href="mailto:' . $sup . '">' . $sup . '</a>.</p>
 <h2>Cookies</h2>

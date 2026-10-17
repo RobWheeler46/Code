@@ -74,6 +74,7 @@ function r_compose(): void {
     }
     $old = $_SESSION['old'] ?? null; $errs = $_SESSION['errs'] ?? []; unset($_SESSION['old'], $_SESSION['errs']);
     $card = $old['card'] ?? $s['card'] ?? (string)($_GET['card'] ?? '');
+    if (!$s && !$old && isset(cards()[$card])) count_view('card_chosen', $card); // a card was chosen from the gallery (not a return to a draft or a redisplay after an error)
     $gone = '';
     if (!(cards()[$card]['on'] ?? false)) { // a saved draft keeps its message and recipients when its design is held back; a direct link to an unavailable design goes home
         if (!$s || !gallery_cards()) { flash('That design is not available. Please choose another.', 'warn'); redirect('/#gallery'); }
@@ -168,6 +169,7 @@ function r_review(): void {
     if (!empty($s['bulk'])) redirect('/admin/bulk?id=' . $s['id']);
     if ($s['status'] === 'draft' && !(cards()[$s['card']]['on'] ?? false)) { flash('The design you chose is no longer available. Pick another and your message and recipients are kept.', 'warn'); redirect('/compose?id=' . (int)$s['id']); }
     $id = (int)$s['id'];
+    if (!post() && empty($s['bulk'])) count_view('review', $s['card']);
     $rs = all('select * from recipients where send_id=? order by id', [$id]);
     $pending = $s['status'] === 'awaiting_payment';
     if (post()) {

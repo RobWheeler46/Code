@@ -251,6 +251,27 @@ function requeue_recipient(int $rid, ?string $newEmail, int $actor, string $via)
 }
 
 /** Link scanners and previewers must not count as a human view. */
+/** Anonymous page view counting: one more on a daily total, nothing else. No cookie, no address, no browser details, no person. Robots, signed in administrators and anyone whose browser says Do Not Track or Global Privacy Control are left out. Never allowed to break a page. */
+function count_view(string $event, string $design = ''): void {
+    try {
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') return;
+        $ua = (string)($_SERVER['HTTP_USER_AGENT'] ?? '');
+        if ($ua === '' || is_scanner() || preg_match('/slurp|facebookexternalhit|whatsapp|telegram|twitterbot|linkedinbot|embedly|lighthouse|pingdom|uptime|monitor|gptbot|claudebot|perplexity|ccbot|bytespider|semrush|ahrefs|bing|google|duckduck/i', $ua)) return;
+        if (($_SERVER['HTTP_DNT'] ?? '') === '1' || ($_SERVER['HTTP_SEC_GPC'] ?? '') === '1') return;
+        if (($u = user()) && !empty($u['is_admin'])) return;
+        $occ = $design !== '' ? (string)((cards()[$design]['cat'] ?? 'christmas')) : '';
+        q('insert into engagement_daily(day,event,occasion,design,n) values(?,?,?,?,1) on conflict(day,event,occasion,design) do update set n=n+1', [date('Y-m-d'), $event, $occ, $design]);
+    } catch (Throwable $e) {}
+}
+/** Totals from the counters for the last $days days (0 for everything kept): events, and the most chosen cards. */
+function engagement_totals(int $days): array {
+    $since = $days > 0 ? date('Y-m-d', time() - 86400 * $days) : '0000-00-00'; $ev = ['visit' => 0, 'card_chosen' => 0, 'review' => 0]; $designs = [];
+    try {
+        foreach (all('select event, sum(n) n from engagement_daily where day>=? group by event', [$since]) as $r) $ev[$r['event']] = (int)$r['n'];
+        foreach (all("select design, sum(n) n from engagement_daily where day>=? and event='card_chosen' and design<>'' group by design order by n desc limit 5", [$since]) as $r) $designs[$r['design']] = (int)$r['n'];
+    } catch (Throwable $e) {}
+    return ['events' => $ev, 'designs' => $designs];
+}
 function is_scanner(): bool { return (bool)preg_match('/bot|crawl|spider|preview|scan|safelinks|proofpoint|barracuda|mimecast|office|headless|curl|python|go-http/i', $_SERVER['HTTP_USER_AGENT'] ?? ''); }
 
 /** FR-059: copy design, greeting and From name into a new unsent draft. Only explicitly chosen recipients come along (fresh tokens, no status). */
@@ -283,6 +304,7 @@ function send_digests(): int {
 /** Retention: blank card content and recipient details once the retention period has passed; drop stale anonymous drafts. */
 function purge_old(): int {
     if (function_exists('art_cleanup_tmp')) art_cleanup_tmp(); // interrupted uploads
+    q('delete from engagement_daily where day<?', [date('Y-m-d', strtotime('-24 months'))]); // visit totals are kept for two years
     $cut = time() - 86400 * (int)setting('retention_days', '90');
     $ids = array_column(all("select id from sends where queued_at is not null and queued_at<? and message<>''", [$cut]), 'id');
     foreach ($ids as $id) {

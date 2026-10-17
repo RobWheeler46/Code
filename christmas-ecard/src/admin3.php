@@ -6,6 +6,16 @@ function small_n(): int { return max(2, (int)setting('small_n', '5')); }
 function masked(int $n): string { return ($n > 0 && $n < small_n()) ? 'fewer than ' . small_n() : (string)$n; }
 function pct(int $a, int $b): string { return $b < small_n() ? 'not enough data' : round(100 * $a / $b) . '%'; }
 
+/** Last 30 days and everything kept, side by side, with small numbers hidden. */
+function engagement_block(): string {
+    $a = engagement_totals(30); $z = engagement_totals(0); $cut = time() - 30 * 86400;
+    $sub30 = (int)one("select count(*) n from sends where is_test=0 and queued_at>?", [$cut])['n']; $subAll = (int)one("select count(*) n from sends where is_test=0 and queued_at is not null")['n'];
+    $rows = [['Home page views', $a['events']['visit'], $z['events']['visit']], ['A card chosen (write screen opened from the gallery)', $a['events']['card_chosen'], $z['events']['card_chosen']], ['Review page reached', $a['events']['review'], $z['events']['review']], ['Cards submitted', $sub30, $subAll]];
+    $b = '<table class="stacked"><tr><th>Step</th><th>Last 30 days</th><th>All recorded</th></tr>'; foreach ($rows as [$l, $x, $y]) $b .= '<tr><td>' . h($l) . '</td><td>' . masked((int)$x) . '</td><td>' . masked((int)$y) . '</td></tr>'; $b .= '</table>';
+    if ($a['designs']) { $b .= '<h3>Most chosen cards, last 30 days</h3><ul>'; foreach ($a['designs'] as $id => $n) $b .= '<li>' . h(cards()[$id]['title'] ?? $id) . ': ' . masked($n) . '</li>'; $b .= '</ul>'; }
+    return $b;
+}
+
 function campaign_measures(): array {
     $sends = all('select * from sends where is_test=0'); $stage = ['Started, no message yet' => 0, 'Message written, not submitted' => 0, 'Waiting for payment' => 0, 'Submitted' => 0]; $senders = [];
     foreach ($sends as $s) {
@@ -28,6 +38,7 @@ function r_admin_measures(): void {
         . '<section class="statuscard"><h2>Senders who donated</h2><p>' . masked($m['donors']) . ' of ' . masked($m['senders']) . ' (' . pct($m['donors'], $m['senders']) . ')</p></section>'
         . '<section class="statuscard"><h2>Average donation</h2><p>' . ($m['donations'] >= small_n() ? gbp(intdiv($m['gross'], $m['donations'])) : 'not enough data') . '</p></section>'
         . '<section class="statuscard"><h2>Sent cards viewed</h2><p>' . pct($m['viewed'], $m['sent']) . '</p></section></div>'
+        . '<h2>Visits and the journey</h2><p class="note">Page views, not people. Counted without cookies or anything that identifies anyone; search engine robots, signed in administrators and people whose browser asks not to be tracked are left out. Daily totals are kept for 24 months.</p>' . engagement_block()
         . '<h2>Where cards stop</h2><ul>';
     foreach ($m['stage'] as $k => $n) $b .= '<li>' . h($k) . ': ' . masked($n) . '</li>';
     $b .= '</ul><h2>Delivery status of recipients</h2><ul>';

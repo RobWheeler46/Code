@@ -140,6 +140,7 @@ function r_sitemap(): never {
     echo '</urlset>'; exit;
 }
 function r_home(): void {
+    count_view('visit');
     seo(['desc' => 'Free Scout themed eCards from 7th Swindon Scouts in Swindon. Choose a design, write your message and email a private card to friends and family.', 'canonical' => '/', 'og_title' => 'Send a card, Scout style',
         'ld' => [org_ld(), ['@context' => 'https://schema.org', '@type' => 'WebSite', 'name' => SITE_NAME, 'url' => base_url() . '/', 'inLanguage' => 'en-GB', 'publisher' => ['@id' => base_url() . '/#org']]]]);
     if (preg_match('/^[a-z0-9-]{1,30}$/', (string)($_GET['ref'] ?? ''))) $_SESSION['ref'] = $_GET['ref']; // promotion source label only, never a person
