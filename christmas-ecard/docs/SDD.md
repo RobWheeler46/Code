@@ -170,6 +170,8 @@ Register / sign in / confirm email (once)  <────────────
 
 After sending, the status page offers a "Tell a friend" block (WhatsApp, email and the plain link, labelled `?ref=sendshare` so Measures can count visits). While cards are still scheduled the sender can change the delivery time (same limits as when scheduling, or send at once); only cards that have not started sending move, and the change is recorded in the change history. When donations are on, the amount suggested on the review page grows with the number of cards (first, second or third amount for 1 to 3, 4 to 10 and 11 or more).
 
+**Guests.** A visitor can write a card without an account. Pressing Review saves the draft and goes to a Create your free account page that says the card is waiting (with Sign in for people who already have an account, and the way back kept in the address as `next`, accepted only if it is a review of a card). Registering returns straight to Review with the card now owned by the new account; sending still needs the email to be verified, and the link in the confirmation email returns to the saved card.
+
 Recipient states shown to the sender: Draft, Queued, Scheduled, Sent, Delivered, Viewed, Failed, Delivery unconfirmed, Cancelled.
 
 ### 7.2 The queue
@@ -188,7 +190,7 @@ Each design has an occasion (chosen in the eCard Library). Occasions are managed
 
 **Home page strips.** With two or more occasions on show the home page leads with picture tiles for each occasion (and All cards). Under them, when no filter is chosen, a Featured cards strip shows the cards the Group has featured, and a New this month strip shows cards added through the eCard Library in the last 30 days (newest first, up to four, none repeated from Featured; the original Christmas set never counts as new). Every card tile carries a Preview link to a full size look (`/card-preview`) before the sender chooses it, and a small line above the title with its occasion and styles.
 
-**Styles and favourites.** Beside occasions, cards can carry style tags (Funny, Heartfelt, Adventure and Traditional to start; up to 12, managed at the foot of the Occasions screen, where a tag can be renamed, hidden or removed). Tags are ticked on a draft in the eCard Library editor, or on any card from Order and visibility. The home page then offers a Style drop down (only tags in use on cards on show), combined with the occasion drop down; the address holds the choices, a hidden or unknown tag is ignored, and an empty result says so with a way back. Signed in senders also see a heart on each card and an Only my favourites choice; favourites belong to the sender, are removed when the account is deleted, and a card that is turned off is never offered. Guests see no favourite controls. Greeting examples on the compose page carry a tone (Short and sweet, A bit cheeky, Warm and thoughtful) with tone buttons when scripts run. The card a recipient opens links to the gallery with the promotion label `recipient-card`.
+**Styles and favourites.** Beside occasions, cards can carry style tags (Funny, Heartfelt, Adventure and Traditional to start; up to 12, managed at the foot of the Occasions screen, where a tag can be renamed, hidden or removed). Tags are ticked on a draft in the eCard Library editor, or on any card from Order, descriptions and styles (in the eCard Library). The home page then offers a Style drop down (only tags in use on cards on show), combined with the occasion drop down; the address holds the choices, a hidden or unknown tag is ignored, and an empty result says so with a way back. Signed in senders also see a heart on each card and an Only my favourites choice; favourites belong to the sender, are removed when the account is deleted, and a card that is turned off is never offered. Guests see no favourite controls. Greeting examples on the compose page carry a tone (Short and sweet, A bit cheeky, Warm and thoughtful) with tone buttons when scripts run. The card a recipient opens links to the gallery with the promotion label `recipient-card`.
 
 ### 7.5 The eCard Library
 
@@ -219,7 +221,7 @@ An owner invites by email with a level (administrator or owner). The person sign
 
 | Screen | Settings |
 |---|---|
-| Site settings | Take donations, suggested amounts, Gift Aid charity and switch; shows the site link, QR code and promotion counts |
+| Donations and sharing | Take donations, suggested amounts, Gift Aid charity and switch; shows the site link, QR code and promotion counts |
 | Application settings | Recipients per card, greeting and name limits, address book limits, test cards per hour, blocked words, small number threshold, rehearsal allow list, alert recipients and escalation, allow web addresses |
 | Email and help wording | Subject, opening line and button of the card email (with `{sender}` and `{card}`), support email, extra Help questions |
 | Privacy and retention | How long card links and details are kept |
@@ -301,10 +303,10 @@ About 30 automated test scripts (PHP, run with `bash scripts/test-all.sh`). They
 | A0 | Workspace shell | all `/admin` pages | Administrators |
 | A1 | Overview | `/admin` | Administrators |
 | A2 | eCard Library list, editor, preview | `/admin/library` | Administrators (publish: owner) |
-| A3 | Order and visibility | `/admin/designs` | Administrators |
-| A3b | Occasions | `/admin/occasions` | Administrators |
+| A3 | Order, descriptions and styles (a section of the eCard Library) | `/admin/designs` | Administrators |
+| A3b | Occasions and styles | `/admin/occasions` | Administrators |
 | A3c | Bulk card send | `/admin/bulk` | Administrators |
-| A4 | Site settings | `/admin/site` | Administrators |
+| A4 | Donations and sharing | `/admin/site` | Administrators |
 | A5 | Delivery issues | `/admin/delivery` | Administrators |
 | A6 | Reports and complaints | `/admin/reports` | Administrators |
 | A7 | Senders | `/admin/senders` | Administrators |
@@ -493,6 +495,7 @@ On a phone each recipient is its own block, so no action is cut off.
 +------------------------------------------------------------------------+
 | My cards                                                               |
 | (verify email warning if needed)       [Write a new card]              |
+| Drafts · Scheduled · Sent  (a heading above each group that has cards)  |
 | +------+  Merry Christmess  [Draft]                                    |
 | |thumb |  13 Oct 2026 · 2 Scheduled, 1 Viewed                          |
 | +------+  [See how it is going]   or  [Keep writing] [Discard draft]   |
@@ -610,7 +613,7 @@ R3 Stop (/optout/<token>)          Expired or withdrawn
 +------------------------------------------------------------------------+
 | (public frame header)                                                  |
 +------------------+-----------------------------------------------------+
-| (7) Volunteer    |  Overview / Cards / Order and visibility            |
+| (7) Volunteer    |  Overview / Cards / eCard Library                   |
 | workspace        |  (breadcrumb)                  [Alex Owner · Owner] |
 | ---------------- |                                                     |
 | OVERVIEW         |                                                     |
@@ -618,10 +621,10 @@ R3 Stop (/optout/<token>)          Expired or withdrawn
 |  Measures        |                                                     |
 | CARDS AND        |                                                     |
 |  eCard Library   |                                                     |
-|  Order and       |                                                     |
-|   visibility     |                                                     |
-|  Occasions       |                                                     |
-|  Site settings   |                                                     |
+|  Occasions and   |                                                     |
+|   styles         |                                                     |
+|  Donations and   |                                                     |
+|   sharing        |                                                     |
 | PEOPLE AND       |                                                     |
 | SUPPORT          |                                                     |
 |  Delivery issues |                                                     |
@@ -657,7 +660,7 @@ On a phone the panel becomes a closed "Workspace menu" that opens on tap.
 | Card activity    2 Sent, 1 Failed...   · Merry Christmess: 3 ...       |
 | Fundraising ... (only while donations are on)                          |
 | What would you like to do?  (tool shortcuts, same as the menu)         |
-|  [eCard Library →] [Order and visibility →] [Site settings →] ...      |
+|  [eCard Library →] [Donations and sharing →] ...      |
 +------------------------------------------------------------------------+
 ```
 
@@ -692,7 +695,7 @@ Preview shows the card "as the sender sees it" and "as the recipient sees it".
 Publish and other actions ask for confirmation first and say what will change.
 ```
 
-**A3b Occasions** (`/admin/occasions`)
+**A3b Occasions and styles** (`/admin/occasions`)
 
 ```
 +------------------------------------------------------------------------+
@@ -712,11 +715,11 @@ Christmas cannot be removed. An occasion with cards cannot be removed.
 To put a card in an occasion, choose it in the eCard Library editor.
 ```
 
-**A3 Order and visibility** (`/admin/designs`)
+**A3 Order, descriptions and styles** (`/admin/designs`), a section of the eCard Library reached from the tabs at the top of the Library (Cards | Order, descriptions and styles); it is not a menu item of its own, and the old address still works
 
 ```
 +------------------------------------------------------------------------+
-| Order and visibility                                                   |
+| Library: Order, descriptions and styles                              |
 | Choose the order cards appear in, hide or show a card, and write the   |
 | description read aloud ... To add or publish a design, use the eCard   |
 | Library.                                                               |
@@ -727,12 +730,12 @@ To put a card in an occasion, choose it in the eCard Library editor.
 +------------------------------------------------------------------------+
 ```
 
-**A4 Site settings** (`/admin/site`) and **A12 settings forms** (same pattern for Application settings, Email and help wording, Privacy and retention)
+**A4 Donations and sharing** (`/admin/site`) and **A12 settings forms** (same pattern for Application settings, Email and help wording, Privacy and retention)
 
 ```
 Form                                      Review screen (after [Review changes])
 +---------------------------------------+ +----------------------------------+
-| Site settings        Version 4        | | Review changes: Site settings    |
+| Donations and sharing Version 4      | | Review changes: Donations and sharing|
 | (when changes apply)                  | | Take donations   Off  ->  On     |
 | [ ] Take donations (leave off until...| | Suggested amounts 2,5,10 -> ...  |
 | Suggested amounts  [200,500,1000]     | | Reason [__________]  (some pages |
@@ -900,7 +903,7 @@ Public:   Home ─┬─> Compose ─> Preview ─> Review ─> Status ─> My c
                 └─> Register / Sign in ─> Account, Address book, My cards
 Recipient: email link ─> Envelope ─> Card ─> Report / Stop cards
 Admin:    Sign in ─> Two step ─> Overview ─┬─> Measures
-                                          ├─> Cards: Library, Order and visibility, Occasions, Site settings
+                                          ├─> Cards: Library (Cards, Order, descriptions and styles), Occasions and styles, Donations and sharing
                                           ├─> Support: Delivery, Reports, Senders
                                           ├─> Fundraising: Donations, Gift Aid
                                           └─> Platform controls: Health, History, Settings,

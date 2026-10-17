@@ -24,7 +24,7 @@ foreach ($roles as $r) {
     $jar = $jars[$r] = login($U[$r]); [$c, $page] = http('/admin', $jar); $menus[$r] = menu($page);
     $want = array_keys(array_filter($rules, fn($who) => in_array('*', $who, true) || in_array($r, $who, true)));
     // the menu shows destinations, platform tools are reached from Platform controls
-    $wantMenu = array_values(array_filter($want, fn($h) => !in_array($h, ['/admin/app', '/admin/mail', '/admin/wording', '/admin/email', '/admin/privacy', '/admin/access', '/admin/rehearsal', '/admin/health', '/admin/audit'], true)));
+    $wantMenu = array_values(array_filter($want, fn($h) => !in_array($h, ['/admin/app', '/admin/mail', '/admin/wording', '/admin/email', '/admin/privacy', '/admin/access', '/admin/rehearsal', '/admin/health', '/admin/audit', '/admin/designs'], true)));
     $got = $menus[$r]; sort($wantMenu); sort($got);
     ok($c === 200 && $got === $wantMenu, "$r: the menu shows exactly " . count($wantMenu) . ' destinations (' . ($got === $wantMenu ? 'match' : 'got ' . implode(' ', $got) . ' wanted ' . implode(' ', $wantMenu)) . ')');
     foreach ($rules as $href => $who) {
@@ -38,6 +38,7 @@ $j = $jars['admin']; [, $hub] = http('/admin/platform', $j); preg_match_all('#cl
 ok(!array_diff(['/admin/app', '/admin/wording', '/admin/health', '/admin/audit'], $cards[1]) && !in_array('/admin/access', $cards[1], true) && !in_array('/admin/mail', $cards[1], true), 'Platform controls lists only the tools that level may use');
 [, $ov] = http('/admin', $j); preg_match_all('#class="wscard" href="([^"]+)"#', $ov, $sc); $m = $menus['admin']; $sc = $sc[1]; sort($sc); $mm = array_values(array_diff($m, ['/admin'])); sort($mm);
 ok($sc === $mm && str_contains($ov, 'What would you like to do?') && str_contains($ov, 'Where things stand'), 'the overview shortcuts are the same destinations as the menu');
+ok(str_contains($ov, 'class="wsshort phoneonly"') && str_contains(file_get_contents(__DIR__ . '/../public/assets/style.css'), '.wsshort.phoneonly{display:none}'), 'the shortcut list is shown only where the menu is not already beside the page');
 // breadcrumbs and current page
 [, $pg] = http('/admin/library', $jars['admin']); ok(str_contains($pg, 'aria-label="Breadcrumb"') && str_contains($pg, '<span aria-current="page">eCard Library</span>') && str_contains($pg, 'Cards') && str_contains($pg, '<a href="/admin/library" aria-current="page">eCard Library</a>'), 'a page shows its breadcrumb and is marked as the current page in the menu');
 [, $pg] = http('/admin/mail', $jars['owner']); ok(str_contains($pg, 'Platform controls') && str_contains($pg, '<span aria-current="page">Email delivery</span>') && str_contains($pg, '<a href="/admin/platform" aria-current="true">Platform controls</a>'), 'a tool inside Platform controls shows where it sits');
@@ -47,7 +48,7 @@ ok(str_contains($pg, '<details class="wsmenu" open><summary>Workspace menu</summ
 [, $ov] = http('/admin', $jars['admin']); ok(strpos($ov, 'Needs attention') !== false && strpos($ov, 'Nothing needs attention') === false ? strpos($ov, 'Needs attention') < strpos($ov, 'Where things stand') : strpos($ov, 'Nothing needs attention') < strpos($ov, 'Where things stand'), 'the Overview starts with what needs doing, then how things stand');
 ok(strpos($ov, 'Where things stand') < strpos($ov, 'What would you like to do?') && !str_contains($ov, 'Your workspace'), 'and the list of tools comes last, without a banner in the way');
 [, $site] = http('/admin/site', $jars['admin']); ok(str_contains($site, 'Share the site') && !str_contains($site, 'Approved card designs') && !str_contains($site, 'Accessible description'), 'Site settings holds settings and sharing, not the long list of designs');
-[$c, $des] = http('/admin/designs', $jars['admin']); ok($c === 200 && str_contains($des, 'Order and visibility') && str_contains($des, 'Accessible description') && str_contains($des, 'value="/admin/designs"'), 'Order and visibility is its own page, and its buttons return to it');
+[$c, $des] = http('/admin/designs', $jars['admin']); ok($c === 200 && str_contains($des, 'Order, descriptions and styles') && str_contains($des, 'Library sections') && str_contains($des, 'Accessible description') && str_contains($des, 'value="/admin/designs"'), 'Order, descriptions and styles is a section of the eCard Library, and its buttons return to it');
 $css = file_get_contents(__DIR__ . '/../public/assets/style.css'); ok(str_contains($css, 'main .wsside a:not(.btn):not(.tile){color:#fff}') && str_contains($css, '.wsside nav{display:block}'), 'the menu links are white on the navy panel and the groups stack');
 ok(!isset(health_alerts()['backup']) && !isset(health_alerts()['offsite']) && !isset(health_alerts()['restore']), 'the Overview no longer lists backup warnings');
 

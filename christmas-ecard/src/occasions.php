@@ -1,5 +1,5 @@
 <?php
-// Donations are one site wide switch (Site settings), off until the Trustees are ready. Which occasion a card is for comes from its design.
+// Donations are one site wide switch (Donations and sharing), off until the Trustees are ready. Which occasion a card is for comes from its design.
 
 const DONATION_PURPOSE = 'Donations go straight to 7th Swindon Scouts.';
 
@@ -84,7 +84,7 @@ function r_admin_occasions(): void {
         } else flash('Nothing was changed.', 'err');
         redirect('/admin/occasions');
     }
-    $b = '<h1>Occasions</h1><p class="lead">Cards are sorted into occasions, such as Christmas or Birthday. Visitors can choose an occasion above the cards on the home page once two or more occasions have cards on show, and they are listed in the order below. To put a card in an occasion, open it in the <a href="/admin/library">eCard Library</a> and choose its occasion.</p><table class="stacked"><tr><th>Occasion and season (month and day, like 11-01)</th><th>Cards</th><th>On show</th><th></th></tr>';
+    $b = '<h1>Occasions and styles</h1><p class="lead">Cards are sorted into occasions, such as Christmas or Birthday. Visitors can choose an occasion above the cards on the home page once two or more occasions have cards on show, and they are listed in the order below. To put a card in an occasion, open it in the <a href="/admin/library">eCard Library</a> and choose its occasion.</p><table class="stacked"><tr><th>Occasion and season (month and day, like 11-01)</th><th>Cards</th><th>On show</th><th></th></tr>';
     $rows = occasion_rows(); $last = count($rows) - 1;
     foreach ($rows as $i => $r) {
         $b .= '<tr><td><form method="post" class="inline">' . csrf() . '<input type="hidden" name="id" value="' . (int)$r['id'] . '"><input name="label" maxlength="30" value="' . h($r['label']) . '" aria-label="Name of occasion ' . h($r['label']) . '"> <input name="season_start" size="6" maxlength="5" placeholder="11-01" value="' . h((string)$r['season_start']) . '" aria-label="Season starts for ' . h($r['label']) . ', month and day"> to <input name="season_end" size="6" maxlength="5" placeholder="01-06" value="' . h((string)$r['season_end']) . '" aria-label="Season ends for ' . h($r['label']) . ', month and day"> <button class="btn alt" name="do" value="save">Save</button></form></td>'
@@ -94,5 +94,5 @@ function r_admin_occasions(): void {
     }
     $b .= '</table><h2>Add an occasion</h2><form method="post" class="stack">' . csrf() . '<label>Name (for example Get well, Easter, Congratulations)<input name="label" maxlength="30" required></label><button class="btn" name="do" value="add">Add occasion</button></form>'
         . '<p class="note">The name is used as typed in sentences, for example "a Get well card" or "an Easter card", so choose short, plain names. A season is the weeks when the home page leads with the cards of that occasion; leave it blank if the occasion has none. Cards for an occasion whose season is not on come after the others, and nothing is ever hidden.</p>';
-    admin_page('Occasions', $b . styles_admin_section());
+    admin_page('Occasions and styles', $b . styles_admin_section());
 }

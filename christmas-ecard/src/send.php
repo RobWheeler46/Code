@@ -96,10 +96,10 @@ function r_compose(): void {
     $recipientsHtml = '<fieldset id="recipients"><legend>Who is it for? (up to ' . max_recipients() . ')</legend>' . fe($errs, 'recipients') . $rowsHtml
         . ($nrows < max_recipients() ? '<button class="btn alt" name="act" value="addrow">Add another recipient</button>' : '<p class="note">That is the most you can send at once (' . max_recipients() . ').</p>')
         . ' <small class="count" data-recipient-count>' . $nrows . ' of ' . max_recipients() . '</small>'
-        . '<details' . (isset($errs['paste']) || ($old['paste'] ?? '') !== '' || !array_filter($rowsIn, fn($r) => trim($r[0] . $r[1]) !== '') ? ' open' : '') . '><summary>Paste several at once</summary><label>Paste a list from a spreadsheet or an email: <em>Name, email</em> on each line, or just email addresses<textarea name="paste" rows="4" placeholder="Gran, gran@example.com&#10;Uncle Bob, bob@example.com&#10;or: aunt.sue@example.com, cousin@example.com"' . fa($errs, 'paste', $f) . '>' . h($old['paste'] ?? '') . '</textarea>' . fe($errs, 'paste') . '</label><button class="btn alt" name="act" value="addpaste">Add these people to the list</button></details></fieldset>';
+        . '<details' . (isset($errs['paste']) || ($old['paste'] ?? '') !== '' ? ' open' : '') . '><summary>Add many people at once</summary><label>Paste a list from a spreadsheet or an email: <em>Name, email</em> on each line, or just email addresses<textarea name="paste" rows="4" placeholder="Gran, gran@example.com&#10;Uncle Bob, bob@example.com&#10;or: aunt.sue@example.com, cousin@example.com"' . fa($errs, 'paste', $f) . '>' . h($old['paste'] ?? '') . '</textarea>' . fe($errs, 'paste') . '</label><button class="btn alt" name="act" value="addpaste">Add these people to the list</button></details></fieldset>';
     $from = $old['sender_name'] ?? $s['sender_name'] ?? ($u['name'] ?? ''); $msg = $old['message'] ?? $s['message'] ?? '';
-    $saved = $s ? '<p class="note" role="status">Draft saved at ' . date('H:i', (int)$s['updated']) . '.</p>' : '<p class="note">Not saved yet. Use Save draft to keep your work' . ($u ? '.' : ' (you will register before sending).') . '</p>';
-    page('Write your card', steps(2) . $gone . '<h1>Write something wonderful</h1><p class="lead">Your message and everyone you are sending it to, together in one place.</p>' . ($u ? '' : '<p class="note">You can prepare your card now. Before it is sent you will create a free account and verify your email, and your card will wait for you.</p>')
+    $saved = $s ? '<p class="note" role="status">Draft saved at ' . date('H:i', (int)$s['updated']) . '.</p>' : '<p class="note">Not saved yet. Use Save draft to keep your work.' . ($u ? '' : ' Before it is sent you will create a free account and verify your email, and your card will wait for you.') . '</p>';
+    page('Write your card', steps(2) . $gone . '<h1>Write something wonderful</h1><p class="lead">Your message and everyone you are sending it to, together in one place.</p>'
         . '<div class="two cmp"><div class="card preview compact" aria-label="Live preview">' . card_art($card) . '<p class="cardname"><strong>' . h(cards()[$card]['title'] ?? '') . '</strong></p><p class="center"><a class="btn alt" href="/#gallery">Change design</a></p><div class="inner"><p class="msg" data-preview-msg>' . nl2br(h($msg)) . '</p><p class="from">With love from<br><strong data-preview-from>' . h($from) . '</strong></p></div></div><form method="post" class="stack" data-dirty-warn>' . csrf()
         . '<input type="hidden" name="card" value="' . h($card) . '">'
         . '<label>From (your name or family name)<input name="sender_name" maxlength="' . (name_max() + 20) . '" data-max="' . name_max() . '" value="' . h($from) . '"' . fa($errs, 'sender_name', $f) . '><small class="count">Up to ' . name_max() . ' characters</small>' . fe($errs, 'sender_name') . '</label>'
@@ -108,7 +108,7 @@ function r_compose(): void {
         . ($back ? '<p class="note">Sending a card back to ' . h($back['sender_name']) . ': add their email address below.</p>' : '')
         . $recipientsHtml
         . ($s && $u && $u['verified'] ? '<p><button class="btn alt" name="act" value="pick">Choose from address book</button></p>' : ($u ? '<p class="note">Save your draft and verify your email to choose from your address book.</p>' : ''))
-        . '<p class="note">Only you can see your full recipient list. Each person gets a private, individual message.</p>' . $saved . '<div class="row"><button class="btn" name="act" value="continue">Review your card</button><button class="btn alt" name="act" value="preview">Preview</button><button class="btn alt" name="act" value="save">Save draft</button><button class="btn alt" name="act" value="test">Email me a test</button></div></form></div>');
+        . '<p class="note">Only you can see your full recipient list. Each person gets a private, individual message.</p>' . $saved . '<div class="row"><button class="btn" name="act" value="continue">Review your card</button><button class="btn alt" name="act" value="save">Save draft</button></div><p class="morelinks"><button class="link" name="act" value="preview">Preview the full card</button> &middot; <button class="link" name="act" value="test">Email me a test</button></p></form></div>');
 }
 
 /** FR-138: what the recipient will receive. Built from the real templates but with a dummy token, so no link opens a real card. */
@@ -148,7 +148,7 @@ function pay_cancel(array $s): string {
 
 function steps(int $n): string {
     $l = ['Choose a card', 'Message and recipients', 'Review and send'];
-    return '<ol class="steps" aria-label="Progress">' . implode('', array_map(fn($t, $i) => '<li' . ($i + 1 === $n ? ' aria-current="step"' : '') . '><span class="sn">' . ($i + 1) . '.</span><span class="sl"> ' . h($t) . '</span></li>', $l, array_keys($l))) . '</ol>';
+    return '<p class="stepof" aria-hidden="true">Step ' . $n . ' of 3</p><ol class="steps" aria-label="Progress">' . implode('', array_map(fn($t, $i) => '<li' . ($i + 1 === $n ? ' aria-current="step"' : '') . '><span class="sn">' . ($i + 1) . '.</span><span class="sl"> ' . h($t) . '</span></li>', $l, array_keys($l))) . '</ol>';
 }
 
 /** Recovery states S08/S09: cancelled or failed checkout vs unknown (pending). */
@@ -162,6 +162,7 @@ function r_pay_cancelled(): void { // Stripe cancel_url lands here
 }
 
 function r_review(): void {
+    if (!user()) { $rid = (int)($_GET['id'] ?? $_POST['id'] ?? 0); own_send($rid); flash('Your card is saved. Create a free account to send it, or sign in if you already have one.', 'warn'); redirect('/register?next=' . urlencode('/review?id=' . $rid)); }
     $u = need_login(); $s = own_send((int)($_GET['id'] ?? $_POST['id'] ?? 0));
     if (!in_array($s['status'], ['draft', 'awaiting_payment'])) redirect('/send?id=' . $s['id']);
     if (!empty($s['bulk'])) redirect('/admin/bulk?id=' . $s['id']);
@@ -279,7 +280,7 @@ function r_dashboard(): void {
     $u = need_login();
     $b = '<h1>My cards</h1>' . ($u['verified'] ? '' : '<p class="flash warn">Please verify your email: click the link we sent to ' . h($u['email']) . '. You need this before sending. <form method="post" action="/resend-verification" class="inline">' . csrf() . '<button class="link">Send it again</button></form><details><summary>Wrong email address?</summary><form method="post" action="/change-email" class="row">' . csrf() . '<label>Correct email<input type="email" name="email" required></label><button class="btn alt">Change and resend</button></form></details></p>') . '<p><a class="btn" href="/">Create a new card</a></p>'
         . '<details class="admincard"><summary>Email preferences</summary><form method="post" action="/prefs" class="row">' . csrf() . '<label>Optional status emails<select name="notify">' . implode('', array_map(fn($k, $l) => '<option value="' . $k . '"' . ($u['notify'] === $k ? ' selected' : '') . '>' . $l . '</option>', ['off', 'viewed', 'summary'], ['Off (default)', 'Email me when a card is opened', 'One daily summary'])) . '</select></label><label class="opt"><input type="checkbox" name="remind" value="1"' . ($u['remind'] ? ' checked' : '') . '> Remind me once a year when the service opens</label><button class="btn alt">Save</button></form></details>';
-    $rows = '';
+    $groups = ['Drafts' => '', 'Scheduled' => '', 'Sent' => ''];
     foreach (all('select * from sends where user_id=? order by id desc', [$u['id']]) as $s) {
         $c = [];
         $gone = 0; $went = 0;
@@ -289,9 +290,9 @@ function r_dashboard(): void {
         $link = $s['status'] === 'draft' ? (!empty($s['bulk']) ? "/admin/bulk?id={$s['id']}" : "/compose?id={$s['id']}") : ($s['status'] === 'awaiting_payment' ? "/review?id={$s['id']}" : "/send?id={$s['id']}");
         $act = $s['status'] === 'draft' ? '<a class="btn" href="' . $link . '">Keep writing</a> <form method="post" action="/discard" class="inline">' . csrf() . '<input type="hidden" name="id" value="' . $s['id'] . '"><button class="link">Discard draft</button></form>' : '<a class="btn alt" href="' . $link . '">See how it is going</a> <a href="/copy?id=' . $s['id'] . '">Send it again to someone</a>';
         $don = donation_state($s) === 'No donation' ? '' : '<br><small>' . h(donation_state($s)) . '</small>';
-        $rows .= '<li class="cardrow"><div class="thumb">' . card_art($s['card'], true, $s['art_ref'] ?? null) . '</div><div><h2>' . h(cards()[$s['card']]['title'] ?? $s['card']) . ' <span class="pill ' . $state[1] . '">' . $state[0] . '</span></h2><p class="note">' . date('j M Y', (int)$s['created']) . ($sum ? ' &middot; ' . h($sum) : '') . $don . '</p><p>' . $act . '</p></div></li>';
+        $groups[$state[1] === 'draft' ? 'Drafts' : ($state[1] === 'scheduled' ? 'Scheduled' : 'Sent')] .= '<li class="cardrow"><div class="thumb">' . card_art($s['card'], true, $s['art_ref'] ?? null) . '</div><div><h3>' . h(cards()[$s['card']]['title'] ?? $s['card']) . ' <span class="pill ' . $state[1] . '">' . $state[0] . '</span></h3><p class="note">' . date('j M Y', (int)$s['created']) . ($sum ? ' &middot; ' . h($sum) : '') . $don . '</p><p>' . $act . '</p></div></li>';
     }
-    $b .= $rows ? '<ul class="plain cardlist">' . $rows . '</ul>' : '<section class="next"><h2>No cards yet</h2><p>Your first card is only a few minutes away.</p><p><a class="btn big" href="/">Choose a design</a></p></section>';
+    $rows = implode('', $groups); $b .= $rows ? implode('', array_map(fn($h, $li) => $li === '' ? '' : '<h2>' . $h . '</h2><ul class="plain cardlist">' . $li . '</ul>', array_keys($groups), $groups)) : '<section class="next"><h2>No cards yet</h2><p>Your first card is only a few minutes away.</p><p><a class="btn big" href="/">Choose a design</a></p></section>';
     $b .= favourites_section();
     $d = all('select * from donations where user_id=? order by id desc', [$u['id']]);
     if ($d) $b .= '<h2>Donation history</h2><table><tr><th>Date</th><th>Amount</th><th>Reference</th></tr>' . implode('', array_map(fn($x) => '<tr><td>' . date('j M Y', (int)$x['created']) . '</td><td>' . gbp((int)$x['pence']) . '</td><td>' . h($x['stripe_session']) . '</td></tr>', $d)) . '</table>';
@@ -344,7 +345,7 @@ function r_send(): void {
     }
     $legend = '<details><summary>What do the statuses mean?</summary><ul>' . implode('', array_map(fn($k, $v) => '<li><strong>' . h($k) . ':</strong> ' . h($v) . '</li>', array_keys(STATUS_HELP), STATUS_HELP)) . '</ul></details>';
     $sched = (int)$s['send_at'] > time() ? 'Scheduled for ' . date('l j F \a\t H:i', (int)$s['send_at']) . '. ' : '';
-    $done = empty($_GET['done']) ? '' : '<section class="flash" role="status"><h2>' . ($sched ? 'Your cards are scheduled' : 'Your cards are queued for sending') . '</h2>' . ($sched ? '<p>' . h($sched) . 'You can cancel any card until then.</p>' : '') . '<p>Queued means accepted and waiting to go out. It does not mean delivered. Each status updates below as cards go out.</p><p><strong>Donation:</strong> ' . h(donation_state($s)) . ($s['donation'] && !one('select 1 from donations where send_id=?', [$s['id']]) ? ' (we will show it here once payment is confirmed)' : '') . '</p><p><a href="/dashboard">Go to my cards</a></p></section>' . share_block();
+    $done = empty($_GET['done']) ? '' : '<section class="flash" role="status"><h2>' . ($sched ? 'Your cards are scheduled' : 'Your cards are queued for sending') . '</h2>' . ($sched ? '<p>' . h($sched) . 'You can cancel any card until then.</p>' : '') . '<p>Queued means waiting to go out, not delivered yet. The statuses below update as cards go out.</p>' . (donation_state($s) === 'No donation' ? '' : '<p><strong>Donation:</strong> ' . h(donation_state($s)) . ($s['donation'] && !one('select 1 from donations where send_id=?', [$s['id']]) ? ' (we will show it here once payment is confirmed)' : '') . '</p>') . '<p><a href="/dashboard">Go to my cards</a></p></section>' . share_block();
     page('Card status', $done . '<h1>' . h(cards()[$s['card']]['title']) . '</h1>' . ($sched && empty($_GET['done']) ? '<p class="note">' . h($sched) . '</p>' : '') . '<p><strong>Cards:</strong> ' . h(ucfirst(str_replace('_', ' ', $s['status']))) . '. <strong>Donation:</strong> ' . h(donation_state($s)) . '.</p>'
         . ($sched && $queued ? '<details class="admincard"><summary>Change the delivery time</summary><form method="post" class="stack">' . csrf() . '<input type="hidden" name="id" value="' . $sid . '">' . schedule_picker($s) . '<button class="btn alt" name="do" value="reschedule">Change delivery time</button></form></details>' : '')
         . ($queued ? '<form method="post">' . csrf() . '<input type="hidden" name="id" value="' . $sid . '"><button class="btn alt" name="do" value="cancel_all">Cancel unsent cards</button></form>' : '')

@@ -191,7 +191,7 @@ function r_admin_library(): void {
     $all = lib_rows(); $n = array_count_values(array_column($all, 'state'));
     $tabs = '<nav class="libtabs" aria-label="Filter by status"><a href="/admin/library"' . ($want === '' ? ' aria-current="page"' : '') . '>All (' . count($all) . ')</a>';
     foreach (LIB_STATES as $k => $label) $tabs .= '<a href="/admin/library?status=' . $k . '"' . ($want === $k ? ' aria-current="page"' : '') . '>' . $label . ' (' . ($n[$k] ?? 0) . ')</a>';
-    $b = '<h1>eCard Library</h1><p class="lead">Add and prepare card artwork. Drafts are private. Senders only see designs that are published. Cards already sent never change.</p><p><a class="btn" href="/admin/library/edit">Add eCard</a></p>' . $tabs . '<ul class="libgrid plain">';
+    $b = library_sections('/admin/library') . '<h1>eCard Library</h1><p class="lead">Add and prepare card artwork. Drafts are private. Senders only see designs that are published. Cards already sent never change.</p><p><a class="btn" href="/admin/library/edit">Add eCard</a></p>' . $tabs . '<ul class="libgrid plain">';
     foreach (array_filter($all, fn($r) => $want === '' || $r['state'] === $want) as $r) {
         $miss = $r['editable'] ? lib_missing($r) : [];
         $b .= '<li class="libcard">' . lib_thumb($r) . '<h2>' . h($r['internal_name']) . '</h2><p><span class="pill st-' . h($r['state']) . '">' . h(LIB_STATES[$r['state']]) . '</span> Version ' . ($r['pub_no'] ?: (int)$r['version_no']) . '</p>'

@@ -27,7 +27,7 @@ $cid = (int)dbq("select id from style_tags where slug='cheeky'")->fetchColumn();
 // tagging a published card from Order and visibility
 $cards = array_keys(gallery_cards()); $c1 = $cards[0]; $c2 = $cards[1]; $fun = (int)dbq("select id from style_tags where slug='funny'")->fetchColumn(); $hrt = (int)dbq("select id from style_tags where slug='heartfelt'")->fetchColumn();
 ok(!str_contains(guest_home(), 'id="gsty"'), 'with no card tagged, visitors are not offered a style filter');
-[, $pg] = http('/admin/designs', $a); ok(str_contains($pg, 'name="styles[]"') && str_contains($pg, 'Save styles'), 'each card on Order and visibility has style tick boxes');
+[, $pg] = http('/admin/designs', $a); ok(str_contains($pg, 'name="styles[]"') && str_contains($pg, 'Save styles'), 'each card on Order, descriptions and styles has style tick boxes');
 act($p, '/admin/designs', ['_to' => '/admin/design-styles', 'card' => $c1, 'styles' => [$fun]]); ok(dbq('select count(*) from design_style_tags')->fetchColumn() == 0, 'only administrators can tag a card');
 act($a, '/admin/designs', ['_to' => '/admin/design-styles', 'card' => $c1, 'styles' => [$fun, $hrt, 9999]]); ok(dbq('select count(*) from design_style_tags')->fetchColumn() == 2, 'ticked styles are saved, and a made up style is ignored');
 act($a, '/admin/designs', ['_to' => '/admin/design-styles', 'card' => $c2, 'styles' => [$hrt]]);

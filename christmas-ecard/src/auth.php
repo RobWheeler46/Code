@@ -1,7 +1,10 @@
 <?php
 // Registering, signing in, passwords, two step sign in, email preferences and deleting an account.
 
+/** Where a new sender goes after registering: back to the card they were sending, when they came from one. */
+function register_next(): string { $n = (string)($_POST['next'] ?? $_GET['next'] ?? ''); return preg_match('#^/review\?id=\d+$#', $n) ? $n : ''; }
 function r_register(): void {
+    $next = register_next();
     if (post()) {
         honeypot();
         limit('reg', 10, 3600);
@@ -15,9 +18,9 @@ function r_register(): void {
         session_regenerate_id(true); $_SESSION['uid'] = $uid; $_SESSION['drafts'] = $keep; claim_drafts($uid);
         mail_send($e, 'Confirm your email for ' . SITE_NAME, "Hello $n,\n\nPlease confirm your email address. We will take you back to your saved card.\n" . base_url() . "/verify?t=$t\n");
         flash('Welcome! Your card is saved. Check your email and click the link to verify before sending.');
-        redirect(($d = one("select id from sends where user_id=? and status='draft' order by id desc", [$uid])) ? '/compose?id=' . $d['id'] : '/dashboard');
+        redirect($next ?: (($d = one("select id from sends where user_id=? and status='draft' order by id desc", [$uid])) ? '/compose?id=' . $d['id'] : '/dashboard'));
     }
-    page('Register', '<h1>Register</h1><p>You need an account to send, so we can verify who is sending. Your card stays saved.</p><form method="post" class="stack">' . csrf() . '<label>Your name<input name="name" required maxlength="80" autocomplete="name"></label><label>Email<input type="email" name="email" required autocomplete="email"></label><label>Password (10+ characters)<input type="password" name="password" required minlength="10" autocomplete="new-password"></label><label class="opt"><input type="checkbox" name="accept" value="1" required> I am 18 or over and I accept the <a href="/terms">terms and safeguarding statement</a> and have read the <a href="/privacy">privacy notice</a></label><label class="opt"><input type="checkbox" name="remind" value="1"> Email me once a year to remind me to send Christmas cards (optional)</label>' . hp_field() . '<button class="btn">Create account</button></form><p>Already registered? <a href="/login">Sign in</a></p>');
+    page('Register', ($next ? '<h1>Create your free account</h1><p class="lead">Your card is saved and waiting. It takes a minute: a name, an email and a password. We then email you a link to confirm your address, and you can send your card.</p>' : '<h1>Register</h1><p>You need an account to send, so we can verify who is sending. Your card stays saved.</p>') . '<form method="post" class="stack">' . csrf() . ($next ? '<input type="hidden" name="next" value="' . h($next) . '">' : '') . '<label>Your name<input name="name" required maxlength="80" autocomplete="name"></label><label>Email<input type="email" name="email" required autocomplete="email"></label><label>Password (10+ characters)<input type="password" name="password" required minlength="10" autocomplete="new-password"></label><label class="opt"><input type="checkbox" name="accept" value="1" required> I am 18 or over and I accept the <a href="/terms">terms and safeguarding statement</a> and have read the <a href="/privacy">privacy notice</a></label><label class="opt"><input type="checkbox" name="remind" value="1"> Email me once a year to remind me to send Christmas cards (optional)</label>' . hp_field() . '<button class="btn">Create account</button></form><p>Already registered? <a href="/login' . ($next ? '?next=' . urlencode($next) : '') . '">Sign in</a></p>');
 }
 
 function r_verify(): void {
@@ -49,7 +52,7 @@ function r_login(): void {
         $_SESSION['uid'] = (int)$u['id']; $_SESSION['mfa'] = false; bootstrap_admin((int)$u['id']); q('update users set last_login=? where id=?', [time(), $u['id']]); $_SESSION['drafts'] = $keep; claim_drafts((int)$u['id']);
         redirect(safe_next($_POST['next'] ?? ''));
     }
-    page('Sign in', '<h1>Sign in</h1><form method="post" class="stack">' . csrf() . '<input type="hidden" name="next" value="' . h($_GET['next'] ?? '') . '"><label>Email<input type="email" name="email" required autocomplete="email"></label><label>Password<input type="password" name="password" required autocomplete="current-password"></label><button class="btn">Sign in</button></form><p><a href="/forgot">Forgotten your password?</a> &middot; <a href="/register">Register</a></p>');
+    page('Sign in', '<h1>Sign in</h1><form method="post" class="stack">' . csrf() . '<input type="hidden" name="next" value="' . h($_GET['next'] ?? '') . '"><label>Email<input type="email" name="email" required autocomplete="email"></label><label>Password<input type="password" name="password" required autocomplete="current-password"></label><button class="btn">Sign in</button></form><p><a href="/forgot">Forgotten your password?</a> &middot; <a href="/register' . (preg_match('#^/review\?id=\d+$#', (string)($_GET['next'] ?? '')) ? '?next=' . urlencode($_GET['next']) : '') . '">Register</a></p>');
 }
 
 function r_logout(): void { $_SESSION = []; session_destroy(); redirect('/'); }

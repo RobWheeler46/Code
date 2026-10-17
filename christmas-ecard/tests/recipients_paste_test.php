@@ -25,7 +25,7 @@ function http(string $path, string $jar, ?array $post = null): array { global $p
 function tok(string $h): string { preg_match('/name="_c" value="([^"]+)"/', $h, $m); return $m[1] ?? ''; }
 $card = array_key_first(gallery_cards()); $jar = tempnam(sys_get_temp_dir(), 'jar');
 [, $pg] = http('/compose?card=' . $card, $jar);
-ok(str_contains($pg, 'Add these people to the list') && str_contains($pg, '<details open><summary>Paste several at once'), 'with an empty list the paste box is open and has an Add button');
+ok(str_contains($pg, 'Add these people to the list') && str_contains($pg, '<details><summary>Add many people at once'), 'the paste box is closed until needed, has a clear name and an Add button');
 function add(string $paste, array $names = [''], array $emails = [''], array $msgs = ['']): string { global $jar, $card; [, $p] = http('/compose?card=' . $card, $jar); return http('/compose', $jar, ['_c' => tok($p), 'card' => $card, 'act' => 'addpaste', 'sender_name' => '', 'message' => '', 'r_name' => $names, 'r_email' => $emails, 'r_msg' => $msgs, 'paste' => $paste])[1]; }
 $h = add("Gran, gran@example.com\nuncle.bob@example.com\nbad line\nSam, sam@example.com", ['Sam'], ['sam@example.com'], ['']);
 preg_match_all('/name="r_email\[\]" value="([^"]*)"/', $h, $m);

@@ -53,6 +53,7 @@ q("update recipients set status='sent' where id=?", [$r4]); $re(['when' => 'cust
 // My cards says plainly where each card stands
 q('update recipients set sent_at=? where id=?', [time() - 60, $r4]); [, $dash] = http('/dashboard', $jar); ok(preg_match('/Merry Christmess|pill sent">Sent</', $dash) && str_contains($dash, 'pill sent">Sent<'), 'a card that has gone out shows a Sent label');
 q('update recipients set sent_at=? where id=?', [time() - 86400 * 400, $r4]); [, $dash] = http('/dashboard', $jar); ok(str_contains($dash, 'pill expired">Links expired<'), 'a card whose links have passed their time shows Links expired');
+[, $dash] = http('/dashboard', $jar); ok(str_contains($dash, '<h2>Sent</h2>') || str_contains($dash, '<h2>Drafts</h2>'), 'My cards groups cards under headings');
 q("update recipients set status='queued', sent_at=null, next_at=? where id=?", [time() + 86400, $r4]); [, $dash] = http('/dashboard', $jar); ok(str_contains($dash, 'pill scheduled">Scheduled<'), 'a card waiting for its chosen time shows Scheduled');
 // donation suggestion follows the number of cards
 q("insert into settings(k,v) values('donations_enabled','1') on conflict(k) do update set v='1'");

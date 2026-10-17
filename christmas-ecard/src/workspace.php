@@ -11,11 +11,10 @@ function workspace_manifest(): array {
         'Overview' => [['Overview', '/admin', 'What needs doing and how things stand', fn() => true],
             ['Measures', '/admin/measures', 'Counts and progress, with small numbers hidden', fn() => can_any('campaign', 'finance', 'appadmin', 'rolesadmin')]],
         'Cards and occasions' => [
-            ['eCard Library', '/admin/library', 'Add, preview and publish card designs', fn() => can_any('campaign', 'rolesadmin')],
-            ['Order and visibility', '/admin/designs', 'Put the cards in order and hide or show them', fn() => can_any('campaign', 'rolesadmin')],
+            ['eCard Library', '/admin/library', 'Add, preview, publish, order and describe card designs', fn() => can_any('campaign', 'rolesadmin')],
             ['Bulk card send', '/admin/bulk', 'Send one card with a different message to everyone in a CSV file', fn() => ops_admin()],
-            ['Occasions', '/admin/occasions', 'Add or rename the groups cards are sorted into', fn() => can_any('campaign', 'rolesadmin')],
-            ['Site settings', '/admin/site', 'Donations, Gift Aid, the site link and QR code', fn() => can_any('campaign', 'appadmin', 'finance', 'delivery', 'rolesadmin')]],
+            ['Occasions and styles', '/admin/occasions', 'Add or rename the occasions and styles cards are sorted into', fn() => can_any('campaign', 'rolesadmin')],
+            ['Donations and sharing', '/admin/site', 'Donations, Gift Aid, the site link and QR code', fn() => can_any('campaign', 'appadmin', 'finance', 'delivery', 'rolesadmin')]],
         'People and support' => [
             ['Delivery issues', '/admin/delivery', 'Failed and unconfirmed cards, resend, pause', fn() => can_any('delivery', 'appadmin', 'rolesadmin')],
             ['Reports and complaints', '/admin/reports', 'Cards reported by recipients', fn() => can('complaints')],
@@ -52,6 +51,7 @@ function platform_links(): array { return array_values(array_map(fn($i) => array
 function workspace_locate(string $path): ?array {
     $best = null; $bl = -1;
     foreach (workspace_manifest() as $g => $items) foreach ($items as $i) if (($path === $i[1] || str_starts_with($path, $i[1] . '/')) && strlen($i[1]) > $bl) { $best = ['group' => $g, 'item' => $i[0], 'href' => $i[1], 'child' => null]; $bl = strlen($i[1]); }
+    if ($path === '/admin/designs' || str_starts_with($path, '/admin/design-styles')) $best = ['group' => 'Cards and occasions', 'item' => 'eCard Library', 'href' => '/admin/library', 'child' => 'Order, descriptions and styles']; // a section of the library, not a menu item of its own
     foreach (platform_manifest() as $c) if (($path === $c[1] || str_starts_with($path, $c[1] . '/')) && strlen($c[1]) > $bl) { $best = ['group' => 'Settings and health', 'item' => 'Platform controls', 'href' => '/admin/platform', 'child' => $c[0]]; $bl = strlen($c[1]); }
     return $best;
 }
@@ -72,6 +72,13 @@ function workspace_shell(string $title, string $body): never {
     page($title, '<div class="ws"><aside class="wsside"><p class="wsbrand"><span>7</span><strong>Volunteer workspace</strong><small>7th Swindon Scouts</small></p><details class="wsmenu" open><summary>Workspace menu</summary>' . $nav . '</details></aside><div class="wsmain"><div class="wstop">' . $crumb . $who . '</div>' . $body . '</div></div>');
 }
 
+/** The two sections of the eCard Library: the cards themselves, and their order, descriptions and styles. */
+function library_sections(string $cur): string {
+    $a = ['/admin/library' => 'Cards', '/admin/designs' => 'Order, descriptions and styles']; $b = '<nav class="libtabs" aria-label="Library sections">';
+    foreach ($a as $h => $l) $b .= '<a href="' . $h . '"' . ($h === $cur ? ' aria-current="page"' : '') . '>' . $l . '</a>';
+    return $b . '</nav>';
+}
+
 function r_admin_platform(): void {
     need_admin(); if (!ops_admin()) fail(403, 'You do not have permission for that.');
     $b = '<h1>Platform controls</h1><p class="lead">Settings and tools for running the service. You see only the ones your roles allow.</p><ul class="wscards plain">';
@@ -85,9 +92,9 @@ function workspace_hero(): string {
     return '<section class="wshero"><p class="eyebrow">Your workspace</p><h1>Everything for your eCards, in one place</h1><p>Start with the task that needs attention. Only the tools your roles allow are shown.</p>' . ($first ? '<a class="btn big" href="' . h($first[1]) . '">' . h($first[0]) . ' &rarr;</a>' : '') . '</section>';
 }
 
-/** "What would you like to do?": a big link for every destination this person may use. */
-function workspace_shortcuts(): string {
-    $b = '<h2>What would you like to do?</h2><ul class="wscards plain">';
+/** "What would you like to do?": a big link for every destination this person may use. $phoneOnly hides it where the menu is already beside the page, so the same list is not shown twice. */
+function workspace_shortcuts(bool $phoneOnly = false): string {
+    $b = '<div class="wsshort' . ($phoneOnly ? ' phoneonly' : '') . '"><h2>What would you like to do?</h2><ul class="wscards plain">';
     foreach (workspace_nav() as $g => $items) foreach ($items as [$label, $href, $desc]) if ($href !== '/admin') $b .= '<li><a class="wscard" href="' . h($href) . '"><strong>' . h($label) . '</strong><span>' . h($desc) . '</span></a></li>';
-    return $b . '</ul>';
+    return $b . '</ul></div>';
 }

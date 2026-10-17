@@ -12,7 +12,7 @@ function role_names(string $csv): string { return implode(', ', array_map(fn($r)
 // ---------- configuration engine
 function config_spec(string $area): array {
     $specs = [
-        'site' => ['edit' => ['campaign', 'rolesadmin'], 'title' => 'Site settings', 'when' => 'New submissions after you confirm. Cards already submitted are not changed.', 'fields' => [
+        'site' => ['edit' => ['campaign', 'rolesadmin'], 'title' => 'Donations and sharing', 'when' => 'New submissions after you confirm. Cards already submitted are not changed.', 'fields' => [
             'donations_enabled' => ['Take donations (leave off until the Trustees are ready; sending cards stays free either way)', 'bool', 'def' => '0'],
             'amounts_pence' => ['Suggested donation amounts in pounds, comma separated (up to 5, £1 to £500)', 'amounts', 'def' => '200,500,1000'],
             'giftaid_charity' => ['Charity name used in the Gift Aid declaration (as HMRC knows it)', 'text', 'max' => 100, 'def' => ''],
@@ -181,10 +181,10 @@ function r_admin_privacy(): void { r_admin_config('privacy'); }
 /** Order, show or hide, and describe the cards: its own page, linked from the eCard Library. */
 function r_admin_designs(): void {
     need_admin(); if (!can_any('campaign', 'rolesadmin')) fail(403, 'You do not have permission for that.');
-    admin_page('Order and visibility', admin_designs_list());
+    admin_page('Order, descriptions and styles', admin_designs_list());
 }
 function admin_designs_list(): string {
-    $edit = can_any('campaign', 'rolesadmin'); $b = '<h1>Order and visibility</h1><p class="lead">Choose the order cards appear in, hide or show a card, and write the description read aloud to people using a screen reader. Changes apply to new cards. Cards already sent keep the artwork they were sent with. To add or publish a design, use the <a href="/admin/library">eCard Library</a>.</p><ul class="plain">';
+    $edit = can_any('campaign', 'rolesadmin'); $b = library_sections('/admin/designs') . '<h1>Order, descriptions and styles</h1><p class="lead">Choose the order cards appear in, hide or show a card, tick its styles, and write the description read aloud to people using a screen reader. Changes apply to new cards. Cards already sent keep the artwork they were sent with. To add or publish a design, use the <a href="/admin/library">Cards</a> section.</p><ul class="plain">';
     $ids = array_keys(cards()); $n = count($ids);
     foreach ($ids as $i => $id) {
         $c = cards()[$id];
@@ -309,7 +309,7 @@ function r_admin(): void {
         $d = one('select count(*) n, coalesce(sum(pence),0) gross, coalesce(sum(fee),0) fee, coalesce(sum(refunded),0) ref from donations');
         $b .= '<h2>Fundraising</h2><p>Confirmed gross donations: <strong>' . gbp((int)$d['gross']) . '</strong> from ' . $d['n'] . ' donations (average ' . gbp($d['n'] ? intdiv((int)$d['gross'], (int)$d['n']) : 0) . '). Fees ' . gbp((int)$d['fee']) . ', refunds ' . gbp((int)$d['ref']) . ', net after both ' . gbp((int)($d['gross'] - $d['fee'] - $d['ref'])) . '.</p>';
     }
-    admin_page('Overview', $b . workspace_shortcuts());
+    admin_page('Overview', $b . workspace_shortcuts(true));
 }
 
 // ---------- delivery (S20)
