@@ -48,6 +48,13 @@
   --pp-border: #d9e1ee;
   --pp-text: #1c2431;
   --pp-muted: #5c6470;
+  /* Neutral text scale (1:1 with the greys previously hardcoded in page styles,
+     so no visual change). Could be consolidated to fewer tones later. */
+  --pp-ink: #221c2e;          /* strong headings */
+  --pp-body: #374151;         /* body text */
+  --pp-body-muted: #4b5563;   /* secondary body text */
+  --pp-soft: #6b6478;         /* captions / meta */
+  --pp-panel-ink: #3f3a52;    /* text on soft-tint panels */
 }
 
 /* Warm page background + Nunito Sans (portal typeface) */

@@ -20,7 +20,7 @@
     <meta name="twitter:image" content="https://www.7thswindon.org.uk/assets/7thswindon-logo.png" />
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"NGO","name":"7th Swindon Scout Group","url":"https://www.7thswindon.org.uk/","logo":"https://www.7thswindon.org.uk/assets/7thswindon-logo.png","image":"https://www.7thswindon.org.uk/assets/7thswindon-logo.png","description":"One of North Swindon's largest Scout Groups, helping over 300 young people aged 6 to 18 develop skills for life through Beavers, Cubs, Scouts and Explorers.","email":"info@7thswindon.org.uk","areaServed":{"@type":"Place","name":"North Swindon, Wiltshire"},"address":{"@type":"PostalAddress","addressLocality":"Swindon","addressRegion":"Wiltshire","addressCountry":"GB"},"parentOrganization":{"@type":"Organization","name":"The Scout Association"},"identifier":{"@type":"PropertyValue","propertyID":"charityNumber","value":"306101"},"sameAs":["https://www.youtube.com/@7thSwindonScouts","https://www.instagram.com/7thswindonscouts"]}</script>
     <link rel="stylesheet" href="assets/style.css?v=20260912b" />
-    <link rel="stylesheet" href="assets/theme.css?v=20260913a" />
+    <link rel="stylesheet" href="assets/theme.css?v=20261018a" />
     <style>
       html { scroll-behavior: smooth; }
       section[id], footer[id] { scroll-margin-top: 90px; }
@@ -31,16 +31,16 @@
       #finder { padding-top: 7.5rem; padding-bottom: 5rem; min-height: 70vh; }
       .finder-wrap { max-width: 56rem; margin: 0 auto; padding: 0 1.5rem; }
       .finder-intro { text-align: center; margin-bottom: 2.5rem; }
-      .finder-intro p { color: #4b5563; font-size: 1.125rem; max-width: 40rem; margin: 1.25rem auto 0; }
+      .finder-intro p { color: var(--pp-body-muted); font-size: 1.125rem; max-width: 40rem; margin: 1.25rem auto 0; }
 
-      .finder-card { background: #fff; border: 1px solid #e3ddf0; border-left: 4px solid var(--fx); border-radius: 16px; padding: 1.75rem; box-shadow: 0 1px 2px rgba(27,21,51,.05), 0 12px 34px rgba(27,21,51,.07); }
+      .finder-card { background: #fff; border: 1px solid var(--pp-border); border-left: 4px solid var(--fx); border-radius: 16px; padding: 1.75rem; box-shadow: 0 1px 2px rgba(27,21,51,.05), 0 12px 34px rgba(27,21,51,.07); }
       @media (min-width: 640px) { .finder-card { padding: 2.25rem; } }
       .f-step-label { display: block; font-weight: 700; font-size: 1.15rem; margin: 0 0 .35rem; }
-      .f-step-hint { color: #6b6478; font-size: .9rem; margin: 0 0 1rem; }
+      .f-step-hint { color: var(--pp-soft); font-size: .9rem; margin: 0 0 1rem; }
       .f-age-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 1rem 1.25rem; }
       .f-field { display: flex; flex-direction: column; }
       .f-field label { font-weight: 600; font-size: .9rem; margin-bottom: .35rem; }
-      .f-field input { padding: .7rem .9rem; border: 1px solid #d7d2e3; border-radius: 10px; font: inherit; font-size: 1rem; background: #fff; color: #221c2e; transition: border-color .15s, box-shadow .15s; }
+      .f-field input { padding: .7rem .9rem; border: 1px solid #d7d2e3; border-radius: 10px; font: inherit; font-size: 1rem; background: #fff; color: var(--pp-ink); transition: border-color .15s, box-shadow .15s; }
       .f-field input:focus { outline: none; border-color: var(--fx); box-shadow: 0 0 0 3px color-mix(in srgb, var(--fx) 22%, transparent); }
       #f-age { width: 8rem; }
       .f-or { color: #5c6470; font-size: .85rem; font-weight: 600; padding-bottom: .8rem; }
@@ -51,11 +51,11 @@
       .f-chips { display: flex; flex-wrap: wrap; gap: .5rem; }
       .f-chip { position: relative; }
       .f-chip input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
-      .f-chip span { display: inline-block; padding: .45rem .9rem; border: 1px solid #d7d2e3; border-radius: 999px; font-size: .9rem; font-weight: 600; color: #3f3a52; background: #fff; transition: all .12s; }
+      .f-chip span { display: inline-block; padding: .45rem .9rem; border: 1px solid #d7d2e3; border-radius: 999px; font-size: .9rem; font-weight: 600; color: var(--pp-panel-ink); background: #fff; transition: all .12s; }
       .f-chip input:hover + span { border-color: var(--fx); }
       .f-chip input:checked + span { background: var(--fx); border-color: var(--fx); color: #fff; }
       .f-chip input:focus-visible + span { outline: 2px solid var(--fx); outline-offset: 2px; }
-      .f-select { padding: .7rem .9rem; border: 1px solid #d7d2e3; border-radius: 10px; font: inherit; font-size: 1rem; background: #fff; color: #221c2e; min-width: 14rem; }
+      .f-select { padding: .7rem .9rem; border: 1px solid #d7d2e3; border-radius: 10px; font: inherit; font-size: 1rem; background: #fff; color: var(--pp-ink); min-width: 14rem; }
       .f-select:focus { outline: none; border-color: var(--fx); box-shadow: 0 0 0 3px color-mix(in srgb, var(--fx) 22%, transparent); }
 
       .f-error { color: #b3261e; font-weight: 600; font-size: .95rem; margin: 1rem 0 0; min-height: 1px; }
@@ -68,20 +68,20 @@
       .f-btn-ghost:hover { background: var(--fx-soft); }
       .f-btn:focus-visible { outline: 2px solid var(--fx-dark); outline-offset: 2px; }
 
-      .f-privacy { display: flex; gap: .5rem; align-items: flex-start; color: #6b6478; font-size: .85rem; margin: 1.5rem auto 0; max-width: 56rem; padding: 0 1.5rem; }
+      .f-privacy { display: flex; gap: .5rem; align-items: flex-start; color: var(--pp-soft); font-size: .85rem; margin: 1.5rem auto 0; max-width: 56rem; padding: 0 1.5rem; }
 
       /* Results */
       #finderResults { max-width: 56rem; margin: 2.5rem auto 0; padding: 0 1.5rem; }
       .f-results-head { font-size: 1.9rem; font-weight: 700; margin: 0 0 .75rem; outline: none; }
-      .f-lead { font-size: 1.1rem; color: #374151; margin: 0 0 1rem; }
-      .f-note { background: var(--fx-soft); border: 1px solid color-mix(in srgb, var(--fx) 25%, transparent); border-radius: 12px; padding: .9rem 1.1rem; color: #3f3a52; margin: 0 0 1.25rem; }
+      .f-lead { font-size: 1.1rem; color: var(--pp-body); margin: 0 0 1rem; }
+      .f-note { background: var(--fx-soft); border: 1px solid color-mix(in srgb, var(--fx) 25%, transparent); border-radius: 12px; padding: .9rem 1.1rem; color: var(--pp-panel-ink); margin: 0 0 1.25rem; }
       .f-note-warn { background: #fdf2e2; border-color: #f6ddb0; color: #8a5606; }
-      .f-caveat { font-size: .9rem; color: #6b6478; margin: 0 0 1.5rem; }
+      .f-caveat { font-size: .9rem; color: var(--pp-soft); margin: 0 0 1.5rem; }
       .f-clearrow, .f-cta-row { margin: 0 0 1.5rem; display: flex; gap: .75rem; flex-wrap: wrap; }
 
       .f-grid { display: grid; gap: 1.25rem; grid-template-columns: 1fr; }
       @media (min-width: 640px) { .f-grid { grid-template-columns: 1fr 1fr; } }
-      .f-card { background: #fff; border: 1px solid #e3ddf0; border-left: 4px solid #6d28d9; border-radius: 14px; padding: 1.5rem; box-shadow: 0 1px 2px rgba(27,21,51,.05), 0 8px 22px rgba(27,21,51,.06); }
+      .f-card { background: #fff; border: 1px solid var(--pp-border); border-left: 4px solid #6d28d9; border-radius: 14px; padding: 1.5rem; box-shadow: 0 1px 2px rgba(27,21,51,.05), 0 8px 22px rgba(27,21,51,.06); }
       .f-card.f-beavers { border-left-color: #2a5fb0; }
       .f-card.f-cubs { border-left-color: #0f9d78; }
       .f-card.f-scouts { border-left-color: #1b1533; }
@@ -90,23 +90,23 @@
       .f-card-head h3 { font-size: 1.4rem; font-weight: 700; margin: 0; }
       .f-tag { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--fx); background: var(--fx-soft); padding: .2rem .55rem; border-radius: 999px; white-space: nowrap; }
       .f-meta { margin: .5rem 0 1rem; display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
-      .f-age { display: inline-block; background: #f0eef6; color: #3f3a52; font-size: .8rem; font-weight: 600; padding: .25rem .6rem; border-radius: 999px; }
+      .f-age { display: inline-block; background: #f0eef6; color: var(--pp-panel-ink); font-size: .8rem; font-weight: 600; padding: .25rem .6rem; border-radius: 999px; }
       .f-avail { display: inline-block; background: #e2ebf7; color: #1e4684; font-size: .8rem; font-weight: 600; padding: .25rem .6rem; border-radius: 999px; }
       .f-detail { display: grid; grid-template-columns: auto 1fr; gap: .35rem 1rem; margin: 0 0 1rem; font-size: .95rem; }
       .f-detail div { display: contents; }
-      .f-detail dt { font-weight: 700; color: #4b5563; }
-      .f-detail dd { margin: 0; color: #374151; }
-      .f-summary { color: #4b5563; font-size: .95rem; line-height: 1.55; margin: 0 0 1.25rem; }
+      .f-detail dt { font-weight: 700; color: var(--pp-body-muted); }
+      .f-detail dd { margin: 0; color: var(--pp-body); }
+      .f-summary { color: var(--pp-body-muted); font-size: .95rem; line-height: 1.55; margin: 0 0 1.25rem; }
       .f-actions { display: flex; gap: .6rem; flex-wrap: wrap; }
       .f-actions .f-btn { padding: .55rem 1.1rem; font-size: .9rem; }
 
       /* ---- Wizard: progress + steps ---- */
       .wiz-progress { list-style: none; display: flex; align-items: flex-start; justify-content: center; max-width: 40rem; margin: 0 auto 1.75rem; padding: 0; }
       .wiz-progress li { flex: 1; display: flex; flex-direction: column; align-items: center; text-align: center; position: relative; color: #5c6470; font-size: .8rem; font-weight: 600; }
-      .wiz-progress li::before { content: ""; position: absolute; top: 16px; right: 50%; width: 100%; height: 2px; background: #e3ddf0; z-index: 0; }
+      .wiz-progress li::before { content: ""; position: absolute; top: 16px; right: 50%; width: 100%; height: 2px; background: var(--pp-border); z-index: 0; }
       .wiz-progress li:first-child::before { display: none; }
       .wiz-progress li.is-done::before { background: var(--fx); }
-      .wiz-num { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #fff; border: 2px solid #e3ddf0; color: #5c6470; font-weight: 700; position: relative; z-index: 1; margin-bottom: .4rem; }
+      .wiz-num { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #fff; border: 2px solid var(--pp-border); color: #5c6470; font-weight: 700; position: relative; z-index: 1; margin-bottom: .4rem; }
       .wiz-progress li.is-active { color: var(--fx); }
       .wiz-progress li.is-active .wiz-num { border-color: var(--fx); color: var(--fx); box-shadow: 0 0 0 4px color-mix(in srgb, var(--fx) 15%, transparent); }
       .wiz-progress li.is-done .wiz-num { background: var(--fx); border-color: var(--fx); color: #fff; }
@@ -122,7 +122,7 @@
       .f-opts { display: flex; flex-direction: column; gap: .5rem; }
       .f-opt { position: relative; display: block; }
       .f-opt input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
-      .f-opt span { display: block; padding: .7rem .9rem; border: 1px solid #d7d2e3; border-radius: 10px; font-weight: 600; color: #3f3a52; background: #fff; transition: all .12s; }
+      .f-opt span { display: block; padding: .7rem .9rem; border: 1px solid #d7d2e3; border-radius: 10px; font-weight: 600; color: var(--pp-panel-ink); background: #fff; transition: all .12s; }
       .f-opt input:hover + span { border-color: var(--fx); }
       .f-opt input:checked + span { background: var(--fx-soft); border-color: var(--fx); color: var(--fx-dark); }
       .f-opt input:focus-visible + span { outline: 2px solid var(--fx); outline-offset: 2px; }
@@ -133,7 +133,7 @@
       .wiz-actions { display: flex; justify-content: space-between; align-items: center; gap: .75rem; margin-top: 1.5rem; }
       .wiz-actions[hidden] { display: none; }
       .fgrp[hidden] { display: none; }
-      .f-placeholder { background: #fff; border: 1px dashed #cbc0e8; border-radius: 14px; padding: 2.5rem 1.5rem; text-align: center; color: #6b6478; }
+      .f-placeholder { background: #fff; border: 1px dashed #cbc0e8; border-radius: 14px; padding: 2.5rem 1.5rem; text-align: center; color: var(--pp-soft); }
       .f-placeholder p { margin: 0; font-size: 1.05rem; line-height: 1.5; }
       .f-placeholder .f-placeholder-emoji { font-size: 2rem; display: block; margin-bottom: .5rem; }
 

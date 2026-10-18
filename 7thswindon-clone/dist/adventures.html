@@ -21,21 +21,21 @@
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"NGO","name":"7th Swindon Scout Group","url":"https://www.7thswindon.org.uk/","logo":"https://www.7thswindon.org.uk/assets/7thswindon-logo.png","image":"https://www.7thswindon.org.uk/assets/7thswindon-logo.png","description":"One of North Swindon's largest Scout Groups, helping over 300 young people aged 6 to 18 develop skills for life through Beavers, Cubs, Scouts and Explorers.","email":"info@7thswindon.org.uk","areaServed":{"@type":"Place","name":"North Swindon, Wiltshire"},"address":{"@type":"PostalAddress","addressLocality":"Swindon","addressRegion":"Wiltshire","addressCountry":"GB"},"parentOrganization":{"@type":"Organization","name":"The Scout Association"},"identifier":{"@type":"PropertyValue","propertyID":"charityNumber","value":"306101"},"sameAs":["https://www.youtube.com/@7thSwindonScouts","https://www.instagram.com/7thswindonscouts"]}</script>
     <title>Latest Adventures · 7th Swindon Scout Group</title>
     <link rel="stylesheet" href="assets/style.css?v=20260912b" />
-    <link rel="stylesheet" href="assets/theme.css?v=20260913a" />
+    <link rel="stylesheet" href="assets/theme.css?v=20261018a" />
     <style>
       html { scroll-behavior: smooth; }
       @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
       :root { --fx: var(--pp-purple, var(--st-teal, #6d28d9)); --fx-dark: var(--pp-purple-dark, var(--st-teal-dark, #4c1d95)); }
       .adv { padding: 7.5rem 1.5rem 4rem; }
       .adv-wrap { max-width: 66rem; margin: 0 auto; }
-      .adv-crumb { font-size: .85rem; color: #6b6478; margin-bottom: 1.25rem; }
+      .adv-crumb { font-size: .85rem; color: var(--pp-soft); margin-bottom: 1.25rem; }
       .adv-crumb a { color: var(--fx); text-decoration: none; } .adv-crumb a:hover { text-decoration: underline; }
       .adv-wrap > h1 { font-size: clamp(2.4rem, 6vw, 3.4rem); font-weight: 800; line-height: 1.05; margin: 0 0 .5rem; }
-      .adv-lead { font-size: 1.15rem; color: #374151; line-height: 1.6; margin: 0 0 2rem; max-width: 42rem; }
+      .adv-lead { font-size: 1.15rem; color: var(--pp-body); line-height: 1.6; margin: 0 0 2rem; max-width: 42rem; }
 
       /* Filter */
       .adv-filters { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0 0 2rem; }
-      .adv-filter { font: inherit; font-weight: 600; font-size: .9rem; color: #4b4560; background: #fff; border: 1px solid #e3ddf0; border-radius: 999px; padding: .45rem 1.1rem; cursor: pointer; transition: all .15s; }
+      .adv-filter { font: inherit; font-weight: 600; font-size: .9rem; color: #4b4560; background: #fff; border: 1px solid var(--pp-border); border-radius: 999px; padding: .45rem 1.1rem; cursor: pointer; transition: all .15s; }
       .adv-filter:hover { border-color: var(--fx); color: var(--fx); }
       .adv-filter.is-active { background: var(--fx); border-color: var(--fx); color: #fff; }
       .adv-filter:focus-visible { outline: 2px solid var(--fx-dark); outline-offset: 2px; }
@@ -44,7 +44,7 @@
       .adv-grid { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
       @media (min-width: 560px) { .adv-grid { grid-template-columns: 1fr 1fr; } }
       @media (min-width: 900px) { .adv-grid { grid-template-columns: 1fr 1fr 1fr; } }
-      .adv-card { display: flex; flex-direction: column; background: #fff; border: 1px solid #e3ddf0; border-radius: 16px; overflow: hidden; text-decoration: none; color: inherit; transition: transform .15s, box-shadow .15s; }
+      .adv-card { display: flex; flex-direction: column; background: #fff; border: 1px solid var(--pp-border); border-radius: 16px; overflow: hidden; text-decoration: none; color: inherit; transition: transform .15s, box-shadow .15s; }
       .adv-card:hover { transform: translateY(-4px); box-shadow: 0 14px 30px rgba(27,23,48,.12); }
       .adv-card:focus-visible { outline: 2px solid var(--fx-dark); outline-offset: 2px; }
       .adv-ban, .adv-img { display: block; width: 100%; height: 140px; object-fit: cover; }
@@ -56,13 +56,13 @@
       .adv-sec { font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #fff; background: var(--fx); border-radius: 999px; padding: .2rem .6rem; }
       .adv-sec-beavers { background: #1e88e5; } .adv-sec-cubs { background: #2e7d32; }
       .adv-sec-scouts { background: #00897b; } .adv-sec-explorers { background: #c62828; }
-      .adv-tag { font-size: .72rem; font-weight: 600; color: #6b6478; background: #f3f0fa; border-radius: 999px; padding: .2rem .6rem; }
+      .adv-tag { font-size: .72rem; font-weight: 600; color: var(--pp-soft); background: #f3f0fa; border-radius: 999px; padding: .2rem .6rem; }
       .adv-card-body h3 { font-size: 1.15rem; font-weight: 800; line-height: 1.25; margin: 0 0 .3rem; }
       .adv-date { font-size: .82rem; color: #857f95; margin: 0 0 .6rem; }
-      .adv-sum { color: #374151; line-height: 1.55; margin: 0 0 1rem; flex: 1; }
+      .adv-sum { color: var(--pp-body); line-height: 1.55; margin: 0 0 1rem; flex: 1; }
       .adv-more { font-weight: 700; color: var(--fx); font-size: .92rem; }
 
-      .adv-empty { color: #4b4560; background: #f3f0fa; border: 1px solid #e3ddf0; border-radius: 12px; padding: 1.5rem; text-align: center; }
+      .adv-empty { color: #4b4560; background: #f3f0fa; border: 1px solid var(--pp-border); border-radius: 12px; padding: 1.5rem; text-align: center; }
       .adv-empty a { color: var(--fx); font-weight: 600; }
 
       /* Article (detail) */
@@ -71,7 +71,7 @@
       .adv-article-head h1 { font-size: clamp(1.9rem, 5vw, 2.8rem); font-weight: 800; line-height: 1.08; margin: .3rem 0 .3rem; }
       .adv-article-body { max-width: 44rem; }
       .adv-article-body p { color: #2f2a3d; line-height: 1.75; font-size: 1.08rem; margin: 0 0 1.2rem; }
-      .adv-article-foot { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between; margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid #e3ddf0; }
+      .adv-article-foot { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between; margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--pp-border); }
       .adv-cta { display: inline-flex; align-items: center; gap: .4rem; background: var(--fx); color: #fff; font-weight: 700; padding: .7rem 1.4rem; border-radius: 999px; text-decoration: none; transition: background .15s; }
       .adv-cta:hover { background: var(--fx-dark); }
       .adv-cta:focus-visible { outline: 2px solid var(--fx-dark); outline-offset: 3px; }

@@ -9,7 +9,7 @@
     <link rel="canonical" href="https://www.7thswindon.org.uk/branding.html" />
     <title>Brand and Assets · 7th Swindon Scout Group</title>
     <link rel="stylesheet" href="assets/style.css?v=20260912b" />
-    <link rel="stylesheet" href="assets/theme.css?v=20260913a" />
+    <link rel="stylesheet" href="assets/theme.css?v=20261018a" />
     <style>
       html { scroll-behavior: smooth; }
       section[id], footer[id] { scroll-margin-top: 90px; }
@@ -17,23 +17,23 @@
       :root { --fx: var(--pp-purple, var(--st-teal, #6d28d9)); --fx-dark: var(--pp-purple-dark, var(--st-teal-dark, #4c1d95)); --fx-soft: #efeafc; }
       .br { padding: 7.5rem 1.5rem 4rem; }
       .br-wrap { max-width: 68rem; margin: 0 auto; }
-      .br-crumb { font-size: .85rem; color: #6b6478; margin-bottom: 1.25rem; }
+      .br-crumb { font-size: .85rem; color: var(--pp-soft); margin-bottom: 1.25rem; }
       .br-crumb a { color: var(--fx); text-decoration: underline; } .br-crumb a:hover { text-decoration: underline; }
       .br-eyebrow { font-size: .78rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--fx); margin: 0 0 .6rem; }
       .br h1 { font-size: clamp(2.6rem, 7vw, 4rem); font-weight: 800; line-height: 1.03; margin: 0 0 .6rem; }
-      .br-lead { font-size: 1.2rem; color: #374151; line-height: 1.6; margin: 0 0 2.5rem; max-width: 42rem; }
+      .br-lead { font-size: 1.2rem; color: var(--pp-body); line-height: 1.6; margin: 0 0 2.5rem; max-width: 42rem; }
 
       /* Section heading */
-      .br-sec { margin: 3.5rem 0 1.5rem; display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; border-bottom: 1px solid #e3ddf0; padding-bottom: .75rem; }
+      .br-sec { margin: 3.5rem 0 1.5rem; display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; border-bottom: 1px solid var(--pp-border); padding-bottom: .75rem; }
       .br-sec h2 { font-size: 1.7rem; font-weight: 800; margin: 0; }
       .br-sec span { font-size: .72rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #5c6470; }
-      .br p.br-intro { color: #4b5563; line-height: 1.6; margin: 0 0 1.5rem; max-width: 44rem; }
+      .br p.br-intro { color: var(--pp-body-muted); line-height: 1.6; margin: 0 0 1.5rem; max-width: 44rem; }
 
       /* Logo grid */
       .logo-grid { display: grid; grid-template-columns: 1fr; gap: 1.25rem; }
       @media (min-width: 560px) { .logo-grid { grid-template-columns: 1fr 1fr; } }
       @media (min-width: 860px) { .logo-grid { grid-template-columns: repeat(3, 1fr); } }
-      .logo-card { background: #fff; border: 1px solid #e3ddf0; border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; }
+      .logo-card { background: #fff; border: 1px solid var(--pp-border); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; }
       .logo-preview { background: #f6f4f0; display: flex; align-items: center; justify-content: center; padding: 2rem; min-height: 12rem; }
       .logo-preview img { max-width: 70%; max-height: 9rem; width: auto; height: auto; }
       .logo-cap { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: 1rem 1.2rem; border-top: 1px solid #eee6f7; flex-wrap: wrap; }
@@ -48,16 +48,16 @@
       .swatches { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
       @media (min-width: 620px) { .swatches { grid-template-columns: repeat(3, 1fr); } }
       @media (min-width: 900px) { .swatches { grid-template-columns: repeat(6, 1fr); } }
-      .swatch { border: 1px solid #e3ddf0; border-radius: 14px; overflow: hidden; background: #fff; }
+      .swatch { border: 1px solid var(--pp-border); border-radius: 14px; overflow: hidden; background: #fff; }
       .swatch .chip { height: 5.5rem; }
       .swatch .info { padding: .7rem .8rem; }
       .swatch .info strong { display: block; font-size: .9rem; }
-      .swatch .info code { font-size: .78rem; color: #6b6478; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .swatch .info code { font-size: .78rem; color: var(--pp-soft); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
       /* Typography specimen */
-      .type-card { background: #fff; border: 1px solid #e3ddf0; border-radius: 16px; padding: 1.75rem; }
+      .type-card { background: #fff; border: 1px solid var(--pp-border); border-radius: 16px; padding: 1.75rem; }
       .type-big { font-size: clamp(2.2rem, 7vw, 3.6rem); font-weight: 800; line-height: 1.05; margin: 0 0 .5rem; letter-spacing: -.01em; }
-      .type-alpha { color: #4b5563; font-size: 1.1rem; line-height: 1.5; margin: 0 0 1.5rem; word-spacing: .1em; }
+      .type-alpha { color: var(--pp-body-muted); font-size: 1.1rem; line-height: 1.5; margin: 0 0 1.5rem; word-spacing: .1em; }
       .type-weights { display: grid; gap: .4rem; margin: 0 0 1.5rem; }
       .type-weights div { font-size: 1.15rem; }
       .type-weights .w4 { font-weight: 400; } .type-weights .w6 { font-weight: 600; } .type-weights .w7 { font-weight: 700; } .type-weights .w8 { font-weight: 800; }
@@ -66,18 +66,18 @@
       /* Tone / essentials cards */
       .ess-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
       @media (min-width: 640px) { .ess-grid { grid-template-columns: 1fr 1fr; } }
-      .ess { background: #fff; border: 1px solid #e3ddf0; border-left: 4px solid var(--fx); border-radius: 14px; padding: 1.3rem 1.4rem; }
+      .ess { background: #fff; border: 1px solid var(--pp-border); border-left: 4px solid var(--fx); border-radius: 14px; padding: 1.3rem 1.4rem; }
       .ess .n { font-size: .8rem; font-weight: 800; color: var(--fx); letter-spacing: .05em; }
       .ess h3 { font-size: 1.15rem; font-weight: 800; margin: .3rem 0 .4rem; }
-      .ess p { color: #4b5563; line-height: 1.55; margin: 0; font-size: .95rem; }
+      .ess p { color: var(--pp-body-muted); line-height: 1.55; margin: 0; font-size: .95rem; }
 
       /* Resource rows + download buttons */
-      .res { display: flex; align-items: center; gap: 1rem; background: #fff; border: 1px solid #e3ddf0; border-radius: 14px; padding: 1.1rem 1.3rem; margin-bottom: .9rem; text-decoration: none; color: inherit; flex-wrap: wrap; }
+      .res { display: flex; align-items: center; gap: 1rem; background: #fff; border: 1px solid var(--pp-border); border-radius: 14px; padding: 1.1rem 1.3rem; margin-bottom: .9rem; text-decoration: none; color: inherit; flex-wrap: wrap; }
       .res:hover { border-color: var(--fx); }
       .res .badge { flex: 0 0 auto; font-size: .7rem; font-weight: 800; letter-spacing: .06em; color: var(--fx-dark); background: var(--fx-soft); border-radius: 8px; padding: .4rem .6rem; }
       .res .res-body { flex: 1 1 16rem; min-width: 0; }
       .res .res-body h3 { font-size: 1.05rem; font-weight: 800; margin: 0 0 .2rem; }
-      .res .res-body p { color: #4b5563; margin: 0; font-size: .92rem; line-height: 1.45; }
+      .res .res-body p { color: var(--pp-body-muted); margin: 0; font-size: .92rem; line-height: 1.45; }
       .res .res-body a { color: var(--fx); font-weight: 600; }
       .res .go { color: var(--fx); font-weight: 700; white-space: nowrap; font-size: .92rem; }
 
@@ -87,7 +87,7 @@
 
       .br-note { background: var(--fx-soft); border: 1px solid color-mix(in srgb, var(--fx) 25%, transparent); border-radius: 14px; padding: 1.3rem 1.5rem; margin: 3rem 0 0; }
       .br-note h2 { font-size: 1.2rem; font-weight: 800; margin: 0 0 .4rem; }
-      .br-note p { color: #3f3a52; margin: 0 0 .5rem; line-height: 1.55; }
+      .br-note p { color: var(--pp-panel-ink); margin: 0 0 .5rem; line-height: 1.55; }
       .br-note a { color: var(--fx-dark); font-weight: 700; }
     </style>
   </head>
@@ -127,7 +127,7 @@
           <div class="swatch"><div class="chip" style="background:#1b1533"></div><div class="info"><strong>Navy</strong><code>#1B1533</code></div></div>
           <div class="swatch"><div class="chip" style="background:#0f9d78"></div><div class="info"><strong>Green</strong><code>#0F9D78</code></div></div>
           <div class="swatch"><div class="chip" style="background:#f5b800"></div><div class="info"><strong>Yellow</strong><code>#F5B800</code></div></div>
-          <div class="swatch"><div class="chip" style="background:#f6f4f0;border-bottom:1px solid #e3ddf0"></div><div class="info"><strong>Warm</strong><code>#F6F4F0</code></div></div>
+          <div class="swatch"><div class="chip" style="background:#f6f4f0;border-bottom:1px solid var(--pp-border)"></div><div class="info"><strong>Warm</strong><code>#F6F4F0</code></div></div>
         </div>
 
         <div class="br-sec"><h2>Our font</h2><span>03 — Typography</span></div>

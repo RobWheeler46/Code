@@ -20,7 +20,7 @@
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"NGO","name":"7th Swindon Scout Group","url":"https://www.7thswindon.org.uk/","logo":"https://www.7thswindon.org.uk/assets/7thswindon-logo.png","image":"https://www.7thswindon.org.uk/assets/7thswindon-logo.png","description":"One of North Swindon's largest Scout Groups, helping over 300 young people aged 6 to 18 develop skills for life through Beavers, Cubs, Scouts and Explorers.","email":"info@7thswindon.org.uk","areaServed":{"@type":"Place","name":"North Swindon, Wiltshire"},"address":{"@type":"PostalAddress","addressLocality":"Swindon","addressRegion":"Wiltshire","addressCountry":"GB"},"parentOrganization":{"@type":"Organization","name":"The Scout Association"},"identifier":{"@type":"PropertyValue","propertyID":"charityNumber","value":"306101"},"sameAs":["https://www.youtube.com/@7thSwindonScouts","https://www.instagram.com/7thswindonscouts"]}</script>
     <title>Scouts · 7th Swindon Scout Group</title>
     <link rel="stylesheet" href="assets/style.css?v=20260912b" />
-    <link rel="stylesheet" href="assets/theme.css?v=20260913a" />
+    <link rel="stylesheet" href="assets/theme.css?v=20261018a" />
     <style>
       html { scroll-behavior: smooth; }
       section[id], footer[id] { scroll-margin-top: 90px; }
@@ -28,7 +28,7 @@
       :root { --fx: var(--pp-purple, var(--st-teal, #6d28d9)); --fx-dark: var(--pp-purple-dark, var(--st-teal-dark, #4c1d95)); --fx-soft: #efeafc; }
       .sec-page { padding-top: 6.5rem; }
       .sec-wrap { max-width: 60rem; margin: 0 auto; padding: 0 1.5rem; }
-      .sec-crumb { font-size: .85rem; color: #6b6478; margin-bottom: 1.25rem; }
+      .sec-crumb { font-size: .85rem; color: var(--pp-soft); margin-bottom: 1.25rem; }
       .sec-crumb a { color: var(--fx); text-decoration: none; }
       .sec-crumb a:hover { text-decoration: underline; }
 
@@ -36,14 +36,14 @@
       @media (min-width: 820px) { .sec-hero { grid-template-columns: 1.1fr .9fr; gap: 2.5rem; } }
       .sec-hero h1 { font-size: clamp(2.4rem, 6vw, 3.4rem); font-weight: 800; margin: 0 0 .4rem; line-height: 1.05; }
       .sec-tagline { font-size: 1.15rem; font-weight: 600; color: var(--sec); margin: 0 0 1rem; }
-      .sec-intro { font-size: 1.1rem; color: #374151; line-height: 1.6; margin: 0; }
+      .sec-intro { font-size: 1.1rem; color: var(--pp-body); line-height: 1.6; margin: 0; }
       .sec-hero-panel { border-radius: 20px; min-height: 15rem; background: linear-gradient(140deg, var(--sec), color-mix(in srgb, var(--sec) 55%, #ffffff)); display: flex; align-items: center; justify-content: center; color: #fff; position: relative; overflow: hidden; }
       .sec-hero-panel span { font-size: 1.5rem; font-weight: 800; letter-spacing: .02em; opacity: .95; text-align: center; padding: 1rem; }
       .sec-hero-panel::after { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 80% 20%, rgba(255,255,255,.25), transparent 55%); }
 
       .sec-benefits { list-style: none; display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; padding: 0; margin: 0 0 2.75rem; }
       @media (min-width: 640px) { .sec-benefits { grid-template-columns: repeat(4, 1fr); } }
-      .sec-benefit { display: flex; flex-direction: column; align-items: center; gap: .5rem; text-align: center; font-weight: 600; font-size: .95rem; color: #221c2e; }
+      .sec-benefit { display: flex; flex-direction: column; align-items: center; gap: .5rem; text-align: center; font-weight: 600; font-size: .95rem; color: var(--pp-ink); }
       .sec-benefit-icon { width: 52px; height: 52px; border-radius: 14px; background: var(--fx-soft); color: var(--sec); display: flex; align-items: center; justify-content: center; }
       .sec-benefit-icon svg { width: 28px; height: 28px; }
 
@@ -52,46 +52,46 @@
       .sec-do { display: grid; grid-template-columns: 1fr; gap: 1.5rem; align-items: start; }
       @media (min-width: 820px) { .sec-do { grid-template-columns: 1fr .8fr; gap: 2.5rem; } }
       .sec-activities { list-style: none; padding: 0; margin: 0; display: grid; gap: .6rem; }
-      .sec-activities li { display: grid; grid-template-columns: auto 1fr; gap: .6rem; font-size: 1.02rem; color: #374151; }
+      .sec-activities li { display: grid; grid-template-columns: auto 1fr; gap: .6rem; font-size: 1.02rem; color: var(--pp-body); }
       .sec-check { color: var(--sec); font-weight: 800; }
-      .sec-do-panel { border-radius: 18px; min-height: 12rem; background: linear-gradient(140deg, color-mix(in srgb, var(--sec) 22%, #ffffff), color-mix(in srgb, var(--sec) 8%, #ffffff)); border: 1px solid #e3ddf0; }
+      .sec-do-panel { border-radius: 18px; min-height: 12rem; background: linear-gradient(140deg, color-mix(in srgb, var(--sec) 22%, #ffffff), color-mix(in srgb, var(--sec) 8%, #ffffff)); border: 1px solid var(--pp-border); }
 
-      .sec-meet-lead { font-size: 1.05rem; color: #374151; margin: 0 0 1.25rem; }
+      .sec-meet-lead { font-size: 1.05rem; color: var(--pp-body); margin: 0 0 1.25rem; }
       .sec-meet-lead a { color: var(--fx); font-weight: 600; }
       .sec-cards { display: grid; grid-template-columns: 1fr; gap: 1rem; margin-top: 1.25rem; }
       @media (min-width: 640px) { .sec-cards { grid-template-columns: 1fr 1fr; } }
-      .sec-card { background: #fff; border: 1px solid #e3ddf0; border-left: 4px solid var(--sec); border-radius: 12px; padding: 1.1rem 1.25rem; box-shadow: 0 1px 2px rgba(27,21,51,.05), 0 8px 22px rgba(27,21,51,.05); }
+      .sec-card { background: #fff; border: 1px solid var(--pp-border); border-left: 4px solid var(--sec); border-radius: 12px; padding: 1.1rem 1.25rem; box-shadow: 0 1px 2px rgba(27,21,51,.05), 0 8px 22px rgba(27,21,51,.05); }
       .sec-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; flex-wrap: wrap; margin-bottom: .5rem; }
       .sec-card-head h3 { font-size: 1.15rem; font-weight: 700; margin: 0; }
       .sec-avail { font-size: .78rem; font-weight: 700; color: #1e4684; background: #e2ebf7; padding: .15rem .5rem; border-radius: 999px; }
       .sec-detail { display: grid; grid-template-columns: auto 1fr; gap: .3rem 1rem; margin: 0; font-size: .95rem; }
-      .sec-detail dt { font-weight: 700; color: #4b5563; }
-      .sec-detail dd { margin: 0; color: #374151; }
-      .sec-fallback { color: #374151; }
+      .sec-detail dt { font-weight: 700; color: var(--pp-body-muted); }
+      .sec-detail dd { margin: 0; color: var(--pp-body); }
+      .sec-fallback { color: var(--pp-body); }
 
       .sec-units { display: grid; gap: .75rem; margin-top: 1.25rem; }
       .sec-unit { background: var(--fx-soft); border: 1px solid color-mix(in srgb, var(--sec) 25%, transparent); border-radius: 12px; padding: .9rem 1.1rem; display: flex; flex-direction: column; }
       .sec-unit strong { color: var(--sec); }
-      .sec-unit span { color: #4b5563; font-size: .95rem; }
+      .sec-unit span { color: var(--pp-body-muted); font-size: .95rem; }
 
       .sec-btn { display: inline-flex; align-items: center; gap: .4rem; padding: .7rem 1.4rem; border-radius: 999px; font-weight: 700; text-decoration: none; background: var(--fx); color: #fff; transition: background .15s; }
       .sec-btn:hover { background: var(--fx-dark); }
       .sec-btn:focus-visible { outline: 2px solid var(--fx-dark); outline-offset: 2px; }
 
-      .sec-acc { border: 1px solid #e3ddf0; border-radius: 12px; margin-bottom: .75rem; overflow: hidden; background: #fff; }
+      .sec-acc { border: 1px solid var(--pp-border); border-radius: 12px; margin-bottom: .75rem; overflow: hidden; background: #fff; }
       .sec-acc summary { cursor: pointer; padding: 1rem 1.25rem; font-weight: 700; font-size: 1.05rem; list-style: none; display: flex; justify-content: space-between; align-items: center; }
       .sec-acc summary::-webkit-details-marker { display: none; }
       .sec-acc summary::after { content: "+"; color: var(--fx); font-size: 1.4rem; font-weight: 400; line-height: 1; }
       .sec-acc[open] summary::after { content: "−"; }
       .sec-acc summary:focus-visible { outline: 2px solid var(--fx); outline-offset: -2px; }
-      .sec-acc-body { padding: 0 1.25rem 1.1rem; color: #4b5563; line-height: 1.6; }
+      .sec-acc-body { padding: 0 1.25rem 1.1rem; color: var(--pp-body-muted); line-height: 1.6; }
       .sec-acc-body p { margin: 0; }
 
-      .sec-inclusion-note { color: #4b5563; margin: 1.1rem 0 0; }
+      .sec-inclusion-note { color: var(--pp-body-muted); margin: 1.1rem 0 0; }
       .sec-inclusion-note a { color: var(--sec); font-weight: 600; }
       .sec-join { background: var(--fx-soft); border-radius: 20px; padding: 2.5rem 1.5rem; text-align: center; margin: 3rem 0 4rem; }
       .sec-join h2 { font-size: 1.7rem; font-weight: 800; margin: 0 0 .5rem; }
-      .sec-join p { color: #4b5563; margin: 0 0 1.5rem; }
+      .sec-join p { color: var(--pp-body-muted); margin: 0 0 1.5rem; }
     </style>
       <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What will my child learn?","acceptedAnswer":{"@type":"Answer","text":"Teamwork, leadership, resilience, outdoor and first-aid skills, cooking and much more, while working towards badges and awards and having fun with friends."}},{"@type":"Question","name":"Is Scouting safe?","acceptedAnswer":{"@type":"Answer","text":"Safety is our top priority. All adult volunteers are DBS checked and safeguarding-trained, and every activity is risk-assessed."}}]}</script>
   </head>
