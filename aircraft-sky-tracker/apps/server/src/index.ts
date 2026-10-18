@@ -758,7 +758,9 @@ async function main(): Promise<void> {
     },
     aircraftAviation: async (icaoHex) => {
       const aircraft = state.snapshot().find((a) => a.icaoHex === icaoHex);
-      return aircraft ? aviation.aircraftContext(aircraft) : null;
+      if (!aircraft) return null;
+      const c = settings.get();
+      return aviation.aircraftContext(aircraft, { latitude: c.latitude, longitude: c.longitude });
     },
     aircraftMessages: (icaoHex, query) => {
       const c = settings.get();

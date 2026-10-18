@@ -755,6 +755,34 @@ button.danger {
 
 /* Aviation context in the drawer (FRD v4.0 §35-47): airspace / contrail /
    nearest weather / military context. */
+.spotability {
+  margin: 0.3rem 0;
+  padding: 0.4rem 0.55rem;
+  border-left: 3px solid var(--secondary);
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+.spotability.spot-excellent,
+.spotability.spot-good {
+  border-left-color: #7fd6a2;
+}
+.spotability.spot-possible {
+  border-left-color: #ffcf6b;
+}
+.spotability.spot-poor,
+.spotability.spot-obscured {
+  border-left-color: #ff8f6b;
+}
+.spot-head {
+  color: var(--primary);
+}
+.spot-reasons {
+  color: var(--secondary);
+  font-size: 0.78rem;
+  margin-top: 0.1rem;
+}
+
 .airspace-list {
   display: flex;
   flex-direction: column;

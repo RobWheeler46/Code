@@ -63,6 +63,15 @@ const CONFIDENCE_LABEL: Record<string, string> = {
   unknown: "Unknown route",
 };
 
+const SPOT_LABEL: Record<string, string> = {
+  excellent: "Excellent",
+  good: "Good",
+  possible: "Possible",
+  poor: "Poor",
+  obscured: "Probably obscured",
+  unknown: "Unknown",
+};
+
 const AUTO_CLOSE_MS = 30_000; // FRD §86
 
 type Row = [string, string | undefined];
@@ -542,11 +551,22 @@ function AviationSection({
   const weather = observer?.weather;
   const military = observer?.military;
   const contrailShown = contrail && contrail.likelihood !== "unknown";
-  if (memberships.length === 0 && !contrailShown && !weather && !military) return null;
+  const spot = aircraft?.spotability;
+  const spotShown = spot && spot.rating !== "unknown";
+  if (memberships.length === 0 && !contrailShown && !weather && !military && !spotShown) return null;
 
   return (
     <>
       <h2>Aviation context</h2>
+
+      {spotShown && (
+        <div className={`spotability spot-${spot.rating}`}>
+          <div className="spot-head">
+            Visibility: <strong>{SPOT_LABEL[spot.rating]}</strong>
+          </div>
+          <div className="spot-reasons">{spot.reasons.join(" · ")}</div>
+        </div>
+      )}
 
       {memberships.length > 0 && (
         <div className="airspace-list">

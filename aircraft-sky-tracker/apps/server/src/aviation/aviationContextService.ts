@@ -13,6 +13,10 @@
 import {
   airspaceForPoint,
   estimateContrail,
+  observerLookAngles,
+  solarElevationDeg,
+  assessAircraftSpotability,
+  FEET_TO_METRES,
   type Aircraft,
   type AviationContext,
   type AircraftAviationContext,
@@ -56,8 +60,8 @@ export class AviationContextService {
     };
   }
 
-  /** Per-aircraft context: airspace membership + contrail estimate. */
-  async aircraftContext(aircraft: Aircraft): Promise<AircraftAviationContext> {
+  /** Per-aircraft context: airspace, contrail estimate, spotability. */
+  async aircraftContext(aircraft: Aircraft, observer: Observer): Promise<AircraftAviationContext> {
     const regions = this.airspace.regions();
     const airspace = airspaceForPoint(
       aircraft.latitude,
@@ -76,6 +80,39 @@ export class AviationContextService {
       contrail = estimateContrail(aircraft.altitudeFeet, undefined, undefined);
     }
 
-    return { airspace, contrail };
+    // Spotability (§20-24): elevation/slant from geometry, cloud from the nearest
+    // METAR, daylight from the Sun's elevation. Weather fetch is cached.
+    const weather = await this.weather
+      .nearest(observer.latitude, observer.longitude)
+      .catch(() => undefined);
+    const look = observerLookAngles(
+      observer.latitude,
+      observer.longitude,
+      0,
+      aircraft.latitude,
+      aircraft.longitude,
+      (aircraft.altitudeFeet ?? 0) * FEET_TO_METRES,
+    );
+    const spotability = assessAircraftSpotability({
+      elevationDeg: look.elevationDegrees,
+      slantRangeMiles: look.slantRangeMiles,
+      altitudeFeet: aircraft.altitudeFeet,
+      flightCategory: weather?.flightCategory,
+      cloudBaseFeet: lowestCeilingFeet(weather?.cloudSummary),
+      sunElevationDeg: solarElevationDeg(observer.latitude, observer.longitude, new Date()),
+    });
+
+    return { airspace, contrail, spotability };
   }
+}
+
+/** Lowest broken/overcast cloud base (feet) from a METAR cloud summary, if any. */
+function lowestCeilingFeet(summary: string | undefined): number | undefined {
+  if (!summary) return undefined;
+  let lowest: number | undefined;
+  for (const m of summary.matchAll(/(BKN|OVC)\s+([\d,]+)/gi)) {
+    const ft = Number(m[2]!.replace(/,/g, ""));
+    if (Number.isFinite(ft) && (lowest === undefined || ft < lowest)) lowest = ft;
+  }
+  return lowest;
 }

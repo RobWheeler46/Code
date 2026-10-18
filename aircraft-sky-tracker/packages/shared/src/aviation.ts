@@ -15,6 +15,7 @@
  */
 
 import { haversineDistanceMiles, STATUTE_MILES_PER_NM } from "./geo.js";
+import type { Spotability } from "./spotability.js";
 
 // --- Airspace ---------------------------------------------------------------
 
@@ -227,4 +228,6 @@ export interface AviationContext {
 export interface AircraftAviationContext {
   airspace: AirspaceMembership[];
   contrail: ContrailEstimate;
+  /** How easily the aircraft can be seen right now (FRD v4.0 §20-24). */
+  spotability?: Spotability;
 }
