@@ -147,9 +147,13 @@ generator), so a nav change is one edit re-applied, not hand-copied across files
 - `sections.json` — **public section registry**: the single source of truth for
   meeting patterns AND per-section content (`sectionTypes`), powering the finder,
   the homepage cards and the section pages. Edit here to change days/times/
-  localities or section copy, then redeploy — no code change. Public fields only;
-  never contains exact venues or member data. (Section pages regenerate from
-  `scratchpad/build-sections.js` if the shared shell changes.)
+  localities or section copy, then **run `node prerender-sections.js`** and
+  redeploy — no code change. That script bakes the section body (intro,
+  activities, meeting times, details, FAQs) into the static HTML so AI answer
+  engines, which do not run JavaScript, can read it; `section.js` still renders
+  it live for visitors. Public fields only; never contains exact venues or
+  member data. (Section pages regenerate from `scratchpad/build-sections.js` if
+  the shared shell changes — re-run the pre-render afterwards.)
 - `sitemap.xml` / `robots.txt` — **SEO baseline** (SEO-001). The sitemap lists
   the public pages (absolute `https://www.7thswindon.org.uk/` URLs); every page
   carries a `<link rel="canonical">`. `robots.txt` allows crawling, hides the PHP
