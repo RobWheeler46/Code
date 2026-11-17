@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="assets/7thswindon-logo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="How 7th Swindon Scout Group makes its website accessible, the standard we aim for, known limitations, and how to tell us about an accessibility problem." />
+    <link rel="canonical" href="https://www.7thswindon.org.uk/accessibility.html" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="7th Swindon Scout Group" />
+    <meta property="og:title" content="Accessibility · 7th Swindon Scout Group" />
+    <meta property="og:description" content="How 7th Swindon Scout Group makes its website accessible, the standard we aim for, and how to tell us about an accessibility problem." />
+    <meta property="og:url" content="https://www.7thswindon.org.uk/accessibility.html" />
+    <meta property="og:image" content="https://www.7thswindon.org.uk/assets/7thswindon-logo.png" />
+    <meta property="og:image:alt" content="7th Swindon Scout Group logo" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Accessibility · 7th Swindon Scout Group" />
+    <meta name="twitter:description" content="How 7th Swindon Scout Group makes its website accessible, and how to tell us about an accessibility problem." />
+    <meta name="twitter:image" content="https://www.7thswindon.org.uk/assets/7thswindon-logo.png" />
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"NGO","name":"7th Swindon Scout Group","url":"https://www.7thswindon.org.uk/","logo":"https://www.7thswindon.org.uk/assets/7thswindon-logo.png","image":"https://www.7thswindon.org.uk/assets/7thswindon-logo.png","description":"One of North Swindon's largest Scout Groups, helping over 300 young people aged 6 to 18 develop skills for life through Beavers, Cubs, Scouts and Explorers.","email":"info@7thswindon.org.uk","areaServed":{"@type":"Place","name":"North Swindon, Wiltshire"},"address":{"@type":"PostalAddress","addressLocality":"Swindon","addressRegion":"Wiltshire","addressCountry":"GB"},"parentOrganization":{"@type":"Organization","name":"The Scout Association"},"identifier":{"@type":"PropertyValue","propertyID":"charityNumber","value":"306101"},"sameAs":["https://www.youtube.com/@7thSwindonScouts","https://www.instagram.com/7thswindonscouts"]}</script>
+    <title>Accessibility · 7th Swindon Scout Group</title>
+    <link rel="stylesheet" href="assets/style.css?v=20260912b" />
+    <link rel="stylesheet" href="assets/theme.css?v=20261018a" />
+    <style>
+      html { scroll-behavior: smooth; }
+      section[id], footer[id] { scroll-margin-top: 90px; }
+      @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+      :root { --fx: var(--pp-purple, var(--st-teal, #6d28d9)); --fx-dark: var(--pp-purple-dark, var(--st-teal-dark, #4c1d95)); --fx-soft: #efeafc; }
+      .hub { padding: 7.5rem 1.5rem 4rem; }
+      .hub-wrap { max-width: 52rem; margin: 0 auto; }
+      .hub-crumb { font-size: .85rem; color: var(--pp-soft); margin-bottom: 1.25rem; }
+      .hub-crumb a { color: var(--fx); text-decoration: underline; } .hub-crumb a:hover { text-decoration: underline; }
+      .hub h1 { font-size: clamp(2.4rem, 6vw, 3.4rem); font-weight: 800; line-height: 1.05; margin: 0 0 .4rem; }
+      .hub-tagline { font-size: 1.2rem; font-weight: 600; color: var(--fx); margin: 0 0 1rem; }
+      .hub-updated { font-size: .9rem; color: var(--pp-soft); margin: 0 0 1.5rem; }
+      .hub-lead { font-size: 1.15rem; color: var(--pp-body); line-height: 1.6; margin: 0 0 2rem; }
+      .hub h2 { font-size: 1.6rem; font-weight: 800; margin: 2.5rem 0 1rem; }
+      .hub p { color: var(--pp-body); line-height: 1.65; margin: 0 0 1rem; }
+      .hub ul.bul { margin: 0 0 1rem; padding: 0; list-style: none; display: grid; gap: .6rem; }
+      .hub ul.bul li { display: grid; grid-template-columns: auto 1fr; gap: .6rem; color: var(--pp-body); line-height: 1.6; }
+      .hub ul.bul .dot { color: var(--fx); font-weight: 800; }
+      .hub-links { list-style: none; padding: 0; margin: .5rem 0 1rem; }
+      .hub-links li { margin: .4rem 0; }
+      .hub-links a, .hub p a { color: var(--fx); font-weight: 600; }
+      .hub-btn { display: inline-flex; align-items: center; gap: .4rem; background: var(--fx); color: #fff; font-weight: 700; padding: .75rem 1.5rem; border-radius: 999px; text-decoration: none; transition: background .15s; margin: .3rem 0 .5rem; }
+      .hub-btn:hover { background: var(--fx-dark); }
+      .hub-btn:focus-visible { outline: 2px solid var(--fx-dark); outline-offset: 3px; }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to main content</a>
+    <div id="root"><div class="font-sans"><nav class="fixed top-0 left-0 right-0 z-50 bg-white transition-shadow duration-300 shadow-md"><div class="max-w-7xl mx-auto px-6 py-4"><div class="flex justify-between items-center"><a href="index.html" class="flex items-center gap-4 group"><div class="w-14 h-14 rounded-full overflow-hidden transition-transform group-hover:scale-105"><img src="assets/7thswindon-logo.png" alt="7th Swindon Scouts" class="w-full h-full object-cover"></div><span class="text-xl font-bold text-purple-600">7th Swindon Scouts</span></a><button id="mobileMenuBtn" aria-label="Menu" aria-expanded="false" aria-controls="mobileMenu" class="lg:hidden text-3xl">☰</button><ul class="hidden lg:flex items-center gap-6 mainnav"><li><a href="index.html" data-nav="home" class="font-semibold hover:text-purple-600 transition-colors">Home</a></li><li class="has-menu"><a href="find-your-section.html" data-nav="join" class="font-semibold hover:text-purple-600 transition-colors">Join</a><ul class="submenu"><li><a href="find-your-section.html">Find Your Section</a></li><li><a href="how-joining-works.html">How Joining Works</a></li><li><a href="inclusion.html">Inclusion and Support</a></li><li><a href="index.html#faq">Parent FAQs</a></li></ul></li><li class="has-menu"><a href="index.html#sections" data-nav="what" class="font-semibold hover:text-purple-600 transition-colors">What We Do</a><ul class="submenu"><li><a href="beavers.html">Beavers</a></li><li><a href="cubs.html">Cubs</a></li><li><a href="scouts.html">Scouts</a></li><li><a href="explorers.html">Explorers</a></li><li><a href="index.html#activityShowcase">Activities and Adventures</a></li></ul></li><li><a href="volunteer.html" data-nav="volunteer" class="font-semibold hover:text-purple-600 transition-colors">Volunteer</a></li><li class="has-menu"><a href="about.html" data-nav="about" class="font-semibold hover:text-purple-600 transition-colors">About</a><ul class="submenu"><li><a href="about.html">About 7th Swindon</a></li><li><a href="safeguarding.html">Safeguarding</a></li><li><a href="support.html">Support Us</a></li><li><a href="agm.html">Governance and AGM</a></li></ul></li><li><a href="contact.html" data-nav="contact" class="font-semibold hover:text-purple-600 transition-colors">Contact</a></li><li><span class="portal-util" role="link" aria-disabled="true" title="7thPortal is coming soon" style="opacity:.45;pointer-events:none;cursor:not-allowed">Open 7thPortal</span></li></ul></div><ul id="mobileMenu" class="hidden lg:hidden flex-col gap-1 pt-4"><li><a href="index.html" class="mobile-link block font-semibold py-2 hover:text-purple-600 transition-colors">Home</a></li><li class="m-group">Join</li><li><a href="find-your-section.html" class="mobile-link m-child">Find Your Section</a></li><li><a href="how-joining-works.html" class="mobile-link m-child">How Joining Works</a></li><li><a href="inclusion.html" class="mobile-link m-child">Inclusion and Support</a></li><li><a href="index.html#faq" class="mobile-link m-child">Parent FAQs</a></li><li class="m-group">What We Do</li><li><a href="beavers.html" class="mobile-link m-child">Beavers</a></li><li><a href="cubs.html" class="mobile-link m-child">Cubs</a></li><li><a href="scouts.html" class="mobile-link m-child">Scouts</a></li><li><a href="explorers.html" class="mobile-link m-child">Explorers</a></li><li><a href="index.html#activityShowcase" class="mobile-link m-child">Activities and Adventures</a></li><li><a href="volunteer.html" class="mobile-link block font-semibold py-2 hover:text-purple-600 transition-colors">Volunteer</a></li><li class="m-group">About</li><li><a href="about.html" class="mobile-link m-child">About 7th Swindon</a></li><li><a href="safeguarding.html" class="mobile-link m-child">Safeguarding</a></li><li><a href="support.html" class="mobile-link m-child">Support Us</a></li><li><a href="agm.html" class="mobile-link m-child">Governance and AGM</a></li><li><a href="contact.html" class="mobile-link block font-semibold py-2 hover:text-purple-600 transition-colors">Contact</a></li><li><span class="mobile-link block font-semibold py-2" role="link" aria-disabled="true" style="opacity:.45;pointer-events:none;cursor:not-allowed">Open 7thPortal</span></li></ul></div></nav>
+
+    <main id="main" tabindex="-1" class="hub">
+      <div class="hub-wrap">
+        <p class="hub-crumb"><a href="index.html">Home</a> › Accessibility</p>
+        <h1>Accessibility</h1>
+        <p class="hub-tagline">Making this website work for everyone</p>
+        <p class="hub-updated">Last updated 17 November 2026.</p>
+        <p class="hub-lead">We want everyone to be able to use our website, whatever device they use and however they browse. This page explains the standard we aim for, what we have done, where we know there is more to do, and how to tell us about a problem.</p>
+
+        <h2>The standard we aim for</h2>
+        <p>We aim to meet the Web Content Accessibility Guidelines version 2.2 at level AA, which is the standard widely used across the United Kingdom. We build and test the site with this in mind, and we check our pages with automated accessibility tools as we make changes. Automated testing does not catch everything, so if something is hard to use, please tell us.</p>
+
+        <h2>What we have done</h2>
+        <ul class="bul">
+          <li><span class="dot">•</span><span>A skip link at the top of every page so you can jump straight to the main content.</span></li>
+          <li><span class="dot">•</span><span>Full keyboard support, with a clear outline showing where you are on the page.</span></li>
+          <li><span class="dot">•</span><span>Colour choices checked for contrast, so text stays readable against its background.</span></li>
+          <li><span class="dot">•</span><span>Meaningful headings and labels, and descriptive text for images.</span></li>
+          <li><span class="dot">•</span><span>A layout that adapts to phones, tablets and desktops, and works when you zoom in.</span></li>
+          <li><span class="dot">•</span><span>Respect for the reduce motion setting, so animations calm down if you have asked your device to limit them.</span></li>
+        </ul>
+
+        <h2>Where we know there is more to do</h2>
+        <p>We are honest about the parts that may not be perfect:</p>
+        <ul class="bul">
+          <li><span class="dot">•</span><span>Some content comes from other services, such as embedded videos and the spam check on our forms. These bring their own accessibility behaviour, which we do not fully control.</span></li>
+          <li><span class="dot">•</span><span>Some documents we link to, for example brand guidelines and meeting papers, are created by others and may not be fully accessible. If you need one in a different format, please ask and we will help.</span></li>
+        </ul>
+
+        <h2>Tell us about a problem</h2>
+        <p>If you find something on this website that is hard to use, or you need information in a different format such as large print or plain text, please get in touch. Tell us the page and what went wrong, and we will do our best to put it right and to get the information to you another way.</p>
+        <a class="hub-btn" href="contact.html">Contact us</a>
+
+        <h2>If you are not happy with our response</h2>
+        <p>We will always try to help. If you are not satisfied with how we have dealt with your request, please come back to us so we can look again. You can also find general advice about digital accessibility from the <a href="https://www.scope.org.uk/" target="_blank" rel="noopener noreferrer">disability charity Scope</a>.</p>
+
+        <h2>Related pages</h2>
+        <ul class="hub-links">
+          <li><a href="inclusion.html">Inclusion and support at 7th Swindon →</a></li>
+          <li><a href="privacy.html">Privacy notice →</a></li>
+        </ul>
+      </div>
+    </main>
+
+    <footer id="footer" class="bg-gray-900 text-white py-12"><div class="max-w-7xl mx-auto px-6"><div class="grid md:grid-cols-3 gap-12 mb-8"><div><div class="w-24 h-24 mb-6"><img src="assets/7thswindon-logo.png" alt="7th Swindon" class="w-full h-full"></div><h3 class="text-xl font-bold text-yellow-400 mb-4">7th Swindon Scout Group</h3><p class="text-gray-300 mb-4 leading-relaxed">Part of Swindon North Scout District, we're one of the largest Scout Groups in North Swindon, helping over 300 young people develop skills for life every week.</p><p class="text-sm text-gray-400">Charity Number: 306101<br>The Scout Association</p></div><div><h3 class="text-xl font-bold text-yellow-400 mb-4">Quick Links</h3><ul class="space-y-3"><li><a href="find-your-section.html" class="text-gray-300 hover:text-white hover:pl-2 transition-all block">Find Your Section</a></li><li><a href="volunteer.html" class="text-gray-300 hover:text-white hover:pl-2 transition-all block">Volunteer With Us</a></li><li><a href="inclusion.html" class="text-gray-300 hover:text-white hover:pl-2 transition-all block">Inclusion and support</a></li><li><a href="agm.html" class="text-gray-300 hover:text-white hover:pl-2 transition-all block">AGM Documents</a></li><li><a href="privacy.html" class="text-gray-300 hover:text-white hover:pl-2 transition-all block">Privacy notice</a></li><li><a href="accessibility.html" class="text-gray-300 hover:text-white hover:pl-2 transition-all block">Accessibility</a></li></ul></div><div><h3 class="text-xl font-bold text-yellow-400 mb-4">Get in Touch</h3><div class="space-y-4"><div class="flex items-start gap-3"><span class="text-xl mt-1">📧</span><div><div class="font-semibold">General Enquiries:</div><a href="contact.html" class="text-gray-300 hover:text-white">Contact us</a></div></div><div class="flex items-start gap-3"><span class="text-xl mt-1">👥</span><div><div class="font-semibold">Volunteering:</div><a href="volunteer.html" class="text-gray-300 hover:text-white">Volunteer with us</a></div></div></div></div></div><div class="border-t border-gray-700 pt-8"><div class="text-center text-gray-400 text-sm"><p>© 2026 7th Swindon Scout Group. All rights reserved.</p></div></div></div></footer></div></div>
+    <script src="app.js?v=20261004a"></script>
+  </body>
+</html>
